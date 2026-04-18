@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { base44 } from '@/api/base44Client';
+import { supabase } from '@/lib/supabaseClient'; // Cambiado a Supabase
 import { db } from '@/lib/db';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { FileText, Loader2, Eye, Trash2 } from 'lucide-react';
@@ -30,48 +30,70 @@ export default function Reports() {
 
   const createMutation = useMutation({
     mutationFn: async (formData) => {
-      // Create report record first
-      const report = await db.Report.create(formData);
+      // 1. Crear el registro del reporte en la base de datos
+      const report = await db.Report.create({
+        ...formData,
+        status: 'generando'
+      });
       setGeneratingId(report.id);
 
-      // Generate report content using LLM
-      const contextData = {
-        projects: projects.filter(p => {
-          if (formData.date_from && p.start_date < formData.date_from) return false;
-          if (formData.date_to && p.start_date > formData.date_to) return false;
-          return true;
-        }),
-        checklists: formData.report_type === 'inspecciones' || formData.report_type === 'general' ? checklists : [],
-        maintenance: formData.report_type === 'mantenimiento' || formData.report_type === 'general' ? maintenance : [],
-      };
-
-      const llmResponse = await base44.integrations.Core.InvokeLLM({
-        prompt: `Genera un reporte profesional en HTML para Colegios Mano Amiga.
-
-Título: ${formData.title}
-Tipo: ${formData.report_type}
-Preparado por: ${formData.prepared_by || 'Departamento de Mantenimiento'}
-Dirigido a: ${formData.directed_to || 'Dirección General'}
-Resumen solicitado: ${formData.summary || 'Reporte general'}
-Período: ${formData.date_from || 'N/A'} a ${formData.date_to || 'N/A'}
-
-Datos disponibles:
-- Proyectos (${contextData.projects.length}): ${JSON.stringify(contextData.projects.map(p => ({ nombre: p.name, estado: p.status, tipo: p.type, avance: p.progress, ubicacion: p.location })))}
-- Inspecciones (${contextData.checklists.length}): ${JSON.stringify(contextData.checklists.map(c => ({ titulo: c.title, tipo: c.infrastructure_type, estado: c.overall_status, items: c.items?.length, fecha: c.inspection_date })))}
-- Mantenimientos (${contextData.maintenance.length}): ${JSON.stringify(contextData.maintenance.map(m => ({ titulo: m.title, tipo: m.type, estado: m.status, prioridad: m.priority, fecha: m.scheduled_date })))}
-
-Genera contenido HTML profesional con tablas, secciones claras, estadísticas resumen, y recomendaciones. El HTML debe ser limpio y bien estructurado con estilos inline para impresión. Usa colores azul corporativo (#2563eb) y naranja (#f97316) de Mano Amiga. Incluye:
-1. Encabezado con el logo de Mano Amiga usando esta imagen: <img src="https://media.base44.com/images/public/69d55a044cd0ffb90a373c25/ef4d204a2_images-Photoroom.png" style="height:80px;" alt="Mano Amiga Logo" /> y el texto "Colegios Mano Amiga" y "Juntos Transformando Vidas"
-2. Información del reporte (fecha, preparado por, dirigido a)
-3. Resumen ejecutivo
-4. Detalle según tipo de reporte
-5. Estadísticas y métricas clave
-6. Conclusiones y recomendaciones
-Solo devuelve el HTML, sin markdown ni bloques de código.`,
+      // 2. Filtrar datos para el contenido del reporte
+      const filteredProjects = projects.filter(p => {
+        if (formData.date_from && p.start_date < formData.date_from) return false;
+        if (formData.date_to && p.start_date > formData.date_to) return false;
+        return true;
       });
 
+      // 3. Generar el HTML del reporte (Sustituyendo al LLM de Base44)
+      const reportHtml = `
+        <div style="font-family: Arial, sans-serif; color: #334155; max-width: 800px; margin: auto; border: 1px solid #e2e8f0; padding: 40px;">
+          <div style="display: flex; align-items: center; justify-content: space-between; border-bottom: 2px solid #2563eb; padding-bottom: 20px; margin-bottom: 20px;">
+            <img src="https://media.base44.com/images/public/69d55a044cd0ffb90a373c25/ef4d204a2_images-Photoroom.png" style="height:60px;" alt="Logo" />
+            <div style="text-align: right;">
+              <h1 style="color: #2563eb; margin: 0; font-size: 24px;">Colegios Mano Amiga</h1>
+              <p style="color: #f97316; margin: 0; font-weight: bold;">Juntos Transformando Vidas</p>
+            </div>
+          </div>
+          
+          <h2 style="text-align: center; text-transform: uppercase;">${formData.title}</h2>
+          
+          <div style="background: #f8fafc; padding: 15px; border-radius: 8px; margin-bottom: 20px;">
+            <p><strong>Tipo de Reporte:</strong> ${formData.report_type}</p>
+            <p><strong>Preparado por:</strong> ${formData.prepared_by || 'Departamento de Mantenimiento'}</p>
+            <p><strong>Dirigido a:</strong> ${formData.directed_to || 'Dirección General'}</p>
+            <p><strong>Fecha:</strong> ${format(new Date(), 'dd/MM/yyyy')}</p>
+          </div>
+
+          <h3>Resumen Ejecutivo</h3>
+          <p>${formData.summary || 'Sin resumen adicional.'}</p>
+
+          <h3>Detalle de Actividades</h3>
+          <table style="width: 100%; border-collapse: collapse; margin-top: 10px;">
+            <thead>
+              <tr style="background: #2563eb; color: white;">
+                <th style="padding: 10px; border: 1px solid #ddd; text-align: left;">Actividad / Proyecto</th>
+                <th style="padding: 10px; border: 1px solid #ddd; text-align: left;">Estado</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${filteredProjects.map(p => `
+                <tr>
+                  <td style="padding: 10px; border: 1px solid #ddd;">${p.name}</td>
+                  <td style="padding: 10px; border: 1px solid #ddd;">${p.status}</td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+
+          <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #e2e8f0; text-align: center; font-size: 12px; color: #94a3b8;">
+            Este es un reporte oficial generado por el Sistema de Gestión de Obras y Mantenimiento RCMA.
+          </div>
+        </div>
+      `;
+
+      // 4. Actualizar el registro con el HTML generado
       await db.Report.update(report.id, {
-        content_html: llmResponse,
+        content_html: reportHtml,
         status: 'finalizado'
       });
 
@@ -105,7 +127,7 @@ Solo devuelve el HTML, sin markdown ni bloques de código.`,
       {generatingId && (
         <div className="bg-primary/5 border border-primary/20 rounded-xl p-4 flex items-center gap-3 mb-6">
           <Loader2 className="w-5 h-5 text-primary animate-spin" />
-          <p className="text-sm text-primary font-medium">Generando reporte, por favor espere...</p>
+          <p className="text-sm text-primary font-medium">Generando reporte RCMA, por favor espere...</p>
         </div>
       )}
 

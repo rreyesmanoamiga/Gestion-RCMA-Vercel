@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { base44 } from '@/api/base44Client';
+import { supabase } from '@/lib/supabaseClient'; // Cambiado a Supabase
 import { db } from '@/lib/db';
 import { useAuth } from '@/lib/AuthContext';
 import { Button } from '@/components/ui/button';
@@ -11,7 +11,7 @@ import { Switch } from '@/components/ui/switch';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { PERMISSIONS, PERMISSION_GROUPS, DEFAULT_PERMISSIONS } from '@/lib/permissions';
-import { Users, UserPlus, Shield, ShieldCheck, Mail, Pencil, Trash2 } from 'lucide-react';
+import { Users, UserPlus, Shield, ShieldCheck, Mail, Pencil } from 'lucide-react';
 import { toast } from 'sonner';
 import PageHeader from '@/components/shared/PageHeader';
 
@@ -19,14 +19,21 @@ export default function UserManagement() {
   const { user: currentUser } = useAuth();
   const qc = useQueryClient();
   const [showInvite, setShowInvite] = useState(false);
-  const [editingUser, setEditingUser] = useState(null); // { email, permsId, perms }
+  const [editingUser, setEditingUser] = useState(null); 
   const [inviteEmail, setInviteEmail] = useState('');
   const [invitePerms, setInvitePerms] = useState(DEFAULT_PERMISSIONS);
   const [inviting, setInviting] = useState(false);
 
+  // 1. Obtener lista de usuarios desde tu tabla de perfiles/usuarios
   const { data: users = [] } = useQuery({
     queryKey: ['users'],
-    queryFn: () => base44.entities.User.list(),
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('profiles') // Asumiendo que tienes una tabla 'profiles'
+        .select('*');
+      if (error) throw error;
+      return data;
+    },
   });
 
   const { data: allPerms = [] } = useQuery({
@@ -36,25 +43,34 @@ export default function UserManagement() {
 
   const updatePermsMutation = useMutation({
     mutationFn: ({ id, data }) => db.UserPermissions.update(id, data),
-    onSuccess: () => { qc.invalidateQueries(['userPermissions']); toast.success('Permisos actualizados'); setEditingUser(null); },
-  });
-
-  const deletePermsMutation = useMutation({
-    mutationFn: (id) => db.UserPermissions.delete(id),
-    onSuccess: () => { qc.invalidateQueries(['userPermissions']); toast.success('Permisos restablecidos'); },
+    onSuccess: () => { 
+      qc.invalidateQueries(['userPermissions']); 
+      toast.success('Permisos actualizados'); 
+      setEditingUser(null); 
+    },
   });
 
   const handleInvite = async (e) => {
     e.preventDefault();
     setInviting(true);
-    await base44.users.inviteUser(inviteEmail, 'user');
-    await db.UserPermissions.create({ user_email: inviteEmail, ...invitePerms });
-    await qc.invalidateQueries(['userPermissions']);
-    toast.success(`Invitación enviada a ${inviteEmail}`);
-    setInviteEmail('');
-    setInvitePerms(DEFAULT_PERMISSIONS);
-    setShowInvite(false);
-    setInviting(false);
+    try {
+      // 2. Invitar mediante Supabase Auth
+      const { data, error } = await supabase.auth.admin.inviteUserByEmail(inviteEmail);
+      if (error) throw error;
+
+      // 3. Crear sus permisos iniciales
+      await db.UserPermissions.create({ user_email: inviteEmail, ...invitePerms });
+      
+      await qc.invalidateQueries(['userPermissions']);
+      toast.success(`Invitación enviada a ${inviteEmail}`);
+      setInviteEmail('');
+      setInvitePerms(DEFAULT_PERMISSIONS);
+      setShowInvite(false);
+    } catch (error) {
+      toast.error('Error al invitar: ' + error.message);
+    } finally {
+      setInviting(false);
+    }
   };
 
   const openEdit = (email) => {
@@ -178,7 +194,6 @@ export default function UserManagement() {
         </CardContent>
       </Card>
 
-      {/* Invite Dialog */}
       <Dialog open={showInvite} onOpenChange={setShowInvite}>
         <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
           <DialogHeader>
@@ -211,7 +226,6 @@ export default function UserManagement() {
         </DialogContent>
       </Dialog>
 
-      {/* Edit Permissions Dialog */}
       {editingUser && (
         <Dialog open={!!editingUser} onOpenChange={() => setEditingUser(null)}>
           <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
