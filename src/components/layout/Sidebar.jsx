@@ -12,7 +12,6 @@ import {
   Users
 } from 'lucide-react';
 import { useAuth } from '@/lib/AuthContext';
-import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 
 const navItems = [
@@ -39,14 +38,12 @@ export default function Sidebar({ isOpen, onToggle }) {
       )}
 
       {/* Mobile toggle */}
-      <Button
-        variant="ghost"
-        size="icon"
+      <button
         onClick={onToggle}
-        className="fixed top-4 left-4 z-50 lg:hidden bg-card shadow-md"
+        className="fixed top-4 left-4 z-50 lg:hidden bg-white shadow-md p-2 rounded-md hover:bg-slate-100 transition-colors border border-slate-200"
       >
         {isOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
-      </Button>
+      </button>
 
       {/* Sidebar */}
       <aside
@@ -56,15 +53,19 @@ export default function Sidebar({ isOpen, onToggle }) {
           isOpen ? 'translate-x-0' : '-translate-x-full'
         )}
       >
-        {/* Logo */}
+        {/* Logo Section Corregida */}
         <div className="p-6 border-b border-sidebar-border">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-lg bg-sidebar-primary flex items-center justify-center">
+            <div className="w-10 h-10 rounded-lg bg-sidebar-primary flex items-center justify-center shadow-inner">
               <Building2 className="w-5 h-5 text-sidebar-primary-foreground" />
             </div>
             <div>
-              <h1 className="text-sm font-bold text-sidebar-foreground leading-tight">Mano Amiga</h1>
-              <p className="text-xs text-sidebar-foreground/60">Gestión de Proyectos</p>
+              <h1 className="text-sm font-black text-sidebar-foreground leading-tight tracking-tight uppercase">
+                Sistema RCMA
+              </h1>
+              <p className="text-[10px] font-bold text-sidebar-foreground/60 uppercase tracking-widest">
+                Coordinación de Obras
+              </p>
             </div>
           </div>
         </div>
@@ -93,24 +94,25 @@ export default function Sidebar({ isOpen, onToggle }) {
           })}
         </nav>
 
-        {/* Footer */}
+        {/* Footer Corregido */}
         <div className="p-4 border-t border-sidebar-border space-y-3">
           {isAdmin && (
             <Link
               to="/usuarios"
               onClick={() => window.innerWidth < 1024 && onToggle()}
-              className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-200 ${
+              className={cn(
+                'flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-200',
                 location.pathname === '/usuarios'
                   ? 'bg-sidebar-primary text-sidebar-primary-foreground shadow-md'
                   : 'text-sidebar-foreground/70 hover:text-sidebar-foreground hover:bg-sidebar-accent'
-              }`}
+              )}
             >
               <Users className="w-4 h-4" />
               Usuarios
             </Link>
           )}
-          <p className="text-xs text-sidebar-foreground/40 text-center">
-            Colegios Mano Amiga © 2026
+          <p className="text-[10px] font-bold text-sidebar-foreground/40 text-center uppercase tracking-tighter">
+            Sistema RCMA © 2026
           </p>
         </div>
       </aside>

@@ -1,163 +1,158 @@
-import React, { useState } from 'react';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Textarea } from '@/components/ui/textarea';
-import { Label } from '@/components/ui/label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import PhotoUploader from '@/components/shared/PhotoUploader';
-import ColegioSelector from '@/components/shared/ColegioSelector';
+import React, { useState, useEffect } from 'react';
+import { X, Save, Wrench } from 'lucide-react';
 
-export default function MaintenanceForm({ open, onClose, onSubmit, record, projects = [] }) {
-  const [form, setForm] = useState(record || {
-    territorio: '', colegio: '', project_id: '', title: '', type: 'preventivo', status: 'pendiente',
-    priority: 'media', location: '', description: '', scheduled_date: '',
-    completed_date: '', responsible: '', cost: '', materials_used: '',
-    findings: '', actions_taken: '', photos_before: [], photos_after: [],
-    next_maintenance_date: '', notes: ''
+export default function MaintenanceForm({ open, onClose, onSubmit, task }) {
+  const [formData, setFormData] = useState({
+    title: '',
+    description: '',
+    status: 'pendiente',
+    priority: 'media',
+    location: '',
+    assigned_to: '',
+    due_date: ''
   });
 
-  const update = (field, value) => setForm(prev => ({ ...prev, [field]: value }));
+  useEffect(() => {
+    if (task) {
+      setFormData(task);
+    } else {
+      setFormData({
+        title: '',
+        description: '',
+        status: 'pendiente',
+        priority: 'media',
+        location: '',
+        assigned_to: '',
+        due_date: ''
+      });
+    }
+  }, [task, open]);
+
+  if (!open) return null;
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    onSubmit({ ...form, cost: form.cost ? Number(form.cost) : undefined });
+    onSubmit(formData);
   };
 
+  const inputClass = "w-full px-3 py-2 border border-slate-300 rounded-md text-sm focus:ring-2 focus:ring-slate-900 focus:outline-none bg-white text-slate-900";
+  const labelClass = "block text-[10px] font-black text-slate-400 uppercase mb-1 mt-3 tracking-widest";
+
   return (
-    <Dialog open={open} onOpenChange={onClose}>
-      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle>{record ? 'Editar Mantenimiento' : 'Nuevo Mantenimiento'}</DialogTitle>
-        </DialogHeader>
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <ColegioSelector
-            territorio={form.territorio}
-            colegio={form.colegio}
-            onTerritorioChange={v => update('territorio', v)}
-            onColegioChange={v => update('colegio', v)}
-          />
+    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4">
+      <div className="bg-white rounded-xl shadow-2xl max-w-lg w-full max-h-[90vh] overflow-hidden flex flex-col border border-slate-200">
+        
+        <div className="p-5 border-b border-slate-100 flex justify-between items-center bg-slate-50">
+          <h3 className="font-bold text-slate-900 flex items-center gap-2 uppercase tracking-tight">
+            <Wrench className="w-4 h-4 text-slate-400" />
+            {task ? 'Editar Orden de Trabajo' : 'Nueva Orden de Mantenimiento'}
+          </h3>
+          <button onClick={onClose} className="text-slate-400 hover:text-slate-600">
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+
+        <form onSubmit={handleSubmit} className="p-6 overflow-y-auto space-y-2">
           <div>
-            <Label>Título *</Label>
-            <Input value={form.title} onChange={e => update('title', e.target.value)} required placeholder="Ej: Mantenimiento preventivo de techos" />
+            <label className={labelClass}>Título de la Tarea / Correctivo *</label>
+            <input
+              type="text"
+              required
+              className={inputClass}
+              value={formData.title}
+              onChange={e => setFormData({ ...formData, title: e.target.value })}
+              placeholder="Ej. Reparación de filtración en losa"
+            />
+          </div>
+
+          <div>
+            <label className={labelClass}>Descripción del Problema</label>
+            <textarea
+              className={`${inputClass} min-h-[80px]`}
+              value={formData.description}
+              onChange={e => setFormData({ ...formData, description: e.target.value })}
+              placeholder="Detalle los hallazgos encontrados..."
+            />
           </div>
 
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <Label>Tipo *</Label>
-              <Select value={form.type} onValueChange={v => update('type', v)}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="preventivo">Preventivo</SelectItem>
-                  <SelectItem value="correctivo">Correctivo</SelectItem>
-                </SelectContent>
-              </Select>
+              <label className={labelClass}>Estado</label>
+              <select 
+                className={inputClass}
+                value={formData.status}
+                onChange={e => setFormData({ ...formData, status: e.target.value })}
+              >
+                <option value="pendiente">Pendiente</option>
+                <option value="en_progreso">En Progreso</option>
+                <option value="completado">Completado</option>
+              </select>
             </div>
             <div>
-              <Label>Prioridad</Label>
-              <Select value={form.priority} onValueChange={v => update('priority', v)}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="baja">Baja</SelectItem>
-                  <SelectItem value="media">Media</SelectItem>
-                  <SelectItem value="alta">Alta</SelectItem>
-                  <SelectItem value="urgente">Urgente</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <Label>Proyecto asociado</Label>
-              <Select value={form.project_id || 'none'} onValueChange={v => update('project_id', v === 'none' ? '' : v)}>
-                <SelectTrigger><SelectValue placeholder="Seleccionar..." /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none">Sin proyecto</SelectItem>
-                  {projects.map(p => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
-              <Label>Ubicación</Label>
-              <Input value={form.location} onChange={e => update('location', e.target.value)} placeholder="Ubicación" />
+              <label className={labelClass}>Prioridad</label>
+              <select 
+                className={inputClass}
+                value={formData.priority}
+                onChange={e => setFormData({ ...formData, priority: e.target.value })}
+              >
+                <option value="baja">Baja</option>
+                <option value="media">Media</option>
+                <option value="alta">Alta</option>
+                <option value="critica">Crítica</option>
+              </select>
             </div>
           </div>
 
           <div>
-            <Label>Descripción</Label>
-            <Textarea value={form.description} onChange={e => update('description', e.target.value)} rows={3} placeholder="Descripción del mantenimiento..." />
+            <label className={labelClass}>Ubicación / Área del Plantel</label>
+            <input
+              type="text"
+              className={inputClass}
+              value={formData.location}
+              onChange={e => setFormData({ ...formData, location: e.target.value })}
+              placeholder="Ej. Edificio B, Planta Alta"
+            />
           </div>
 
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <Label>Fecha Programada</Label>
-              <Input type="date" value={form.scheduled_date} onChange={e => update('scheduled_date', e.target.value)} />
+              <label className={labelClass}>Asignado a (Técnico)</label>
+              <input
+                type="text"
+                className={inputClass}
+                value={formData.assigned_to}
+                onChange={e => setFormData({ ...formData, assigned_to: e.target.value })}
+              />
             </div>
             <div>
-              <Label>Responsable</Label>
-              <Input value={form.responsible} onChange={e => update('responsible', e.target.value)} placeholder="Nombre" />
+              <label className={labelClass}>Fecha Límite</label>
+              <input
+                type="date"
+                className={inputClass}
+                value={formData.due_date}
+                onChange={e => setFormData({ ...formData, due_date: e.target.value })}
+              />
             </div>
           </div>
 
-          {record && (
-            <>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <Label>Estado</Label>
-                  <Select value={form.status} onValueChange={v => update('status', v)}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="pendiente">Pendiente</SelectItem>
-                      <SelectItem value="en_progreso">En Progreso</SelectItem>
-                      <SelectItem value="completado">Completado</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div>
-                  <Label>Fecha de Completado</Label>
-                  <Input type="date" value={form.completed_date} onChange={e => update('completed_date', e.target.value)} />
-                </div>
-              </div>
-              <div>
-                <Label>Hallazgos</Label>
-                <Textarea value={form.findings} onChange={e => update('findings', e.target.value)} rows={2} placeholder="Hallazgos encontrados..." />
-              </div>
-              <div>
-                <Label>Acciones Realizadas</Label>
-                <Textarea value={form.actions_taken} onChange={e => update('actions_taken', e.target.value)} rows={2} placeholder="Acciones tomadas..." />
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <Label>Costo</Label>
-                  <Input type="number" value={form.cost} onChange={e => update('cost', e.target.value)} placeholder="0.00" />
-                </div>
-                <div>
-                  <Label>Materiales Usados</Label>
-                  <Input value={form.materials_used} onChange={e => update('materials_used', e.target.value)} placeholder="Materiales" />
-                </div>
-              </div>
-              <div>
-                <Label>Próximo Mantenimiento</Label>
-                <Input type="date" value={form.next_maintenance_date} onChange={e => update('next_maintenance_date', e.target.value)} />
-              </div>
-            </>
-          )}
-
-          <PhotoUploader photos={form.photos_before || []} onChange={photos => update('photos_before', photos)} label="Fotos Antes" />
-          <PhotoUploader photos={form.photos_after || []} onChange={photos => update('photos_after', photos)} label="Fotos Después" />
-
-          <div>
-            <Label>Notas</Label>
-            <Textarea value={form.notes} onChange={e => update('notes', e.target.value)} rows={2} placeholder="Notas adicionales..." />
-          </div>
-
-          <div className="flex justify-end gap-3 pt-2">
-            <Button type="button" variant="outline" onClick={onClose}>Cancelar</Button>
-            <Button type="submit">{record ? 'Guardar Cambios' : 'Crear Registro'}</Button>
+          <div className="p-5 border-t border-slate-100 bg-slate-50 flex justify-end gap-3 mt-6">
+            <button 
+              type="button"
+              onClick={onClose} 
+              className="px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-200 rounded-md transition-colors"
+            >
+              Cancelar
+            </button>
+            <button 
+              type="submit" 
+              className="px-6 py-2 bg-slate-900 text-white rounded-md text-sm font-bold hover:bg-slate-800 flex items-center gap-2 shadow-lg active:scale-95 transition-all"
+            >
+              <Save className="w-4 h-4" />
+              {task ? 'Actualizar Orden' : 'Crear Orden'}
+            </button>
           </div>
         </form>
-      </DialogContent>
-    </Dialog>
+      </div>
+    </div>
   );
 }

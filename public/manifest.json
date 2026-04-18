@@ -1,0 +1,23 @@
+{
+  "short_name": "RCMA",
+  "name": "Sistema de Gestión RCMA",
+  "description": "Control de mantenimiento y levantamiento de infraestructura educativa.",
+  "icons": [
+    {
+      "src": "logo.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "logo.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ],
+  "start_url": ".",
+  "display": "standalone",
+  "theme_color": "#0f172a",
+  "background_color": "#ffffff"
+}

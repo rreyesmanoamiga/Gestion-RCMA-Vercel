@@ -1,5 +1,4 @@
 import React from 'react';
-import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 
 const statusStyles = {
@@ -24,6 +23,7 @@ const statusStyles = {
   correctivo: 'bg-orange-100 text-orange-700 border-orange-200',
   borrador: 'bg-slate-100 text-slate-600 border-slate-200',
   finalizado: 'bg-emerald-100 text-emerald-700 border-emerald-200',
+  completado: 'bg-emerald-100 text-emerald-700 border-emerald-200',
 };
 
 const statusLabels = {
@@ -50,9 +50,15 @@ const statusLabels = {
 };
 
 export default function StatusBadge({ status }) {
+  // Fallback para estados no definidos
+  const fallbackStyle = 'bg-slate-50 text-slate-400 border-slate-200';
+  
   return (
-    <Badge variant="outline" className={cn('text-xs font-medium border', statusStyles[status] || 'bg-muted text-muted-foreground')}>
+    <span className={cn(
+      'inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold border transition-colors',
+      statusStyles[status] || fallbackStyle
+    )}>
       {statusLabels[status] || status}
-    </Badge>
+    </span>
   );
 }

@@ -1,17 +1,10 @@
 import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { supabase } from '@/lib/supabaseClient'; // Cambiado a Supabase
+import { supabase } from '@/lib/supabaseClient'; 
 import { db } from '@/lib/db';
 import { useAuth } from '@/lib/AuthContext';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Badge } from '@/components/ui/badge';
-import { Switch } from '@/components/ui/switch';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { PERMISSIONS, PERMISSION_GROUPS, DEFAULT_PERMISSIONS } from '@/lib/permissions';
-import { Users, UserPlus, Shield, ShieldCheck, Mail, Pencil } from 'lucide-react';
+import { Users, UserPlus, Shield, ShieldCheck, Mail, Pencil, X } from 'lucide-react';
 import { toast } from 'sonner';
 import PageHeader from '@/components/shared/PageHeader';
 
@@ -24,13 +17,10 @@ export default function UserManagement() {
   const [invitePerms, setInvitePerms] = useState(DEFAULT_PERMISSIONS);
   const [inviting, setInviting] = useState(false);
 
-  // 1. Obtener lista de usuarios desde tu tabla de perfiles/usuarios
   const { data: users = [] } = useQuery({
     queryKey: ['users'],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('profiles') // Asumiendo que tienes una tabla 'profiles'
-        .select('*');
+      const { data, error } = await supabase.from('profiles').select('*');
       if (error) throw error;
       return data;
     },
@@ -54,13 +44,9 @@ export default function UserManagement() {
     e.preventDefault();
     setInviting(true);
     try {
-      // 2. Invitar mediante Supabase Auth
       const { data, error } = await supabase.auth.admin.inviteUserByEmail(inviteEmail);
       if (error) throw error;
-
-      // 3. Crear sus permisos iniciales
       await db.UserPermissions.create({ user_email: inviteEmail, ...invitePerms });
-      
       await qc.invalidateQueries(['userPermissions']);
       toast.success(`Invitación enviada a ${inviteEmail}`);
       setInviteEmail('');
@@ -97,20 +83,30 @@ export default function UserManagement() {
   const nonAdminUsers = users.filter(u => u.role !== 'admin' && u.email !== currentUser?.email);
   const adminUsers = users.filter(u => u.role === 'admin');
 
+  // Clases compartidas
+  const cardClass = "bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden";
+  const btnPrimary = "px-4 py-2 bg-slate-900 text-white rounded-md text-sm font-medium hover:bg-slate-800 disabled:opacity-50 transition-colors";
+  const btnOutline = "px-4 py-2 border border-slate-300 rounded-md text-sm font-medium text-slate-700 hover:bg-slate-50 transition-colors flex items-center gap-2";
+
   const PermissionEditor = ({ perms, onChange }) => (
-    <div className="space-y-4">
+    <div className="space-y-6">
       {PERMISSION_GROUPS.map(group => (
-        <div key={group.label}>
-          <p className="text-sm font-semibold text-foreground mb-2">{group.label}</p>
-          <div className="grid grid-cols-2 gap-2">
+        <div key={group.label} className="bg-slate-50 p-4 rounded-lg border border-slate-100">
+          <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-3">{group.label}</p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             {group.permissions.map(perm => (
-              <div key={perm} className="flex items-center gap-2">
-                <Switch
-                  checked={!!perms[perm]}
-                  onCheckedChange={v => onChange({ ...perms, [perm]: v })}
-                />
-                <span className="text-sm text-muted-foreground">{PERMISSIONS[perm]}</span>
-              </div>
+              <label key={perm} className="flex items-center gap-3 cursor-pointer group">
+                <div className="relative inline-flex items-center">
+                  <input
+                    type="checkbox"
+                    className="sr-only peer"
+                    checked={!!perms[perm]}
+                    onChange={e => onChange({ ...perms, [perm]: e.target.checked })}
+                  />
+                  <div className="w-9 h-5 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-slate-800"></div>
+                </div>
+                <span className="text-sm text-slate-600 group-hover:text-slate-900 transition-colors">{PERMISSIONS[perm]}</span>
+              </label>
             ))}
           </div>
         </div>
@@ -119,129 +115,135 @@ export default function UserManagement() {
   );
 
   return (
-    <div className="p-6 max-w-4xl mx-auto space-y-6">
+    <div className="p-4 sm:p-6 max-w-4xl mx-auto space-y-8">
       <PageHeader
         title="Gestión de Usuarios"
-        subtitle="Administra usuarios y sus permisos en la plataforma"
+        subtitle="Administra usuarios y permisos del Sistema RCMA"
         actionLabel="Invitar Usuario"
         onAction={() => setShowInvite(true)}
       />
 
-      {/* Admins */}
-      <Card>
-        <CardHeader className="pb-3">
-          <CardTitle className="flex items-center gap-2 text-base">
-            <ShieldCheck className="w-4 h-4 text-primary" />
-            Administradores
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-2">
+      {/* Administradores */}
+      <div className={cardClass}>
+        <div className="px-5 py-4 border-b border-slate-100 bg-slate-50/50">
+          <h2 className="flex items-center gap-2 text-sm font-bold text-slate-800 uppercase tracking-tight">
+            <ShieldCheck className="w-4 h-4 text-blue-600" />
+            Administradores del Sistema
+          </h2>
+        </div>
+        <div className="divide-y divide-slate-100 px-5">
           {adminUsers.map(u => (
-            <div key={u.id} className="flex items-center justify-between py-2 border-b last:border-0">
+            <div key={u.id} className="flex items-center justify-between py-4">
               <div className="flex items-center gap-3">
-                <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center">
-                  <span className="text-xs font-bold text-primary">{u.full_name?.[0] || u.email[0].toUpperCase()}</span>
+                <div className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center border border-slate-200">
+                  <span className="text-sm font-bold text-slate-600">{u.full_name?.[0] || u.email[0].toUpperCase()}</span>
                 </div>
                 <div>
-                  <p className="text-sm font-medium">{u.full_name || u.email}</p>
-                  <p className="text-xs text-muted-foreground">{u.email}</p>
+                  <p className="text-sm font-bold text-slate-900">{u.full_name || u.email}</p>
+                  <p className="text-xs text-slate-500">{u.email}</p>
                 </div>
               </div>
-              <Badge className="bg-primary/10 text-primary border-0"><Shield className="w-3 h-3 mr-1" />Admin</Badge>
+              <span className="px-2 py-1 bg-blue-50 text-blue-700 text-[10px] font-bold rounded border border-blue-100 uppercase">Master Admin</span>
             </div>
           ))}
-        </CardContent>
-      </Card>
+        </div>
+      </div>
 
-      {/* Regular Users */}
-      <Card>
-        <CardHeader className="pb-3">
-          <CardTitle className="flex items-center gap-2 text-base">
-            <Users className="w-4 h-4 text-muted-foreground" />
+      {/* Invitados */}
+      <div className={cardClass}>
+        <div className="px-5 py-4 border-b border-slate-100">
+          <h2 className="flex items-center gap-2 text-sm font-bold text-slate-800 uppercase tracking-tight">
+            <Users className="w-4 h-4 text-slate-400" />
             Usuarios Invitados
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
+          </h2>
+        </div>
+        <div className="px-5">
           {nonAdminUsers.length === 0 ? (
-            <p className="text-sm text-muted-foreground text-center py-6">No hay usuarios invitados aún.</p>
+            <p className="text-sm text-slate-400 text-center py-10 italic">No hay usuarios invitados registrados.</p>
           ) : (
-            <div className="space-y-2">
+            <div className="divide-y divide-slate-100">
               {nonAdminUsers.map(u => {
                 const rec = allPerms.find(p => p.user_email === u.email);
                 const activePerms = rec ? Object.keys(PERMISSIONS).filter(k => rec[k]) : [];
                 return (
-                  <div key={u.id} className="flex items-center justify-between py-2 border-b last:border-0">
+                  <div key={u.id} className="flex items-center justify-between py-4">
                     <div className="flex items-center gap-3">
-                      <div className="w-8 h-8 rounded-full bg-muted flex items-center justify-center">
-                        <span className="text-xs font-bold text-muted-foreground">{u.full_name?.[0] || u.email[0].toUpperCase()}</span>
+                      <div className="w-10 h-10 rounded-full bg-slate-50 flex items-center justify-center border border-slate-100">
+                        <span className="text-sm font-bold text-slate-400">{u.full_name?.[0] || u.email[0].toUpperCase()}</span>
                       </div>
                       <div>
-                        <p className="text-sm font-medium">{u.full_name || u.email}</p>
-                        <p className="text-xs text-muted-foreground">{u.email}</p>
-                        <p className="text-xs text-muted-foreground mt-0.5">{activePerms.length} permiso(s) activo(s)</p>
+                        <p className="text-sm font-bold text-slate-900">{u.full_name || u.email}</p>
+                        <p className="text-xs text-slate-500">{u.email}</p>
+                        <p className="text-[10px] font-bold text-blue-600 mt-0.5 uppercase tracking-tighter">{activePerms.length} permisos activos</p>
                       </div>
                     </div>
-                    <div className="flex gap-2">
-                      <Button size="sm" variant="outline" onClick={() => openEdit(u.email)}>
-                        <Pencil className="w-3 h-3 mr-1" />Permisos
-                      </Button>
-                    </div>
+                    <button onClick={() => openEdit(u.email)} className={btnOutline}>
+                      <Pencil className="w-3.5 h-3.5" /> Gestionar
+                    </button>
                   </div>
                 );
               })}
             </div>
           )}
-        </CardContent>
-      </Card>
+        </div>
+      </div>
 
-      <Dialog open={showInvite} onOpenChange={setShowInvite}>
-        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2"><UserPlus className="w-4 h-4" />Invitar Usuario</DialogTitle>
-          </DialogHeader>
-          <form onSubmit={handleInvite} className="space-y-5">
-            <div>
-              <Label>Correo electrónico *</Label>
-              <div className="relative mt-1">
-                <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                <Input
-                  type="email"
-                  required
-                  className="pl-9"
-                  placeholder="usuario@ejemplo.com"
-                  value={inviteEmail}
-                  onChange={e => setInviteEmail(e.target.value)}
+      {/* Modales Personalizados */}
+      {(showInvite || editingUser) && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4">
+          <div className="bg-white rounded-xl shadow-2xl max-w-lg w-full max-h-[90vh] overflow-hidden flex flex-col border border-slate-200">
+            <div className="p-5 border-b border-slate-100 flex justify-between items-center bg-slate-50">
+              <h3 className="font-bold text-slate-900 flex items-center gap-2">
+                {showInvite ? <><UserPlus className="w-4 h-4" /> Invitar nuevo usuario</> : `Permisos: ${editingUser?.email}`}
+              </h3>
+              <button onClick={() => { setShowInvite(false); setEditingUser(null); }} className="text-slate-400 hover:text-slate-600">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            
+            <div className="p-6 overflow-y-auto">
+              {showInvite ? (
+                <form id="invite-form" onSubmit={handleInvite} className="space-y-6">
+                  <div>
+                    <label className="block text-xs font-bold text-slate-500 uppercase mb-2 tracking-wide">Correo institucional</label>
+                    <div className="relative">
+                      <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                      <input
+                        type="email"
+                        required
+                        className="w-full pl-10 pr-4 py-2 border border-slate-300 rounded-md text-sm focus:ring-2 focus:ring-slate-900 focus:outline-none"
+                        placeholder="ejemplo@organizacion.com"
+                        value={inviteEmail}
+                        onChange={e => setInviteEmail(e.target.value)}
+                      />
+                    </div>
+                  </div>
+                  <PermissionEditor perms={invitePerms} onChange={setInvitePerms} />
+                </form>
+              ) : (
+                <PermissionEditor
+                  perms={editingUser.perms}
+                  onChange={perms => setEditingUser(prev => ({ ...prev, perms }))}
                 />
-              </div>
+              )}
             </div>
-            <div>
-              <p className="text-sm font-semibold mb-3">Permisos del usuario</p>
-              <PermissionEditor perms={invitePerms} onChange={setInvitePerms} />
-            </div>
-            <div className="flex justify-end gap-3 pt-2">
-              <Button type="button" variant="outline" onClick={() => setShowInvite(false)}>Cancelar</Button>
-              <Button type="submit" disabled={inviting}>{inviting ? 'Enviando...' : 'Enviar Invitación'}</Button>
-            </div>
-          </form>
-        </DialogContent>
-      </Dialog>
 
-      {editingUser && (
-        <Dialog open={!!editingUser} onOpenChange={() => setEditingUser(null)}>
-          <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
-            <DialogHeader>
-              <DialogTitle>Permisos de {editingUser.email}</DialogTitle>
-            </DialogHeader>
-            <PermissionEditor
-              perms={editingUser.perms}
-              onChange={perms => setEditingUser(prev => ({ ...prev, perms }))}
-            />
-            <div className="flex justify-end gap-3 pt-2">
-              <Button variant="outline" onClick={() => setEditingUser(null)}>Cancelar</Button>
-              <Button onClick={handleSaveEdit}>Guardar Permisos</Button>
+            <div className="p-5 border-t border-slate-100 bg-slate-50 flex justify-end gap-3">
+              <button onClick={() => { setShowInvite(false); setEditingUser(null); }} className="px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-200 rounded-md transition-colors">
+                Cancelar
+              </button>
+              {showInvite ? (
+                <button form="invite-form" type="submit" disabled={inviting} className={btnPrimary}>
+                  {inviting ? 'Enviando invitación...' : 'Enviar Invitación'}
+                </button>
+              ) : (
+                <button onClick={handleSaveEdit} className={btnPrimary}>
+                  Guardar cambios de acceso
+                </button>
+              )}
             </div>
-          </DialogContent>
-        </Dialog>
+          </div>
+        </div>
       )}
     </div>
   );

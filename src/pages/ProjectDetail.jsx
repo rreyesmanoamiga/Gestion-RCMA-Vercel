@@ -1,141 +1,161 @@
-import React, { useState } from 'react';
-import { db } from '@/lib/db';
+import React from 'react';
+import { useParams, Link, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Link } from 'react-router-dom';
-import { ArrowLeft, MapPin, Calendar, User, DollarSign, Pencil, Trash2 } from 'lucide-react';
-import { format } from 'date-fns';
-import { es } from 'date-fns/locale';
-import { Button } from '@/components/ui/button';
-import { Progress } from '@/components/ui/progress';
+import { db } from '@/lib/db';
+import { 
+  ArrowLeft, 
+  Calendar, 
+  MapPin, 
+  User, 
+  FileText, 
+  Trash2, 
+  Pencil, 
+  CheckCircle2,
+  Clock
+} from 'lucide-react';
 import StatusBadge from '@/components/shared/StatusBadge';
 import PriorityBadge from '@/components/shared/PriorityBadge';
-import ProjectForm from '@/components/projects/ProjectForm';
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
-import { useNavigate } from 'react-router-dom';
 
 export default function ProjectDetail() {
-  const urlParams = new URLSearchParams(window.location.search);
-  const projectId = window.location.pathname.split('/').pop();
+  const { id } = useParams();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const [editing, setEditing] = useState(false);
 
-  const { data: projects = [] } = useQuery({
+  const { data: projects = [], isLoading } = useQuery({
     queryKey: ['projects'],
     queryFn: () => db.Project.list('-created_at', 100),
   });
 
-  const project = projects.find(p => p.id === projectId);
-
-  const updateMutation = useMutation({
-    mutationFn: (data) => db.Project.update(projectId, data),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['projects'] });
-      setEditing(false);
-    },
-  });
+  const project = projects.find(p => p.id === id);
 
   const deleteMutation = useMutation({
-    mutationFn: () => db.Project.delete(projectId),
+    mutationFn: () => db.Project.delete(id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['projects'] });
       navigate('/proyectos');
     },
   });
 
-  if (!project) {
-    return <div className="flex items-center justify-center py-20"><div className="w-8 h-8 border-4 border-muted border-t-primary rounded-full animate-spin" /></div>;
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center py-20">
+        <div className="w-8 h-8 border-4 border-slate-200 border-t-slate-800 rounded-full animate-spin" />
+      </div>
+    );
   }
 
+  if (!project) {
+    return (
+      <div className="text-center py-20">
+        <p className="text-slate-500">El proyecto no existe o ha sido eliminado.</p>
+        <Link to="/proyectos" className="text-blue-600 font-bold mt-4 inline-block italic underline">Volver al listado</Link>
+      </div>
+    );
+  }
+
+  // Estilos de botones nativos
+  const btnDanger = "inline-flex items-center gap-2 px-4 py-2 border border-red-200 text-red-600 rounded-md text-sm font-bold hover:bg-red-50 transition-colors";
+  const btnOutline = "inline-flex items-center gap-2 px-4 py-2 border border-slate-300 rounded-md text-sm font-bold text-slate-700 hover:bg-slate-50 transition-colors";
+
   return (
-    <div className="max-w-3xl mx-auto">
-      <Link to="/proyectos" className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground mb-6">
-        <ArrowLeft className="w-4 h-4" /> Volver a Proyectos
-      </Link>
-
-      <div className="bg-card rounded-xl border border-border p-6">
-        <div className="flex items-start justify-between mb-4">
-          <div className="flex items-center gap-2 flex-wrap">
-            <StatusBadge status={project.status} />
-            <PriorityBadge priority={project.priority} />
-            <span className="text-xs text-muted-foreground capitalize px-2 py-0.5 bg-muted rounded-md">
-              {project.type === 'construccion' ? 'Construcción' : 'Mantenimiento'}
-            </span>
-          </div>
-          <div className="flex gap-2">
-            <Button variant="outline" size="sm" onClick={() => setEditing(true)} className="gap-1.5">
-              <Pencil className="w-3.5 h-3.5" /> Editar
-            </Button>
-            <AlertDialog>
-              <AlertDialogTrigger asChild>
-                <Button variant="outline" size="sm" className="text-destructive hover:bg-destructive/10 gap-1.5">
-                  <Trash2 className="w-3.5 h-3.5" /> Eliminar
-                </Button>
-              </AlertDialogTrigger>
-              <AlertDialogContent>
-                <AlertDialogHeader>
-                  <AlertDialogTitle>¿Eliminar proyecto?</AlertDialogTitle>
-                  <AlertDialogDescription>Esta acción no se puede deshacer.</AlertDialogDescription>
-                </AlertDialogHeader>
-                <AlertDialogFooter>
-                  <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                  <AlertDialogAction onClick={() => deleteMutation.mutate()} className="bg-destructive text-destructive-foreground">Eliminar</AlertDialogAction>
-                </AlertDialogFooter>
-              </AlertDialogContent>
-            </AlertDialog>
-          </div>
+    <div className="max-w-5xl mx-auto space-y-6 p-4">
+      {/* Navegación y Acciones */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <Link to="/proyectos" className="flex items-center gap-2 text-sm font-bold text-slate-400 hover:text-slate-900 transition-colors uppercase tracking-tighter">
+          <ArrowLeft className="w-4 h-4" /> Volver a Proyectos
+        </Link>
+        <div className="flex gap-2">
+          <button className={btnOutline} onClick={() => alert('Función de edición en desarrollo')}>
+            <Pencil className="w-4 h-4" /> Editar
+          </button>
+          <button 
+            className={btnDanger}
+            onClick={() => {
+              if (window.confirm('¿Confirmas la eliminación definitiva de este proyecto?')) {
+                deleteMutation.mutate();
+              }
+            }}
+          >
+            <Trash2 className="w-4 h-4" /> Eliminar
+          </button>
         </div>
-
-        <h1 className="text-xl font-bold text-foreground mb-2">{project.name}</h1>
-        {project.description && <p className="text-sm text-muted-foreground mb-4">{project.description}</p>}
-
-        {project.progress > 0 && (
-          <div className="mb-5">
-            <div className="flex items-center justify-between text-sm mb-1.5">
-              <span className="text-muted-foreground">Avance del proyecto</span>
-              <span className="font-semibold">{project.progress}%</span>
-            </div>
-            <Progress value={project.progress} className="h-2" />
-          </div>
-        )}
-
-        <div className="grid grid-cols-2 gap-4 text-sm">
-          {project.location && (
-            <div className="flex items-center gap-2 text-muted-foreground">
-              <MapPin className="w-4 h-4" /> <span>{project.location}</span>
-            </div>
-          )}
-          {project.responsible && (
-            <div className="flex items-center gap-2 text-muted-foreground">
-              <User className="w-4 h-4" /> <span>{project.responsible}</span>
-            </div>
-          )}
-          {project.start_date && (
-            <div className="flex items-center gap-2 text-muted-foreground">
-              <Calendar className="w-4 h-4" /> <span>Inicio: {format(new Date(project.start_date), 'dd MMM yyyy', { locale: es })}</span>
-            </div>
-          )}
-          {project.end_date && (
-            <div className="flex items-center gap-2 text-muted-foreground">
-              <Calendar className="w-4 h-4" /> <span>Fin: {format(new Date(project.end_date), 'dd MMM yyyy', { locale: es })}</span>
-            </div>
-          )}
-          {project.budget && (
-            <div className="flex items-center gap-2 text-muted-foreground">
-              <DollarSign className="w-4 h-4" /> <span>${Number(project.budget).toLocaleString()}</span>
-            </div>
-          )}
-        </div>
-
-        {project.notes && (
-          <div className="mt-5 pt-5 border-t border-border">
-            <h3 className="text-sm font-medium text-foreground mb-1">Notas</h3>
-            <p className="text-sm text-muted-foreground whitespace-pre-wrap">{project.notes}</p>
-          </div>
-        )}
       </div>
 
-      <ProjectForm open={editing} onClose={() => setEditing(false)} onSubmit={data => updateMutation.mutate(data)} project={project} />
+      {/* Cabecera de Proyecto */}
+      <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+        <div className="p-6 sm:p-8 border-b border-slate-100 bg-slate-50/30">
+          <div className="flex flex-wrap gap-2 mb-4">
+            <StatusBadge status={project.status} />
+            <PriorityBadge priority={project.priority} />
+          </div>
+          <h1 className="text-3xl font-black text-slate-900 leading-tight">{project.name}</h1>
+          <p className="text-slate-500 mt-2 max-w-2xl text-sm leading-relaxed italic">
+            {project.description || "Sin descripción técnica detallada."}
+          </p>
+        </div>
+
+        {/* Ficha Técnica */}
+        <div className="grid grid-cols-1 md:grid-cols-3 divide-y md:divide-y-0 md:divide-x divide-slate-100 bg-white">
+          <div className="p-6">
+            <div className="flex items-center gap-3 mb-1">
+              <MapPin className="w-4 h-4 text-slate-400" />
+              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Ubicación / Colegio</span>
+            </div>
+            <p className="text-sm font-bold text-slate-800 ml-7">{project.location || 'No especificada'}</p>
+          </div>
+          <div className="p-6">
+            <div className="flex items-center gap-3 mb-1">
+              <User className="w-4 h-4 text-slate-400" />
+              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Responsable de Obra</span>
+            </div>
+            <p className="text-sm font-bold text-slate-800 ml-7">{project.responsible || 'Sin asignar'}</p>
+          </div>
+          <div className="p-6">
+            <div className="flex items-center gap-3 mb-1">
+              <Calendar className="w-4 h-4 text-slate-400" />
+              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Fecha de Inicio</span>
+            </div>
+            <p className="text-sm font-bold text-slate-800 ml-7">{project.start_date || 'Pendiente'}</p>
+          </div>
+        </div>
+      </div>
+
+      {/* Avance y Detalles */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="lg:col-span-2 space-y-6">
+          <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
+            <h3 className="text-sm font-bold text-slate-900 uppercase tracking-tight mb-4 flex items-center gap-2">
+              <Clock className="w-4 h-4 text-blue-600" />
+              Estado del Avance
+            </h3>
+            <div className="flex items-end justify-between mb-2">
+              <span className="text-3xl font-black text-slate-900">{project.progress || 0}%</span>
+              <span className="text-xs font-bold text-slate-400 mb-1">PROGRESO TOTAL</span>
+            </div>
+            <div className="w-full bg-slate-100 rounded-full h-3 overflow-hidden border border-slate-200">
+              <div 
+                className="bg-slate-900 h-full transition-all duration-1000 ease-out" 
+                style={{ width: `${project.progress || 0}%` }}
+              />
+            </div>
+          </div>
+        </div>
+
+        <div className="space-y-6">
+          <div className="bg-slate-900 text-white p-6 rounded-xl shadow-lg relative overflow-hidden">
+            <FileText className="absolute -right-4 -bottom-4 w-24 h-24 text-white/10 rotate-12" />
+            <h3 className="text-xs font-bold text-white/60 uppercase tracking-widest mb-4">Acceso Rápido</h3>
+            <div className="space-y-3 relative z-10">
+              <button className="w-full py-2 px-4 bg-white/10 hover:bg-white/20 rounded-lg text-xs font-bold transition-colors text-left flex items-center gap-2">
+                <CheckCircle2 className="w-4 h-4 text-green-400" /> Ver Checklists Vinculados
+              </button>
+              <button className="w-full py-2 px-4 bg-white/10 hover:bg-white/20 rounded-lg text-xs font-bold transition-colors text-left flex items-center gap-2">
+                <FileText className="w-4 h-4 text-blue-400" /> Generar Reporte PDF
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }

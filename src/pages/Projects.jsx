@@ -10,8 +10,6 @@ import EmptyState from '@/components/shared/EmptyState';
 import StatusBadge from '@/components/shared/StatusBadge';
 import PriorityBadge from '@/components/shared/PriorityBadge';
 import ProjectForm from '@/components/projects/ProjectForm';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Progress } from '@/components/ui/progress';
 import { COLEGIOS, TERRITORIOS } from '@/lib/colegios';
 
 export default function Projects() {
@@ -47,48 +45,63 @@ export default function Projects() {
     return true;
   });
 
+  // Estilo común para los selectores de filtro
+  const selectClass = "h-10 px-3 py-2 bg-white border border-slate-300 rounded-md text-sm focus:ring-2 focus:ring-slate-400 focus:outline-none text-slate-700";
+
   if (isLoading) {
-    return <div className="flex items-center justify-center py-20"><div className="w-8 h-8 border-4 border-muted border-t-primary rounded-full animate-spin" /></div>;
+    return <div className="flex items-center justify-center py-20"><div className="w-8 h-8 border-4 border-slate-200 border-t-slate-800 rounded-full animate-spin" /></div>;
   }
 
   return (
     <div>
-      <PageHeader title="Proyectos" subtitle="Gestión de proyectos de construcción y mantenimiento" actionLabel="Nuevo Proyecto" onAction={() => setShowForm(true)} />
+      <PageHeader 
+        title="Proyectos" 
+        subtitle="Gestión de proyectos de construcción y mantenimiento" 
+        actionLabel="Nuevo Proyecto" 
+        onAction={() => setShowForm(true)} 
+      />
 
-      {/* Filters */}
+      {/* Filtros de Proyecto */}
       <div className="flex flex-wrap gap-3 mb-6">
-        <Select value={filterTerritorio} onValueChange={v => { setFilterTerritorio(v); setFilterColegio('all'); }}>
-          <SelectTrigger className="w-36"><SelectValue placeholder="Territorio" /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">Territorios</SelectItem>
-            {TERRITORIOS.map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}
-          </SelectContent>
-        </Select>
-        <Select value={filterColegio} onValueChange={setFilterColegio}>
-          <SelectTrigger className="w-36"><SelectValue placeholder="Colegio" /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">Colegios</SelectItem>
-            {colegiosPorTerritorio.map(c => <SelectItem key={c.colegio} value={c.colegio}>{c.colegio}</SelectItem>)}
-          </SelectContent>
-        </Select>
-        <Select value={filterType} onValueChange={setFilterType}>
-          <SelectTrigger className="w-36"><SelectValue placeholder="Tipo" /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">Todos los tipos</SelectItem>
-            <SelectItem value="construccion">Construcción</SelectItem>
-            <SelectItem value="mantenimiento">Mantenimiento</SelectItem>
-          </SelectContent>
-        </Select>
-        <Select value={filterStatus} onValueChange={setFilterStatus}>
-          <SelectTrigger className="w-36"><SelectValue placeholder="Estado" /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">Todos</SelectItem>
-            <SelectItem value="planificado">Planificado</SelectItem>
-            <SelectItem value="en_progreso">En Progreso</SelectItem>
-            <SelectItem value="completado">Completado</SelectItem>
-            <SelectItem value="pausado">Pausado</SelectItem>
-          </SelectContent>
-        </Select>
+        <select 
+          className={selectClass}
+          value={filterTerritorio} 
+          onChange={e => { setFilterTerritorio(e.target.value); setFilterColegio('all'); }}
+        >
+          <option value="all">Territorios</option>
+          {TERRITORIOS.map(t => <option key={t} value={t}>{t}</option>)}
+        </select>
+
+        <select 
+          className={selectClass}
+          value={filterColegio} 
+          onChange={e => setFilterColegio(e.target.value)}
+        >
+          <option value="all">Colegios</option>
+          {colegiosPorTerritorio.map(c => <option key={c.colegio} value={c.colegio}>{c.colegio}</option>)}
+        </select>
+
+        <select 
+          className={selectClass}
+          value={filterType} 
+          onChange={e => setFilterType(e.target.value)}
+        >
+          <option value="all">Todos los tipos</option>
+          <option value="construccion">Construcción</option>
+          <option value="mantenimiento">Mantenimiento</option>
+        </select>
+
+        <select 
+          className={selectClass}
+          value={filterStatus} 
+          onChange={e => setFilterStatus(e.target.value)}
+        >
+          <option value="all">Todos los estados</option>
+          <option value="planificado">Planificado</option>
+          <option value="en_progreso">En Progreso</option>
+          <option value="completado">Completado</option>
+          <option value="pausado">Pausado</option>
+        </select>
       </div>
 
       {filtered.length === 0 ? (
@@ -102,39 +115,53 @@ export default function Projects() {
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
           {filtered.map(project => (
-            <Link key={project.id} to={`/proyectos/${project.id}`} className="bg-card rounded-xl border border-border p-5 hover:shadow-lg transition-all duration-300 group">
+            <Link key={project.id} to={`/proyectos/${project.id}`} className="bg-white rounded-xl border border-slate-200 p-5 hover:shadow-lg transition-all duration-300 group flex flex-col">
               <div className="flex items-start justify-between mb-3">
                 <div className="flex items-center gap-2 flex-wrap">
                   <StatusBadge status={project.status} />
                   <PriorityBadge priority={project.priority} />
                 </div>
                 <div className="text-right shrink-0 ml-2">
-                  {project.colegio && <p className="text-xs font-semibold text-primary">{project.colegio}</p>}
-                  {project.territorio && <p className="text-[10px] text-muted-foreground">{project.territorio}</p>}
+                  {project.colegio && <p className="text-xs font-bold text-slate-800">{project.colegio}</p>}
+                  {project.territorio && <p className="text-[10px] text-slate-400 font-medium uppercase">{project.territorio}</p>}
                 </div>
               </div>
-              <h3 className="font-semibold text-foreground mb-1 group-hover:text-primary transition-colors">{project.name}</h3>
-              {project.description && <p className="text-xs text-muted-foreground line-clamp-2 mb-3">{project.description}</p>}
               
-              {project.progress > 0 && (
-                <div className="mb-3">
-                  <div className="flex items-center justify-between text-xs text-muted-foreground mb-1">
-                    <span>Avance</span>
+              <h3 className="font-semibold text-slate-900 mb-1 group-hover:text-blue-600 transition-colors leading-tight">
+                {project.name}
+              </h3>
+              
+              {project.description && (
+                <p className="text-xs text-slate-500 line-clamp-2 mb-4 h-8 italic">
+                  {project.description}
+                </p>
+              )}
+              
+              {/* Barra de Progreso Personalizada */}
+              {project.progress !== undefined && (
+                <div className="mb-4 mt-auto">
+                  <div className="flex items-center justify-between text-[10px] font-bold text-slate-400 mb-1 uppercase tracking-tighter">
+                    <span>Avance de obra</span>
                     <span>{project.progress}%</span>
                   </div>
-                  <Progress value={project.progress} className="h-1.5" />
+                  <div className="w-full bg-slate-100 rounded-full h-1.5 overflow-hidden">
+                    <div 
+                      className="bg-slate-800 h-full transition-all duration-500" 
+                      style={{ width: `${project.progress}%` }}
+                    />
+                  </div>
                 </div>
               )}
 
-              <div className="flex flex-wrap gap-3 text-xs text-muted-foreground">
+              <div className="flex flex-wrap gap-x-4 gap-y-2 text-[10px] text-slate-400 border-t border-slate-50 pt-3 uppercase font-semibold">
                 {project.location && (
-                  <span className="flex items-center gap-1"><MapPin className="w-3 h-3" />{project.location}</span>
+                  <span className="flex items-center gap-1.5"><MapPin className="w-3 h-3 text-slate-300" />{project.location}</span>
                 )}
                 {project.responsible && (
-                  <span className="flex items-center gap-1"><User className="w-3 h-3" />{project.responsible}</span>
+                  <span className="flex items-center gap-1.5"><User className="w-3 h-3 text-slate-300" />{project.responsible}</span>
                 )}
                 {project.start_date && (
-                  <span className="flex items-center gap-1"><Calendar className="w-3 h-3" />{format(new Date(project.start_date), 'dd MMM', { locale: es })}</span>
+                  <span className="flex items-center gap-1.5"><Calendar className="w-3 h-3 text-slate-300" />{format(new Date(project.start_date), 'dd MMM', { locale: es })}</span>
                 )}
               </div>
             </Link>
@@ -142,7 +169,11 @@ export default function Projects() {
         </div>
       )}
 
-      <ProjectForm open={showForm} onClose={() => setShowForm(false)} onSubmit={data => createMutation.mutate(data)} />
+      <ProjectForm 
+        open={showForm} 
+        onClose={() => setShowForm(false)} 
+        onSubmit={data => createMutation.mutate(data)} 
+      />
     </div>
   );
 }

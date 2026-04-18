@@ -1,7 +1,7 @@
 import React, { useRef } from 'react';
-import { supabase } from '@/lib/supabaseClient'; // Cambiado a Supabase
+import { supabase } from '@/lib/supabaseClient'; 
 import { Camera, X, Loader2 } from 'lucide-react';
-import { Button } from '@/components/ui/button';
+// Se elimina la importación de Button para evitar el error ENOENT
 import { cn } from '@/lib/utils';
 
 export default function PhotoUploader({ photos = [], onChange, label = "Fotos", maxPhotos = 10 }) {
@@ -19,19 +19,16 @@ export default function PhotoUploader({ photos = [], onChange, label = "Fotos", 
       for (const file of files) {
         if (newPhotos.length >= maxPhotos) break;
 
-        // 1. Crear un nombre único para el archivo
         const fileExt = file.name.split('.').pop();
         const fileName = `${Math.random()}.${fileExt}`;
         const filePath = `${fileName}`;
 
-        // 2. Subir a Supabase Storage (Bucket llamado 'photos')
         const { data, error } = await supabase.storage
           .from('photos') 
           .upload(filePath, file);
 
         if (error) throw error;
 
-        // 3. Obtener la URL pública de la imagen
         const { data: { publicUrl } } = supabase.storage
           .from('photos')
           .getPublicUrl(filePath);
@@ -55,10 +52,10 @@ export default function PhotoUploader({ photos = [], onChange, label = "Fotos", 
 
   return (
     <div className="space-y-2">
-      <label className="text-sm font-medium text-foreground">{label}</label>
+      <label className="text-sm font-medium text-slate-700">{label}</label>
       <div className="flex flex-wrap gap-3">
         {photos.map((url, i) => (
-          <div key={i} className="relative w-20 h-20 rounded-lg overflow-hidden border border-border group">
+          <div key={i} className="relative w-20 h-20 rounded-lg overflow-hidden border border-slate-200 group">
             <img src={url} alt="" className="w-full h-full object-cover" />
             <button
               type="button"
@@ -69,27 +66,29 @@ export default function PhotoUploader({ photos = [], onChange, label = "Fotos", 
             </button>
           </div>
         ))}
+        
         {photos.length < maxPhotos && (
           <button
             type="button"
             onClick={() => fileRef.current?.click()}
             disabled={uploading}
             className={cn(
-              'w-20 h-20 rounded-lg border-2 border-dashed border-border flex flex-col items-center justify-center gap-1 text-muted-foreground hover:border-primary hover:text-primary transition-colors',
+              'w-20 h-20 rounded-lg border-2 border-dashed border-slate-300 flex flex-col items-center justify-center gap-1 text-slate-400 hover:border-slate-900 hover:text-slate-900 transition-colors bg-slate-50',
               uploading && 'opacity-50 cursor-not-allowed'
             )}
           >
             {uploading ? (
-              <Loader2 className="w-5 h-5 animate-spin" />
+              <Loader2 className="w-5 h-5 animate-spin text-slate-900" />
             ) : (
               <>
                 <Camera className="w-5 h-5" />
-                <span className="text-[10px]">Agregar</span>
+                <span className="text-[10px] font-medium">Agregar</span>
               </>
             )}
           </button>
         )}
       </div>
+      
       <input
         ref={fileRef}
         type="file"
