@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { X, Save, tool as Hammer } from 'lucide-react';
+import { X, Save, Hammer } from 'lucide-react'; // Corregido: Hammer importado directamente
 
-// Mantenemos la estructura de datos para facilitar tus modificaciones futuras
+// DATOS DE TERRITORIOS
 const TERRITORIOS_DATA = {
   NORTE: [
     { colegio: 'CEC VAC' },
@@ -27,7 +27,7 @@ export default function MaintenanceForm({ open, onClose, onSubmit, maintenance }
   const [formData, setFormData] = useState({
     title: '',
     territorio: '',
-    location: '', // Colegio
+    location: '', 
     type: 'Correctivo',
     priority: 'media',
     status: 'pendiente',
@@ -58,7 +58,7 @@ export default function MaintenanceForm({ open, onClose, onSubmit, maintenance }
     setFormData({
       ...formData,
       territorio: e.target.value,
-      location: '' // Reinicia el colegio al cambiar de zona
+      location: '' 
     });
   };
 
@@ -66,7 +66,7 @@ export default function MaintenanceForm({ open, onClose, onSubmit, maintenance }
     e.preventDefault();
     onSubmit({
       ...formData,
-      colegio: formData.location // Sincronización con la columna 'colegio' en Supabase
+      colegio: formData.location // Sincroniza con tu columna de Supabase
     });
   };
 
@@ -78,8 +78,9 @@ export default function MaintenanceForm({ open, onClose, onSubmit, maintenance }
       <div className="bg-white rounded-xl shadow-2xl max-w-lg w-full max-h-[90vh] overflow-hidden flex flex-col border border-slate-200">
         
         <div className="p-5 border-b border-slate-100 flex justify-between items-center bg-slate-50">
-          <h3 className="font-bold text-slate-900">
-            {maintenance ? 'Editar Orden de Mantenimiento' : 'Nueva Orden de Mantenimiento'}
+          <h3 className="font-bold text-slate-900 flex items-center gap-2">
+            <Hammer className="w-4 h-4" />
+            {maintenance ? 'Editar Mantenimiento' : 'Nuevo Mantenimiento'}
           </h3>
           <button onClick={onClose} className="text-slate-400 hover:text-slate-600">
             <X className="w-5 h-5" />
@@ -88,12 +89,12 @@ export default function MaintenanceForm({ open, onClose, onSubmit, maintenance }
 
         <form onSubmit={handleSubmit} className="p-6 overflow-y-auto space-y-1">
           <div>
-            <label className={labelClass}>Asunto / Tarea de Mantenimiento *</label>
+            <label className={labelClass}>Asunto / Tarea *</label>
             <input
               type="text" required className={inputClass}
               value={formData.title}
               onChange={e => setFormData({ ...formData, title: e.target.value })}
-              placeholder="Ej. Reparación de fuga en baño de hombres"
+              placeholder="Ej. Revisión de transformador"
             />
           </div>
 
@@ -113,7 +114,7 @@ export default function MaintenanceForm({ open, onClose, onSubmit, maintenance }
               </select>
             </div>
             <div>
-              <label className={labelClass}>Colegio / Ubicación</label>
+              <label className={labelClass}>Colegio</label>
               <select 
                 className={inputClass}
                 value={formData.location}
@@ -131,4 +132,52 @@ export default function MaintenanceForm({ open, onClose, onSubmit, maintenance }
 
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className
+              <label className={labelClass}>Tipo</label>
+              <select 
+                className={inputClass}
+                value={formData.type}
+                onChange={e => setFormData({ ...formData, type: e.target.value })}
+              >
+                <option value="Preventivo">Preventivo</option>
+                <option value="Correctivo">Correctivo</option>
+                <option value="Mejora">Mejora</option>
+              </select>
+            </div>
+            <div>
+              <label className={labelClass}>Prioridad</label>
+              <select 
+                className={inputClass}
+                value={formData.priority}
+                onChange={e => setFormData({ ...formData, priority: e.target.value })}
+              >
+                <option value="baja">Baja</option>
+                <option value="media">Media</option>
+                <option value="alta">Alta</option>
+                <option value="critica">Crítica</option>
+              </select>
+            </div>
+          </div>
+
+          <div>
+            <label className={labelClass}>Descripción</label>
+            <textarea
+              className={`${inputClass} h-20 resize-none`}
+              value={formData.description}
+              onChange={e => setFormData({ ...formData, description: e.target.value })}
+            />
+          </div>
+
+          <div className="p-5 border-t border-slate-100 bg-slate-50 flex justify-end gap-3 mt-6">
+            <button type="button" onClick={onClose} className="px-4 py-2 text-sm font-medium text-slate-600">
+              Cancelar
+            </button>
+            <button type="submit" className="px-4 py-2 bg-slate-900 text-white rounded-md text-sm font-medium flex items-center gap-2">
+              <Save className="w-4 h-4" />
+              Guardar
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
