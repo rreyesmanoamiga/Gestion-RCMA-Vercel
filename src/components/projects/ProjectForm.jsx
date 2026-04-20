@@ -1,188 +1,256 @@
 import React, { useState, useEffect } from 'react';
-import { X, Save } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
+import { Label } from '@/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Save, X } from 'lucide-react';
+
+// DATOS EXACTOS DE TU EXCEL "Reencuentro y Gestión de Tareas"
+const TERRITORIOS_DATA = {
+  NORTE: [
+    { colegio: 'CEC VAC', eco: 'JUAN CARLOS MURILLO' },
+    { colegio: 'CEC CHIHUAHUA', eco: 'JUAN CARLOS MURILLO' },
+    { colegio: 'CEC NUEVO LAREDO', eco: 'JUAN CARLOS MURILLO' },
+    { colegio: 'CEC SALTILLO', eco: 'JUAN CARLOS MURILLO' }
+  ],
+  MEXICO: [
+    { colegio: 'CEC SUR', eco: 'ALMA DELIA' },
+    { colegio: 'CEC PROYECTO', eco: 'ALMA DELIA' },
+    { colegio: 'CEC PRIMARIA', eco: 'JOSE LUIS RAMIREZ' },
+    { colegio: 'CEC COACALCO', eco: 'JOSE LUIS RAMIREZ' }
+  ],
+  FMA: [
+    { colegio: 'CMA COACALCO', eco: '-' },
+    { colegio: 'CMA COAPA', eco: '-' },
+    { colegio: 'CMA TAXQUEÑA', eco: '-' },
+    { colegio: 'CMA PUEBLA', eco: '-' }
+  ]
+};
 
 export default function ProjectForm({ open, onClose, onSubmit, project }) {
-  const [formData, setFormData] = useState({
+  const [form, setForm] = useState({
     name: '',
     description: '',
+    territorio: '',
+    colegio: '',
+    eco: '',
+    type: 'mantenimiento',
     status: 'planificado',
     priority: 'media',
     location: '',
     responsible: '',
     start_date: '',
-    progress: 0
+    end_date: '',
+    budget: '',
+    progress: 0,
+    ticket_number: '',
+    notes: ''
   });
 
   useEffect(() => {
     if (project) {
-      setFormData(project);
-    } else {
-      setFormData({
-        name: '',
-        description: '',
-        status: 'planificado',
-        priority: 'media',
-        location: '',
-        responsible: '',
-        start_date: '',
-        progress: 0
+      setForm({
+        ...project,
+        // Aseguramos que los valores numéricos no rompan los inputs
+        budget: project.budget || '',
+        progress: project.progress || 0,
+        ticket_number: project.ticket_number || ''
       });
     }
   }, [project, open]);
 
-  if (!open) return null;
+  const update = (field, value) => setForm(prev => ({ ...prev, [field]: value }));
+
+  const handleTerritorioChange = (v) => {
+    setForm(prev => ({
+      ...prev,
+      territorio: v,
+      colegio: '', // Limpiar selección anterior
+      eco: ''
+    }));
+  };
+
+  const handleColegioChange = (v) => {
+    const info = TERRITORIOS_DATA[form.territorio]?.find(c => c.colegio === v);
+    setForm(prev => ({
+      ...prev,
+      colegio: v,
+      location: v, // Sincronizamos con location para la DB
+      eco: info ? info.eco : ''
+    }));
+  };
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    
-    // Mantenemos tu diseño pero enviamos los datos como Supabase los pide
-    const dataToSubmit = {
-      name: formData.name,
-      description: formData.description,
-      status: formData.status || 'no_iniciado',
-      priority: formData.priority || 'media',
-      location: formData.location,
-      colegio: formData.location, // Mapeo a tu columna de la DB
-      responsible: formData.responsible,
-      progress: parseInt(formData.progress) || 0, // Evita el NaN
-      start_date: formData.start_date || null,
-      
-      // Campos obligatorios segun tu SQL
-      type: 'Mantenimiento', 
-      territorio: 'MEXICO'   
-    };
-    
-    onSubmit(dataToSubmit);
+    onSubmit({ 
+      ...form, 
+      budget: form.budget ? Number(form.budget) : 0, 
+      progress: Number(form.progress) || 0,
+      ticket_number: form.ticket_number ? String(form.ticket_number) : null
+    });
   };
 
-  const inputClass = "w-full px-3 py-2 border border-slate-300 rounded-md text-sm focus:ring-2 focus:ring-slate-900 focus:outline-none bg-white text-slate-900";
-  const labelClass = "block text-xs font-bold text-slate-500 uppercase mb-1 mt-3";
-
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4">
-      <div className="bg-white rounded-xl shadow-2xl max-w-lg w-full max-h-[90vh] overflow-hidden flex flex-col border border-slate-200">
-        
-        <div className="p-5 border-b border-slate-100 flex justify-between items-center bg-slate-50">
-          <h3 className="font-bold text-slate-900">
+    <Dialog open={open} onOpenChange={onClose}>
+      <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto bg-white">
+        <DialogHeader>
+          <DialogTitle className="text-xl font-bold text-slate-900">
             {project ? 'Editar Proyecto' : 'Nuevo Proyecto'}
-          </h3>
-          <button onClick={onClose} className="text-slate-400 hover:text-slate-600">
-            <X className="w-5 h-5" />
-          </button>
-        </div>
+          </DialogTitle>
+        </DialogHeader>
 
-        <form onSubmit={handleSubmit} className="p-6 overflow-y-auto space-y-1">
+        <form onSubmit={handleSubmit} className="space-y-4 pt-4">
+          
+          {/* SECCIÓN DE UBICACIÓN (CASCADA) */}
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <Label className="text-xs font-bold uppercase text-slate-500">Territorio</Label>
+              <Select value={form.territorio} onValueChange={handleTerritorioChange}>
+                <SelectTrigger className="mt-1"><SelectValue placeholder="Zona..." /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="NORTE">NORTE</SelectItem>
+                  <SelectItem value="MEXICO">MEXICO</SelectItem>
+                  <SelectItem value="FMA">FMA</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label className="text-xs font-bold uppercase text-slate-500">Colegio / Sede</Label>
+              <Select 
+                value={form.colegio} 
+                onValueChange={handleColegioChange}
+                disabled={!form.territorio}
+              >
+                <SelectTrigger className="mt-1"><SelectValue placeholder="Colegio..." /></SelectTrigger>
+                <SelectContent>
+                  {form.territorio && TERRITORIOS_DATA[form.territorio].map(c => (
+                    <SelectItem key={c.colegio} value={c.colegio}>{c.colegio}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+
+          {/* INDICADOR ECO AUTOMÁTICO */}
+          {form.eco && (
+            <div className="rounded-md bg-blue-50 border border-blue-100 px-3 py-2 flex justify-between items-center">
+              <span className="text-xs font-bold text-blue-700 uppercase">Responsable ECO:</span>
+              <span className="text-sm font-semibold text-blue-900">{form.eco}</span>
+            </div>
+          )}
+
           <div>
-            <label className={labelClass}>Nombre del Proyecto *</label>
-            <input
-              type="text"
-              required
-              className={inputClass}
-              value={formData.name}
-              onChange={e => setFormData({ ...formData, name: e.target.value })}
-              placeholder="Ej. Impermeabilización de Aula 4"
+            <Label className="text-xs font-bold uppercase text-slate-500">Nombre del Proyecto *</Label>
+            <Input 
+              value={form.name} 
+              onChange={e => update('name', e.target.value)} 
+              required 
+              placeholder="Ej: Impermeabilización General" 
+              className="mt-1"
             />
           </div>
 
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <Label className="text-xs font-bold uppercase text-slate-500">Tipo</Label>
+              <Select value={form.type} onValueChange={v => update('type', v)}>
+                <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="mantenimiento">Mantenimiento</SelectItem>
+                  <SelectItem value="construccion">Construcción</SelectItem>
+                  <SelectItem value="remodelacion">Remodelación</SelectItem>
+                  <SelectItem value="adecuacion">Adecuación</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label className="text-xs font-bold uppercase text-slate-500">Prioridad</Label>
+              <Select value={form.priority} onValueChange={v => update('priority', v)}>
+                <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="baja">Baja</SelectItem>
+                  <SelectItem value="media">Media</SelectItem>
+                  <SelectItem value="alta">Alta</SelectItem>
+                  <SelectItem value="urgente">Urgente</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <Label className="text-xs font-bold uppercase text-slate-500">Responsable Ejecución</Label>
+              <Input 
+                value={form.responsible} 
+                onChange={e => update('responsible', e.target.value)} 
+                placeholder="Persona/Empresa"
+                className="mt-1"
+              />
+            </div>
+            <div>
+              <Label className="text-xs font-bold uppercase text-slate-500">Presupuesto (MXN)</Label>
+              <Input 
+                type="number" 
+                value={form.budget} 
+                onChange={e => update('budget', e.target.value)} 
+                placeholder="0.00"
+                className="mt-1"
+              />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <Label className="text-xs font-bold uppercase text-slate-500">Ticket # (Opcional)</Label>
+              <div className="relative mt-1">
+                <Input 
+                  type="number" 
+                  value={form.ticket_number} 
+                  onChange={e => update('ticket_number', e.target.value)} 
+                  placeholder="Ej: 42"
+                />
+                {form.ticket_number && (
+                  <p className="mt-1 text-[10px] font-bold text-red-600">
+                    ID: TCMM{String(form.ticket_number).padStart(4, '0')}
+                  </p>
+                )}
+              </div>
+            </div>
+            <div>
+              <Label className="text-xs font-bold uppercase text-slate-500">Avance (%)</Label>
+              <Input 
+                type="number" 
+                max="100" 
+                value={form.progress} 
+                onChange={e => update('progress', e.target.value)} 
+                className="mt-1"
+              />
+            </div>
+          </div>
+
           <div>
-            <label className={labelClass}>Descripción</label>
-            <textarea
-              className={`${inputClass} min-h-[80px]`}
-              value={formData.description}
-              onChange={e => setFormData({ ...formData, description: e.target.value })}
+            <Label className="text-xs font-bold uppercase text-slate-500">Descripción / Notas</Label>
+            <Textarea 
+              value={form.description} 
+              onChange={e => update('description', e.target.value)} 
+              className="mt-1" 
+              rows={2} 
             />
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className={labelClass}>Estado</label>
-              <select 
-                className={inputClass}
-                value={formData.status}
-                onChange={e => setFormData({ ...formData, status: e.target.value })}
-              >
-                <option value="planificado">Planificado</option>
-                <option value="en_progreso">En Progreso</option>
-                <option value="pausado">Pausado</option>
-                <option value="completado">Completado</option>
-              </select>
-            </div>
-            <div>
-              <label className={labelClass}>Prioridad</label>
-              <select 
-                className={inputClass}
-                value={formData.priority}
-                onChange={e => setFormData({ ...formData, priority: e.target.value })}
-              >
-                <option value="baja">Baja</option>
-                <option value="media">Media</option>
-                <option value="alta">Alta</option>
-              </select>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className={labelClass}>Ubicación / Colegio</label>
-              <input
-                type="text"
-                className={inputClass}
-                value={formData.location}
-                onChange={e => setFormData({ ...formData, location: e.target.value })}
-              />
-            </div>
-            <div>
-              <label className={labelClass}>Responsable</label>
-              <input
-                type="text"
-                className={inputClass}
-                value={formData.responsible}
-                onChange={e => setFormData({ ...formData, responsible: e.target.value })}
-              />
-            </div>
-          </div>
-
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className={labelClass}>Fecha de Inicio</label>
-              <input
-                type="date"
-                className={inputClass}
-                value={formData.start_date}
-                onChange={e => setFormData({ ...formData, start_date: e.target.value })}
-              />
-            </div>
-            <div>
-              <label className={labelClass}>Progreso (%)</label>
-              <input
-                type="number"
-                min="0"
-                max="100"
-                className={inputClass}
-                value={formData.progress}
-                onChange={e => setFormData({ ...formData, progress: e.target.value })}
-              />
-            </div>
-          </div>
-
-          <div className="p-5 border-t border-slate-100 bg-slate-50 flex justify-end gap-3 mt-6">
-            <button 
-              type="button"
-              onClick={onClose} 
-              className="px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-200 rounded-md"
-            >
+          <div className="flex justify-end gap-3 pt-4 border-t border-slate-100">
+            <Button type="button" variant="outline" onClick={onClose}>
               Cancelar
-            </button>
-            <button 
-              type="submit" 
-              className="px-4 py-2 bg-slate-900 text-white rounded-md text-sm font-medium hover:bg-slate-800 flex items-center gap-2"
-            >
-              <Save className="w-4 h-4" />
-              {project ? 'Actualizar Proyecto' : 'Guardar Proyecto'}
-            </button>
+            </Button>
+            <Button type="submit" className="bg-slate-900 text-white hover:bg-slate-800">
+              <Save className="w-4 h-4 mr-2" />
+              {project ? 'Guardar Cambios' : 'Crear Proyecto'}
+            </Button>
           </div>
         </form>
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   );
 }
