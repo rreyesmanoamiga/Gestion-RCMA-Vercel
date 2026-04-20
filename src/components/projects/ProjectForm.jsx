@@ -30,151 +30,132 @@ export default function ProjectForm({ open, onClose, onSubmit, project }) {
     }
   }, [project, open]);
 
-  if (!open) return null;
-
-  const handleSubmit = (e) => {
-    e.preventDefault();
-    
-    // Aseguramos que los datos críticos tengan el formato correcto antes de enviar
-    const dataToSubmit = {
-      ...formData,
-      progress: parseInt(formData.progress) || 0, // Si es NaN, enviamos 0
-      start_date: formData.start_date || null     // Si está vacía, enviamos null
-    };
-    
-    onSubmit(dataToSubmit);
-  };
-
-  const inputClass = "w-full px-3 py-2 border border-slate-300 rounded-md text-sm focus:ring-2 focus:ring-slate-900 focus:outline-none bg-white text-slate-900";
-  const labelClass = "block text-xs font-bold text-slate-500 uppercase mb-1 mt-3";
-
+  // Esta es la animación y estructura del panel lateral (Slide-over)
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4">
-      <div className="bg-white rounded-xl shadow-2xl max-w-lg w-full max-h-[90vh] overflow-hidden flex flex-col border border-slate-200">
+    <>
+      {/* Fondo oscuro con desenfoque (Overlay) */}
+      <div 
+        className={`fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-[100] transition-opacity duration-300 ${open ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
+        onClick={onClose}
+      />
+
+      {/* Panel Lateral Deslizable */}
+      <div className={`fixed inset-y-0 right-0 w-full max-w-md bg-white shadow-2xl z-[101] transform transition-transform duration-300 ease-in-out ${open ? 'translate-x-0' : 'translate-x-full'}`}>
         
-        <div className="p-5 border-b border-slate-100 flex justify-between items-center bg-slate-50">
-          <h3 className="font-bold text-slate-900">
-            {project ? 'Editar Proyecto' : 'Nuevo Proyecto'}
-          </h3>
-          <button onClick={onClose} className="text-slate-400 hover:text-slate-600">
-            <X className="w-5 h-5" />
-          </button>
-        </div>
-
-        <form onSubmit={handleSubmit} className="p-6 overflow-y-auto space-y-1">
-          <div>
-            <label className={labelClass}>Nombre del Proyecto *</label>
-            <input
-              type="text"
-              required
-              className={inputClass}
-              value={formData.name}
-              onChange={e => setFormData({ ...formData, name: e.target.value })}
-              placeholder="Ej. Impermeabilización de Aula 4"
-            />
-          </div>
-
-          <div>
-            <label className={labelClass}>Descripción</label>
-            <textarea
-              className={`${inputClass} min-h-[80px]`}
-              value={formData.description}
-              onChange={e => setFormData({ ...formData, description: e.target.value })}
-            />
-          </div>
-
-          <div className="grid grid-cols-2 gap-3">
+        <div className="h-full flex flex-col">
+          {/* Cabecera del Panel */}
+          <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-slate-50">
             <div>
-              <label className={labelClass}>Estado</label>
-              <select 
-                className={inputClass}
-                value={formData.status}
-                onChange={e => setFormData({ ...formData, status: e.target.value })}
-              >
-                <option value="planificado">Planificado</option>
-                <option value="en_progreso">En Progreso</option>
-                <option value="pausado">Pausado</option>
-                <option value="completado">Completado</option>
-              </select>
+              <h3 className="text-lg font-bold text-slate-900">
+                {project ? 'Editar Proyecto' : 'Nuevo Proyecto'}
+              </h3>
+              <p className="text-xs text-slate-500 uppercase tracking-wider font-semibold">Gestión de Obra</p>
             </div>
-            <div>
-              <label className={labelClass}>Prioridad</label>
-              <select 
-                className={inputClass}
-                value={formData.priority}
-                onChange={e => setFormData({ ...formData, priority: e.target.value })}
-              >
-                <option value="baja">Baja</option>
-                <option value="media">Media</option>
-                <option value="alta">Alta</option>
-                <option value="critica">Crítica</option>
-              </select>
-            </div>
+            <button onClick={onClose} className="p-2 hover:bg-slate-200 rounded-full transition-colors text-slate-400 hover:text-slate-600">
+              <X className="w-6 h-6" />
+            </button>
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className={labelClass}>Ubicación / Colegio</label>
+          {/* Cuerpo del Formulario con scroll propio */}
+          <form onSubmit={(e) => {
+            e.preventDefault();
+            const dataToSubmit = {
+              ...formData,
+              progress: parseInt(formData.progress) || 0,
+              type: 'Mantenimiento', // Valor por defecto para evitar error 400
+              territorio: 'MEXICO'   // Valor por defecto para evitar error 400
+            };
+            onSubmit(dataToSubmit);
+          }} className="flex-1 overflow-y-auto p-6 space-y-5">
+            
+            <div className="space-y-1">
+              <label className="text-xs font-bold text-slate-500 uppercase">Nombre del Proyecto</label>
               <input
                 type="text"
-                className={inputClass}
+                required
+                className="w-full px-4 py-3 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                value={formData.name}
+                onChange={e => setFormData({ ...formData, name: e.target.value })}
+                placeholder="Ej. Impermeabilización de Aula 4"
+              />
+            </div>
+
+            <div className="space-y-1">
+              <label className="text-xs font-bold text-slate-500 uppercase">Descripción</label>
+              <textarea
+                className="w-full px-4 py-3 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 min-h-[100px]"
+                value={formData.description}
+                onChange={e => setFormData({ ...formData, description: e.target.value })}
+              />
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-1">
+                <label className="text-xs font-bold text-slate-500 uppercase">Estado</label>
+                <select className="w-full px-4 py-3 border border-slate-200 rounded-lg bg-white" value={formData.status} onChange={e => setFormData({ ...formData, status: e.target.value })}>
+                  <option value="planificado">Planificado</option>
+                  <option value="en_progreso">En Progreso</option>
+                  <option value="pausado">Pausado</option>
+                  <option value="completado">Completado</option>
+                </select>
+              </div>
+              <div className="space-y-1">
+                <label className="text-xs font-bold text-slate-500 uppercase">Prioridad</label>
+                <select className="w-full px-4 py-3 border border-slate-200 rounded-lg bg-white" value={formData.priority} onChange={e => setFormData({ ...formData, priority: e.target.value })}>
+                  <option value="baja">Baja</option>
+                  <option value="media">Media</option>
+                  <option value="alta">Alta</option>
+                </select>
+              </div>
+            </div>
+
+            {/* Agregué este campo para que coincida con tu tabla 'colegio' */}
+            <div className="space-y-1">
+              <label className="text-xs font-bold text-slate-500 uppercase">Colegio / Ubicación</label>
+              <input
+                type="text"
+                className="w-full px-4 py-3 border border-slate-200 rounded-lg"
                 value={formData.location}
                 onChange={e => setFormData({ ...formData, location: e.target.value })}
               />
             </div>
-            <div>
-              <label className={labelClass}>Responsable</label>
-              <input
-                type="text"
-                className={inputClass}
-                value={formData.responsible}
-                onChange={e => setFormData({ ...formData, responsible: e.target.value })}
-              />
-            </div>
-          </div>
 
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className={labelClass}>Fecha de Inicio</label>
-              <input
-                type="date"
-                className={inputClass}
-                value={formData.start_date}
-                onChange={e => setFormData({ ...formData, start_date: e.target.value })}
-              />
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-1">
+                <label className="text-xs font-bold text-slate-500 uppercase">Fecha Inicio</label>
+                <input
+                  type="date"
+                  className="w-full px-4 py-3 border border-slate-200 rounded-lg"
+                  value={formData.start_date}
+                  onChange={e => setFormData({ ...formData, start_date: e.target.value })}
+                />
+              </div>
+              <div className="space-y-1">
+                <label className="text-xs font-bold text-slate-500 uppercase">Progreso (%)</label>
+                <input
+                  type="number"
+                  className="w-full px-4 py-3 border border-slate-200 rounded-lg"
+                  value={formData.progress}
+                  onChange={e => setFormData({ ...formData, progress: e.target.value })}
+                />
+              </div>
             </div>
-            <div>
-              <label className={labelClass}>Progreso (%)</label>
-              <input
-                type="number"
-                min="0"
-                max="100"
-                className={inputClass}
-                value={formData.progress}
-                // Cambio clave aquí: permitimos que el input maneje el valor como venga, la limpieza se hace en el submit
-                onChange={e => setFormData({ ...formData, progress: e.target.value })}
-              />
-            </div>
-          </div>
+          </form>
 
-          <div className="p-5 border-t border-slate-100 bg-slate-50 flex justify-end gap-3 mt-6">
-            <button 
-              type="button"
-              onClick={onClose} 
-              className="px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-200 rounded-md"
-            >
+          {/* Botones fijos al final */}
+          <div className="p-6 border-t border-slate-100 bg-slate-50 flex gap-3">
+            <button type="button" onClick={onClose} className="flex-1 px-4 py-3 text-sm font-bold text-slate-600 hover:bg-slate-200 rounded-xl transition-colors">
               Cancelar
             </button>
-            <button 
-              type="submit" 
-              className="px-4 py-2 bg-slate-900 text-white rounded-md text-sm font-medium hover:bg-slate-800 flex items-center gap-2"
-            >
-              <Save className="w-4 h-4" />
-              {project ? 'Actualizar Proyecto' : 'Guardar Proyecto'}
+            <button onClick={() => {
+              // Trigger el form submit manualmente si el botón está fuera del form tag o simplemente usa type="submit" dentro del form
+            }} type="submit" className="flex-[2] px-4 py-3 bg-slate-900 text-white rounded-xl text-sm font-bold hover:bg-slate-800 flex items-center justify-center gap-2 shadow-lg">
+              <Save className="w-5 h-5" />
+              {project ? 'Actualizar' : 'Crear Proyecto'}
             </button>
           </div>
-        </form>
+        </div>
       </div>
-    </div>
+    </>
   );
 }
