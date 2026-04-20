@@ -34,7 +34,15 @@ export default function ProjectForm({ open, onClose, onSubmit, project }) {
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    onSubmit(formData);
+    
+    // Aseguramos que los datos críticos tengan el formato correcto antes de enviar
+    const dataToSubmit = {
+      ...formData,
+      progress: parseInt(formData.progress) || 0, // Si es NaN, enviamos 0
+      start_date: formData.start_date || null     // Si está vacía, enviamos null
+    };
+    
+    onSubmit(dataToSubmit);
   };
 
   const inputClass = "w-full px-3 py-2 border border-slate-300 rounded-md text-sm focus:ring-2 focus:ring-slate-900 focus:outline-none bg-white text-slate-900";
@@ -143,7 +151,8 @@ export default function ProjectForm({ open, onClose, onSubmit, project }) {
                 max="100"
                 className={inputClass}
                 value={formData.progress}
-                onChange={e => setFormData({ ...formData, progress: parseInt(e.target.value) })}
+                // Cambio clave aquí: permitimos que el input maneje el valor como venga, la limpieza se hace en el submit
+                onChange={e => setFormData({ ...formData, progress: e.target.value })}
               />
             </div>
           </div>
