@@ -1,135 +1,137 @@
 import React, { useState, useEffect } from 'react';
-import { X, Save, Plus, Trash2 } from 'lucide-react';
+import { X, Save } from 'lucide-react';
 
-export default function ChecklistForm({ open, onClose, onSubmit, record }) {
+// Mantenemos la misma fuente de verdad para los datos
+const TERRITORIOS_DATA = {
+  NORTE: [
+    { colegio: 'CEC VAC' },
+    { colegio: 'CEC CHIHUAHUA' },
+    { colegio: 'CEC NUEVO LAREDO' },
+    { colegio: 'CEC SALTILLO' }
+  ],
+  MEXICO: [
+    { colegio: 'CEC SUR' },
+    { colegio: 'CEC PROYECTO' },
+    { colegio: 'CEC PRIMARIA' },
+    { colegio: 'CEC COACALCO' }
+  ],
+  FMA: [
+    { colegio: 'CMA COACALCO' },
+    { colegio: 'CMA COAPA' },
+    { colegio: 'CMA TAXQUEÑA' },
+    { colegio: 'CMA PUEBLA' }
+  ]
+};
+
+export default function ChecklistForm({ open, onClose, onSubmit, checklist }) {
   const [formData, setFormData] = useState({
     title: '',
-    inspector: '',
-    location: '',
+    territorio: '',
+    location: '', // Este es el Colegio
     status: 'pendiente',
-    items: [{ label: '', completed: false }],
-    observations: ''
+    description: ''
   });
 
   useEffect(() => {
-    if (record) {
-      setFormData(record);
+    if (checklist) {
+      setFormData(checklist);
     } else {
       setFormData({
         title: '',
-        inspector: '',
+        territorio: '',
         location: '',
         status: 'pendiente',
-        items: [{ label: '', completed: false }],
-        observations: ''
+        description: ''
       });
     }
-  }, [record, open]);
+  }, [checklist, open]);
 
   if (!open) return null;
 
-  const addItem = () => {
+  // Lógica de cambio de Territorio (limpia el colegio seleccionado)
+  const handleTerritorioChange = (e) => {
     setFormData({
       ...formData,
-      items: [...formData.items, { label: '', completed: false }]
+      territorio: e.target.value,
+      location: '' // Reinicia el colegio al cambiar de zona
     });
-  };
-
-  const removeItem = (index) => {
-    const newItems = formData.items.filter((_, i) => i !== index);
-    setFormData({ ...formData, items: newItems });
-  };
-
-  const updateItem = (index, value) => {
-    const newItems = [...formData.items];
-    newItems[index].label = value;
-    setFormData({ ...formData, items: newItems });
   };
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    onSubmit(formData);
+    // Enviamos los datos a la base de datos (Supabase)
+    onSubmit({
+      ...formData,
+      colegio: formData.location // Sincronizamos con el nombre de tu columna
+    });
   };
 
   const inputClass = "w-full px-3 py-2 border border-slate-300 rounded-md text-sm focus:ring-2 focus:ring-slate-900 focus:outline-none bg-white text-slate-900";
-  const labelClass = "block text-[10px] font-black text-slate-400 uppercase mb-1 mt-3 tracking-widest";
+  const labelClass = "block text-xs font-bold text-slate-500 uppercase mb-1 mt-3";
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4">
-      <div className="bg-white rounded-xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-hidden flex flex-col border border-slate-200">
+      <div className="bg-white rounded-xl shadow-2xl max-w-lg w-full max-h-[90vh] overflow-hidden flex flex-col border border-slate-200">
         
         <div className="p-5 border-b border-slate-100 flex justify-between items-center bg-slate-50">
-          <h3 className="font-bold text-slate-900 uppercase tracking-tight">
-            {record ? 'Editar Inspección' : 'Nuevo Registro de Levantamiento'}
+          <h3 className="font-bold text-slate-900">
+            {checklist ? 'Editar Checklist' : 'Nuevo Checklist'}
           </h3>
           <button onClick={onClose} className="text-slate-400 hover:text-slate-600">
             <X className="w-5 h-5" />
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="p-6 overflow-y-auto space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <form onSubmit={handleSubmit} className="p-6 overflow-y-auto space-y-1">
+          <div>
+            <label className={labelClass}>Título del Checklist *</label>
+            <input
+              type="text" required className={inputClass}
+              value={formData.title}
+              onChange={e => setFormData({ ...formData, title: e.target.value })}
+              placeholder="Ej. Revisión Mensual de Instalaciones"
+            />
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className={labelClass}>Título de la Lista</label>
-              <input
-                type="text"
+              <label className={labelClass}>Territorio</label>
+              <select 
+                className={inputClass} 
+                value={formData.territorio} 
+                onChange={handleTerritorioChange}
                 required
-                className={inputClass}
-                value={formData.title}
-                onChange={e => setFormData({ ...formData, title: e.target.value })}
-                placeholder="Ej. Revisión Estructural Ala Norte"
-              />
+              >
+                <option value="">Seleccione...</option>
+                <option value="NORTE">NORTE</option>
+                <option value="MEXICO">MEXICO</option>
+                <option value="FMA">FMA</option>
+              </select>
             </div>
             <div>
-              <label className={labelClass}>Ubicación / Plantel</label>
-              <input
-                type="text"
+              <label className={labelClass}>Colegio / Sede</label>
+              <select 
                 className={inputClass}
                 value={formData.location}
                 onChange={e => setFormData({ ...formData, location: e.target.value })}
-              />
-            </div>
-          </div>
-
-          <div>
-            <label className={labelClass}>Puntos de Inspección</label>
-            <div className="space-y-2 mt-2">
-              {formData.items.map((item, index) => (
-                <div key={index} className="flex gap-2">
-                  <input
-                    type="text"
-                    required
-                    className={inputClass}
-                    placeholder={`Punto ${index + 1}`}
-                    value={item.label}
-                    onChange={e => updateItem(index, e.target.value)}
-                  />
-                  <button 
-                    type="button"
-                    onClick={() => removeItem(index)}
-                    className="p-2 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-md transition-colors"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </button>
-                </div>
-              ))}
-              <button 
-                type="button"
-                onClick={addItem}
-                className="w-full py-2 border-2 border-dashed border-slate-200 rounded-md text-xs font-bold text-slate-400 hover:border-slate-400 hover:text-slate-600 transition-all flex items-center justify-center gap-2"
+                disabled={!formData.territorio}
+                required
               >
-                <Plus className="w-3 h-3" /> Añadir Punto de Revisión
-              </button>
+                <option value="">Seleccione...</option>
+                {formData.territorio && TERRITORIOS_DATA[formData.territorio].map(item => (
+                  <option key={item.colegio} value={item.colegio}>{item.colegio}</option>
+                ))}
+              </select>
             </div>
           </div>
 
           <div>
-            <label className={labelClass}>Observaciones Generales</label>
+            <label className={labelClass}>Descripción / Observaciones</label>
             <textarea
-              className={`${inputClass} min-h-[100px]`}
-              value={formData.observations}
-              onChange={e => setFormData({ ...formData, observations: e.target.value })}
-              placeholder="Notas técnicas sobre el estado del inmueble..."
+              className={`${inputClass} h-24 resize-none`}
+              value={formData.description}
+              onChange={e => setFormData({ ...formData, description: e.target.value })}
+              placeholder="Detalles adicionales del checklist..."
             />
           </div>
 
@@ -137,16 +139,16 @@ export default function ChecklistForm({ open, onClose, onSubmit, record }) {
             <button 
               type="button"
               onClick={onClose} 
-              className="px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-200 rounded-md transition-colors"
+              className="px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-200 rounded-md"
             >
               Cancelar
             </button>
             <button 
               type="submit" 
-              className="px-6 py-2 bg-slate-900 text-white rounded-md text-sm font-bold hover:bg-slate-800 flex items-center gap-2 shadow-lg active:scale-95 transition-all"
+              className="px-4 py-2 bg-slate-900 text-white rounded-md text-sm font-medium hover:bg-slate-800 flex items-center gap-2"
             >
               <Save className="w-4 h-4" />
-              Guardar Reporte
+              {checklist ? 'Actualizar Checklist' : 'Crear Checklist'}
             </button>
           </div>
         </form>
