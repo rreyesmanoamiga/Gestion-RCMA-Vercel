@@ -1,54 +1,55 @@
-export const PERMISSIONS = {
-  ver_proyectos: 'Ver Proyectos',
-  crear_proyectos: 'Crear Proyectos',
-  editar_proyectos: 'Editar Proyectos',
-  eliminar_proyectos: 'Eliminar Proyectos',
-  ver_checklists: 'Ver Checklists',
-  crear_checklists: 'Crear Checklists',
-  editar_checklists: 'Editar Checklists',
-  eliminar_checklists: 'Eliminar Checklists',
-  ver_mantenimiento: 'Ver Mantenimiento',
-  crear_mantenimiento: 'Crear Mantenimiento',
-  editar_mantenimiento: 'Editar Mantenimiento',
-  eliminar_mantenimiento: 'Eliminar Mantenimiento',
-  ver_reportes: 'Ver Reportes',
-  crear_reportes: 'Crear Reportes',
-  eliminar_reportes: 'Eliminar Reportes',
-};
+// Fuente única de verdad para todos los permisos.
+// Para agregar un permiso nuevo: solo añade una línea aquí.
+const PERMISSION_DEFS = [
+  { key: 'ver_proyectos',          label: 'Ver Proyectos',          group: 'Proyectos',     default: true  },
+  { key: 'crear_proyectos',        label: 'Crear Proyectos',        group: 'Proyectos',     default: false },
+  { key: 'editar_proyectos',       label: 'Editar Proyectos',       group: 'Proyectos',     default: false },
+  { key: 'eliminar_proyectos',     label: 'Eliminar Proyectos',     group: 'Proyectos',     default: false },
 
-export const PERMISSION_GROUPS = [
-  {
-    label: 'Proyectos',
-    permissions: ['ver_proyectos', 'crear_proyectos', 'editar_proyectos', 'eliminar_proyectos'],
-  },
-  {
-    label: 'Checklists',
-    permissions: ['ver_checklists', 'crear_checklists', 'editar_checklists', 'eliminar_checklists'],
-  },
-  {
-    label: 'Mantenimiento',
-    permissions: ['ver_mantenimiento', 'crear_mantenimiento', 'editar_mantenimiento', 'eliminar_mantenimiento'],
-  },
-  {
-    label: 'Reportes',
-    permissions: ['ver_reportes', 'crear_reportes', 'eliminar_reportes'],
-  },
+  { key: 'ver_checklists',         label: 'Ver Checklists',         group: 'Checklists',    default: true  },
+  { key: 'crear_checklists',       label: 'Crear Checklists',       group: 'Checklists',    default: false },
+  { key: 'editar_checklists',      label: 'Editar Checklists',      group: 'Checklists',    default: false },
+  { key: 'eliminar_checklists',    label: 'Eliminar Checklists',    group: 'Checklists',    default: false },
+
+  { key: 'ver_mantenimiento',      label: 'Ver Mantenimiento',      group: 'Mantenimiento', default: true  },
+  { key: 'crear_mantenimiento',    label: 'Crear Mantenimiento',    group: 'Mantenimiento', default: false },
+  { key: 'editar_mantenimiento',   label: 'Editar Mantenimiento',   group: 'Mantenimiento', default: false },
+  { key: 'eliminar_mantenimiento', label: 'Eliminar Mantenimiento', group: 'Mantenimiento', default: false },
+
+  { key: 'ver_reportes',           label: 'Ver Reportes',           group: 'Reportes',      default: true  },
+  { key: 'crear_reportes',         label: 'Crear Reportes',         group: 'Reportes',      default: false },
+  { key: 'editar_reportes',        label: 'Editar Reportes',        group: 'Reportes',      default: false }, // ← estaba ausente
+  { key: 'eliminar_reportes',      label: 'Eliminar Reportes',      group: 'Reportes',      default: false },
 ];
 
-export const DEFAULT_PERMISSIONS = {
-  ver_proyectos: true,
-  crear_proyectos: false,
-  editar_proyectos: false,
-  eliminar_proyectos: false,
-  ver_checklists: true,
-  crear_checklists: false,
-  editar_checklists: false,
-  eliminar_checklists: false,
-  ver_mantenimiento: true,
-  crear_mantenimiento: false,
-  editar_mantenimiento: false,
-  eliminar_mantenimiento: false,
-  ver_reportes: true,
-  crear_reportes: false,
-  eliminar_reportes: false,
-};
+// Mapa clave → label  (e.g. PERMISSIONS.ver_proyectos === 'Ver Proyectos')
+export const PERMISSIONS = Object.fromEntries(
+  PERMISSION_DEFS.map(({ key, label }) => [key, label])
+);
+
+// Permisos agrupados para renderizar la UI de administración
+export const PERMISSION_GROUPS = Object.values(
+  PERMISSION_DEFS.reduce((groups, { key, group }) => {
+    if (!groups[group]) groups[group] = { label: group, permissions: [] };
+    groups[group].permissions.push(key);
+    return groups;
+  }, {})
+);
+
+// Valores por default: solo lectura habilitada, escritura denegada
+export const DEFAULT_PERMISSIONS = Object.fromEntries(
+  PERMISSION_DEFS.map(({ key, default: val }) => [key, val])
+);
+
+/**
+ * Verifica si un usuario tiene un permiso específico.
+ * @param {Object} userPermissions - Objeto de permisos del usuario
+ * @param {string} key - Clave del permiso a verificar
+ * @returns {boolean}
+ *
+ * @example
+ * const { permissions } = useAuth();
+ * if (hasPermission(permissions, 'crear_proyectos')) { ... }
+ */
+export const hasPermission = (userPermissions, key) =>
+  userPermissions?.[key] === true;
