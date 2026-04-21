@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { X, Save } from 'lucide-react';
+import { getAppParams } from '../utils'; // Asegúrate de que la ruta a tus utilidades sea correcta
 
-// Mantenemos la misma fuente de verdad para los datos
 const TERRITORIOS_DATA = {
   NORTE: [
     { colegio: 'CEC VAC' },
@@ -24,45 +24,56 @@ const TERRITORIOS_DATA = {
 };
 
 export default function ChecklistForm({ open, onClose, onSubmit, checklist }) {
+  // 1. Obtenemos los parámetros (appId, token) usando tu lógica exitosa
+  const params = getAppParams();
+
   const [formData, setFormData] = useState({
     title: '',
     territorio: '',
-    location: '', // Este es el Colegio
+    location: '', 
     status: 'pendiente',
-    description: ''
+    description: '',
+    app_id: params.appId // Inicializamos con el appId recuperado
   });
 
   useEffect(() => {
     if (checklist) {
-      setFormData(checklist);
+      setFormData({
+        ...checklist,
+        app_id: params.appId // Aseguramos que siempre lleve el appId
+      });
     } else {
       setFormData({
         title: '',
         territorio: '',
         location: '',
         status: 'pendiente',
-        description: ''
+        description: '',
+        app_id: params.appId
       });
     }
-  }, [checklist, open]);
+  }, [checklist, open, params.appId]);
 
   if (!open) return null;
 
-  // Lógica de cambio de Territorio (limpia el colegio seleccionado)
   const handleTerritorioChange = (e) => {
     setFormData({
       ...formData,
       territorio: e.target.value,
-      location: '' // Reinicia el colegio al cambiar de zona
+      location: '' 
     });
   };
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    // Enviamos los datos a la base de datos (Supabase)
+    
+    // 2. Construimos el objeto final sincronizando columnas
+    // Aquí mandamos el app_id y el colegio para que Supabase no dé error 400
     onSubmit({
       ...formData,
-      colegio: formData.location // Sincronizamos con el nombre de tu columna
+      colegio: formData.location, // Sincroniza con tu columna en DB
+      app_id: params.appId,       // Obligatorio para la validación
+      updated_at: new Date()
     });
   };
 
