@@ -10,6 +10,7 @@ interface FormData {
   title:                string;
   territorio:           string;
   colegio:              string;
+  infrastructure_type:  string;
   general_observations: string;
 }
 
@@ -17,6 +18,7 @@ const INITIAL_FORM: FormData = {
   title:                '',
   territorio:           '',
   colegio:              '',
+  infrastructure_type:  'concreto',
   general_observations: '',
 };
 
@@ -49,10 +51,11 @@ export default function ChecklistForm({
   useEffect(() => {
     if (checklist) {
       setFormData({
-        title:                String(checklist.title       ?? ''),
-        territorio:           String(checklist.territorio   ?? ''),
+        title:                String(checklist.title                ?? ''),
+        territorio:           String(checklist.territorio            ?? ''),
         colegio:              String(checklist.colegio ?? checklist.location ?? ''),
-        general_observations: String(checklist.general_observations ?? ''),
+        infrastructure_type:  String(checklist.infrastructure_type  ?? 'concreto'),
+        general_observations: String(checklist.general_observations  ?? ''),
       });
     } else {
       setFormData(INITIAL_FORM);
@@ -188,6 +191,19 @@ export default function ChecklistForm({
               )}
             </div>
           )}
+
+          <div>
+            <label className={labelClass}>Tipo de Estructura *</label>
+            <select
+              className={inputClass}
+              value={formData.infrastructure_type}
+              onChange={e => setFormData(prev => ({ ...prev, infrastructure_type: e.target.value }))}
+              required
+            >
+              <option value="concreto">Concreto</option>
+              <option value="metalica">Metálica</option>
+            </select>
+          </div>
 
           <div>
             <label className={labelClass}>Descripción / Observaciones</label>
