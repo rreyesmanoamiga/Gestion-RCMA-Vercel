@@ -26,11 +26,13 @@ export default function Dashboard() {
     queryFn: () => db.MaintenanceRecord.list('-created_at', 500),
   });
 
-  const projects    = projectsQuery.data    ?? [];
-  const checklists  = checklistsQuery.data  ?? [];
-  const maintenance = maintenanceQuery.data ?? [];
+  // Memoizados — evita que ?? [] cree un nuevo array en cada render
+  // y elimina los warnings de exhaustive-deps en los useMemo posteriores
+  const projects    = useMemo(() => projectsQuery.data    ?? [], [projectsQuery.data]);
+  const checklists  = useMemo(() => checklistsQuery.data  ?? [], [checklistsQuery.data]);
+  const maintenance = useMemo(() => maintenanceQuery.data ?? [], [maintenanceQuery.data]);
 
-  // Estado de carga unificado — evita mostrar ceros reales durante la carga inicial
+  // Estado de carga unificado
   const isLoading = projectsQuery.isLoading
     || checklistsQuery.isLoading
     || maintenanceQuery.isLoading;
@@ -62,9 +64,9 @@ export default function Dashboard() {
   const territorySummary = useMemo(() =>
     ['NORTE', 'MEXICO'].map(territorio => ({
       territorio,
-      colegios:  COLEGIOS.filter(c => c.territorio === territorio),
-      projects:  projects.filter(p => p.territorio === territorio),
-      checklists: checklists.filter(c => c.territorio === territorio),
+      colegios:    COLEGIOS.filter(c => c.territorio === territorio),
+      projects:    projects.filter(p => p.territorio === territorio),
+      checklists:  checklists.filter(c => c.territorio === territorio),
       maintenance: maintenance.filter(m => m.territorio === territorio),
     })),
     [projects, checklists, maintenance]
