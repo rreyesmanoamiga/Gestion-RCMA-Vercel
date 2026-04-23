@@ -111,14 +111,23 @@ export default function Dashboard() {
   return (
     <div className="space-y-8">
       {/* Header */}
-      <div>
-        <div className="flex items-center gap-3 mb-1">
-          <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center">
-            <Building2 className="w-4 h-4 text-primary" />
+      <div className="flex items-center justify-between">
+        <div>
+          <div className="flex items-center gap-3 mb-1">
+            <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center">
+              <Building2 className="w-4 h-4 text-primary" />
+            </div>
+            <h1 className="text-2xl font-bold text-foreground">Colegios Mano Amiga</h1>
           </div>
-          <h1 className="text-2xl font-bold text-foreground">Colegios Mano Amiga</h1>
+          <p className="text-sm text-muted-foreground ml-11">Panel de Gestión de Proyectos y Mantenimiento</p>
         </div>
-        <p className="text-sm text-muted-foreground ml-11">Panel de Gestión de Proyectos y Mantenimiento</p>
+        <div className="hidden sm:flex items-center justify-center bg-slate-900 rounded-xl px-4 py-2 shadow-md">
+          <img
+            src="/logo.png"
+            alt="Mano Amiga"
+            className="h-12 w-auto object-contain"
+          />
+        </div>
       </div>
 
       {/* Stats */}

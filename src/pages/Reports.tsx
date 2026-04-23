@@ -240,7 +240,11 @@ export default function Reports() {
 
         <div className={`${cardClass} bg-slate-900 text-white border-none relative overflow-hidden flex flex-col justify-center`}>
           <div className="relative z-10">
-            <h3 className="text-xl font-black mb-2 italic">Sistema RCMA Cloud</h3>
+            <img
+              src="/logo.png"
+              alt="Mano Amiga"
+              className="h-14 w-auto object-contain mb-4"
+            />
             <p className="text-slate-400 text-sm mb-6 max-w-sm">
               Todos los datos están sincronizados con tu base de datos central. Los cambios realizados en campo se reflejan aquí en tiempo real.
             </p>
