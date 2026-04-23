@@ -9,33 +9,60 @@ import StatusBadge from '@/components/shared/StatusBadge';
 import PriorityBadge from '@/components/shared/PriorityBadge';
 import MaintenanceForm from '@/components/maintenance/MaintenanceForm';
 
-// Fuera del componente — se definen una sola vez
 const btnOutline = "flex items-center gap-1.5 px-3 py-1.5 border border-slate-300 rounded-md text-sm font-medium text-slate-700 hover:bg-slate-50 transition-colors";
 const btnDanger  = "flex items-center gap-1.5 px-3 py-1.5 border border-red-200 rounded-md text-sm font-medium text-red-600 hover:bg-red-50 transition-colors";
 
+interface MaintenanceRecord {
+  id:                   string;
+  title?:               string;
+  type?:                string;
+  status?:              string;
+  priority?:            string;
+  description?:         string;
+  location?:            string;
+  responsible?:         string;
+  scheduled_date?:      string;
+  completed_date?:      string;
+  next_maintenance_date?: string;
+  cost?:                number | string;
+  findings?:            string;
+  actions_taken?:       string;
+  materials_used?:      string;
+  notes?:               string;
+  photos_before?:       string[];
+  photos_after?:        string[];
+  project_id?:          string;
+}
+
+interface Project {
+  id:    string;
+  name?: string;
+}
+
 export default function MaintenanceDetail() {
-  const { id: recordId } = useParams(); // ← useParams en lugar de window.location
+  const { id: recordId } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const [editing, setEditing] = useState(false);
+  const [editing, setEditing]               = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
-  // Fetch directo por ID — no descarga todos los registros
   const { data, isLoading, isError } = useQuery({
     queryKey: ['maintenance', recordId],
     queryFn: () => db.MaintenanceRecord.filter({ id: recordId }, '-created_at', 1),
     enabled: !!recordId,
   });
 
-  const { data: projects = [] } = useQuery({
+  const { data: rawProjects = [] } = useQuery({
     queryKey: ['projects'],
     queryFn: () => db.Project.list('-created_at', 500),
   });
 
-  const record = data?.[0];
+  const record   = (data as unknown as MaintenanceRecord[] | undefined)?.[0];
+  const projects = rawProjects as unknown as Project[];
 
   const updateMutation = useMutation({
-    mutationFn: (payload) => db.MaintenanceRecord.update(recordId, payload),
+    mutationFn: (payload: Record<string, unknown>) =>
+      db.MaintenanceRecord.update(recordId!, payload),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['maintenance'] });
       setEditing(false);
@@ -43,7 +70,7 @@ export default function MaintenanceDetail() {
   });
 
   const deleteMutation = useMutation({
-    mutationFn: () => db.MaintenanceRecord.delete(recordId),
+    mutationFn: () => db.MaintenanceRecord.delete(recordId!),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['maintenance'] });
       navigate('/mantenimiento');
@@ -145,7 +172,6 @@ export default function MaintenanceDetail() {
           )}
         </div>
 
-        {/* Detalles técnicos */}
         <div className="space-y-4 pt-2">
           {record.findings && (
             <div>
@@ -167,8 +193,7 @@ export default function MaintenanceDetail() {
           )}
         </div>
 
-        {/* Fotos antes */}
-        {record.photos_before?.length > 0 && (
+        {record.photos_before && record.photos_before.length > 0 && (
           <div className="pt-4 border-t border-slate-100">
             <h3 className="text-sm font-semibold text-slate-900 mb-3">Registro Fotográfico: Antes</h3>
             <div className="grid grid-cols-3 sm:grid-cols-4 gap-3">
@@ -182,8 +207,7 @@ export default function MaintenanceDetail() {
           </div>
         )}
 
-        {/* Fotos después */}
-        {record.photos_after?.length > 0 && (
+        {record.photos_after && record.photos_after.length > 0 && (
           <div className="pt-4 border-t border-slate-100">
             <h3 className="text-sm font-semibold text-slate-900 mb-3">Registro Fotográfico: Después</h3>
             <div className="grid grid-cols-3 sm:grid-cols-4 gap-3">
@@ -205,7 +229,6 @@ export default function MaintenanceDetail() {
         )}
       </div>
 
-      {/* Modal de confirmación de eliminación */}
       {showDeleteConfirm && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 p-4">
           <div className="bg-white rounded-lg shadow-xl max-w-sm w-full p-6">
@@ -238,9 +261,8 @@ export default function MaintenanceDetail() {
       <MaintenanceForm
         open={editing}
         onClose={() => setEditing(false)}
-        onSubmit={data => updateMutation.mutate(data)}
-        record={record}
-        projects={projects}
+        onSubmit={(data: Record<string, unknown>) => updateMutation.mutate(data)}
+        maintenance={record as unknown as Record<string, unknown>}
       />
     </div>
   );

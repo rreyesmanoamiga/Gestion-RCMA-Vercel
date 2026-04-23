@@ -8,7 +8,16 @@ import StatusBadge from '@/components/shared/StatusBadge';
 
 const PAGE_SIZE = 20;
 
-const tabClass = (activeTab, id) => `
+interface MaintenanceTask {
+  id:          string;
+  title?:      string;
+  status?:     string;
+  location?:   string;
+  updated_at?: string;
+  created_at?: string;
+}
+
+const tabClass = (activeTab: string, id: string) => `
   flex items-center gap-2 px-6 py-3 text-sm font-bold uppercase tracking-tighter transition-all border-b-2
   ${activeTab === id
     ? 'border-slate-900 text-slate-900 bg-slate-50'
@@ -19,13 +28,14 @@ export default function Maintenance() {
   const [activeTab, setActiveTab]       = useState('pendientes');
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
 
-  const { data: maintenanceTasks = [], isLoading } = useQuery({
+  const { data: rawTasks = [], isLoading } = useQuery({
     queryKey: ['maintenance'],
     queryFn: () => db.MaintenanceRecord.list('-created_at', 500),
   });
 
-  // Reset visibleCount al cambiar de tab
-  const handleTabChange = (tab) => {
+  const maintenanceTasks = rawTasks as unknown as MaintenanceTask[];
+
+  const handleTabChange = (tab: string) => {
     setActiveTab(tab);
     setVisibleCount(PAGE_SIZE);
   };
@@ -116,7 +126,6 @@ export default function Maintenance() {
                 ))}
               </div>
 
-              {/* Botón cargar más */}
               {hasMore && (
                 <div className="flex flex-col items-center gap-2 py-6 border-t border-slate-100">
                   <button

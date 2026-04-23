@@ -8,7 +8,37 @@ import StatusBadge from '@/components/shared/StatusBadge';
 import PriorityBadge from '@/components/shared/PriorityBadge';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
-import { COLEGIOS } from '@/lib/colegios';
+import { COLEGIOS, type Colegio } from '@/lib/colegios';
+
+// ─── Interfaces ───────────────────────────────────────────────────────────────
+interface Project {
+  id:          string;
+  name?:       string;
+  status?:     string;
+  priority?:   string;
+  colegio?:    string;
+  territorio?: string;
+  location?:   string;
+  progress?:   number;
+}
+
+interface Checklist {
+  id:               string;
+  overall_status?:  string;
+  colegio?:         string;
+  territorio?:      string;
+}
+
+interface MaintenanceRecord {
+  id:             string;
+  title?:         string;
+  status?:        string;
+  priority?:      string;
+  colegio?:       string;
+  territorio?:    string;
+  type?:          string;
+  scheduled_date?: string;
+}
 
 export default function Dashboard() {
   const projectsQuery = useQuery({
@@ -26,18 +56,15 @@ export default function Dashboard() {
     queryFn: () => db.MaintenanceRecord.list('-created_at', 500),
   });
 
-  // Memoizados — evita que ?? [] cree un nuevo array en cada render
-  // y elimina los warnings de exhaustive-deps en los useMemo posteriores
-  const projects    = useMemo(() => projectsQuery.data    ?? [], [projectsQuery.data]);
-  const checklists  = useMemo(() => checklistsQuery.data  ?? [], [checklistsQuery.data]);
-  const maintenance = useMemo(() => maintenanceQuery.data ?? [], [maintenanceQuery.data]);
+  // Memoizados con cast — evita que ?? [] cree un nuevo array en cada render
+  const projects    = useMemo(() => (projectsQuery.data    ?? []) as unknown as Project[],    [projectsQuery.data]);
+  const checklists  = useMemo(() => (checklistsQuery.data  ?? []) as unknown as Checklist[],  [checklistsQuery.data]);
+  const maintenance = useMemo(() => (maintenanceQuery.data ?? []) as unknown as MaintenanceRecord[], [maintenanceQuery.data]);
 
-  // Estado de carga unificado
   const isLoading = projectsQuery.isLoading
     || checklistsQuery.isLoading
     || maintenanceQuery.isLoading;
 
-  // Stats memoizados — se recalculan solo cuando cambian los datos
   const stats = useMemo(() => ({
     activeProjects:     projects.filter(p => p.status === 'en_progreso').length,
     criticalChecklists: checklists.filter(c => c.overall_status === 'critico' || c.overall_status === 'malo').length,
@@ -45,26 +72,24 @@ export default function Dashboard() {
     urgentItems:        maintenance.filter(m => m.priority === 'urgente' && m.status !== 'completado').length,
   }), [projects, checklists, maintenance]);
 
-  // Set de colegios urgentes — O(1) lookup vs O(n) .some() por cada colegio en el render
   const urgentColegios = useMemo(() => {
-    const s = new Set();
+    const s = new Set<string>();
     projects.forEach(p => {
-      if (p.priority === 'urgente' && p.status !== 'completado') s.add(p.colegio);
+      if (p.priority === 'urgente' && p.status !== 'completado' && p.colegio) s.add(p.colegio);
     });
     maintenance.forEach(m => {
-      if (m.priority === 'urgente' && m.status !== 'completado') s.add(m.colegio);
+      if (m.priority === 'urgente' && m.status !== 'completado' && m.colegio) s.add(m.colegio);
     });
     checklists.forEach(c => {
-      if (c.overall_status === 'critico' || c.overall_status === 'malo') s.add(c.colegio);
+      if ((c.overall_status === 'critico' || c.overall_status === 'malo') && c.colegio) s.add(c.colegio);
     });
     return s;
   }, [projects, maintenance, checklists]);
 
-  // Resumen por territorio memoizado
   const territorySummary = useMemo(() =>
     ['NORTE', 'MEXICO'].map(territorio => ({
       territorio,
-      colegios:    COLEGIOS.filter(c => c.territorio === territorio),
+      colegios:    COLEGIOS.filter((c: Colegio) => c.territorio === territorio),
       projects:    projects.filter(p => p.territorio === territorio),
       checklists:  checklists.filter(c => c.territorio === territorio),
       maintenance: maintenance.filter(m => m.territorio === territorio),

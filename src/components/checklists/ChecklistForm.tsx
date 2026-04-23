@@ -1,59 +1,94 @@
-import React, { useState, useEffect } from 'react';
-import { X, Save, Hammer, ChevronDown, ChevronUp, Info, MapPin, User } from 'lucide-react';
-import { COLEGIOS } from '@/lib/colegios';
+import React, { useState, useEffect, useMemo } from 'react';
+import { X, Save, ChevronDown, ChevronUp, Info, MapPin, User } from 'lucide-react';
+import { getAppParams } from '@/lib/app-params';
+import { COLEGIOS, type Colegio } from '@/lib/colegios';
 import ColegioSelector from '@/components/shared/ColegioSelector';
 
-// Fuera del componente — se definen una sola vez
 const inputClass = "w-full px-3 py-2 border border-slate-300 rounded-md text-sm focus:ring-2 focus:ring-slate-900 focus:outline-none bg-white text-slate-900";
 const labelClass = "block text-xs font-bold text-slate-500 uppercase mb-1 mt-3";
 
-const INITIAL_FORM = {
-  title:          '',
-  territorio:     '',
-  colegio:        '',
-  type:           'Correctivo',
-  priority:       'media',
-  status:         'pendiente',
-  description:    '',
-  scheduled_date: '',
-};
+interface FormData {
+  title:       string;
+  territorio:  string;
+  colegio:     string;
+  status:      string;
+  description: string;
+  app_id:      string | null;
+}
 
-export default function MaintenanceForm({ open, onClose, onSubmit, maintenance }) {
-  const [formData, setFormData] = useState(INITIAL_FORM);
+interface ChecklistRecord {
+  title?:       string;
+  territorio?:  string;
+  colegio?:     string;
+  location?:    string;
+  status?:      string;
+  description?: string;
+  [key: string]: unknown;
+}
+
+interface ChecklistFormProps {
+  open:       boolean;
+  onClose:    () => void;
+  onSubmit:   (data: Record<string, unknown>) => void;
+  checklist?: ChecklistRecord | null;
+  projects?:  unknown[];
+}
+
+export default function ChecklistForm({
+  open,
+  onClose,
+  onSubmit,
+  checklist = null,
+}: ChecklistFormProps) {
+  const params = useMemo(() => getAppParams(), []);
+
+  const INITIAL_FORM: FormData = {
+    title:       '',
+    territorio:  '',
+    colegio:     '',
+    status:      'pendiente',
+    description: '',
+    app_id:      params.appId,
+  };
+
+  const [formData, setFormData] = useState<FormData>(INITIAL_FORM);
   const [infoOpen, setInfoOpen] = useState(false);
 
   useEffect(() => {
-    if (maintenance) {
+    if (checklist) {
       setFormData({
-        ...INITIAL_FORM,
-        ...maintenance,
-        colegio: maintenance.colegio ?? maintenance.location ?? '',
+        title:       String(checklist.title       ?? ''),
+        territorio:  String(checklist.territorio   ?? ''),
+        colegio:     String(checklist.colegio ?? checklist.location ?? ''),
+        status:      String(checklist.status       ?? 'pendiente'),
+        description: String(checklist.description  ?? ''),
+        app_id:      params.appId,
       });
     } else {
       setFormData(INITIAL_FORM);
     }
     setInfoOpen(false);
-  }, [maintenance, open]);
+  }, [checklist, open, params.appId]);
 
   if (!open) return null;
 
-  const colegiosFiltrados = formData.territorio
+  const colegiosFiltrados: Colegio[] = formData.territorio
     ? COLEGIOS.filter(c => c.territorio === formData.territorio)
     : [];
 
-  const colegioInfo = formData.colegio
+  const colegioInfo: Colegio | null = formData.colegio
     ? COLEGIOS.find(c => c.colegio === formData.colegio) ?? null
     : null;
 
-  const territorioInfo = formData.territorio && !formData.colegio
+  const territorioInfo: Colegio[] | null = formData.territorio && !formData.colegio
     ? colegiosFiltrados
     : null;
 
-  const hasInfo = !!(colegioInfo || (territorioInfo?.length > 0));
+  const hasInfo = !!(colegioInfo || (territorioInfo && territorioInfo.length > 0));
 
-  const handleSubmit = (e) => {
+  const handleSubmit = (e: React.MouseEvent | React.FormEvent) => {
     e.preventDefault();
-    onSubmit({ ...formData, updated_at: new Date() });
+    onSubmit({ ...formData, app_id: params.appId, updated_at: new Date() });
   };
 
   return (
@@ -62,9 +97,8 @@ export default function MaintenanceForm({ open, onClose, onSubmit, maintenance }
 
         {/* Header */}
         <div className="p-5 border-b border-slate-100 flex justify-between items-center bg-slate-50">
-          <h3 className="font-bold text-slate-900 flex items-center gap-2">
-            <Hammer className="w-4 h-4" />
-            {maintenance ? 'Editar Mantenimiento' : 'Nuevo Mantenimiento'}
+          <h3 className="font-bold text-slate-900">
+            {checklist ? 'Editar Checklist' : 'Nuevo Checklist'}
           </h3>
           <button onClick={onClose} className="text-slate-400 hover:text-slate-600">
             <X className="w-5 h-5" />
@@ -74,20 +108,18 @@ export default function MaintenanceForm({ open, onClose, onSubmit, maintenance }
         {/* Body */}
         <div className="p-6 overflow-y-auto space-y-3 flex-1">
 
-          {/* Título */}
           <div>
-            <label className={labelClass}>Asunto / Tarea *</label>
+            <label className={labelClass}>Título del Checklist *</label>
             <input
               type="text"
               required
               className={inputClass}
               value={formData.title}
               onChange={e => setFormData(prev => ({ ...prev, title: e.target.value }))}
-              placeholder="Ej. Revisión de transformador"
+              placeholder="Ej. Revisión Mensual de Instalaciones"
             />
           </div>
 
-          {/* Territorio + Colegio — usando ColegioSelector */}
           <ColegioSelector
             territorio={formData.territorio}
             colegio={formData.colegio}
@@ -102,7 +134,6 @@ export default function MaintenanceForm({ open, onClose, onSubmit, maintenance }
             required
           />
 
-          {/* Panel plegable de información */}
           {hasInfo && (
             <div className="rounded-lg border border-slate-200 overflow-hidden">
               <button
@@ -125,20 +156,24 @@ export default function MaintenanceForm({ open, onClose, onSubmit, maintenance }
                 <div className="px-4 py-3 bg-white space-y-3">
                   {colegioInfo && (
                     <div className="space-y-2">
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-2 text-sm">
                         <MapPin className="w-4 h-4 text-slate-400 shrink-0" />
                         <span className="text-slate-500 text-xs font-bold uppercase">Territorio</span>
-                        <span className="text-slate-800 text-sm font-semibold ml-auto">{colegioInfo.territorio}</span>
+                        <span className="text-slate-800 text-sm font-semibold ml-auto">
+                          {colegioInfo.territorio}
+                        </span>
                       </div>
-                      <div className="flex items-start gap-2">
+                      <div className="flex items-start gap-2 text-sm">
                         <User className="w-4 h-4 text-slate-400 shrink-0 mt-0.5" />
                         <span className="text-slate-500 text-xs font-bold uppercase">ECO</span>
-                        <span className="text-slate-800 text-sm font-semibold ml-auto text-right">{colegioInfo.eco}</span>
+                        <span className="text-slate-800 text-sm font-semibold ml-auto text-right">
+                          {colegioInfo.eco}
+                        </span>
                       </div>
                     </div>
                   )}
 
-                  {territorioInfo?.length > 0 && (
+                  {territorioInfo && territorioInfo.length > 0 && (
                     <div className="divide-y divide-slate-100">
                       {territorioInfo.map(c => (
                         <div key={c.colegio} className="py-2 flex items-start justify-between gap-3">
@@ -167,42 +202,13 @@ export default function MaintenanceForm({ open, onClose, onSubmit, maintenance }
             </div>
           )}
 
-          {/* Tipo + Prioridad */}
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className={labelClass}>Tipo</label>
-              <select
-                className={inputClass}
-                value={formData.type}
-                onChange={e => setFormData(prev => ({ ...prev, type: e.target.value }))}
-              >
-                <option value="Preventivo">Preventivo</option>
-                <option value="Correctivo">Correctivo</option>
-                <option value="Mejora">Mejora</option>
-              </select>
-            </div>
-            <div>
-              <label className={labelClass}>Prioridad</label>
-              <select
-                className={inputClass}
-                value={formData.priority}
-                onChange={e => setFormData(prev => ({ ...prev, priority: e.target.value }))}
-              >
-                <option value="baja">Baja</option>
-                <option value="media">Media</option>
-                <option value="alta">Alta</option>
-                <option value="critica">Crítica</option>
-              </select>
-            </div>
-          </div>
-
-          {/* Descripción */}
           <div>
-            <label className={labelClass}>Descripción</label>
+            <label className={labelClass}>Descripción / Observaciones</label>
             <textarea
-              className={`${inputClass} h-20 resize-none`}
+              className={`${inputClass} h-24 resize-none`}
               value={formData.description}
               onChange={e => setFormData(prev => ({ ...prev, description: e.target.value }))}
+              placeholder="Detalles adicionales del checklist..."
             />
           </div>
         </div>
@@ -212,17 +218,17 @@ export default function MaintenanceForm({ open, onClose, onSubmit, maintenance }
           <button
             type="button"
             onClick={onClose}
-            className="px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-200 rounded-md transition-colors"
+            className="px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-200 rounded-md"
           >
             Cancelar
           </button>
           <button
             type="button"
             onClick={handleSubmit}
-            className="px-4 py-2 bg-slate-900 text-white rounded-md text-sm font-medium flex items-center gap-2 hover:bg-slate-800"
+            className="px-4 py-2 bg-slate-900 text-white rounded-md text-sm font-medium hover:bg-slate-800 flex items-center gap-2"
           >
             <Save className="w-4 h-4" />
-            {maintenance ? 'Actualizar' : 'Guardar'}
+            {checklist ? 'Actualizar Checklist' : 'Crear Checklist'}
           </button>
         </div>
       </div>

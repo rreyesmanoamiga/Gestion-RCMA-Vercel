@@ -1,93 +1,116 @@
-import React, { useState, useEffect, useMemo } from 'react';
-import { X, Save, ChevronDown, ChevronUp, Info, MapPin, User } from 'lucide-react';
-import { getAppParams } from '@/lib/app-params';
-import { COLEGIOS } from '@/lib/colegios';
+import React, { useState, useEffect } from 'react';
+import { X, Save, Hammer, ChevronDown, ChevronUp, Info, MapPin, User } from 'lucide-react';
+import { COLEGIOS, type Colegio } from '@/lib/colegios';
 import ColegioSelector from '@/components/shared/ColegioSelector';
 
-// Fuera del componente — se definen una sola vez
 const inputClass = "w-full px-3 py-2 border border-slate-300 rounded-md text-sm focus:ring-2 focus:ring-slate-900 focus:outline-none bg-white text-slate-900";
 const labelClass = "block text-xs font-bold text-slate-500 uppercase mb-1 mt-3";
 
-const INITIAL_FORM = {
-  title:       '',
-  territorio:  '',
-  colegio:     '',
-  status:      'pendiente',
-  description: '',
+interface FormData {
+  title:          string;
+  territorio:     string;
+  colegio:        string;
+  type:           string;
+  priority:       string;
+  status:         string;
+  description:    string;
+  scheduled_date: string;
+}
+
+const INITIAL_FORM: FormData = {
+  title:          '',
+  territorio:     '',
+  colegio:        '',
+  type:           'Correctivo',
+  priority:       'media',
+  status:         'pendiente',
+  description:    '',
+  scheduled_date: '',
 };
 
-export default function ChecklistForm({ open, onClose, onSubmit, checklist }) {
-  const params = useMemo(() => getAppParams(), []);
+interface MaintenanceFormProps {
+  open:         boolean;
+  onClose:      () => void;
+  onSubmit:     (data: Record<string, unknown>) => void;
+  maintenance?: Record<string, unknown> | null;
+}
 
-  const [formData, setFormData] = useState({ ...INITIAL_FORM, app_id: params.appId });
+export default function MaintenanceForm({
+  open,
+  onClose,
+  onSubmit,
+  maintenance = null,
+}: MaintenanceFormProps) {
+  const [formData, setFormData] = useState<FormData>(INITIAL_FORM);
   const [infoOpen, setInfoOpen] = useState(false);
 
   useEffect(() => {
-    if (checklist) {
+    if (maintenance) {
       setFormData({
-        ...INITIAL_FORM,
-        ...checklist,
-        colegio: checklist.colegio ?? checklist.location ?? '',
-        app_id:  params.appId,
+        title:          String(maintenance.title          ?? ''),
+        territorio:     String(maintenance.territorio      ?? ''),
+        colegio:        String(maintenance.colegio ?? maintenance.location ?? ''),
+        type:           String(maintenance.type            ?? 'Correctivo'),
+        priority:       String(maintenance.priority        ?? 'media'),
+        status:         String(maintenance.status          ?? 'pendiente'),
+        description:    String(maintenance.description     ?? ''),
+        scheduled_date: String(maintenance.scheduled_date  ?? ''),
       });
     } else {
-      setFormData({ ...INITIAL_FORM, app_id: params.appId });
+      setFormData(INITIAL_FORM);
     }
     setInfoOpen(false);
-  }, [checklist, open, params.appId]);
+  }, [maintenance, open]);
 
   if (!open) return null;
 
-  const colegiosFiltrados = formData.territorio
+  const colegiosFiltrados: Colegio[] = formData.territorio
     ? COLEGIOS.filter(c => c.territorio === formData.territorio)
     : [];
 
-  const colegioInfo = formData.colegio
+  const colegioInfo: Colegio | null = formData.colegio
     ? COLEGIOS.find(c => c.colegio === formData.colegio) ?? null
     : null;
 
-  const territorioInfo = formData.territorio && !formData.colegio
+  const territorioInfo: Colegio[] | null = formData.territorio && !formData.colegio
     ? colegiosFiltrados
     : null;
 
   const hasInfo = !!(colegioInfo || (territorioInfo && territorioInfo.length > 0));
 
-  const handleSubmit = (e) => {
+  const handleSubmit = (e: React.MouseEvent | React.FormEvent) => {
     e.preventDefault();
-    onSubmit({ ...formData, app_id: params.appId, updated_at: new Date() });
+    onSubmit({ ...formData, updated_at: new Date() });
   };
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4">
       <div className="bg-white rounded-xl shadow-2xl max-w-lg w-full max-h-[90vh] overflow-hidden flex flex-col border border-slate-200">
 
-        {/* Header */}
         <div className="p-5 border-b border-slate-100 flex justify-between items-center bg-slate-50">
-          <h3 className="font-bold text-slate-900">
-            {checklist ? 'Editar Checklist' : 'Nuevo Checklist'}
+          <h3 className="font-bold text-slate-900 flex items-center gap-2">
+            <Hammer className="w-4 h-4" />
+            {maintenance ? 'Editar Mantenimiento' : 'Nuevo Mantenimiento'}
           </h3>
           <button onClick={onClose} className="text-slate-400 hover:text-slate-600">
             <X className="w-5 h-5" />
           </button>
         </div>
 
-        {/* Body */}
         <div className="p-6 overflow-y-auto space-y-3 flex-1">
 
-          {/* Título */}
           <div>
-            <label className={labelClass}>Título del Checklist *</label>
+            <label className={labelClass}>Asunto / Tarea *</label>
             <input
               type="text"
               required
               className={inputClass}
               value={formData.title}
               onChange={e => setFormData(prev => ({ ...prev, title: e.target.value }))}
-              placeholder="Ej. Revisión Mensual de Instalaciones"
+              placeholder="Ej. Revisión de transformador"
             />
           </div>
 
-          {/* Territorio + Colegio — usando ColegioSelector */}
           <ColegioSelector
             territorio={formData.territorio}
             colegio={formData.colegio}
@@ -102,7 +125,6 @@ export default function ChecklistForm({ open, onClose, onSubmit, checklist }) {
             required
           />
 
-          {/* Panel plegable de información */}
           {hasInfo && (
             <div className="rounded-lg border border-slate-200 overflow-hidden">
               <button
@@ -125,19 +147,15 @@ export default function ChecklistForm({ open, onClose, onSubmit, checklist }) {
                 <div className="px-4 py-3 bg-white space-y-3">
                   {colegioInfo && (
                     <div className="space-y-2">
-                      <div className="flex items-center gap-2 text-sm">
+                      <div className="flex items-center gap-2">
                         <MapPin className="w-4 h-4 text-slate-400 shrink-0" />
                         <span className="text-slate-500 text-xs font-bold uppercase">Territorio</span>
-                        <span className="text-slate-800 text-sm font-semibold ml-auto">
-                          {colegioInfo.territorio}
-                        </span>
+                        <span className="text-slate-800 text-sm font-semibold ml-auto">{colegioInfo.territorio}</span>
                       </div>
-                      <div className="flex items-start gap-2 text-sm">
+                      <div className="flex items-start gap-2">
                         <User className="w-4 h-4 text-slate-400 shrink-0 mt-0.5" />
                         <span className="text-slate-500 text-xs font-bold uppercase">ECO</span>
-                        <span className="text-slate-800 text-sm font-semibold ml-auto text-right">
-                          {colegioInfo.eco}
-                        </span>
+                        <span className="text-slate-800 text-sm font-semibold ml-auto text-right">{colegioInfo.eco}</span>
                       </div>
                     </div>
                   )}
@@ -171,34 +189,59 @@ export default function ChecklistForm({ open, onClose, onSubmit, checklist }) {
             </div>
           )}
 
-          {/* Descripción */}
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className={labelClass}>Tipo</label>
+              <select
+                className={inputClass}
+                value={formData.type}
+                onChange={e => setFormData(prev => ({ ...prev, type: e.target.value }))}
+              >
+                <option value="Preventivo">Preventivo</option>
+                <option value="Correctivo">Correctivo</option>
+                <option value="Mejora">Mejora</option>
+              </select>
+            </div>
+            <div>
+              <label className={labelClass}>Prioridad</label>
+              <select
+                className={inputClass}
+                value={formData.priority}
+                onChange={e => setFormData(prev => ({ ...prev, priority: e.target.value }))}
+              >
+                <option value="baja">Baja</option>
+                <option value="media">Media</option>
+                <option value="alta">Alta</option>
+                <option value="critica">Crítica</option>
+              </select>
+            </div>
+          </div>
+
           <div>
-            <label className={labelClass}>Descripción / Observaciones</label>
+            <label className={labelClass}>Descripción</label>
             <textarea
-              className={`${inputClass} h-24 resize-none`}
+              className={`${inputClass} h-20 resize-none`}
               value={formData.description}
               onChange={e => setFormData(prev => ({ ...prev, description: e.target.value }))}
-              placeholder="Detalles adicionales del checklist..."
             />
           </div>
         </div>
 
-        {/* Footer */}
         <div className="p-5 border-t border-slate-100 bg-slate-50 flex justify-end gap-3">
           <button
             type="button"
             onClick={onClose}
-            className="px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-200 rounded-md"
+            className="px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-200 rounded-md transition-colors"
           >
             Cancelar
           </button>
           <button
             type="button"
             onClick={handleSubmit}
-            className="px-4 py-2 bg-slate-900 text-white rounded-md text-sm font-medium hover:bg-slate-800 flex items-center gap-2"
+            className="px-4 py-2 bg-slate-900 text-white rounded-md text-sm font-medium flex items-center gap-2 hover:bg-slate-800"
           >
             <Save className="w-4 h-4" />
-            {checklist ? 'Actualizar Checklist' : 'Crear Checklist'}
+            {maintenance ? 'Actualizar' : 'Guardar'}
           </button>
         </div>
       </div>

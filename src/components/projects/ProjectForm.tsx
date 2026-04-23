@@ -3,14 +3,26 @@ import { X, Save } from 'lucide-react';
 import { COLEGIOS } from '@/lib/colegios';
 import ColegioSelector from '@/components/shared/ColegioSelector';
 
-// Fuera del componente — se definen una sola vez
 const inputClass    = "w-full px-3 py-2 border border-slate-300 rounded-md text-sm focus:ring-2 focus:ring-slate-900 focus:outline-none bg-white text-slate-900";
 const labelClass    = "block text-xs font-bold text-slate-500 uppercase mb-1 mt-3";
 const readOnlyClass = "w-full px-3 py-2 border border-slate-200 rounded-md text-sm bg-slate-50 font-semibold text-slate-600 cursor-default";
 
 const DEFAULT_PROJECT_TYPE = 'Mantenimiento';
 
-const INITIAL_FORM = {
+interface FormData {
+  name:        string;
+  description: string;
+  status:      string;
+  priority:    string;
+  territorio:  string;
+  colegio:     string;
+  eco:         string;
+  responsible: string;
+  start_date:  string;
+  progress:    number;
+}
+
+const INITIAL_FORM: FormData = {
   name:        '',
   description: '',
   status:      'planificado',
@@ -23,17 +35,30 @@ const INITIAL_FORM = {
   progress:    0,
 };
 
-export default function ProjectForm({ open, onClose, onSubmit, project }) {
-  const [formData, setFormData] = useState(INITIAL_FORM);
+interface ProjectFormProps {
+  open:     boolean;
+  onClose:  () => void;
+  onSubmit: (data: Record<string, unknown>) => void;
+  project?: Record<string, unknown> | null;
+}
+
+export default function ProjectForm({ open, onClose, onSubmit, project = null }: ProjectFormProps) {
+  const [formData, setFormData] = useState<FormData>(INITIAL_FORM);
 
   useEffect(() => {
     if (project) {
       setFormData({
         ...INITIAL_FORM,
-        ...project,
-        colegio:  project.colegio  ?? project.location ?? '',
-        eco:      project.eco      ?? '',
-        progress: project.progress ?? 0,
+        name:        String(project.name        ?? ''),
+        description: String(project.description ?? ''),
+        status:      String(project.status      ?? 'planificado'),
+        priority:    String(project.priority     ?? 'media'),
+        territorio:  String(project.territorio   ?? ''),
+        colegio:     String(project.colegio  ?? project.location ?? ''),
+        eco:         String(project.eco          ?? ''),
+        responsible: String(project.responsible  ?? ''),
+        start_date:  String(project.start_date   ?? ''),
+        progress:    Number(project.progress     ?? 0),
       });
     } else {
       setFormData(INITIAL_FORM);
@@ -42,11 +67,11 @@ export default function ProjectForm({ open, onClose, onSubmit, project }) {
 
   if (!open) return null;
 
-  const handleSubmit = (e) => {
+  const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     onSubmit({
       ...formData,
-      progress: parseInt(formData.progress) || 0,
+      progress: formData.progress || 0,
       type:     DEFAULT_PROJECT_TYPE,
     });
   };
@@ -68,7 +93,6 @@ export default function ProjectForm({ open, onClose, onSubmit, project }) {
         {/* Body */}
         <form onSubmit={handleSubmit} className="p-6 overflow-y-auto space-y-1 flex-1">
 
-          {/* Nombre */}
           <div>
             <label className={labelClass}>Nombre del Proyecto *</label>
             <input
@@ -81,31 +105,19 @@ export default function ProjectForm({ open, onClose, onSubmit, project }) {
             />
           </div>
 
-          {/* Territorio + Colegio — usando ColegioSelector */}
           <ColegioSelector
             territorio={formData.territorio}
             colegio={formData.colegio}
             onTerritorioChange={val => {
-              setFormData(prev => ({
-                ...prev,
-                territorio: val,
-                colegio:    '',
-                eco:        '',
-              }));
+              setFormData(prev => ({ ...prev, territorio: val, colegio: '', eco: '' }));
             }}
             onColegioChange={val => {
-              // ECO se asigna automáticamente desde colegios.js al seleccionar el colegio
               const colegioData = COLEGIOS.find(c => c.colegio === val);
-              setFormData(prev => ({
-                ...prev,
-                colegio: val,
-                eco:     colegioData?.eco ?? '',
-              }));
+              setFormData(prev => ({ ...prev, colegio: val, eco: colegioData?.eco ?? '' }));
             }}
             required
           />
 
-          {/* ECO automático — readOnly, asignado desde colegios.js */}
           <div>
             <label className={labelClass}>Responsable ECO (Automático)</label>
             <input
@@ -117,7 +129,6 @@ export default function ProjectForm({ open, onClose, onSubmit, project }) {
             />
           </div>
 
-          {/* Estado + Prioridad */}
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className={labelClass}>Estado</label>
@@ -146,7 +157,6 @@ export default function ProjectForm({ open, onClose, onSubmit, project }) {
             </div>
           </div>
 
-          {/* Responsable de ejecución */}
           <div>
             <label className={labelClass}>Responsable de Ejecución</label>
             <input
@@ -158,7 +168,6 @@ export default function ProjectForm({ open, onClose, onSubmit, project }) {
             />
           </div>
 
-          {/* Fecha + Progreso */}
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className={labelClass}>Fecha de Inicio</label>
@@ -177,12 +186,11 @@ export default function ProjectForm({ open, onClose, onSubmit, project }) {
                 max="100"
                 className={inputClass}
                 value={formData.progress}
-                onChange={e => setFormData(prev => ({ ...prev, progress: e.target.value }))}
+                onChange={e => setFormData(prev => ({ ...prev, progress: Number(e.target.value) }))}
               />
             </div>
           </div>
 
-          {/* Footer dentro del form */}
           <div className="pt-6 border-t border-slate-100 flex justify-end gap-3 mt-4">
             <button
               type="button"

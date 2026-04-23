@@ -15,6 +15,21 @@ import { COLEGIOS, TERRITORIOS } from '@/lib/colegios';
 const PAGE_SIZE   = 20;
 const selectClass = "h-10 px-3 py-2 bg-white border border-slate-300 rounded-md text-sm focus:ring-2 focus:ring-slate-400 focus:outline-none text-slate-700";
 
+interface Project {
+  id:          string;
+  name?:       string;
+  status?:     string;
+  priority?:   string;
+  type?:       string;
+  colegio?:    string;
+  territorio?: string;
+  location?:   string;
+  responsible?: string;
+  start_date?: string;
+  description?: string;
+  progress?:   number;
+}
+
 export default function Projects() {
   const [showForm, setShowForm]                 = useState(false);
   const [filterStatus, setFilterStatus]         = useState('all');
@@ -24,20 +39,21 @@ export default function Projects() {
   const [visibleCount, setVisibleCount]         = useState(PAGE_SIZE);
   const queryClient = useQueryClient();
 
-  const { data: projects = [], isLoading } = useQuery({
+  const { data: rawProjects = [], isLoading } = useQuery({
     queryKey: ['projects'],
     queryFn: () => db.Project.list('-created_at', 500),
   });
 
+  const projects = rawProjects as unknown as Project[];
+
   const createMutation = useMutation({
-    mutationFn: (data) => db.Project.create(data),
+    mutationFn: (data: Record<string, unknown>) => db.Project.create(data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['projects'] });
       setShowForm(false);
     },
   });
 
-  // Colegios filtrados por territorio
   const colegiosPorTerritorio = useMemo(() =>
     filterTerritorio !== 'all'
       ? COLEGIOS.filter(c => c.territorio === filterTerritorio)
@@ -46,12 +62,12 @@ export default function Projects() {
   );
 
   // Reset visibleCount al cambiar filtros
-  const handleFilterChange = (setter) => (e) => {
-    setter(e.target.value);
-    setVisibleCount(PAGE_SIZE);
-  };
+  const handleFilterChange = (setter: React.Dispatch<React.SetStateAction<string>>) =>
+    (e: React.ChangeEvent<HTMLSelectElement>) => {
+      setter(e.target.value);
+      setVisibleCount(PAGE_SIZE);
+    };
 
-  // Proyectos filtrados completos
   const filtered = useMemo(() =>
     projects.filter(p => {
       if (filterStatus     !== 'all' && p.status     !== filterStatus)     return false;
@@ -63,7 +79,6 @@ export default function Projects() {
     [projects, filterStatus, filterType, filterTerritorio, filterColegio]
   );
 
-  // Slice visible — solo los registros a mostrar
   const visible   = useMemo(() => filtered.slice(0, visibleCount), [filtered, visibleCount]);
   const hasMore   = visibleCount < filtered.length;
   const remaining = filtered.length - visibleCount;
@@ -131,7 +146,6 @@ export default function Projects() {
           <option value="pausado">Pausado</option>
         </select>
 
-        {/* Contador de resultados */}
         {filtered.length > 0 && (
           <span className="h-10 flex items-center text-sm text-slate-500">
             {filtered.length} proyecto{filtered.length !== 1 ? 's' : ''}
@@ -214,7 +228,6 @@ export default function Projects() {
             ))}
           </div>
 
-          {/* Botón cargar más */}
           {hasMore && (
             <div className="flex flex-col items-center gap-2 mt-8">
               <button
@@ -235,7 +248,7 @@ export default function Projects() {
       <ProjectForm
         open={showForm}
         onClose={() => setShowForm(false)}
-        onSubmit={data => createMutation.mutate(data)}
+        onSubmit={(data: Record<string, unknown>) => createMutation.mutate(data)}
       />
     </div>
   );

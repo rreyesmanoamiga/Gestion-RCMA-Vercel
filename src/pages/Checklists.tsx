@@ -14,6 +14,32 @@ import { COLEGIOS, TERRITORIOS } from '@/lib/colegios';
 const PAGE_SIZE          = 20;
 const filterControlClass = "h-10 px-3 py-2 bg-white border border-slate-300 rounded-md text-sm focus:ring-2 focus:ring-slate-400 focus:outline-none";
 
+interface ChecklistItem {
+  condition?: string;
+}
+
+interface Checklist {
+  id:                  string;
+  title?:              string;
+  overall_status?:     string;
+  infrastructure_type?: string;
+  colegio?:            string;
+  territorio?:         string;
+  project_id?:         string;
+  inspector?:          string;
+  inspection_date?:    string;
+  items?:              ChecklistItem[];
+}
+
+interface ChecklistWithCounts extends Checklist {
+  itemCounts: { bueno: number; regular: number; malo: number; critico: number };
+}
+
+interface Project {
+  id:   string;
+  name?: string;
+}
+
 export default function Checklists() {
   const [showForm, setShowForm]                 = useState(false);
   const [search, setSearch]                     = useState('');
@@ -23,18 +49,21 @@ export default function Checklists() {
   const [visibleCount, setVisibleCount]         = useState(PAGE_SIZE);
   const queryClient = useQueryClient();
 
-  const { data: checklists = [], isLoading } = useQuery({
+  const { data: rawChecklists = [], isLoading } = useQuery({
     queryKey: ['checklists'],
     queryFn: () => db.Checklist.list('-created_at', 500),
   });
 
-  const { data: projects = [] } = useQuery({
+  const { data: rawProjects = [] } = useQuery({
     queryKey: ['projects'],
     queryFn: () => db.Project.list('-created_at', 500),
   });
 
+  const checklists = rawChecklists as unknown as Checklist[];
+  const projects   = rawProjects   as unknown as Project[];
+
   const createMutation = useMutation({
-    mutationFn: (data) => db.Checklist.create(data),
+    mutationFn: (data: Record<string, unknown>) => db.Checklist.create(data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['checklists'] });
       setShowForm(false);
@@ -42,15 +71,17 @@ export default function Checklists() {
   });
 
   const projectMap = useMemo(
-    () => Object.fromEntries(projects.map(p => [p.id, p.name])),
+    () => Object.fromEntries(projects.map(p => [p.id, p.name ?? ''])),
     [projects]
   );
 
-  const checklistsWithCounts = useMemo(() =>
+  const checklistsWithCounts = useMemo((): ChecklistWithCounts[] =>
     checklists.map(c => {
       const counts = { bueno: 0, regular: 0, malo: 0, critico: 0 };
       (c.items || []).forEach(item => {
-        if (counts[item.condition] !== undefined) counts[item.condition]++;
+        if (item.condition && item.condition in counts) {
+          counts[item.condition as keyof typeof counts]++;
+        }
       });
       return { ...c, itemCounts: counts };
     }),
@@ -64,13 +95,13 @@ export default function Checklists() {
     [filterTerritorio]
   );
 
-  // Reset visibleCount al cambiar filtros
-  const handleFilterChange = (setter) => (value) => {
-    setter(value);
-    setVisibleCount(PAGE_SIZE);
-  };
+  const handleFilterChange = (setter: React.Dispatch<React.SetStateAction<string>>) =>
+    (value: string) => {
+      setter(value);
+      setVisibleCount(PAGE_SIZE);
+    };
 
-  const filtered = useMemo(() =>
+  const filtered = useMemo((): ChecklistWithCounts[] =>
     checklistsWithCounts.filter(c => {
       if (filterType       !== 'all' && c.infrastructure_type !== filterType)       return false;
       if (filterTerritorio !== 'all' && c.territorio          !== filterTerritorio) return false;
@@ -234,7 +265,7 @@ export default function Checklists() {
       <ChecklistForm
         open={showForm}
         onClose={() => setShowForm(false)}
-        onSubmit={data => createMutation.mutate(data)}
+        onSubmit={(data: Record<string, unknown>) => createMutation.mutate(data)}
         projects={projects}
       />
     </div>

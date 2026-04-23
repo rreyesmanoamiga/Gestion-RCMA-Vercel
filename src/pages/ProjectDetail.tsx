@@ -17,27 +17,37 @@ import {
 import StatusBadge from '@/components/shared/StatusBadge';
 import PriorityBadge from '@/components/shared/PriorityBadge';
 
-// Fuera del componente — se definen una sola vez
 const btnDanger  = "inline-flex items-center gap-2 px-4 py-2 border border-red-200 text-red-600 rounded-md text-sm font-bold hover:bg-red-50 transition-colors";
 const btnOutline = "inline-flex items-center gap-2 px-4 py-2 border border-slate-300 rounded-md text-sm font-bold text-slate-700 hover:bg-slate-50 transition-colors disabled:opacity-40 disabled:cursor-not-allowed";
 
+interface Project {
+  id:           string;
+  name?:        string;
+  description?: string;
+  status?:      string;
+  priority?:    string;
+  location?:    string;
+  responsible?: string;
+  start_date?:  string;
+  progress?:    number;
+}
+
 export default function ProjectDetail() {
-  const { id } = useParams();
+  const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
-  // Fetch directo por ID — no descarga todos los proyectos
   const { data, isLoading, isError } = useQuery({
     queryKey: ['projects', id],
     queryFn: () => db.Project.filter({ id }, '-created_at', 1),
     enabled: !!id,
   });
 
-  const project = data?.[0];
+  const project = (data as unknown as Project[] | undefined)?.[0];
 
   const deleteMutation = useMutation({
-    mutationFn: () => db.Project.delete(id),
+    mutationFn: () => db.Project.delete(id!),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['projects'] });
       navigate('/proyectos');
@@ -75,14 +85,10 @@ export default function ProjectDetail() {
           <ArrowLeft className="w-4 h-4" /> Volver a Proyectos
         </Link>
         <div className="flex gap-2">
-          {/* Botón deshabilitado hasta implementar edición */}
           <button className={btnOutline} disabled title="Función en desarrollo">
             <Pencil className="w-4 h-4" /> Editar
           </button>
-          <button
-            className={btnDanger}
-            onClick={() => setShowDeleteConfirm(true)}
-          >
+          <button className={btnDanger} onClick={() => setShowDeleteConfirm(true)}>
             <Trash2 className="w-4 h-4" /> Eliminar
           </button>
         </div>
@@ -101,7 +107,6 @@ export default function ProjectDetail() {
           </p>
         </div>
 
-        {/* Ficha técnica */}
         <div className="grid grid-cols-1 md:grid-cols-3 divide-y md:divide-y-0 md:divide-x divide-slate-100 bg-white">
           <div className="p-6">
             <div className="flex items-center gap-3 mb-1">
