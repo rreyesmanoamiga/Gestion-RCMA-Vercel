@@ -1,8 +1,7 @@
 import { useMemo } from 'react';
-// @ts-ignore
-import { Label } from '@/components/ui/label';
-// @ts-ignore
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import * as Label from '@radix-ui/react-label';
+import * as Select from '@radix-ui/react-select';
+import { ChevronDown } from 'lucide-react';
 import { COLEGIOS, TERRITORIOS, type Colegio } from '@/lib/colegios';
 
 interface ColegioSelectorProps {
@@ -12,6 +11,11 @@ interface ColegioSelectorProps {
   onColegioChange: (value: string) => void;
   required?: boolean;
 }
+
+const selectTriggerClass = "w-full flex items-center justify-between px-3 py-2 border border-slate-300 rounded-md text-sm bg-white text-slate-900 focus:ring-2 focus:ring-slate-900 focus:outline-none";
+const selectContentClass = "z-50 bg-white border border-slate-200 rounded-md shadow-lg overflow-hidden";
+const selectItemClass    = "px-3 py-2 text-sm text-slate-700 hover:bg-slate-100 cursor-pointer outline-none focus:bg-slate-100";
+const labelClass         = "block text-xs font-bold text-slate-500 uppercase mb-1";
 
 export default function ColegioSelector({
   territorio,
@@ -34,41 +38,65 @@ export default function ColegioSelector({
 
   return (
     <div className="grid grid-cols-2 gap-3">
+      {/* Territorio */}
       <div>
-        <Label htmlFor="selector-territorio">
+        <Label.Root htmlFor="selector-territorio" className={labelClass}>
           Territorio {required && '*'}
-        </Label>
-        <Select value={territorio || 'all'} onValueChange={handleTerritorio}>
-          <SelectTrigger id="selector-territorio">
-            <SelectValue placeholder="Seleccionar..." />
-          </SelectTrigger>
-          <SelectContent>
-            {!required && <SelectItem value="all">Todos</SelectItem>}
-            {TERRITORIOS.map((t: string) => (
-              <SelectItem key={t} value={t}>{t}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        </Label.Root>
+        <Select.Root value={territorio || 'all'} onValueChange={handleTerritorio}>
+          <Select.Trigger id="selector-territorio" className={selectTriggerClass}>
+            <Select.Value placeholder="Seleccionar..." />
+            <Select.Icon><ChevronDown className="w-4 h-4 text-slate-400" /></Select.Icon>
+          </Select.Trigger>
+          <Select.Portal>
+            <Select.Content className={selectContentClass} position="popper" sideOffset={4}>
+              <Select.Viewport>
+                {!required && (
+                  <Select.Item value="all" className={selectItemClass}>
+                    <Select.ItemText>Todos</Select.ItemText>
+                  </Select.Item>
+                )}
+                {TERRITORIOS.map((t: string) => (
+                  <Select.Item key={t} value={t} className={selectItemClass}>
+                    <Select.ItemText>{t}</Select.ItemText>
+                  </Select.Item>
+                ))}
+              </Select.Viewport>
+            </Select.Content>
+          </Select.Portal>
+        </Select.Root>
       </div>
 
+      {/* Colegio */}
       <div>
-        <Label htmlFor="selector-colegio">
+        <Label.Root htmlFor="selector-colegio" className={labelClass}>
           Colegio {required && '*'}
-        </Label>
-        <Select
+        </Label.Root>
+        <Select.Root
           value={colegio || 'all'}
           onValueChange={(v: string) => onColegioChange(v === 'all' ? '' : v)}
         >
-          <SelectTrigger id="selector-colegio">
-            <SelectValue placeholder="Seleccionar..." />
-          </SelectTrigger>
-          <SelectContent>
-            {!required && <SelectItem value="all">Todos</SelectItem>}
-            {colegiosFiltrados.map((c: Colegio) => (
-              <SelectItem key={c.colegio} value={c.colegio}>{c.colegio}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+          <Select.Trigger id="selector-colegio" className={selectTriggerClass}>
+            <Select.Value placeholder="Seleccionar..." />
+            <Select.Icon><ChevronDown className="w-4 h-4 text-slate-400" /></Select.Icon>
+          </Select.Trigger>
+          <Select.Portal>
+            <Select.Content className={selectContentClass} position="popper" sideOffset={4}>
+              <Select.Viewport>
+                {!required && (
+                  <Select.Item value="all" className={selectItemClass}>
+                    <Select.ItemText>Todos</Select.ItemText>
+                  </Select.Item>
+                )}
+                {colegiosFiltrados.map((c: Colegio) => (
+                  <Select.Item key={c.colegio} value={c.colegio} className={selectItemClass}>
+                    <Select.ItemText>{c.colegio}</Select.ItemText>
+                  </Select.Item>
+                ))}
+              </Select.Viewport>
+            </Select.Content>
+          </Select.Portal>
+        </Select.Root>
       </div>
     </div>
   );
