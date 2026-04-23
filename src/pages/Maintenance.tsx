@@ -1,10 +1,11 @@
 import React, { useState, useMemo } from 'react';
 import { db } from '@/lib/db';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import { Wrench, Clock, CheckCircle, AlertCircle, ChevronDown } from 'lucide-react';
 import PageHeader from '@/components/shared/PageHeader';
 import StatusBadge from '@/components/shared/StatusBadge';
+import MaintenanceForm from '@/components/maintenance/MaintenanceForm';
 
 const PAGE_SIZE = 20;
 
@@ -27,6 +28,8 @@ const tabClass = (activeTab: string, id: string) => `
 export default function Maintenance() {
   const [activeTab, setActiveTab]       = useState('pendientes');
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
+  const [showForm, setShowForm]         = useState(false);
+  const queryClient = useQueryClient();
 
   const { data: rawTasks = [], isLoading } = useQuery({
     queryKey: ['maintenance'],
@@ -34,6 +37,14 @@ export default function Maintenance() {
   });
 
   const maintenanceTasks = rawTasks as unknown as MaintenanceTask[];
+
+  const createMutation = useMutation({
+    mutationFn: (data: Record<string, unknown>) => db.MaintenanceRecord.create(data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['maintenance'] });
+      setShowForm(false);
+    },
+  });
 
   const handleTabChange = (tab: string) => {
     setActiveTab(tab);
@@ -66,6 +77,8 @@ export default function Maintenance() {
       <PageHeader
         title="Mantenimiento"
         subtitle="Control de órdenes de trabajo y correctivos"
+        actionLabel="Nuevo Mantenimiento"
+        onAction={() => setShowForm(true)}
       />
 
       <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
@@ -144,6 +157,12 @@ export default function Maintenance() {
           )}
         </div>
       </div>
+
+      <MaintenanceForm
+        open={showForm}
+        onClose={() => setShowForm(false)}
+        onSubmit={(data: Record<string, unknown>) => createMutation.mutate(data)}
+      />
     </div>
   );
 }
