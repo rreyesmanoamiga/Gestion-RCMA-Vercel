@@ -1,9 +1,23 @@
-#env
+# Variables de entorno — nunca commitear credenciales
 .env
 .env.*
+.env*.local
+
+# Dependencias
+node_modules
+
+# Build outputs
+dist
+dist-ssr
+
+# Caché de Vite
+.vite
+
+# TypeScript build info
+*.tsbuildinfo
 
 # Logs
-/logs
+logs/
 *.log
 npm-debug.log*
 yarn-debug.log*
@@ -11,21 +25,24 @@ yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
 
-node_modules
-dist
-dist-ssr
-*.local
+# Supabase local development
+.supabase/
 
-# Editor directories and files
+# Cobertura de tests
+coverage/
+
+# Archivos locales de editor
 .vscode/*
 !.vscode/extensions.json
 .idea
-.DS_Store
 *.suo
 *.ntvs*
 *.njsproj
 *.sln
 *.sw?
 
-.env
-.vite
+# macOS
+.DS_Store
+
+# Archivos locales de Vite
+*.local

@@ -1,82 +1,66 @@
 import React, { useState, useEffect } from 'react';
-import { X, Save, Hammer } from 'lucide-react'; // Corregido: Hammer importado directamente
+import { X, Save, Hammer, ChevronDown, ChevronUp, Info, MapPin, User } from 'lucide-react';
+import { COLEGIOS } from '@/lib/colegios';
+import ColegioSelector from '@/components/shared/ColegioSelector';
 
-// DATOS DE TERRITORIOS
-const TERRITORIOS_DATA = {
-  NORTE: [
-    { colegio: 'CEC VAC' },
-    { colegio: 'CEC CHIHUAHUA' },
-    { colegio: 'CEC NUEVO LAREDO' },
-    { colegio: 'CEC SALTILLO' }
-  ],
-  MEXICO: [
-    { colegio: 'CEC SUR' },
-    { colegio: 'CEC PROYECTO' },
-    { colegio: 'CEC PRIMARIA' },
-    { colegio: 'CEC COACALCO' }
-  ],
-  FMA: [
-    { colegio: 'CMA COACALCO' },
-    { colegio: 'CMA COAPA' },
-    { colegio: 'CMA TAXQUEÑA' },
-    { colegio: 'CMA PUEBLA' }
-  ]
+// Fuera del componente — se definen una sola vez
+const inputClass = "w-full px-3 py-2 border border-slate-300 rounded-md text-sm focus:ring-2 focus:ring-slate-900 focus:outline-none bg-white text-slate-900";
+const labelClass = "block text-xs font-bold text-slate-500 uppercase mb-1 mt-3";
+
+const INITIAL_FORM = {
+  title:          '',
+  territorio:     '',
+  colegio:        '',
+  type:           'Correctivo',
+  priority:       'media',
+  status:         'pendiente',
+  description:    '',
+  scheduled_date: '',
 };
 
 export default function MaintenanceForm({ open, onClose, onSubmit, maintenance }) {
-  const [formData, setFormData] = useState({
-    title: '',
-    territorio: '',
-    location: '', 
-    type: 'Correctivo',
-    priority: 'media',
-    status: 'pendiente',
-    description: '',
-    scheduled_date: ''
-  });
+  const [formData, setFormData] = useState(INITIAL_FORM);
+  const [infoOpen, setInfoOpen] = useState(false);
 
   useEffect(() => {
     if (maintenance) {
-      setFormData(maintenance);
-    } else {
       setFormData({
-        title: '',
-        territorio: '',
-        location: '',
-        type: 'Correctivo',
-        priority: 'media',
-        status: 'pendiente',
-        description: '',
-        scheduled_date: ''
+        ...INITIAL_FORM,
+        ...maintenance,
+        colegio: maintenance.colegio ?? maintenance.location ?? '',
       });
+    } else {
+      setFormData(INITIAL_FORM);
     }
+    setInfoOpen(false);
   }, [maintenance, open]);
 
   if (!open) return null;
 
-  const handleTerritorioChange = (e) => {
-    setFormData({
-      ...formData,
-      territorio: e.target.value,
-      location: '' 
-    });
-  };
+  const colegiosFiltrados = formData.territorio
+    ? COLEGIOS.filter(c => c.territorio === formData.territorio)
+    : [];
+
+  const colegioInfo = formData.colegio
+    ? COLEGIOS.find(c => c.colegio === formData.colegio) ?? null
+    : null;
+
+  const territorioInfo = formData.territorio && !formData.colegio
+    ? colegiosFiltrados
+    : null;
+
+  const hasInfo = !!(colegioInfo || (territorioInfo?.length > 0));
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    onSubmit({
-      ...formData,
-      colegio: formData.location // Sincroniza con tu columna de Supabase
-    });
+    onSubmit({ ...formData, updated_at: new Date() });
   };
-
-  const inputClass = "w-full px-3 py-2 border border-slate-300 rounded-md text-sm focus:ring-2 focus:ring-slate-900 focus:outline-none bg-white text-slate-900";
-  const labelClass = "block text-xs font-bold text-slate-500 uppercase mb-1 mt-3";
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4">
       <div className="bg-white rounded-xl shadow-2xl max-w-lg w-full max-h-[90vh] overflow-hidden flex flex-col border border-slate-200">
-        
+
+        {/* Header */}
         <div className="p-5 border-b border-slate-100 flex justify-between items-center bg-slate-50">
           <h3 className="font-bold text-slate-900 flex items-center gap-2">
             <Hammer className="w-4 h-4" />
@@ -87,56 +71,110 @@ export default function MaintenanceForm({ open, onClose, onSubmit, maintenance }
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="p-6 overflow-y-auto space-y-1">
+        {/* Body */}
+        <div className="p-6 overflow-y-auto space-y-3 flex-1">
+
+          {/* Título */}
           <div>
             <label className={labelClass}>Asunto / Tarea *</label>
             <input
-              type="text" required className={inputClass}
+              type="text"
+              required
+              className={inputClass}
               value={formData.title}
-              onChange={e => setFormData({ ...formData, title: e.target.value })}
+              onChange={e => setFormData(prev => ({ ...prev, title: e.target.value }))}
               placeholder="Ej. Revisión de transformador"
             />
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className={labelClass}>Territorio</label>
-              <select 
-                className={inputClass} 
-                value={formData.territorio} 
-                onChange={handleTerritorioChange}
-                required
-              >
-                <option value="">Seleccione...</option>
-                <option value="NORTE">NORTE</option>
-                <option value="MEXICO">MEXICO</option>
-                <option value="FMA">FMA</option>
-              </select>
-            </div>
-            <div>
-              <label className={labelClass}>Colegio</label>
-              <select 
-                className={inputClass}
-                value={formData.location}
-                onChange={e => setFormData({ ...formData, location: e.target.value })}
-                disabled={!formData.territorio}
-                required
-              >
-                <option value="">Seleccione...</option>
-                {formData.territorio && TERRITORIOS_DATA[formData.territorio].map(item => (
-                  <option key={item.colegio} value={item.colegio}>{item.colegio}</option>
-                ))}
-              </select>
-            </div>
-          </div>
+          {/* Territorio + Colegio — usando ColegioSelector */}
+          <ColegioSelector
+            territorio={formData.territorio}
+            colegio={formData.colegio}
+            onTerritorioChange={val => {
+              setFormData(prev => ({ ...prev, territorio: val, colegio: '' }));
+              setInfoOpen(false);
+            }}
+            onColegioChange={val => {
+              setFormData(prev => ({ ...prev, colegio: val }));
+              setInfoOpen(!!val);
+            }}
+            required
+          />
 
+          {/* Panel plegable de información */}
+          {hasInfo && (
+            <div className="rounded-lg border border-slate-200 overflow-hidden">
+              <button
+                type="button"
+                onClick={() => setInfoOpen(v => !v)}
+                className="w-full flex items-center justify-between px-4 py-2.5 bg-slate-50 hover:bg-slate-100 transition-colors text-left"
+              >
+                <span className="flex items-center gap-2 text-xs font-bold text-slate-600 uppercase tracking-wide">
+                  <Info className="w-3.5 h-3.5 text-blue-500" />
+                  {colegioInfo
+                    ? `Info: ${colegioInfo.colegio}`
+                    : `Colegios en territorio ${formData.territorio}`}
+                </span>
+                {infoOpen
+                  ? <ChevronUp className="w-4 h-4 text-slate-400" />
+                  : <ChevronDown className="w-4 h-4 text-slate-400" />}
+              </button>
+
+              {infoOpen && (
+                <div className="px-4 py-3 bg-white space-y-3">
+                  {colegioInfo && (
+                    <div className="space-y-2">
+                      <div className="flex items-center gap-2">
+                        <MapPin className="w-4 h-4 text-slate-400 shrink-0" />
+                        <span className="text-slate-500 text-xs font-bold uppercase">Territorio</span>
+                        <span className="text-slate-800 text-sm font-semibold ml-auto">{colegioInfo.territorio}</span>
+                      </div>
+                      <div className="flex items-start gap-2">
+                        <User className="w-4 h-4 text-slate-400 shrink-0 mt-0.5" />
+                        <span className="text-slate-500 text-xs font-bold uppercase">ECO</span>
+                        <span className="text-slate-800 text-sm font-semibold ml-auto text-right">{colegioInfo.eco}</span>
+                      </div>
+                    </div>
+                  )}
+
+                  {territorioInfo?.length > 0 && (
+                    <div className="divide-y divide-slate-100">
+                      {territorioInfo.map(c => (
+                        <div key={c.colegio} className="py-2 flex items-start justify-between gap-3">
+                          <div>
+                            <p className="text-sm font-semibold text-slate-800">{c.colegio}</p>
+                            <p className="text-xs text-slate-500 mt-0.5 flex items-center gap-1">
+                              <User className="w-3 h-3" /> {c.eco}
+                            </p>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setFormData(prev => ({ ...prev, colegio: c.colegio }));
+                              setInfoOpen(true);
+                            }}
+                            className="text-[10px] font-bold text-blue-600 hover:text-blue-800 shrink-0 mt-1 uppercase tracking-wide"
+                          >
+                            Seleccionar
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Tipo + Prioridad */}
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className={labelClass}>Tipo</label>
-              <select 
+              <select
                 className={inputClass}
                 value={formData.type}
-                onChange={e => setFormData({ ...formData, type: e.target.value })}
+                onChange={e => setFormData(prev => ({ ...prev, type: e.target.value }))}
               >
                 <option value="Preventivo">Preventivo</option>
                 <option value="Correctivo">Correctivo</option>
@@ -145,10 +183,10 @@ export default function MaintenanceForm({ open, onClose, onSubmit, maintenance }
             </div>
             <div>
               <label className={labelClass}>Prioridad</label>
-              <select 
+              <select
                 className={inputClass}
                 value={formData.priority}
-                onChange={e => setFormData({ ...formData, priority: e.target.value })}
+                onChange={e => setFormData(prev => ({ ...prev, priority: e.target.value }))}
               >
                 <option value="baja">Baja</option>
                 <option value="media">Media</option>
@@ -158,25 +196,35 @@ export default function MaintenanceForm({ open, onClose, onSubmit, maintenance }
             </div>
           </div>
 
+          {/* Descripción */}
           <div>
             <label className={labelClass}>Descripción</label>
             <textarea
               className={`${inputClass} h-20 resize-none`}
               value={formData.description}
-              onChange={e => setFormData({ ...formData, description: e.target.value })}
+              onChange={e => setFormData(prev => ({ ...prev, description: e.target.value }))}
             />
           </div>
+        </div>
 
-          <div className="p-5 border-t border-slate-100 bg-slate-50 flex justify-end gap-3 mt-6">
-            <button type="button" onClick={onClose} className="px-4 py-2 text-sm font-medium text-slate-600">
-              Cancelar
-            </button>
-            <button type="submit" className="px-4 py-2 bg-slate-900 text-white rounded-md text-sm font-medium flex items-center gap-2">
-              <Save className="w-4 h-4" />
-              Guardar
-            </button>
-          </div>
-        </form>
+        {/* Footer */}
+        <div className="p-5 border-t border-slate-100 bg-slate-50 flex justify-end gap-3">
+          <button
+            type="button"
+            onClick={onClose}
+            className="px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-200 rounded-md transition-colors"
+          >
+            Cancelar
+          </button>
+          <button
+            type="button"
+            onClick={handleSubmit}
+            className="px-4 py-2 bg-slate-900 text-white rounded-md text-sm font-medium flex items-center gap-2 hover:bg-slate-800"
+          >
+            <Save className="w-4 h-4" />
+            {maintenance ? 'Actualizar' : 'Guardar'}
+          </button>
+        </div>
       </div>
     </div>
   );

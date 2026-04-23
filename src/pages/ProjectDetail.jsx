@@ -1,32 +1,40 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { db } from '@/lib/db';
-import { 
-  ArrowLeft, 
-  Calendar, 
-  MapPin, 
-  User, 
-  FileText, 
-  Trash2, 
-  Pencil, 
+import {
+  ArrowLeft,
+  Calendar,
+  MapPin,
+  User,
+  FileText,
+  Trash2,
+  Pencil,
   CheckCircle2,
-  Clock
+  Clock,
+  AlertTriangle,
 } from 'lucide-react';
 import StatusBadge from '@/components/shared/StatusBadge';
 import PriorityBadge from '@/components/shared/PriorityBadge';
+
+// Fuera del componente — se definen una sola vez
+const btnDanger  = "inline-flex items-center gap-2 px-4 py-2 border border-red-200 text-red-600 rounded-md text-sm font-bold hover:bg-red-50 transition-colors";
+const btnOutline = "inline-flex items-center gap-2 px-4 py-2 border border-slate-300 rounded-md text-sm font-bold text-slate-700 hover:bg-slate-50 transition-colors disabled:opacity-40 disabled:cursor-not-allowed";
 
 export default function ProjectDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
-  const { data: projects = [], isLoading } = useQuery({
-    queryKey: ['projects'],
-    queryFn: () => db.Project.list('-created_at', 100),
+  // Fetch directo por ID — no descarga todos los proyectos
+  const { data, isLoading, isError } = useQuery({
+    queryKey: ['projects', id],
+    queryFn: () => db.Project.filter({ id }, '-created_at', 1),
+    enabled: !!id,
   });
 
-  const project = projects.find(p => p.id === id);
+  const project = data?.[0];
 
   const deleteMutation = useMutation({
     mutationFn: () => db.Project.delete(id),
@@ -44,44 +52,43 @@ export default function ProjectDetail() {
     );
   }
 
-  if (!project) {
+  if (isError || !project) {
     return (
-      <div className="text-center py-20">
-        <p className="text-slate-500">El proyecto no existe o ha sido eliminado.</p>
-        <Link to="/proyectos" className="text-blue-600 font-bold mt-4 inline-block italic underline">Volver al listado</Link>
+      <div className="flex flex-col items-center justify-center py-20 gap-3 text-slate-500">
+        <AlertTriangle className="w-8 h-8 text-amber-400" />
+        <p className="text-sm">El proyecto no existe o ha sido eliminado.</p>
+        <Link to="/proyectos" className="text-sm text-blue-600 hover:underline">
+          Volver al listado
+        </Link>
       </div>
     );
   }
 
-  // Estilos de botones nativos
-  const btnDanger = "inline-flex items-center gap-2 px-4 py-2 border border-red-200 text-red-600 rounded-md text-sm font-bold hover:bg-red-50 transition-colors";
-  const btnOutline = "inline-flex items-center gap-2 px-4 py-2 border border-slate-300 rounded-md text-sm font-bold text-slate-700 hover:bg-slate-50 transition-colors";
-
   return (
     <div className="max-w-5xl mx-auto space-y-6 p-4">
-      {/* Navegación y Acciones */}
+      {/* Navegación y acciones */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <Link to="/proyectos" className="flex items-center gap-2 text-sm font-bold text-slate-400 hover:text-slate-900 transition-colors uppercase tracking-tighter">
+        <Link
+          to="/proyectos"
+          className="flex items-center gap-2 text-sm font-bold text-slate-400 hover:text-slate-900 transition-colors uppercase tracking-tighter"
+        >
           <ArrowLeft className="w-4 h-4" /> Volver a Proyectos
         </Link>
         <div className="flex gap-2">
-          <button className={btnOutline} onClick={() => alert('Función de edición en desarrollo')}>
+          {/* Botón deshabilitado hasta implementar edición */}
+          <button className={btnOutline} disabled title="Función en desarrollo">
             <Pencil className="w-4 h-4" /> Editar
           </button>
-          <button 
+          <button
             className={btnDanger}
-            onClick={() => {
-              if (window.confirm('¿Confirmas la eliminación definitiva de este proyecto?')) {
-                deleteMutation.mutate();
-              }
-            }}
+            onClick={() => setShowDeleteConfirm(true)}
           >
             <Trash2 className="w-4 h-4" /> Eliminar
           </button>
         </div>
       </div>
 
-      {/* Cabecera de Proyecto */}
+      {/* Cabecera de proyecto */}
       <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
         <div className="p-6 sm:p-8 border-b border-slate-100 bg-slate-50/30">
           <div className="flex flex-wrap gap-2 mb-4">
@@ -90,11 +97,11 @@ export default function ProjectDetail() {
           </div>
           <h1 className="text-3xl font-black text-slate-900 leading-tight">{project.name}</h1>
           <p className="text-slate-500 mt-2 max-w-2xl text-sm leading-relaxed italic">
-            {project.description || "Sin descripción técnica detallada."}
+            {project.description || 'Sin descripción técnica detallada.'}
           </p>
         </div>
 
-        {/* Ficha Técnica */}
+        {/* Ficha técnica */}
         <div className="grid grid-cols-1 md:grid-cols-3 divide-y md:divide-y-0 md:divide-x divide-slate-100 bg-white">
           <div className="p-6">
             <div className="flex items-center gap-3 mb-1">
@@ -120,7 +127,7 @@ export default function ProjectDetail() {
         </div>
       </div>
 
-      {/* Avance y Detalles */}
+      {/* Avance y detalles */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2 space-y-6">
           <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
@@ -133,8 +140,8 @@ export default function ProjectDetail() {
               <span className="text-xs font-bold text-slate-400 mb-1">PROGRESO TOTAL</span>
             </div>
             <div className="w-full bg-slate-100 rounded-full h-3 overflow-hidden border border-slate-200">
-              <div 
-                className="bg-slate-900 h-full transition-all duration-1000 ease-out" 
+              <div
+                className="bg-slate-900 h-full transition-all duration-1000 ease-out"
                 style={{ width: `${project.progress || 0}%` }}
               />
             </div>
@@ -156,6 +163,36 @@ export default function ProjectDetail() {
           </div>
         </div>
       </div>
+
+      {/* Modal de confirmación de eliminación */}
+      {showDeleteConfirm && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 p-4">
+          <div className="bg-white rounded-lg shadow-xl max-w-sm w-full p-6">
+            <h2 className="text-lg font-bold text-slate-900">¿Eliminar proyecto?</h2>
+            <p className="text-sm text-slate-500 mt-2">
+              Esta acción no se puede deshacer y el proyecto desaparecerá del sistema permanentemente.
+            </p>
+            <div className="flex justify-end gap-3 mt-6">
+              <button
+                onClick={() => setShowDeleteConfirm(false)}
+                className="px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100 rounded-md"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={() => {
+                  deleteMutation.mutate();
+                  setShowDeleteConfirm(false);
+                }}
+                disabled={deleteMutation.isPending}
+                className="px-4 py-2 text-sm font-medium bg-red-600 text-white hover:bg-red-700 rounded-md shadow-sm disabled:opacity-50"
+              >
+                {deleteMutation.isPending ? 'Eliminando...' : 'Eliminar Proyecto'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

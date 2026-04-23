@@ -5,7 +5,7 @@ import { twMerge } from 'tailwind-merge';
  * Combina clases de Tailwind resolviendo conflictos.
  * @example cn('px-2 py-1', condition && 'bg-blue-500')
  */
-export function cn(...inputs) {
+export function cn(...inputs: unknown[]) {
   return twMerge(clsx(inputs));
 }
 

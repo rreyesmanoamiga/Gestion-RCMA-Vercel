@@ -1,6 +1,19 @@
 // Fuente única de verdad para todos los permisos.
 // Para agregar un permiso nuevo: solo añade una línea aquí.
-const PERMISSION_DEFS = [
+
+interface PermissionDef {
+  key: string;
+  label: string;
+  group: string;
+  default: boolean;
+}
+
+interface PermissionGroup {
+  label: string;
+  permissions: string[];
+}
+
+const PERMISSION_DEFS: PermissionDef[] = [
   { key: 'ver_proyectos',          label: 'Ver Proyectos',          group: 'Proyectos',     default: true  },
   { key: 'crear_proyectos',        label: 'Crear Proyectos',        group: 'Proyectos',     default: false },
   { key: 'editar_proyectos',       label: 'Editar Proyectos',       group: 'Proyectos',     default: false },
@@ -18,38 +31,43 @@ const PERMISSION_DEFS = [
 
   { key: 'ver_reportes',           label: 'Ver Reportes',           group: 'Reportes',      default: true  },
   { key: 'crear_reportes',         label: 'Crear Reportes',         group: 'Reportes',      default: false },
-  { key: 'editar_reportes',        label: 'Editar Reportes',        group: 'Reportes',      default: false }, // ← estaba ausente
+  { key: 'editar_reportes',        label: 'Editar Reportes',        group: 'Reportes',      default: false },
   { key: 'eliminar_reportes',      label: 'Eliminar Reportes',      group: 'Reportes',      default: false },
 ];
 
 // Mapa clave → label  (e.g. PERMISSIONS.ver_proyectos === 'Ver Proyectos')
-export const PERMISSIONS = Object.fromEntries(
+export const PERMISSIONS: Record<string, string> = Object.fromEntries(
   PERMISSION_DEFS.map(({ key, label }) => [key, label])
 );
 
 // Permisos agrupados para renderizar la UI de administración
-export const PERMISSION_GROUPS = Object.values(
-  PERMISSION_DEFS.reduce((groups, { key, group }) => {
-    if (!groups[group]) groups[group] = { label: group, permissions: [] };
-    groups[group].permissions.push(key);
-    return groups;
-  }, {})
+export const PERMISSION_GROUPS: PermissionGroup[] = Object.values(
+  PERMISSION_DEFS.reduce(
+    (groups: Record<string, PermissionGroup>, { key, group }) => {
+      if (!groups[group]) groups[group] = { label: group, permissions: [] };
+      groups[group].permissions.push(key);
+      return groups;
+    },
+    {}
+  )
 );
 
 // Valores por default: solo lectura habilitada, escritura denegada
-export const DEFAULT_PERMISSIONS = Object.fromEntries(
+export const DEFAULT_PERMISSIONS: Record<string, boolean> = Object.fromEntries(
   PERMISSION_DEFS.map(({ key, default: val }) => [key, val])
 );
 
 /**
  * Verifica si un usuario tiene un permiso específico.
- * @param {Object} userPermissions - Objeto de permisos del usuario
- * @param {string} key - Clave del permiso a verificar
- * @returns {boolean}
+ * @param userPermissions - Objeto de permisos del usuario
+ * @param key - Clave del permiso a verificar
+ * @returns boolean
  *
  * @example
  * const { permissions } = useAuth();
  * if (hasPermission(permissions, 'crear_proyectos')) { ... }
  */
-export const hasPermission = (userPermissions, key) =>
-  userPermissions?.[key] === true;
+export const hasPermission = (
+  userPermissions: Record<string, boolean> | null | undefined,
+  key: string
+): boolean => userPermissions?.[key] === true;

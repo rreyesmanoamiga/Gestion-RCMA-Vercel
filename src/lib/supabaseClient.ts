@@ -1,3 +1,4 @@
+/// <reference types="vite/client" />
 import { createClient } from '@supabase/supabase-js';
 
 // En Vite se usa import.meta.env en lugar de process.env
@@ -16,7 +17,7 @@ if (!supabaseUrl || !supabaseAnonKey) {
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   auth: {
     persistSession:   true,
-    storageKey:       'ma-app-auth', // evita colisiones con otras apps en el mismo dominio
+    storageKey:       'ma-app-auth',
     autoRefreshToken: true,
   },
 });

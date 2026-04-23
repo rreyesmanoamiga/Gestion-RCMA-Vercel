@@ -1,4 +1,10 @@
-export const COLEGIOS = [
+export interface Colegio {
+  colegio: string;
+  territorio: string;
+  eco: string;
+}
+
+export const COLEGIOS: Colegio[] = [
   { colegio: "MA AGS",    territorio: "NORTE",  eco: "Arq. Adrian Rodriguez López" },
   { colegio: "MA GDL",    territorio: "NORTE",  eco: "Arq. Armando B. Naranjo Rincón" },
   { colegio: "MA CIM",    territorio: "NORTE",  eco: "Arq. Juan Antonio Montoya Martinez" },
@@ -26,10 +32,10 @@ export const COLEGIOS = [
   { colegio: "GENERAL",   territorio: "FMA",    eco: "-" },
 ];
 
-export const TERRITORIOS = ["NORTE", "MEXICO", "FMA"];
+export const TERRITORIOS: string[] = ["NORTE", "MEXICO", "FMA"];
 
-export const getColegiosByTerritorio = (territorio) =>
+export const getColegiosByTerritorio = (territorio: string): string[] =>
   COLEGIOS.filter(c => c.territorio === territorio).map(c => c.colegio);
 
-export const getColegioInfo = (colegio) =>
-  COLEGIOS.find(c => c.colegio === colegio) || null;
+export const getColegioInfo = (colegio: string): Colegio | null =>
+  COLEGIOS.find(c => c.colegio === colegio) ?? null;

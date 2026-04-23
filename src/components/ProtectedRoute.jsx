@@ -1,27 +1,29 @@
-import { useEffect } from 'react';
-import { Outlet } from 'react-router-dom';
+import React from 'react';
+import { Outlet, Navigate } from 'react-router-dom';
 import { useAuth } from '@/lib/AuthContext';
-import UserNotRegisteredError from '@/components/UserNotRegisteredError';
 
+// Spinner de carga — se muestra mientras se verifica la sesión
 const DefaultFallback = () => (
   <div className="fixed inset-0 flex items-center justify-center bg-white">
-    <div className="w-8 h-8 border-4 border-slate-200 border-t-slate-800 rounded-full animate-spin"></div>
+    <div className="w-8 h-8 border-4 border-slate-200 border-t-slate-800 rounded-full animate-spin" />
   </div>
 );
 
-export default function ProtectedRoute({ fallback = <DefaultFallback />, unauthenticatedElement }) {
-  // Mantenemos los hooks para no romper el contexto, pero no bloquearemos el flujo
-  const { isAuthenticated, isLoadingAuth, authChecked, checkUserAuth } = useAuth();
+export default function ProtectedRoute({
+  fallback              = <DefaultFallback />,
+  unauthenticatedElement,
+}) {
+  // Reconciliado con AuthContext corregido — expone { user, loading, error, signOut }
+  const { user, loading } = useAuth();
 
-  useEffect(() => {
-    if (!authChecked && !isLoadingAuth) {
-      checkUserAuth();
-    }
-  }, [authChecked, isLoadingAuth, checkUserAuth]);
+  // 1. Mientras Supabase verifica la sesión — mostrar spinner
+  if (loading) return fallback;
 
-  /**
-   * ACCESO TOTAL LIBERADO
-   * Simplemente retornamos el Outlet. Esto ignora si estás logueado o no.
-   */
+  // 2. Sin sesión activa — redirigir al login (o elemento personalizado)
+  if (!user) {
+    return unauthenticatedElement ?? <Navigate to="/login" replace />;
+  }
+
+  // 3. Sesión verificada — renderizar la ruta protegida
   return <Outlet />;
 }
