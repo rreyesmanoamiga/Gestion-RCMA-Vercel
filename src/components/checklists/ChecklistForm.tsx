@@ -7,28 +7,28 @@ const inputClass = "w-full px-3 py-2 border border-slate-300 rounded-md text-sm 
 const labelClass = "block text-xs font-bold text-slate-500 uppercase mb-1 mt-3";
 
 interface FormData {
-  title:       string;
-  territorio:  string;
-  colegio:     string;
-  status:      string;
-  description: string;
+  title:                string;
+  territorio:           string;
+  colegio:              string;
+  status:               string;
+  general_observations: string;
 }
 
 const INITIAL_FORM: FormData = {
-  title:       '',
-  territorio:  '',
-  colegio:     '',
-  status:      'pendiente',
-  description: '',
+  title:                '',
+  territorio:           '',
+  colegio:              '',
+  status:               'pendiente',
+  general_observations: '',
 };
 
 interface ChecklistRecord {
-  title?:       string;
-  territorio?:  string;
-  colegio?:     string;
-  location?:    string;
-  status?:      string;
-  description?: string;
+  title?:                string;
+  territorio?:           string;
+  colegio?:              string;
+  location?:             string;
+  status?:               string;
+  general_observations?: string;
   [key: string]: unknown;
 }
 
@@ -52,11 +52,11 @@ export default function ChecklistForm({
   useEffect(() => {
     if (checklist) {
       setFormData({
-        title:       String(checklist.title       ?? ''),
-        territorio:  String(checklist.territorio   ?? ''),
-        colegio:     String(checklist.colegio ?? checklist.location ?? ''),
-        status:      String(checklist.status       ?? 'pendiente'),
-        description: String(checklist.description  ?? ''),
+        title:                String(checklist.title       ?? ''),
+        territorio:           String(checklist.territorio   ?? ''),
+        colegio:              String(checklist.colegio ?? checklist.location ?? ''),
+        status:               String(checklist.status       ?? 'pendiente'),
+        general_observations: String(checklist.general_observations ?? ''),
       });
     } else {
       setFormData(INITIAL_FORM);
@@ -197,8 +197,8 @@ export default function ChecklistForm({
             <label className={labelClass}>Descripción / Observaciones</label>
             <textarea
               className={`${inputClass} h-24 resize-none`}
-              value={formData.description}
-              onChange={e => setFormData(prev => ({ ...prev, description: e.target.value }))}
+              value={formData.general_observations}
+              onChange={e => setFormData(prev => ({ ...prev, general_observations: e.target.value }))}
               placeholder="Detalles adicionales del checklist..."
             />
           </div>
