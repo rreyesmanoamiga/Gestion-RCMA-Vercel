@@ -13,10 +13,33 @@ const cardClass  = "bg-white rounded-xl border border-slate-200 shadow-sm overfl
 const btnPrimary = "px-4 py-2 bg-slate-900 text-white rounded-md text-sm font-medium hover:bg-slate-800 disabled:opacity-50 transition-colors";
 const btnOutline = "px-4 py-2 border border-slate-300 rounded-md text-sm font-medium text-slate-700 hover:bg-slate-50 transition-colors flex items-center gap-2";
 
+// ─── Interfaces ───────────────────────────────────────────────────────────────
+interface AppUser {
+  id:        string;
+  email:     string;
+  full_name?: string;
+  role?:     string;
+}
+
+interface PermRecord {
+  id:         string;
+  user_email: string;
+  [key: string]: unknown;
+}
+
+interface EditingUser {
+  email:   string;
+  permsId: string | null;
+  perms:   Record<string, boolean>;
+}
+
+interface PermissionEditorProps {
+  perms:    Record<string, boolean>;
+  onChange: (perms: Record<string, boolean>) => void;
+}
+
 // ─── PermissionEditor fuera del componente padre ─────────────────────────────
-// Si estuviera dentro, React lo trataría como un componente nuevo en cada render
-// y los toggles perderían el foco al hacer clic.
-function PermissionEditor({ perms, onChange }) {
+function PermissionEditor({ perms, onChange }: PermissionEditorProps) {
   return (
     <div className="space-y-6">
       {PERMISSION_GROUPS.map(group => (
@@ -53,12 +76,12 @@ export default function UserManagement() {
   const { user: currentUser } = useAuth();
   const qc = useQueryClient();
   const [showInvite, setShowInvite]   = useState(false);
-  const [editingUser, setEditingUser] = useState(null);
+  const [editingUser, setEditingUser] = useState<EditingUser | null>(null);
   const [inviteEmail, setInviteEmail] = useState('');
-  const [invitePerms, setInvitePerms] = useState(DEFAULT_PERMISSIONS);
+  const [invitePerms, setInvitePerms] = useState<Record<string, boolean>>(DEFAULT_PERMISSIONS);
   const [inviting, setInviting]       = useState(false);
 
-  const { data: users = [] } = useQuery({
+  const { data: rawUsers = [] } = useQuery({
     queryKey: ['users'],
     queryFn: async () => {
       const { data, error } = await supabase.from('profiles').select('*');
@@ -67,12 +90,14 @@ export default function UserManagement() {
     },
   });
 
-  const { data: allPerms = [] } = useQuery({
+  const { data: rawPerms = [] } = useQuery({
     queryKey: ['userPermissions'],
     queryFn: () => db.UserPermissions.list(),
   });
 
-  // Listas memoizadas — se recalculan solo cuando cambian users o currentUser
+  const users   = rawUsers as unknown as AppUser[];
+  const allPerms = rawPerms as unknown as PermRecord[];
+
   const adminUsers = useMemo(
     () => users.filter(u => u.role === 'admin'),
     [users]
@@ -84,58 +109,55 @@ export default function UserManagement() {
   );
 
   const updatePermsMutation = useMutation({
-    mutationFn: ({ id, data }) => db.UserPermissions.update(id, data),
+    mutationFn: ({ id, data }: { id: string; data: Record<string, boolean> }) =>
+      db.UserPermissions.update(id, data),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['userPermissions'] }); // ← sintaxis v5
+      qc.invalidateQueries({ queryKey: ['userPermissions'] });
       toast.success('Permisos actualizados');
       setEditingUser(null);
     },
   });
 
-  const handleInvite = async (e) => {
+  const handleInvite = async (e: React.FormEvent) => {
     e.preventDefault();
     setInviting(true);
     try {
-      // ← Correcto: llamar a un Edge Function con service_role en el servidor.
-      //   supabase.auth.admin.inviteUserByEmail() requiere service_role key
-      //   y NUNCA debe llamarse desde el cliente (siempre retorna 403).
-      //
-      //   Edge Function recomendada en /supabase/functions/invite-user/index.ts:
-      //   const { error } = await adminClient.auth.admin.inviteUserByEmail(email)
       const { error } = await supabase.functions.invoke('invite-user', {
         body: { email: inviteEmail, permissions: invitePerms },
       });
       if (error) throw error;
 
       await db.UserPermissions.create({ user_email: inviteEmail, ...invitePerms });
-      await qc.invalidateQueries({ queryKey: ['userPermissions'] }); // ← sintaxis v5
+      await qc.invalidateQueries({ queryKey: ['userPermissions'] });
       toast.success(`Invitación enviada a ${inviteEmail}`);
       setInviteEmail('');
       setInvitePerms(DEFAULT_PERMISSIONS);
       setShowInvite(false);
-    } catch (err) {
-      toast.error('Error al invitar: ' + err.message);
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Error desconocido';
+      toast.error('Error al invitar: ' + message);
     } finally {
       setInviting(false);
     }
   };
 
-  const openEdit = (email) => {
+  const openEdit = (email: string) => {
     const rec = allPerms.find(p => p.user_email === email);
     setEditingUser({
       email,
       permsId: rec?.id ?? null,
-      perms: rec ? { ...rec } : { ...DEFAULT_PERMISSIONS },
+      perms: rec ? { ...rec as Record<string, boolean> } : { ...DEFAULT_PERMISSIONS },
     });
   };
 
   const handleSaveEdit = async () => {
+    if (!editingUser) return;
     const { permsId, email, perms } = editingUser;
     if (permsId) {
       updatePermsMutation.mutate({ id: permsId, data: perms });
     } else {
       await db.UserPermissions.create({ user_email: email, ...perms });
-      await qc.invalidateQueries({ queryKey: ['userPermissions'] }); // ← sintaxis v5
+      await qc.invalidateQueries({ queryKey: ['userPermissions'] });
       toast.success('Permisos guardados');
       setEditingUser(null);
     }
@@ -198,8 +220,8 @@ export default function UserManagement() {
           ) : (
             <div className="divide-y divide-slate-100">
               {nonAdminUsers.map(u => {
-                const rec          = allPerms.find(p => p.user_email === u.email);
-                const activePerms  = rec ? Object.keys(PERMISSIONS).filter(k => rec[k]) : [];
+                const rec         = allPerms.find(p => p.user_email === u.email);
+                const activePerms = rec ? Object.keys(PERMISSIONS).filter(k => rec[k]) : [];
                 return (
                   <div key={u.id} className="flex items-center justify-between py-4">
                     <div className="flex items-center gap-3">
@@ -263,10 +285,10 @@ export default function UserManagement() {
                   </div>
                   <PermissionEditor perms={invitePerms} onChange={setInvitePerms} />
                 </form>
-              ) : (
+              ) : editingUser && (
                 <PermissionEditor
                   perms={editingUser.perms}
-                  onChange={perms => setEditingUser(prev => ({ ...prev, perms }))}
+                  onChange={perms => setEditingUser(prev => prev ? { ...prev, perms } : null)}
                 />
               )}
             </div>

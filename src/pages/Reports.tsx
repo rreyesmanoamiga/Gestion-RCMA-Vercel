@@ -16,28 +16,51 @@ import PageHeader from '@/components/shared/PageHeader';
 const btnOutline = "flex items-center gap-2 px-4 py-2.5 border border-slate-300 rounded-lg text-sm font-bold text-slate-700 hover:bg-slate-50 transition-all shadow-sm disabled:opacity-40 disabled:cursor-not-allowed";
 const cardClass  = "bg-white p-6 rounded-xl border border-slate-200 shadow-sm";
 
+interface Project {
+  id:         string;
+  name?:      string;
+  status?:    string;
+  progress?:  number;
+  territorio?: string;
+}
+
+interface Stats {
+  total:       number;
+  completed:   number;
+  avgProgress: number;
+}
+
 // Carga jsPDF desde CDN solo cuando se necesita
-async function loadJsPDF() {
-  if (window.jspdf?.jsPDF) return window.jspdf.jsPDF;
-  await new Promise((resolve, reject) => {
+async function loadJsPDF(): Promise<typeof import('jspdf').jsPDF> {
+  const w = window as Window & { jspdf?: { jsPDF: typeof import('jspdf').jsPDF } };
+  if (w.jspdf?.jsPDF) return w.jspdf.jsPDF;
+  await new Promise<void>((resolve, reject) => {
     const script = document.createElement('script');
-    script.src = 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js';
-    script.onload = resolve;
-    script.onerror = reject;
+    script.src     = 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js';
+    script.onload  = () => resolve();
+    script.onerror = () => reject(new Error('Error cargando jsPDF'));
     document.head.appendChild(script);
   });
-  return window.jspdf.jsPDF;
+  return w.jspdf!.jsPDF;
 }
 
 // Genera y descarga el reporte general en PDF
-async function exportResumenPDF({ stats, projects, checklists }) {
+async function exportResumenPDF({
+  stats,
+  projects,
+  checklists,
+}: {
+  stats:      Stats;
+  projects:   Project[];
+  checklists: unknown[];
+}): Promise<void> {
   const JsPDF = await loadJsPDF();
   const doc   = new JsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
   const now   = new Date().toLocaleDateString('es-MX', { year: 'numeric', month: 'long', day: 'numeric' });
-  const W     = 210; // ancho A4 en mm
+  const W     = 210;
   let   y     = 20;
 
-  const line  = (text, size = 10, bold = false, color = [30, 30, 30]) => {
+  const line = (text: string, size = 10, bold = false, color: [number, number, number] = [30, 30, 30]) => {
     doc.setFontSize(size);
     doc.setFont('helvetica', bold ? 'bold' : 'normal');
     doc.setTextColor(...color);
@@ -81,20 +104,18 @@ async function exportResumenPDF({ stats, projects, checklists }) {
 
   const cols = { name: 20, status: 110, progress: 150, territory: 170 };
 
-  // Cabecera de tabla
   doc.setFillColor(241, 245, 249);
   doc.rect(18, y - 4, W - 36, 8, 'F');
   doc.setFontSize(8);
   doc.setFont('helvetica', 'bold');
   doc.setTextColor(100, 116, 139);
-  doc.text('Proyecto',    cols.name,     y);
-  doc.text('Estado',      cols.status,   y);
-  doc.text('Avance',      cols.progress, y);
-  doc.text('Territorio',  cols.territory, y);
+  doc.text('Proyecto',   cols.name,     y);
+  doc.text('Estado',     cols.status,   y);
+  doc.text('Avance',     cols.progress, y);
+  doc.text('Territorio', cols.territory, y);
   y += 6;
   divider();
 
-  // Filas
   doc.setFont('helvetica', 'normal');
   doc.setTextColor(30, 30, 30);
   projects.slice(0, 40).forEach((p, i) => {
@@ -104,11 +125,11 @@ async function exportResumenPDF({ stats, projects, checklists }) {
       doc.rect(18, y - 4, W - 36, 7, 'F');
     }
     doc.setFontSize(8);
-    const name = p.name?.length > 45 ? p.name.slice(0, 42) + '…' : (p.name || '—');
+    const name = p.name && p.name.length > 45 ? p.name.slice(0, 42) + '…' : (p.name || '—');
     doc.text(name,                       cols.name,     y);
-    doc.text(p.status      || '—',       cols.status,   y);
+    doc.text(p.status     || '—',        cols.status,   y);
     doc.text(`${p.progress || 0}%`,      cols.progress, y);
-    doc.text(p.territorio  || '—',       cols.territory, y);
+    doc.text(p.territorio || '—',        cols.territory, y);
     y += 7;
   });
 
@@ -119,7 +140,6 @@ async function exportResumenPDF({ stats, projects, checklists }) {
     doc.text(`... y ${projects.length - 40} proyectos más. Consulta el sistema para el listado completo.`, 20, y);
   }
 
-  // Pie de página
   const pages = doc.getNumberOfPages();
   for (let i = 1; i <= pages; i++) {
     doc.setPage(i);
@@ -133,18 +153,20 @@ async function exportResumenPDF({ stats, projects, checklists }) {
 }
 
 export default function Reports() {
-  const { data: projects = [] } = useQuery({
+  const { data: rawProjects   = [] } = useQuery({
     queryKey: ['projects'],
     queryFn: () => db.Project.list('-created_at', 500),
   });
 
-  const { data: checklists = [] } = useQuery({
+  const { data: rawChecklists = [] } = useQuery({
     queryKey: ['checklists'],
-    queryFn: () => db.Checklist.list('-created_at', 500), // ← corregido: Checklist
+    queryFn: () => db.Checklist.list('-created_at', 500),
   });
 
-  // Stats memoizados — se recalculan solo cuando cambian los proyectos
-  const stats = useMemo(() => ({
+  const projects   = rawProjects   as unknown as Project[];
+  const checklists = rawChecklists as unknown[];
+
+  const stats = useMemo((): Stats => ({
     total:       projects.length,
     completed:   projects.filter(p => p.status === 'completado').length,
     avgProgress: projects.length > 0
@@ -201,12 +223,9 @@ export default function Reports() {
             Genera archivos para auditorías de obra, revisión de estimaciones o reportes de mantenimiento preventivo.
           </p>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            {/* Funcional — genera PDF con jsPDF */}
             <button className={btnOutline} onClick={handleExportPDF}>
               <FileText className="w-4 h-4 text-red-600" /> Resumen General (.pdf)
             </button>
-
-            {/* Próximamente — deshabilitados con tooltip */}
             <button className={btnOutline} disabled title="Próximamente">
               <FileSpreadsheet className="w-4 h-4 text-green-600" /> Resumen de Obras (.xlsx)
             </button>
