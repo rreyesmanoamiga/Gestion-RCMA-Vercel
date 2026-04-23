@@ -2,11 +2,12 @@ import React, { useState, useMemo } from 'react';
 import { db } from '@/lib/db';
 import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
-import { Wrench, Clock, CheckCircle, AlertCircle } from 'lucide-react';
+import { Wrench, Clock, CheckCircle, AlertCircle, ChevronDown } from 'lucide-react';
 import PageHeader from '@/components/shared/PageHeader';
 import StatusBadge from '@/components/shared/StatusBadge';
 
-// Fuera del componente — se define una sola vez
+const PAGE_SIZE = 20;
+
 const tabClass = (activeTab, id) => `
   flex items-center gap-2 px-6 py-3 text-sm font-bold uppercase tracking-tighter transition-all border-b-2
   ${activeTab === id
@@ -15,12 +16,19 @@ const tabClass = (activeTab, id) => `
 `;
 
 export default function Maintenance() {
-  const [activeTab, setActiveTab] = useState('pendientes');
+  const [activeTab, setActiveTab]       = useState('pendientes');
+  const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
 
   const { data: maintenanceTasks = [], isLoading } = useQuery({
     queryKey: ['maintenance'],
-    queryFn: () => db.MaintenanceRecord.list('-created_at', 500), // ← corregido: MaintenanceRecord
+    queryFn: () => db.MaintenanceRecord.list('-created_at', 500),
   });
+
+  // Reset visibleCount al cambiar de tab
+  const handleTabChange = (tab) => {
+    setActiveTab(tab);
+    setVisibleCount(PAGE_SIZE);
+  };
 
   const filteredTasks = useMemo(() =>
     maintenanceTasks.filter(task => {
@@ -30,6 +38,10 @@ export default function Maintenance() {
     }),
     [maintenanceTasks, activeTab]
   );
+
+  const visible   = useMemo(() => filteredTasks.slice(0, visibleCount), [filteredTasks, visibleCount]);
+  const hasMore   = visibleCount < filteredTasks.length;
+  const remaining = filteredTasks.length - visibleCount;
 
   if (isLoading) {
     return (
@@ -44,18 +56,17 @@ export default function Maintenance() {
       <PageHeader
         title="Mantenimiento"
         subtitle="Control de órdenes de trabajo y correctivos"
-        // Botón omitido hasta implementar la funcionalidad de nueva orden
       />
 
       <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
         <div className="flex border-b border-slate-100">
-          <button onClick={() => setActiveTab('pendientes')} className={tabClass(activeTab, 'pendientes')}>
+          <button onClick={() => handleTabChange('pendientes')} className={tabClass(activeTab, 'pendientes')}>
             <Clock className="w-4 h-4" /> Pendientes
           </button>
-          <button onClick={() => setActiveTab('completados')} className={tabClass(activeTab, 'completados')}>
+          <button onClick={() => handleTabChange('completados')} className={tabClass(activeTab, 'completados')}>
             <CheckCircle className="w-4 h-4" /> Historial
           </button>
-          <button onClick={() => setActiveTab('todos')} className={tabClass(activeTab, 'todos')}>
+          <button onClick={() => handleTabChange('todos')} className={tabClass(activeTab, 'todos')}>
             <Wrench className="w-4 h-4" /> Todos
           </button>
         </div>
@@ -67,43 +78,60 @@ export default function Maintenance() {
               <p className="text-slate-400 font-medium">No se encontraron órdenes de mantenimiento.</p>
             </div>
           ) : (
-            <div className="divide-y divide-slate-100">
-              {filteredTasks.map(task => (
-                // ← Link en lugar de div — navegación consistente con el resto de la app
-                <Link
-                  key={task.id}
-                  to={`/mantenimiento/${task.id}`}
-                  className="p-5 hover:bg-slate-50 transition-colors flex flex-col md:flex-row md:items-center justify-between gap-4"
-                >
-                  <div className="flex items-start gap-4">
-                    <div className={`mt-1 p-2 rounded-lg ${task.status === 'completado' ? 'bg-green-50 text-green-600' : 'bg-amber-50 text-amber-600'}`}>
-                      <Wrench className="w-5 h-5" />
-                    </div>
-                    <div>
-                      <h4 className="font-bold text-slate-900 leading-tight">{task.title}</h4>
-                      <div className="flex flex-wrap gap-x-4 gap-y-1 mt-1">
-                        <span className="text-xs text-slate-500 font-medium flex items-center gap-1">
-                          Edificio: <b className="text-slate-700">{task.location || 'N/A'}</b>
-                        </span>
-                        <span className="text-xs text-slate-500 font-medium">
-                          Ref: <span className="text-slate-400">#{task.id?.slice(-5).toUpperCase()}</span>
-                        </span>
+            <>
+              <div className="divide-y divide-slate-100">
+                {visible.map(task => (
+                  <Link
+                    key={task.id}
+                    to={`/mantenimiento/${task.id}`}
+                    className="p-5 hover:bg-slate-50 transition-colors flex flex-col md:flex-row md:items-center justify-between gap-4"
+                  >
+                    <div className="flex items-start gap-4">
+                      <div className={`mt-1 p-2 rounded-lg ${task.status === 'completado' ? 'bg-green-50 text-green-600' : 'bg-amber-50 text-amber-600'}`}>
+                        <Wrench className="w-5 h-5" />
+                      </div>
+                      <div>
+                        <h4 className="font-bold text-slate-900 leading-tight">{task.title}</h4>
+                        <div className="flex flex-wrap gap-x-4 gap-y-1 mt-1">
+                          <span className="text-xs text-slate-500 font-medium flex items-center gap-1">
+                            Edificio: <b className="text-slate-700">{task.location || 'N/A'}</b>
+                          </span>
+                          <span className="text-xs text-slate-500 font-medium">
+                            Ref: <span className="text-slate-400">#{task.id?.slice(-5).toUpperCase()}</span>
+                          </span>
+                        </div>
                       </div>
                     </div>
-                  </div>
 
-                  <div className="flex items-center gap-4 ml-14 md:ml-0">
-                    <div className="text-right hidden sm:block">
-                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-tighter">Última actualización</p>
-                      <p className="text-xs font-bold text-slate-600">
-                        {task.updated_at || task.created_at || 'Reciente'}
-                      </p>
+                    <div className="flex items-center gap-4 ml-14 md:ml-0">
+                      <div className="text-right hidden sm:block">
+                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-tighter">Última actualización</p>
+                        <p className="text-xs font-bold text-slate-600">
+                          {task.updated_at || task.created_at || 'Reciente'}
+                        </p>
+                      </div>
+                      <StatusBadge status={task.status} />
                     </div>
-                    <StatusBadge status={task.status} />
-                  </div>
-                </Link>
-              ))}
-            </div>
+                  </Link>
+                ))}
+              </div>
+
+              {/* Botón cargar más */}
+              {hasMore && (
+                <div className="flex flex-col items-center gap-2 py-6 border-t border-slate-100">
+                  <button
+                    onClick={() => setVisibleCount(v => v + PAGE_SIZE)}
+                    className="flex items-center gap-2 px-5 py-2.5 bg-white border border-slate-300 rounded-lg text-sm font-medium text-slate-700 hover:bg-slate-50 hover:border-slate-400 transition-colors shadow-sm"
+                  >
+                    <ChevronDown className="w-4 h-4" />
+                    Cargar más ({remaining} restante{remaining !== 1 ? 's' : ''})
+                  </button>
+                  <p className="text-xs text-slate-400">
+                    Mostrando {visible.length} de {filteredTasks.length} registros
+                  </p>
+                </div>
+              )}
+            </>
           )}
         </div>
       </div>

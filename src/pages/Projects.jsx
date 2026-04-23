@@ -2,7 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { db } from '@/lib/db';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
-import { FolderKanban, MapPin, Calendar, User } from 'lucide-react';
+import { FolderKanban, MapPin, Calendar, User, ChevronDown } from 'lucide-react';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import PageHeader from '@/components/shared/PageHeader';
@@ -12,20 +12,21 @@ import PriorityBadge from '@/components/shared/PriorityBadge';
 import ProjectForm from '@/components/projects/ProjectForm';
 import { COLEGIOS, TERRITORIOS } from '@/lib/colegios';
 
-// Fuera del componente — se define una sola vez
+const PAGE_SIZE   = 20;
 const selectClass = "h-10 px-3 py-2 bg-white border border-slate-300 rounded-md text-sm focus:ring-2 focus:ring-slate-400 focus:outline-none text-slate-700";
 
 export default function Projects() {
-  const [showForm, setShowForm]               = useState(false);
-  const [filterStatus, setFilterStatus]       = useState('all');
-  const [filterType, setFilterType]           = useState('all');
+  const [showForm, setShowForm]                 = useState(false);
+  const [filterStatus, setFilterStatus]         = useState('all');
+  const [filterType, setFilterType]             = useState('all');
   const [filterTerritorio, setFilterTerritorio] = useState('all');
-  const [filterColegio, setFilterColegio]     = useState('all');
+  const [filterColegio, setFilterColegio]       = useState('all');
+  const [visibleCount, setVisibleCount]         = useState(PAGE_SIZE);
   const queryClient = useQueryClient();
 
   const { data: projects = [], isLoading } = useQuery({
     queryKey: ['projects'],
-    queryFn: () => db.Project.list('-created_at', 500), // límite aumentado
+    queryFn: () => db.Project.list('-created_at', 500),
   });
 
   const createMutation = useMutation({
@@ -36,7 +37,7 @@ export default function Projects() {
     },
   });
 
-  // Colegios filtrados por territorio — se recalcula solo cuando cambia el filtro
+  // Colegios filtrados por territorio
   const colegiosPorTerritorio = useMemo(() =>
     filterTerritorio !== 'all'
       ? COLEGIOS.filter(c => c.territorio === filterTerritorio)
@@ -44,17 +45,28 @@ export default function Projects() {
     [filterTerritorio]
   );
 
-  // Proyectos filtrados — se recalcula solo cuando cambian datos o filtros
+  // Reset visibleCount al cambiar filtros
+  const handleFilterChange = (setter) => (e) => {
+    setter(e.target.value);
+    setVisibleCount(PAGE_SIZE);
+  };
+
+  // Proyectos filtrados completos
   const filtered = useMemo(() =>
     projects.filter(p => {
-      if (filterStatus    !== 'all' && p.status    !== filterStatus)    return false;
-      if (filterType      !== 'all' && p.type      !== filterType)      return false;
+      if (filterStatus     !== 'all' && p.status     !== filterStatus)     return false;
+      if (filterType       !== 'all' && p.type       !== filterType)       return false;
       if (filterTerritorio !== 'all' && p.territorio !== filterTerritorio) return false;
-      if (filterColegio   !== 'all' && p.colegio   !== filterColegio)   return false;
+      if (filterColegio    !== 'all' && p.colegio    !== filterColegio)    return false;
       return true;
     }),
     [projects, filterStatus, filterType, filterTerritorio, filterColegio]
   );
+
+  // Slice visible — solo los registros a mostrar
+  const visible   = useMemo(() => filtered.slice(0, visibleCount), [filtered, visibleCount]);
+  const hasMore   = visibleCount < filtered.length;
+  const remaining = filtered.length - visibleCount;
 
   if (isLoading) {
     return (
@@ -77,7 +89,10 @@ export default function Projects() {
         <select
           className={selectClass}
           value={filterTerritorio}
-          onChange={e => { setFilterTerritorio(e.target.value); setFilterColegio('all'); }}
+          onChange={e => {
+            handleFilterChange(setFilterTerritorio)(e);
+            setFilterColegio('all');
+          }}
         >
           <option value="all">Territorios</option>
           {TERRITORIOS.map(t => <option key={t} value={t}>{t}</option>)}
@@ -86,7 +101,7 @@ export default function Projects() {
         <select
           className={selectClass}
           value={filterColegio}
-          onChange={e => setFilterColegio(e.target.value)}
+          onChange={handleFilterChange(setFilterColegio)}
         >
           <option value="all">Colegios</option>
           {colegiosPorTerritorio.map(c => (
@@ -97,7 +112,7 @@ export default function Projects() {
         <select
           className={selectClass}
           value={filterType}
-          onChange={e => setFilterType(e.target.value)}
+          onChange={handleFilterChange(setFilterType)}
         >
           <option value="all">Todos los tipos</option>
           <option value="construccion">Construcción</option>
@@ -107,7 +122,7 @@ export default function Projects() {
         <select
           className={selectClass}
           value={filterStatus}
-          onChange={e => setFilterStatus(e.target.value)}
+          onChange={handleFilterChange(setFilterStatus)}
         >
           <option value="all">Todos los estados</option>
           <option value="planificado">Planificado</option>
@@ -115,6 +130,13 @@ export default function Projects() {
           <option value="completado">Completado</option>
           <option value="pausado">Pausado</option>
         </select>
+
+        {/* Contador de resultados */}
+        {filtered.length > 0 && (
+          <span className="h-10 flex items-center text-sm text-slate-500">
+            {filtered.length} proyecto{filtered.length !== 1 ? 's' : ''}
+          </span>
+        )}
       </div>
 
       {filtered.length === 0 ? (
@@ -126,70 +148,88 @@ export default function Projects() {
           onAction={() => setShowForm(true)}
         />
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-          {filtered.map(project => (
-            <Link
-              key={project.id}
-              to={`/proyectos/${project.id}`}
-              className="bg-white rounded-xl border border-slate-200 p-5 hover:shadow-lg transition-all duration-300 group flex flex-col"
-            >
-              <div className="flex items-start justify-between mb-3">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <StatusBadge status={project.status} />
-                  <PriorityBadge priority={project.priority} />
-                </div>
-                <div className="text-right shrink-0 ml-2">
-                  {project.colegio    && <p className="text-xs font-bold text-slate-800">{project.colegio}</p>}
-                  {project.territorio && <p className="text-[10px] text-slate-400 font-medium uppercase">{project.territorio}</p>}
-                </div>
-              </div>
-
-              <h3 className="font-semibold text-slate-900 mb-1 group-hover:text-blue-600 transition-colors leading-tight">
-                {project.name}
-              </h3>
-
-              {project.description && (
-                <p className="text-xs text-slate-500 line-clamp-2 mb-4 h-8 italic">
-                  {project.description}
-                </p>
-              )}
-
-              {project.progress !== undefined && (
-                <div className="mb-4 mt-auto">
-                  <div className="flex items-center justify-between text-[10px] font-bold text-slate-400 mb-1 uppercase tracking-tighter">
-                    <span>Avance de obra</span>
-                    <span>{project.progress}%</span>
+        <>
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+            {visible.map(project => (
+              <Link
+                key={project.id}
+                to={`/proyectos/${project.id}`}
+                className="bg-white rounded-xl border border-slate-200 p-5 hover:shadow-lg transition-all duration-300 group flex flex-col"
+              >
+                <div className="flex items-start justify-between mb-3">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <StatusBadge status={project.status} />
+                    <PriorityBadge priority={project.priority} />
                   </div>
-                  <div className="w-full bg-slate-100 rounded-full h-1.5 overflow-hidden">
-                    <div
-                      className="bg-slate-800 h-full transition-all duration-500"
-                      style={{ width: `${project.progress}%` }}
-                    />
+                  <div className="text-right shrink-0 ml-2">
+                    {project.colegio    && <p className="text-xs font-bold text-slate-800">{project.colegio}</p>}
+                    {project.territorio && <p className="text-[10px] text-slate-400 font-medium uppercase">{project.territorio}</p>}
                   </div>
                 </div>
-              )}
 
-              <div className="flex flex-wrap gap-x-4 gap-y-2 text-[10px] text-slate-400 border-t border-slate-50 pt-3 uppercase font-semibold">
-                {project.location && (
-                  <span className="flex items-center gap-1.5">
-                    <MapPin className="w-3 h-3 text-slate-300" />{project.location}
-                  </span>
+                <h3 className="font-semibold text-slate-900 mb-1 group-hover:text-blue-600 transition-colors leading-tight">
+                  {project.name}
+                </h3>
+
+                {project.description && (
+                  <p className="text-xs text-slate-500 line-clamp-2 mb-4 h-8 italic">
+                    {project.description}
+                  </p>
                 )}
-                {project.responsible && (
-                  <span className="flex items-center gap-1.5">
-                    <User className="w-3 h-3 text-slate-300" />{project.responsible}
-                  </span>
+
+                {project.progress !== undefined && (
+                  <div className="mb-4 mt-auto">
+                    <div className="flex items-center justify-between text-[10px] font-bold text-slate-400 mb-1 uppercase tracking-tighter">
+                      <span>Avance de obra</span>
+                      <span>{project.progress}%</span>
+                    </div>
+                    <div className="w-full bg-slate-100 rounded-full h-1.5 overflow-hidden">
+                      <div
+                        className="bg-slate-800 h-full transition-all duration-500"
+                        style={{ width: `${project.progress}%` }}
+                      />
+                    </div>
+                  </div>
                 )}
-                {project.start_date && (
-                  <span className="flex items-center gap-1.5">
-                    <Calendar className="w-3 h-3 text-slate-300" />
-                    {format(new Date(project.start_date), 'dd MMM', { locale: es })}
-                  </span>
-                )}
-              </div>
-            </Link>
-          ))}
-        </div>
+
+                <div className="flex flex-wrap gap-x-4 gap-y-2 text-[10px] text-slate-400 border-t border-slate-50 pt-3 uppercase font-semibold">
+                  {project.location && (
+                    <span className="flex items-center gap-1.5">
+                      <MapPin className="w-3 h-3 text-slate-300" />{project.location}
+                    </span>
+                  )}
+                  {project.responsible && (
+                    <span className="flex items-center gap-1.5">
+                      <User className="w-3 h-3 text-slate-300" />{project.responsible}
+                    </span>
+                  )}
+                  {project.start_date && (
+                    <span className="flex items-center gap-1.5">
+                      <Calendar className="w-3 h-3 text-slate-300" />
+                      {format(new Date(project.start_date), 'dd MMM', { locale: es })}
+                    </span>
+                  )}
+                </div>
+              </Link>
+            ))}
+          </div>
+
+          {/* Botón cargar más */}
+          {hasMore && (
+            <div className="flex flex-col items-center gap-2 mt-8">
+              <button
+                onClick={() => setVisibleCount(v => v + PAGE_SIZE)}
+                className="flex items-center gap-2 px-5 py-2.5 bg-white border border-slate-300 rounded-lg text-sm font-medium text-slate-700 hover:bg-slate-50 hover:border-slate-400 transition-colors shadow-sm"
+              >
+                <ChevronDown className="w-4 h-4" />
+                Cargar más ({remaining} restante{remaining !== 1 ? 's' : ''})
+              </button>
+              <p className="text-xs text-slate-400">
+                Mostrando {visible.length} de {filtered.length} proyectos
+              </p>
+            </div>
+          )}
+        </>
       )}
 
       <ProjectForm
