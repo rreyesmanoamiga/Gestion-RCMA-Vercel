@@ -80,7 +80,7 @@ export default function MaintenanceForm({
 
   const handleSubmit = (e: React.MouseEvent | React.FormEvent) => {
     e.preventDefault();
-    onSubmit({ ...formData, updated_at: new Date() });
+    onSubmit({ ...formData });
   };
 
   return (

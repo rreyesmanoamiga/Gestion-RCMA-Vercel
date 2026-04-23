@@ -1,6 +1,5 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect } from 'react';
 import { X, Save, ChevronDown, ChevronUp, Info, MapPin, User } from 'lucide-react';
-import { getAppParams } from '@/lib/app-params';
 import { COLEGIOS, type Colegio } from '@/lib/colegios';
 import ColegioSelector from '@/components/shared/ColegioSelector';
 
@@ -13,8 +12,15 @@ interface FormData {
   colegio:     string;
   status:      string;
   description: string;
-  app_id:      string | null;
 }
+
+const INITIAL_FORM: FormData = {
+  title:       '',
+  territorio:  '',
+  colegio:     '',
+  status:      'pendiente',
+  description: '',
+};
 
 interface ChecklistRecord {
   title?:       string;
@@ -40,17 +46,6 @@ export default function ChecklistForm({
   onSubmit,
   checklist = null,
 }: ChecklistFormProps) {
-  const params = useMemo(() => getAppParams(), []);
-
-  const INITIAL_FORM: FormData = {
-    title:       '',
-    territorio:  '',
-    colegio:     '',
-    status:      'pendiente',
-    description: '',
-    app_id:      params.appId,
-  };
-
   const [formData, setFormData] = useState<FormData>(INITIAL_FORM);
   const [infoOpen, setInfoOpen] = useState(false);
 
@@ -62,13 +57,12 @@ export default function ChecklistForm({
         colegio:     String(checklist.colegio ?? checklist.location ?? ''),
         status:      String(checklist.status       ?? 'pendiente'),
         description: String(checklist.description  ?? ''),
-        app_id:      params.appId,
       });
     } else {
       setFormData(INITIAL_FORM);
     }
     setInfoOpen(false);
-  }, [checklist, open, params.appId]);
+  }, [checklist, open]);
 
   if (!open) return null;
 
@@ -88,14 +82,13 @@ export default function ChecklistForm({
 
   const handleSubmit = (e: React.MouseEvent | React.FormEvent) => {
     e.preventDefault();
-    onSubmit({ ...formData, app_id: params.appId, updated_at: new Date() });
+    onSubmit({ ...formData });
   };
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4">
       <div className="bg-white rounded-xl shadow-2xl max-w-lg w-full max-h-[90vh] overflow-hidden flex flex-col border border-slate-200">
 
-        {/* Header */}
         <div className="p-5 border-b border-slate-100 flex justify-between items-center bg-slate-50">
           <h3 className="font-bold text-slate-900">
             {checklist ? 'Editar Checklist' : 'Nuevo Checklist'}
@@ -105,9 +98,7 @@ export default function ChecklistForm({
           </button>
         </div>
 
-        {/* Body */}
         <div className="p-6 overflow-y-auto space-y-3 flex-1">
-
           <div>
             <label className={labelClass}>Título del Checklist *</label>
             <input
@@ -213,7 +204,6 @@ export default function ChecklistForm({
           </div>
         </div>
 
-        {/* Footer */}
         <div className="p-5 border-t border-slate-100 bg-slate-50 flex justify-end gap-3">
           <button
             type="button"
