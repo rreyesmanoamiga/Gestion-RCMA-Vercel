@@ -10,7 +10,6 @@ interface FormData {
   title:                string;
   territorio:           string;
   colegio:              string;
-  status:               string;
   general_observations: string;
 }
 
@@ -18,7 +17,6 @@ const INITIAL_FORM: FormData = {
   title:                '',
   territorio:           '',
   colegio:              '',
-  status:               'pendiente',
   general_observations: '',
 };
 
@@ -27,7 +25,6 @@ interface ChecklistRecord {
   territorio?:           string;
   colegio?:              string;
   location?:             string;
-  status?:               string;
   general_observations?: string;
   [key: string]: unknown;
 }
@@ -55,7 +52,6 @@ export default function ChecklistForm({
         title:                String(checklist.title       ?? ''),
         territorio:           String(checklist.territorio   ?? ''),
         colegio:              String(checklist.colegio ?? checklist.location ?? ''),
-        status:               String(checklist.status       ?? 'pendiente'),
         general_observations: String(checklist.general_observations ?? ''),
       });
     } else {
