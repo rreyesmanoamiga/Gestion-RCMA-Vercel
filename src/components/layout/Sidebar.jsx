@@ -10,28 +10,34 @@ import {
   Menu,
   X,
   Users,
+  LogOut,
 } from 'lucide-react';
 import { useAuth } from '@/lib/AuthContext';
 import { cn } from '@/lib/utils';
-import { useIsMobile } from '@/hooks/use-mobile'; // ← hook existente en el proyecto
+import { useIsMobile } from '@/hooks/use-mobile';
+import { supabase } from '@/lib/supabaseClient';
 
 // Fuera del componente — array estático
 const NAV_ITEMS = [
-  { label: 'Dashboard',     path: '/',             icon: LayoutDashboard },
-  { label: 'Proyectos',     path: '/proyectos',    icon: FolderKanban    },
-  { label: 'Checklists',    path: '/checklists',   icon: ClipboardCheck  },
-  { label: 'Mantenimiento', path: '/mantenimiento', icon: Wrench         },
-  { label: 'Reportes',      path: '/reportes',     icon: FileText        },
+  { label: 'Dashboard',     path: '/',              icon: LayoutDashboard },
+  { label: 'Proyectos',     path: '/proyectos',     icon: FolderKanban    },
+  { label: 'Checklists',    path: '/checklists',    icon: ClipboardCheck  },
+  { label: 'Mantenimiento', path: '/mantenimiento', icon: Wrench          },
+  { label: 'Reportes',      path: '/reportes',      icon: FileText        },
 ];
 
 export default function Sidebar({ isOpen, onToggle }) {
-  const location  = useLocation();
-  const { user }  = useAuth();
-  const isAdmin   = user?.role === 'admin';
-  const isMobile  = useIsMobile(); // ← reemplaza window.innerWidth < 1024
+  const location = useLocation();
+  const { user } = useAuth();
+  const isAdmin  = user?.role === 'admin';
+  const isMobile = useIsMobile();
 
   const handleNavClick = () => {
     if (isMobile) onToggle();
+  };
+
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
   };
 
   const navLinkClass = (path) => cn(
@@ -99,14 +105,14 @@ export default function Sidebar({ isOpen, onToggle }) {
               onClick={handleNavClick}
               className={navLinkClass(path)}
             >
-              <Icon className="w-[18px] h-[18px]" /> {/* ← w-4.5 no existe en Tailwind base */}
+              <Icon className="w-[18px] h-[18px]" />
               {label}
             </Link>
           ))}
         </nav>
 
         {/* Footer */}
-        <div className="p-4 border-t border-sidebar-border space-y-3">
+        <div className="p-4 border-t border-sidebar-border space-y-2">
           {isAdmin && (
             <Link
               to="/usuarios"
@@ -117,7 +123,17 @@ export default function Sidebar({ isOpen, onToggle }) {
               Usuarios
             </Link>
           )}
-          <p className="text-[10px] font-bold text-sidebar-foreground/40 text-center uppercase tracking-tighter">
+
+          {/* Botón cerrar sesión */}
+          <button
+            onClick={handleLogout}
+            className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-sidebar-foreground/70 hover:text-red-400 hover:bg-red-500/10 transition-all duration-200"
+          >
+            <LogOut className="w-[18px] h-[18px]" />
+            Cerrar sesión
+          </button>
+
+          <p className="text-[10px] font-bold text-sidebar-foreground/40 text-center uppercase tracking-tighter pt-1">
             Sistema RCMA © 2026
           </p>
         </div>
