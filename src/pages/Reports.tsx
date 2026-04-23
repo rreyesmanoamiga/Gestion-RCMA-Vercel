@@ -85,6 +85,27 @@ async function exportResumenPDF({
   doc.setFont('helvetica', 'normal');
   doc.setTextColor(180, 180, 200);
   doc.text(`Generado el ${now}`, 20, 22);
+
+  // Logo en encabezado del PDF
+  try {
+    const logoImg = await new Promise<string>((resolve, reject) => {
+      const img = new Image();
+      img.crossOrigin = 'anonymous';
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        canvas.width  = img.width;
+        canvas.height = img.height;
+        canvas.getContext('2d')!.drawImage(img, 0, 0);
+        resolve(canvas.toDataURL('image/png'));
+      };
+      img.onerror = reject;
+      img.src = '/logo.png';
+    });
+    doc.addImage(logoImg, 'PNG', W - 38, 2, 24, 24);
+  } catch {
+    // Si falla la carga del logo, continúa sin él
+  }
+
   y = 40;
 
   // KPIs
