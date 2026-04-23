@@ -121,11 +121,11 @@ export default function Dashboard() {
           </div>
           <p className="text-sm text-muted-foreground ml-11">Panel de Gestión de Proyectos y Mantenimiento</p>
         </div>
-        <div className="hidden sm:flex items-center justify-center bg-slate-900 rounded-xl px-4 py-2 shadow-md">
+        <div className="hidden sm:flex items-center justify-center">
           <img
             src="/logo.png"
             alt="Mano Amiga"
-            className="h-12 w-auto object-contain"
+            className="h-14 w-auto object-contain mix-blend-multiply"
           />
         </div>
       </div>
