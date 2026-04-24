@@ -211,17 +211,21 @@ function AuthenticatedApp() {
   const [isInviteFlow, setIsInviteFlow] = useState(false);
 
   useEffect(() => {
-    // Detecta si el hash del URL contiene un token de invitación
-    const hash = window.location.hash;
-    if (hash.includes('access_token') && hash.includes('type=invite')) {
-      setIsInviteFlow(true);
-    }
-    // También detecta el evento de Supabase para invitaciones
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
-      if (event === 'USER_UPDATED' || event === 'SIGNED_IN') {
+      if (event === 'PASSWORD_RECOVERY') {
+        setIsInviteFlow(true);
+      }
+      if (event === 'USER_UPDATED' || event === 'SIGNED_OUT') {
         setIsInviteFlow(false);
       }
     });
+
+    // También detecta si el hash contiene type=recovery o type=invite
+    const hash = window.location.hash;
+    if (hash.includes('type=recovery') || hash.includes('type=invite')) {
+      setIsInviteFlow(true);
+    }
+
     return () => subscription.unsubscribe();
   }, []);
 
