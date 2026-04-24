@@ -181,7 +181,7 @@ async function exportResumenPDF({
   y += 2;
   divider();
 
-  const pendCols = { colegio: 20, proyecto: 55, estatus: 120, prioridad: 155, notas: 175 };
+  const pendCols = { colegio: 20, proyecto: 55, estatus: 130, prioridad: 165 };
   doc.setFillColor(241, 245, 249);
   doc.rect(18, y - 4, W - 36, 8, 'F');
   doc.setFontSize(8);
@@ -191,7 +191,6 @@ async function exportResumenPDF({
   doc.text('Proyecto',  pendCols.proyecto,  y);
   doc.text('Estatus',   pendCols.estatus,   y);
   doc.text('Prioridad', pendCols.prioridad, y);
-  doc.text('Notas',     pendCols.notas,     y);
   y += 6;
   divider();
 
@@ -201,14 +200,12 @@ async function exportResumenPDF({
     if (y > 270) { doc.addPage(); y = 20; }
     if (i % 2 === 0) { doc.setFillColor(248, 250, 252); doc.rect(18, y - 4, W - 36, 7, 'F'); }
     doc.setFontSize(7.5);
-    const colegio  = (p.colegio || '—').slice(0, 15);
-    const proyecto = (p.nombre_proyecto || '—').slice(0, 28);
-    const notas    = (p.notas || '—').slice(0, 18);
+    const colegio  = (p.colegio || '—').slice(0, 20);
+    const proyecto = (p.nombre_proyecto || '—').slice(0, 38);
     doc.text(colegio,            pendCols.colegio,   y);
     doc.text(proyecto,           pendCols.proyecto,  y);
     doc.text(p.estatus  || '—',  pendCols.estatus,   y);
     doc.text(p.prioridad || '—', pendCols.prioridad, y);
-    doc.text(notas,              pendCols.notas,     y);
     y += 7;
   });
   if (pendientes.length > 40) {
