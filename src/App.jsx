@@ -26,29 +26,41 @@ function SetPasswordPage() {
   const [password, setPassword] = useState('');
   const [confirm, setConfirm]   = useState('');
   const [loading, setLoading]   = useState(false);
-  const [verifying, setVerifying] = useState(false);
+  const [verifying, setVerifying] = useState(true); // Empieza en true mientras verifica
   const [verified, setVerified] = useState(false);
   const [error, setError]       = useState('');
   const [success, setSuccess]   = useState(false);
 
   useEffect(() => {
-    // Verifica el token OTP al cargar la página
     const hash = window.location.hash;
     const params = new URLSearchParams(hash.replace('#', ''));
     const token = params.get('token') || params.get('access_token');
     const type  = params.get('type') as 'invite' | 'recovery' | null;
 
-    if (token && type === 'invite') {
-      setVerifying(true);
-      supabase.auth.verifyOtp({ token_hash: token, type: 'invite' })
+    if (token && (type === 'invite' || type === 'recovery')) {
+      // Verificar el OTP — esto también establece la sesión activa
+      supabase.auth.verifyOtp({
+        token_hash: token,
+        type: type === 'invite' ? 'invite' : 'recovery',
+      })
         .then(({ error }) => {
-          if (error) setError('El link de invitación es inválido o expiró. Pide uno nuevo.');
-          else setVerified(true);
+          if (error) {
+            setError('El link de invitación es inválido o expiró. Pide uno nuevo.');
+          } else {
+            setVerified(true);
+          }
           setVerifying(false);
         });
     } else {
-      // Para recovery (reset password), el token ya fue procesado por Supabase
-      setVerified(true);
+      // Sin token en el hash — revisar si ya hay sesión activa (ej. PASSWORD_RECOVERY via onAuthStateChange)
+      supabase.auth.getSession().then(({ data: { session } }) => {
+        if (session) {
+          setVerified(true);
+        } else {
+          setError('No se encontró un link válido. Usa el enlace del correo de invitación.');
+        }
+        setVerifying(false);
+      });
     }
   }, []);
 
@@ -177,10 +189,11 @@ function AuthHashHandler() {
   const navigate = useNavigate();
 
   useEffect(() => {
-    // Detecta type=recovery o type=invite en el hash al cargar
     const hash = window.location.hash;
+
+    // CORRECCIÓN CLAVE: pasar el hash completo a /reset-password para no perder el token
     if (hash.includes('type=recovery') || hash.includes('type=invite')) {
-      navigate('/reset-password', { replace: true });
+      navigate(`/reset-password${hash}`, { replace: true });
       return;
     }
 
