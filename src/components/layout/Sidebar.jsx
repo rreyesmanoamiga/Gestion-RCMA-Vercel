@@ -9,15 +9,14 @@ import {
   Building2,
   Menu,
   X,
-  Users,
   LogOut,
+  Lock,
 } from 'lucide-react';
 import { useAuth } from '@/lib/AuthContext';
 import { cn } from '@/lib/utils';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { supabase } from '@/lib/supabaseClient';
 
-// Fuera del componente — array estático
 const NAV_ITEMS = [
   { label: 'Dashboard',     path: '/',              icon: LayoutDashboard },
   { label: 'Proyectos',     path: '/proyectos',     icon: FolderKanban    },
@@ -49,7 +48,6 @@ export default function Sidebar({ isOpen, onToggle }) {
 
   return (
     <>
-      {/* Overlay móvil */}
       {isOpen && (
         <div
           aria-hidden="true"
@@ -58,7 +56,6 @@ export default function Sidebar({ isOpen, onToggle }) {
         />
       )}
 
-      {/* Botón de toggle móvil */}
       <button
         onClick={onToggle}
         aria-label={isOpen ? 'Cerrar menú' : 'Abrir menú'}
@@ -69,7 +66,6 @@ export default function Sidebar({ isOpen, onToggle }) {
         {isOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
       </button>
 
-      {/* Sidebar */}
       <aside
         id="app-sidebar"
         aria-label="Navegación principal"
@@ -109,22 +105,22 @@ export default function Sidebar({ isOpen, onToggle }) {
               {label}
             </Link>
           ))}
+
+          {/* Accesos — solo admin */}
+          {isAdmin && (
+            <Link
+              to="/accesos"
+              onClick={handleNavClick}
+              className={navLinkClass('/accesos')}
+            >
+              <Lock className="w-[18px] h-[18px]" />
+              Accesos
+            </Link>
+          )}
         </nav>
 
         {/* Footer */}
         <div className="p-4 border-t border-sidebar-border space-y-2">
-          {isAdmin && (
-            <Link
-              to="/usuarios"
-              onClick={handleNavClick}
-              className={navLinkClass('/usuarios')}
-            >
-              <Users className="w-4 h-4" />
-              Usuarios
-            </Link>
-          )}
-
-          {/* Botón cerrar sesión */}
           <button
             onClick={handleLogout}
             className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-sidebar-foreground/70 hover:text-red-400 hover:bg-red-500/10 transition-all duration-200"

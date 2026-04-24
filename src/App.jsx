@@ -16,6 +16,7 @@ import Maintenance from '@/pages/Maintenance';
 import MaintenanceDetail from '@/pages/MaintenanceDetail';
 import Reports from '@/pages/Reports';
 import UserManagement from '@/pages/UserManagement';
+import Accesos from '@/pages/Accesos';
 
 // ─── Página de login ──────────────────────────────────────────────────────────
 function LoginPage() {
@@ -31,8 +32,6 @@ function LoginPage() {
     const { error } = await supabase.auth.signInWithPassword({ email, password });
     if (error) setError(error.message);
     setLoading(false);
-    // Si tiene éxito, onAuthStateChange en AuthContext actualizará `user`
-    // y el guard de AuthenticatedApp redirigirá automáticamente al Dashboard
   };
 
   const inputClass = "w-full px-3 py-2 border border-slate-300 rounded-md text-sm focus:ring-2 focus:ring-slate-900 focus:outline-none bg-white";
@@ -41,7 +40,6 @@ function LoginPage() {
     <div className="min-h-screen flex items-center justify-center bg-slate-50 p-4">
       <div className="bg-white rounded-xl shadow-sm border border-slate-200 w-full max-w-sm p-8">
 
-        {/* Logo / título */}
         <div className="text-center mb-8">
           <h1 className="text-2xl font-black text-slate-900 uppercase tracking-tight">
             Sistema RCMA
@@ -105,7 +103,6 @@ function LoginPage() {
 function AuthenticatedApp() {
   const { user, loading } = useAuth();
 
-  // 1. Spinner mientras Supabase verifica la sesión
   if (loading) {
     return (
       <div className="fixed inset-0 flex items-center justify-center bg-white">
@@ -114,22 +111,21 @@ function AuthenticatedApp() {
     );
   }
 
-  // 2. Sin sesión — mostrar login
   if (!user) return <LoginPage />;
 
-  // 3. Sesión activa — renderizar la app
   return (
     <Routes>
       <Route element={<AppLayout />}>
         <Route path="/"                  element={<Dashboard />} />
-        <Route path="/proyectos"          element={<Projects />} />
-        <Route path="/proyectos/:id"      element={<ProjectDetail />} />
-        <Route path="/checklists"         element={<Checklists />} />
-        <Route path="/checklists/:id"     element={<ChecklistDetail />} />
-        <Route path="/mantenimiento"      element={<Maintenance />} />
-        <Route path="/mantenimiento/:id"  element={<MaintenanceDetail />} />
-        <Route path="/reportes"           element={<Reports />} />
-        <Route path="/usuarios"           element={<UserManagement />} />
+        <Route path="/proyectos"         element={<Projects />} />
+        <Route path="/proyectos/:id"     element={<ProjectDetail />} />
+        <Route path="/checklists"        element={<Checklists />} />
+        <Route path="/checklists/:id"    element={<ChecklistDetail />} />
+        <Route path="/mantenimiento"     element={<Maintenance />} />
+        <Route path="/mantenimiento/:id" element={<MaintenanceDetail />} />
+        <Route path="/reportes"         element={<Reports />} />
+        <Route path="/usuarios"         element={<UserManagement />} />
+        <Route path="/accesos"          element={<Accesos />} />
       </Route>
       <Route path="/login" element={<Navigate to="/" replace />} />
       <Route path="*"      element={<PageNotFound />} />
@@ -144,7 +140,7 @@ export default function App() {
       <AuthProvider>
         <Router>
           <AuthenticatedApp />
-          <Toaster richColors position="top-right" /> {/* dentro del Router */}
+          <Toaster richColors position="top-right" />
         </Router>
       </AuthProvider>
     </QueryClientProvider>
