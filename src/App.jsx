@@ -139,6 +139,13 @@ function AuthHashHandler() {
   const navigate = useNavigate();
 
   useEffect(() => {
+    // Detecta type=recovery o type=invite en el hash al cargar
+    const hash = window.location.hash;
+    if (hash.includes('type=recovery') || hash.includes('type=invite')) {
+      navigate('/reset-password', { replace: true });
+      return;
+    }
+
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
       if (event === 'PASSWORD_RECOVERY') {
         navigate('/reset-password', { replace: true });
@@ -162,26 +169,28 @@ function AuthenticatedApp() {
     );
   }
 
-  if (!user) return <LoginPage />;
-
   return (
     <Routes>
       <Route path="/reset-password" element={<SetPasswordPage />} />
-      <Route element={<AppLayout />}>
-        <Route path="/"                  element={<Dashboard />} />
-        <Route path="/proyectos"         element={<Projects />} />
-        <Route path="/proyectos/:id"     element={<ProjectDetail />} />
-        <Route path="/checklists"        element={<Checklists />} />
-        <Route path="/checklists/:id"    element={<ChecklistDetail />} />
-        <Route path="/mantenimiento"     element={<Maintenance />} />
-        <Route path="/mantenimiento/:id" element={<MaintenanceDetail />} />
-        <Route path="/reportes"          element={<Reports />} />
-        <Route path="/usuarios"          element={<UserManagement />} />
-        <Route path="/accesos"           element={<Accesos />} />
-        <Route path="/pendientes"        element={<Pendientes />} />
-      </Route>
-      <Route path="/login" element={<Navigate to="/" replace />} />
-      <Route path="*"      element={<PageNotFound />} />
+      {!user ? (
+        <Route path="*" element={<LoginPage />} />
+      ) : (
+        <Route element={<AppLayout />}>
+          <Route path="/"                  element={<Dashboard />} />
+          <Route path="/proyectos"         element={<Projects />} />
+          <Route path="/proyectos/:id"     element={<ProjectDetail />} />
+          <Route path="/checklists"        element={<Checklists />} />
+          <Route path="/checklists/:id"    element={<ChecklistDetail />} />
+          <Route path="/mantenimiento"     element={<Maintenance />} />
+          <Route path="/mantenimiento/:id" element={<MaintenanceDetail />} />
+          <Route path="/reportes"          element={<Reports />} />
+          <Route path="/usuarios"          element={<UserManagement />} />
+          <Route path="/accesos"           element={<Accesos />} />
+          <Route path="/pendientes"        element={<Pendientes />} />
+          <Route path="/login"             element={<Navigate to="/" replace />} />
+          <Route path="*"                  element={<PageNotFound />} />
+        </Route>
+      )}
     </Routes>
   );
 }

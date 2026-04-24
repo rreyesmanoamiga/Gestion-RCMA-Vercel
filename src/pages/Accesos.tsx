@@ -134,8 +134,23 @@ export default function Accesos() {
       setInvitePerms(DEFAULT_PERMISSIONS);
       setShowInvite(false);
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Error desconocido';
-      toast.error('Error al invitar: ' + message);
+      const message = err instanceof Error ? err.message : '';
+      // Si el error es porque el usuario ya existe, igual registramos los permisos
+      if (message.includes('already') || message.includes('exists') || message.includes('400')) {
+        try {
+          await supabase.from('user_permissions')
+            .upsert({ user_email: inviteEmail, ...invitePerms }, { onConflict: 'user_email' });
+          await qc.invalidateQueries({ queryKey: ['userPermissions'] });
+          toast.success(`Acceso actualizado para ${inviteEmail}`);
+          setInviteEmail('');
+          setInvitePerms(DEFAULT_PERMISSIONS);
+          setShowInvite(false);
+        } catch {
+          toast.error('Error al registrar permisos');
+        }
+      } else {
+        toast.error('Error al invitar: ' + (message || 'Error desconocido'));
+      }
     } finally {
       setInviting(false);
     }
