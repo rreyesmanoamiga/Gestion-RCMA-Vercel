@@ -12,16 +12,10 @@ const btnPrimary = "px-4 py-2 bg-slate-900 text-white rounded-md text-sm font-me
 const btnOutline = "px-4 py-2 border border-slate-300 rounded-md text-sm font-medium text-slate-700 hover:bg-slate-50 transition-colors flex items-center gap-2";
 const btnDanger  = "px-4 py-2 border border-red-200 rounded-md text-sm font-medium text-red-600 hover:bg-red-50 transition-colors flex items-center gap-2";
 
-interface AppUser {
-  id:         string;
-  email:      string;
-  full_name?: string;
-  role?:      string;
-}
-
 interface PermRecord {
   id:         string;
   user_email: string;
+  role?:      string;
   [key: string]: unknown;
 }
 
@@ -46,9 +40,7 @@ function PermissionEditor({ perms, onChange }: PermissionEditorProps) {
             {group.permissions.map(perm => (
               <label key={perm} className="flex items-center gap-3 cursor-pointer group">
                 <div className="relative inline-flex items-center">
-                  <input
-                    type="checkbox"
-                    className="sr-only peer"
+                  <input type="checkbox" className="sr-only peer"
                     checked={!!perms[perm]}
                     onChange={e => onChange({ ...perms, [perm]: e.target.checked })}
                   />
@@ -70,7 +62,7 @@ export default function Accesos() {
   const qc = useQueryClient();
   const [showInvite, setShowInvite]   = useState(false);
   const [editingUser, setEditingUser] = useState<EditingUser | null>(null);
-  const [revokeUser, setRevokeUser]   = useState<AppUser | null>(null);
+  const [revokeEmail, setRevokeEmail] = useState<string | null>(null);
   const [inviteEmail, setInviteEmail] = useState('');
   const [invitePerms, setInvitePerms] = useState<Record<string, boolean>>(DEFAULT_PERMISSIONS);
   const [inviting, setInviting]       = useState(false);
@@ -82,33 +74,48 @@ export default function Accesos() {
 
   const allPerms = rawPerms as unknown as PermRecord[];
 
-  // Usuarios derivados de user_permissions — sin depender de tabla profiles
   const nonAdminUsers = useMemo(() =>
-    allPerms
-      .filter(p => String(p.role) !== 'admin')
-      .map(p => ({
-        id:    String(p.id),
-        email: String(p.user_email),
-      })) as AppUser[],
+    allPerms.filter(p => String(p.role) !== 'admin'),
     [allPerms]
   );
 
+  // ── Update permisos usando upsert por user_email ───────────────────────────
   const updatePermsMutation = useMutation({
-    mutationFn: ({ id, data }: { id: string; data: Record<string, boolean> }) =>
-      db.UserPermissions.update(id, data),
+    mutationFn: async ({ email, perms }: { email: string; perms: Record<string, boolean> }) => {
+      const { error } = await supabase
+        .from('user_permissions')
+        .update(perms)
+        .eq('user_email', email);
+      if (error) throw error;
+    },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['userPermissions'] });
       toast.success('Permisos actualizados');
       setEditingUser(null);
     },
+    onError: (err: unknown) => {
+      const msg = err instanceof Error ? err.message : 'Error al actualizar';
+      toast.error(msg);
+    },
   });
 
+  // ── Delete por user_email ─────────────────────────────────────────────────
   const deletePermsMutation = useMutation({
-    mutationFn: (id: string) => db.UserPermissions.delete(id),
+    mutationFn: async (email: string) => {
+      const { error } = await supabase
+        .from('user_permissions')
+        .delete()
+        .eq('user_email', email);
+      if (error) throw error;
+    },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['userPermissions'] });
       toast.success('Acceso revocado');
-      setRevokeUser(null);
+      setRevokeEmail(null);
+    },
+    onError: (err: unknown) => {
+      const msg = err instanceof Error ? err.message : 'Error al revocar';
+      toast.error(msg);
     },
   });
 
@@ -143,28 +150,9 @@ export default function Accesos() {
     });
   };
 
-  const handleSaveEdit = async () => {
+  const handleSaveEdit = () => {
     if (!editingUser) return;
-    const { permsId, email, perms } = editingUser;
-    if (permsId) {
-      updatePermsMutation.mutate({ id: permsId, data: perms });
-    } else {
-      await db.UserPermissions.create({ user_email: email, ...perms });
-      await qc.invalidateQueries({ queryKey: ['userPermissions'] });
-      toast.success('Permisos guardados');
-      setEditingUser(null);
-    }
-  };
-
-  const handleRevoke = () => {
-    if (!revokeUser) return;
-    const rec = allPerms.find(p => p.user_email === revokeUser.email);
-    if (rec) {
-      deletePermsMutation.mutate(rec.id);
-    } else {
-      toast.error('No se encontraron permisos para este usuario');
-      setRevokeUser(null);
-    }
+    updatePermsMutation.mutate({ email: editingUser.email, perms: editingUser.perms });
   };
 
   const closeModal = () => { setShowInvite(false); setEditingUser(null); };
@@ -197,29 +185,27 @@ export default function Accesos() {
           ) : (
             <div className="divide-y divide-slate-100">
               {nonAdminUsers.map(u => {
-                const rec         = allPerms.find(p => p.user_email === u.email);
-                const activePerms = rec ? Object.keys(PERMISSIONS).filter(k => rec[k]) : [];
+                const activePerms = Object.keys(PERMISSIONS).filter(k => u[k]);
                 return (
                   <div key={u.id} className="flex items-center justify-between py-4 gap-4">
                     <div className="flex items-center gap-3 min-w-0">
                       <div className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center border border-slate-200 shrink-0">
                         <span className="text-sm font-bold text-slate-600">
-                          {u.full_name?.[0] || u.email[0].toUpperCase()}
+                          {String(u.user_email)[0].toUpperCase()}
                         </span>
                       </div>
                       <div className="min-w-0">
-                        <p className="text-sm font-bold text-slate-900 truncate">{u.full_name || u.email}</p>
-                        <p className="text-xs text-slate-500 truncate">{u.email}</p>
+                        <p className="text-sm font-bold text-slate-900 truncate">{String(u.user_email)}</p>
                         <p className="text-[10px] font-bold text-blue-600 mt-0.5 uppercase tracking-tighter">
                           {activePerms.length} permiso{activePerms.length !== 1 ? 's' : ''} activo{activePerms.length !== 1 ? 's' : ''}
                         </p>
                       </div>
                     </div>
                     <div className="flex gap-2 shrink-0">
-                      <button onClick={() => openEdit(u.email)} className={btnOutline}>
+                      <button onClick={() => openEdit(String(u.user_email))} className={btnOutline}>
                         <Pencil className="w-3.5 h-3.5" /> Permisos
                       </button>
-                      <button onClick={() => setRevokeUser(u)} className={btnDanger}>
+                      <button onClick={() => setRevokeEmail(String(u.user_email))} className={btnDanger}>
                         <Trash2 className="w-3.5 h-3.5" /> Revocar
                       </button>
                     </div>
@@ -231,7 +217,7 @@ export default function Accesos() {
         </div>
       </div>
 
-      {/* Permisos disponibles — referencia visual */}
+      {/* Permisos disponibles */}
       <div className={cardClass}>
         <div className="px-5 py-4 border-b border-slate-100 bg-slate-50/50">
           <h2 className="flex items-center gap-2 text-sm font-bold text-slate-800 uppercase tracking-tight">
@@ -281,9 +267,7 @@ export default function Accesos() {
                     </label>
                     <div className="relative">
                       <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                      <input
-                        type="email"
-                        required
+                      <input type="email" required
                         className="w-full pl-10 pr-4 py-2 border border-slate-300 rounded-md text-sm focus:ring-2 focus:ring-slate-900 focus:outline-none"
                         placeholder="ejemplo@organizacion.com"
                         value={inviteEmail}
@@ -318,27 +302,23 @@ export default function Accesos() {
         </div>
       )}
 
-      {/* Modal — confirmar revocar acceso */}
-      {revokeUser && (
+      {/* Modal — confirmar revocar */}
+      {revokeEmail && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 p-4">
           <div className="bg-white rounded-lg shadow-xl max-w-sm w-full p-6">
             <h2 className="text-lg font-bold text-slate-900">¿Revocar acceso?</h2>
             <p className="text-sm text-slate-500 mt-2">
-              <span className="font-semibold text-slate-700">{revokeUser.full_name || revokeUser.email}</span> perderá
-              todos sus permisos y no podrá acceder al sistema.
+              <span className="font-semibold text-slate-700">{revokeEmail}</span> perderá todos sus permisos.
             </p>
             <div className="flex justify-end gap-3 mt-6">
-              <button
-                onClick={() => setRevokeUser(null)}
-                className="px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100 rounded-md"
-              >
+              <button onClick={() => setRevokeEmail(null)}
+                className="px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100 rounded-md">
                 Cancelar
               </button>
               <button
-                onClick={handleRevoke}
+                onClick={() => deletePermsMutation.mutate(revokeEmail)}
                 disabled={deletePermsMutation.isPending}
-                className="px-4 py-2 text-sm font-medium bg-red-600 text-white hover:bg-red-700 rounded-md shadow-sm disabled:opacity-50"
-              >
+                className="px-4 py-2 text-sm font-medium bg-red-600 text-white hover:bg-red-700 rounded-md disabled:opacity-50">
                 {deletePermsMutation.isPending ? 'Revocando...' : 'Revocar Acceso'}
               </button>
             </div>
