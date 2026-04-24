@@ -28,7 +28,7 @@ const NAV_ITEMS = [
 export default function Sidebar({ isOpen, onToggle }) {
   const location = useLocation();
   const { user } = useAuth();
-  const isAdmin  = user?.role === 'admin';
+  const isAdmin  = user?.user_metadata?.role === 'admin';
   const isMobile = useIsMobile();
 
   const handleNavClick = () => {
