@@ -75,26 +75,22 @@ export default function Accesos() {
   const [invitePerms, setInvitePerms] = useState<Record<string, boolean>>(DEFAULT_PERMISSIONS);
   const [inviting, setInviting]       = useState(false);
 
-  const { data: rawUsers = [] } = useQuery({
-    queryKey: ['users'],
-    queryFn: async () => {
-      const { data, error } = await supabase.from('profiles').select('*');
-      if (error) throw error;
-      return data;
-    },
-  });
-
   const { data: rawPerms = [] } = useQuery({
     queryKey: ['userPermissions'],
     queryFn: () => db.UserPermissions.list(),
   });
 
-  const users    = rawUsers as unknown as AppUser[];
   const allPerms = rawPerms as unknown as PermRecord[];
 
-  const nonAdminUsers = useMemo(
-    () => users.filter(u => u.role !== 'admin'),
-    [users]
+  // Usuarios derivados de user_permissions — sin depender de tabla profiles
+  const nonAdminUsers = useMemo(() =>
+    allPerms
+      .filter(p => p.role !== 'admin')
+      .map(p => ({
+        id:    p.id,
+        email: p.user_email,
+      })) as AppUser[],
+    [allPerms]
   );
 
   const updatePermsMutation = useMutation({
