@@ -11,6 +11,7 @@ import {
   X,
   LogOut,
   Lock,
+  ClockAlert,
 } from 'lucide-react';
 import { useAuth } from '@/lib/AuthContext';
 import { cn } from '@/lib/utils';
@@ -22,6 +23,7 @@ const NAV_ITEMS = [
   { label: 'Proyectos',     path: '/proyectos',     icon: FolderKanban    },
   { label: 'Checklists',    path: '/checklists',    icon: ClipboardCheck  },
   { label: 'Mantenimiento', path: '/mantenimiento', icon: Wrench          },
+  { label: 'Pendientes',    path: '/pendientes',    icon: ClockAlert      },
   { label: 'Reportes',      path: '/reportes',      icon: FileText        },
 ];
 

@@ -89,4 +89,5 @@ export const db = {
   MaintenanceRecord: createEntityClient('maintenance_records'),
   Report:            createEntityClient('reports'),
   UserPermissions:   createEntityClient('user_permissions'),
+  Pendiente:         createEntityClient('pendientes'),
 };

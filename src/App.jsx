@@ -17,6 +17,7 @@ import MaintenanceDetail from '@/pages/MaintenanceDetail';
 import Reports from '@/pages/Reports';
 import UserManagement from '@/pages/UserManagement';
 import Accesos from '@/pages/Accesos';
+import Pendientes from '@/pages/Pendientes';
 
 const inputClass = "w-full px-3 py-2 border border-slate-300 rounded-md text-sm focus:ring-2 focus:ring-slate-900 focus:outline-none bg-white";
 
@@ -177,6 +178,7 @@ function AuthenticatedApp() {
         <Route path="/reportes"          element={<Reports />} />
         <Route path="/usuarios"          element={<UserManagement />} />
         <Route path="/accesos"           element={<Accesos />} />
+        <Route path="/pendientes"        element={<Pendientes />} />
       </Route>
       <Route path="/login" element={<Navigate to="/" replace />} />
       <Route path="*"      element={<PageNotFound />} />
