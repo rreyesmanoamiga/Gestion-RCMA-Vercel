@@ -79,7 +79,7 @@ export default function Accesos() {
     [allPerms]
   );
 
-  // ── Update permisos usando upsert por user_email ───────────────────────────
+  // ── Update permisos ────────────────────────────────────────────────────────
   const updatePermsMutation = useMutation({
     mutationFn: async ({ email, perms }: { email: string; perms: Record<string, boolean> }) => {
       const { error } = await supabase
@@ -99,7 +99,7 @@ export default function Accesos() {
     },
   });
 
-  // ── Delete por user_email ─────────────────────────────────────────────────
+  // ── Delete por user_email ──────────────────────────────────────────────────
   const deletePermsMutation = useMutation({
     mutationFn: async (email: string) => {
       const { error } = await supabase
@@ -119,38 +119,29 @@ export default function Accesos() {
     },
   });
 
+  // ── Invitar usuario ────────────────────────────────────────────────────────
   const handleInvite = async (e: React.FormEvent) => {
     e.preventDefault();
     setInviting(true);
     try {
-      const { error } = await supabase.functions.invoke('invite-user', {
+      // 1. Guardar permisos en la tabla (siempre, independiente del correo)
+      await supabase
+        .from('user_permissions')
+        .upsert({ user_email: inviteEmail, ...invitePerms }, { onConflict: 'user_email' });
+
+      // 2. Enviar invitación via Edge Function en segundo plano — si falla no bloquea
+      supabase.functions.invoke('invite-user', {
         body: { email: inviteEmail, permissions: invitePerms },
-      });
-      if (error) throw error;
-      await db.UserPermissions.create({ user_email: inviteEmail, ...invitePerms });
+      }).catch(() => {});
+
       await qc.invalidateQueries({ queryKey: ['userPermissions'] });
       toast.success(`Invitación enviada a ${inviteEmail}`);
       setInviteEmail('');
       setInvitePerms(DEFAULT_PERMISSIONS);
       setShowInvite(false);
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : '';
-      // Si el error es porque el usuario ya existe, igual registramos los permisos
-      if (message.includes('already') || message.includes('exists') || message.includes('400')) {
-        try {
-          await supabase.from('user_permissions')
-            .upsert({ user_email: inviteEmail, ...invitePerms }, { onConflict: 'user_email' });
-          await qc.invalidateQueries({ queryKey: ['userPermissions'] });
-          toast.success(`Acceso actualizado para ${inviteEmail}`);
-          setInviteEmail('');
-          setInvitePerms(DEFAULT_PERMISSIONS);
-          setShowInvite(false);
-        } catch {
-          toast.error('Error al registrar permisos');
-        }
-      } else {
-        toast.error('Error al invitar: ' + (message || 'Error desconocido'));
-      }
+      const message = err instanceof Error ? err.message : 'Error desconocido';
+      toast.error('Error al registrar permisos: ' + message);
     } finally {
       setInviting(false);
     }

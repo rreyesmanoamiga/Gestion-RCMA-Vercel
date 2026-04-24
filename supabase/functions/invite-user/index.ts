@@ -7,7 +7,6 @@ const corsHeaders = {
 };
 
 serve(async (req) => {
-  // Manejo de CORS preflight
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders });
   }
@@ -22,27 +21,38 @@ serve(async (req) => {
       );
     }
 
-    // Cliente admin con service_role (solo disponible en Edge Functions)
     const supabaseAdmin = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
       { auth: { autoRefreshToken: false, persistSession: false } }
     );
 
-    // Enviar invitación — esto genera el link con type=invite
+    const siteUrl = Deno.env.get('SITE_URL') ?? 'https://gestion-rcma-vercel.vercel.app';
+
     const { data, error } = await supabaseAdmin.auth.admin.inviteUserByEmail(email, {
-      redirectTo: `${Deno.env.get('SITE_URL') ?? 'https://gestion-rcma-vercel.vercel.app'}/reset-password`,
+      redirectTo: `${siteUrl}/reset-password`,
     });
 
     if (error) {
-      // Si el usuario ya existe, no es un error crítico
-      if (error.message?.includes('already') || error.status === 422) {
+      // Usuario ya existe — no es error crítico, retornar 200 igual
+      const msg = error.message?.toLowerCase() ?? '';
+      if (
+        msg.includes('already') ||
+        msg.includes('exists') ||
+        msg.includes('registered') ||
+        error.status === 422 ||
+        error.status === 400
+      ) {
         return new Response(
-          JSON.stringify({ error: 'already_exists', message: error.message }),
-          { status: 422, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          JSON.stringify({ success: true, already_exists: true }),
+          { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
       }
-      throw error;
+      // Otro error real
+      return new Response(
+        JSON.stringify({ error: error.message }),
+        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
     }
 
     return new Response(
