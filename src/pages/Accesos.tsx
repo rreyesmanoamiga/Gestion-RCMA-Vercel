@@ -85,10 +85,10 @@ export default function Accesos() {
   // Usuarios derivados de user_permissions — sin depender de tabla profiles
   const nonAdminUsers = useMemo(() =>
     allPerms
-      .filter(p => p.role !== 'admin')
+      .filter(p => String(p.role) !== 'admin')
       .map(p => ({
-        id:    p.id,
-        email: p.user_email,
+        id:    String(p.id),
+        email: String(p.user_email),
       })) as AppUser[],
     [allPerms]
   );
