@@ -1,7 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabaseClient';
-import { db } from '@/lib/db';
 import { PERMISSIONS, PERMISSION_GROUPS, DEFAULT_PERMISSIONS } from '@/lib/permissions';
 import { Lock, UserPlus, Mail, Pencil, X, Trash2, ShieldCheck, Users } from 'lucide-react';
 import { toast } from 'sonner';
@@ -69,7 +68,11 @@ export default function Accesos() {
 
   const { data: rawPerms = [] } = useQuery({
     queryKey: ['userPermissions'],
-    queryFn: () => db.UserPermissions.list(),
+    queryFn: async () => {
+      const { data, error } = await supabase.from('user_permissions').select('*');
+      if (error) throw error;
+      return data;
+    },
   });
 
   const allPerms = rawPerms as unknown as PermRecord[];
@@ -99,14 +102,20 @@ export default function Accesos() {
     },
   });
 
-  // ── Delete por user_email ──────────────────────────────────────────────────
+  // ── Revocar: borra permisos Y usuario de Auth ──────────────────────────────
   const deletePermsMutation = useMutation({
     mutationFn: async (email: string) => {
+      // 1. Borrar de la tabla de permisos
       const { error } = await supabase
         .from('user_permissions')
         .delete()
         .eq('user_email', email);
       if (error) throw error;
+
+      // 2. Borrar de Auth via Edge Function en segundo plano
+      supabase.functions.invoke('delete-user', {
+        body: { email },
+      }).catch(() => {});
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['userPermissions'] });
@@ -124,16 +133,10 @@ export default function Accesos() {
     e.preventDefault();
     setInviting(true);
     try {
-      // 1. Guardar permisos en la tabla (siempre, independiente del correo)
-      await supabase
-        .from('user_permissions')
-        .upsert({ user_email: inviteEmail, ...invitePerms }, { onConflict: 'user_email' });
-
-      // 2. Enviar invitación via Edge Function en segundo plano — si falla no bloquea
-      supabase.functions.invoke('invite-user', {
+      const { error } = await supabase.functions.invoke('invite-user', {
         body: { email: inviteEmail, permissions: invitePerms },
-      }).catch(() => {});
-
+      });
+      if (error) throw error;
       await qc.invalidateQueries({ queryKey: ['userPermissions'] });
       toast.success(`Invitación enviada a ${inviteEmail}`);
       setInviteEmail('');
@@ -141,7 +144,7 @@ export default function Accesos() {
       setShowInvite(false);
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Error desconocido';
-      toast.error('Error al registrar permisos: ' + message);
+      toast.error('Error: ' + message);
     } finally {
       setInviting(false);
     }
@@ -314,7 +317,7 @@ export default function Accesos() {
           <div className="bg-white rounded-lg shadow-xl max-w-sm w-full p-6">
             <h2 className="text-lg font-bold text-slate-900">¿Revocar acceso?</h2>
             <p className="text-sm text-slate-500 mt-2">
-              <span className="font-semibold text-slate-700">{revokeEmail}</span> perderá todos sus permisos.
+              <span className="font-semibold text-slate-700">{revokeEmail}</span> perderá todos sus permisos y acceso al sistema.
             </p>
             <div className="flex justify-end gap-3 mt-6">
               <button onClick={() => setRevokeEmail(null)}

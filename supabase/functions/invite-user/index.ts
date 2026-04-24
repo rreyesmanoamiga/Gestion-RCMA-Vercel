@@ -21,6 +21,7 @@ serve(async (req) => {
       );
     }
 
+    // Cliente admin con service_role — bypasea RLS
     const supabaseAdmin = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
@@ -29,34 +30,40 @@ serve(async (req) => {
 
     const siteUrl = Deno.env.get('SITE_URL') ?? 'https://gestion-rcma-vercel.vercel.app';
 
-    const { data, error } = await supabaseAdmin.auth.admin.inviteUserByEmail(email, {
+    // 1. Enviar invitación
+    const { error: inviteError } = await supabaseAdmin.auth.admin.inviteUserByEmail(email, {
       redirectTo: `${siteUrl}/reset-password`,
     });
 
-    if (error) {
-      // Usuario ya existe — no es error crítico, retornar 200 igual
-      const msg = error.message?.toLowerCase() ?? '';
-      if (
-        msg.includes('already') ||
-        msg.includes('exists') ||
-        msg.includes('registered') ||
-        error.status === 422 ||
-        error.status === 400
-      ) {
+    // Si el usuario ya existe no es error crítico, continuamos
+    if (inviteError) {
+      const msg = inviteError.message?.toLowerCase() ?? '';
+      const isExisting = msg.includes('already') || msg.includes('exists') ||
+        msg.includes('registered') || inviteError.status === 422 || inviteError.status === 400;
+      if (!isExisting) {
         return new Response(
-          JSON.stringify({ success: true, already_exists: true }),
-          { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          JSON.stringify({ error: inviteError.message }),
+          { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
       }
-      // Otro error real
-      return new Response(
-        JSON.stringify({ error: error.message }),
-        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
+    }
+
+    // 2. Insertar/actualizar permisos con service_role (bypasea RLS)
+    if (permissions) {
+      const { error: permsError } = await supabaseAdmin
+        .from('user_permissions')
+        .upsert({ user_email: email, ...permissions }, { onConflict: 'user_email' });
+
+      if (permsError) {
+        return new Response(
+          JSON.stringify({ error: 'Error al guardar permisos: ' + permsError.message }),
+          { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
     }
 
     return new Response(
-      JSON.stringify({ success: true, user: data.user }),
+      JSON.stringify({ success: true }),
       { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
 
