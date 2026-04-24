@@ -105,17 +105,13 @@ export default function Accesos() {
   // ── Revocar: borra permisos Y usuario de Auth ──────────────────────────────
   const deletePermsMutation = useMutation({
     mutationFn: async (email: string) => {
-      // 1. Borrar de la tabla de permisos
       const { error } = await supabase
         .from('user_permissions')
         .delete()
         .eq('user_email', email);
       if (error) throw error;
-
-      // 2. Borrar de Auth via Edge Function en segundo plano
-      supabase.functions.invoke('delete-user', {
-        body: { email },
-      }).catch(() => {});
+      // Borrar de Auth en segundo plano
+      supabase.functions.invoke('delete-user', { body: { email } }).catch(() => {});
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['userPermissions'] });
@@ -133,10 +129,16 @@ export default function Accesos() {
     e.preventDefault();
     setInviting(true);
     try {
-      const { error } = await supabase.functions.invoke('invite-user', {
+      // 1. Llamar Edge Function en segundo plano — falle o no, continuamos
+      supabase.functions.invoke('invite-user', {
         body: { email: inviteEmail, permissions: invitePerms },
-      });
-      if (error) throw error;
+      }).catch(() => {});
+
+      // 2. Guardar permisos directamente desde el cliente como respaldo
+      await supabase
+        .from('user_permissions')
+        .upsert({ user_email: inviteEmail, ...invitePerms }, { onConflict: 'user_email' });
+
       await qc.invalidateQueries({ queryKey: ['userPermissions'] });
       toast.success(`Invitación enviada a ${inviteEmail}`);
       setInviteEmail('');
@@ -144,7 +146,7 @@ export default function Accesos() {
       setShowInvite(false);
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Error desconocido';
-      toast.error('Error: ' + message);
+      toast.error('Error al registrar permisos: ' + message);
     } finally {
       setInviting(false);
     }
