@@ -26,7 +26,7 @@ function SetPasswordPage() {
   const [password, setPassword] = useState('');
   const [confirm, setConfirm]   = useState('');
   const [loading, setLoading]   = useState(false);
-  const [verifying, setVerifying] = useState(true); // Empieza en true mientras verifica
+  const [verifying, setVerifying] = useState(true);
   const [verified, setVerified] = useState(false);
   const [error, setError]       = useState('');
   const [success, setSuccess]   = useState(false);
@@ -35,10 +35,9 @@ function SetPasswordPage() {
     const hash = window.location.hash;
     const params = new URLSearchParams(hash.replace('#', ''));
     const token = params.get('token') || params.get('access_token');
-    const type  = params.get('type') as 'invite' | 'recovery' | null;
+    const type  = params.get('type'); // sin cast TypeScript
 
     if (token && (type === 'invite' || type === 'recovery')) {
-      // Verificar el OTP — esto también establece la sesión activa
       supabase.auth.verifyOtp({
         token_hash: token,
         type: type === 'invite' ? 'invite' : 'recovery',
@@ -52,7 +51,6 @@ function SetPasswordPage() {
           setVerifying(false);
         });
     } else {
-      // Sin token en el hash — revisar si ya hay sesión activa (ej. PASSWORD_RECOVERY via onAuthStateChange)
       supabase.auth.getSession().then(({ data: { session } }) => {
         if (session) {
           setVerified(true);
@@ -64,7 +62,7 @@ function SetPasswordPage() {
     }
   }, []);
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = async (e) => { // sin tipo TypeScript
     e.preventDefault();
     if (password !== confirm) { setError('Las contraseñas no coinciden'); return; }
     if (password.length < 6)  { setError('Mínimo 6 caracteres'); return; }
@@ -191,7 +189,6 @@ function AuthHashHandler() {
   useEffect(() => {
     const hash = window.location.hash;
 
-    // CORRECCIÓN CLAVE: pasar el hash completo a /reset-password para no perder el token
     if (hash.includes('type=recovery') || hash.includes('type=invite')) {
       navigate(`/reset-password${hash}`, { replace: true });
       return;
