@@ -26,10 +26,33 @@ function SetPasswordPage() {
   const [password, setPassword] = useState('');
   const [confirm, setConfirm]   = useState('');
   const [loading, setLoading]   = useState(false);
+  const [verifying, setVerifying] = useState(false);
+  const [verified, setVerified] = useState(false);
   const [error, setError]       = useState('');
   const [success, setSuccess]   = useState(false);
 
-  const handleSubmit = async (e) => {
+  useEffect(() => {
+    // Verifica el token OTP al cargar la página
+    const hash = window.location.hash;
+    const params = new URLSearchParams(hash.replace('#', ''));
+    const token = params.get('token') || params.get('access_token');
+    const type  = params.get('type') as 'invite' | 'recovery' | null;
+
+    if (token && type === 'invite') {
+      setVerifying(true);
+      supabase.auth.verifyOtp({ token_hash: token, type: 'invite' })
+        .then(({ error }) => {
+          if (error) setError('El link de invitación es inválido o expiró. Pide uno nuevo.');
+          else setVerified(true);
+          setVerifying(false);
+        });
+    } else {
+      // Para recovery (reset password), el token ya fue procesado por Supabase
+      setVerified(true);
+    }
+  }, []);
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (password !== confirm) { setError('Las contraseñas no coinciden'); return; }
     if (password.length < 6)  { setError('Mínimo 6 caracteres'); return; }
@@ -40,6 +63,14 @@ function SetPasswordPage() {
     else setSuccess(true);
     setLoading(false);
   };
+
+  if (verifying) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-slate-50">
+        <div className="w-8 h-8 border-4 border-slate-200 border-t-slate-800 rounded-full animate-spin" />
+      </div>
+    );
+  }
 
   if (success) {
     return (
@@ -67,23 +98,30 @@ function SetPasswordPage() {
           <h1 className="text-2xl font-black text-slate-900 uppercase tracking-tight">Sistema RCMA</h1>
           <p className="text-sm text-slate-500 mt-1">Establece tu contraseña de acceso</p>
         </div>
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div>
-            <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Nueva contraseña</label>
-            <input type="password" required className={inputClass} value={password}
-              onChange={e => setPassword(e.target.value)} placeholder="Mínimo 6 caracteres" />
+        {error && !verified ? (
+          <div className="text-center">
+            <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-md px-3 py-2 mb-4">{error}</p>
+            <a href="/" className="text-sm text-slate-600 underline">Volver al inicio</a>
           </div>
-          <div>
-            <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Confirmar contraseña</label>
-            <input type="password" required className={inputClass} value={confirm}
-              onChange={e => setConfirm(e.target.value)} placeholder="Repite tu contraseña" />
-          </div>
-          {error && <p className="text-xs text-red-600 bg-red-50 border border-red-200 rounded-md px-3 py-2">{error}</p>}
-          <button type="submit" disabled={loading}
-            className="w-full py-2 bg-slate-900 text-white rounded-md text-sm font-medium hover:bg-slate-800 disabled:opacity-50 transition-colors">
-            {loading ? 'Guardando...' : 'Establecer contraseña'}
-          </button>
-        </form>
+        ) : (
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div>
+              <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Nueva contraseña</label>
+              <input type="password" required className={inputClass} value={password}
+                onChange={e => setPassword(e.target.value)} placeholder="Mínimo 6 caracteres" />
+            </div>
+            <div>
+              <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Confirmar contraseña</label>
+              <input type="password" required className={inputClass} value={confirm}
+                onChange={e => setConfirm(e.target.value)} placeholder="Repite tu contraseña" />
+            </div>
+            {error && <p className="text-xs text-red-600 bg-red-50 border border-red-200 rounded-md px-3 py-2">{error}</p>}
+            <button type="submit" disabled={loading || !verified}
+              className="w-full py-2 bg-slate-900 text-white rounded-md text-sm font-medium hover:bg-slate-800 disabled:opacity-50 transition-colors">
+              {loading ? 'Guardando...' : 'Establecer contraseña'}
+            </button>
+          </form>
+        )}
       </div>
     </div>
   );
