@@ -1,12 +1,11 @@
 import React, { useState, useCallback } from 'react';
 import { Outlet } from 'react-router-dom';
 import Sidebar from './Sidebar';
+import OfflineBanner from '@/components/shared/OfflineBanner';
 
 export default function AppLayout() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
-  // useCallback con forma funcional del setter — sin dependencias,
-  // referencia estable aunque Sidebar se envuelva en React.memo
   const handleToggle = useCallback(
     () => setSidebarOpen(prev => !prev),
     []
@@ -20,6 +19,7 @@ export default function AppLayout() {
           <Outlet />
         </div>
       </main>
+      <OfflineBanner />
     </div>
   );
 }
