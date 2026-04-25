@@ -5,6 +5,7 @@ import { Link } from 'react-router-dom';
 import { ClipboardCheck, Search, ChevronDown } from 'lucide-react';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
+import { toast } from 'sonner';
 import PageHeader from '@/components/shared/PageHeader';
 import EmptyState from '@/components/shared/EmptyState';
 import StatusBadge from '@/components/shared/StatusBadge';
@@ -64,9 +65,17 @@ export default function Checklists() {
 
   const createMutation = useMutation({
     mutationFn: (data: Record<string, unknown>) => db.Checklist.create(data),
-    onSuccess: () => {
+    onSuccess: (result: any) => {
       queryClient.invalidateQueries({ queryKey: ['checklists'] });
       setShowForm(false);
+      if (result?._offline) {
+        toast.warning('📶 Sin conexión — Inspección guardada localmente, se sincronizará cuando haya internet');
+      } else {
+        toast.success('Inspección creada correctamente');
+      }
+    },
+    onError: () => {
+      toast.error('Error al crear la inspección');
     },
   });
 

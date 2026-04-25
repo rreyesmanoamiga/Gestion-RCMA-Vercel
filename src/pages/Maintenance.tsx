@@ -3,6 +3,7 @@ import { db } from '@/lib/db';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import { Wrench, Clock, CheckCircle, AlertCircle, ChevronDown } from 'lucide-react';
+import { toast } from 'sonner';
 import PageHeader from '@/components/shared/PageHeader';
 import StatusBadge from '@/components/shared/StatusBadge';
 import MaintenanceForm from '@/components/maintenance/MaintenanceForm';
@@ -40,9 +41,17 @@ export default function Maintenance() {
 
   const createMutation = useMutation({
     mutationFn: (data: Record<string, unknown>) => db.MaintenanceRecord.create(data),
-    onSuccess: () => {
+    onSuccess: (result: any) => {
       queryClient.invalidateQueries({ queryKey: ['maintenance'] });
       setShowForm(false);
+      if (result?._offline) {
+        toast.warning('📶 Sin conexión — Mantenimiento guardado localmente, se sincronizará cuando haya internet');
+      } else {
+        toast.success('Mantenimiento creado correctamente');
+      }
+    },
+    onError: () => {
+      toast.error('Error al crear el mantenimiento');
     },
   });
 

@@ -118,7 +118,6 @@ function PendienteForm({
         </div>
 
         <form onSubmit={handleSubmit} className="p-6 overflow-y-auto space-y-3 flex-1">
-          {/* Nombre del proyecto */}
           <div>
             <label className={labelClass}>Nombre del Proyecto *</label>
             <input type="text" required className={inputClass} value={formData.nombre_proyecto}
@@ -126,12 +125,10 @@ function PendienteForm({
               placeholder="Ej. Remodelación de Aula 3" />
           </div>
 
-          {/* Territorio + Colegio */}
           <ColegioSelector
             territorio={formData.territorio}
             colegio={formData.colegio}
             onTerritorioChange={val => {
-              const colegioData = COLEGIOS.find(c => c.colegio === formData.colegio);
               setFormData(p => ({ ...p, territorio: val, colegio: '', eco: '' }));
             }}
             onColegioChange={val => {
@@ -141,14 +138,12 @@ function PendienteForm({
             required
           />
 
-          {/* ECO automático */}
           <div>
             <label className={labelClass}>ECO (Automático)</label>
             <input type="text" readOnly className="w-full px-3 py-2 border border-slate-200 rounded-md text-sm bg-slate-50 font-semibold text-slate-600 cursor-default"
               value={formData.eco} placeholder="Se asigna según el colegio" />
           </div>
 
-          {/* Tipo + Prioridad */}
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className={labelClass}>Tipo de Proyecto</label>
@@ -167,7 +162,6 @@ function PendienteForm({
             </div>
           </div>
 
-          {/* Asignación + Estatus */}
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className={labelClass}>Asignación</label>
@@ -186,7 +180,6 @@ function PendienteForm({
             </div>
           </div>
 
-          {/* Presupuesto */}
           <div>
             <label className={labelClass}>Presupuesto Original (MXN)</label>
             <input type="number" min="0" step="0.01" className={inputClass} value={formData.presupuesto}
@@ -194,7 +187,6 @@ function PendienteForm({
               placeholder="0.00" />
           </div>
 
-          {/* Notas */}
           <div>
             <label className={labelClass}>Notas / Pendiente *</label>
             <textarea required className={`${inputClass} h-32 resize-none`} value={formData.notas}
@@ -240,21 +232,31 @@ export default function Pendientes() {
 
   const createMutation = useMutation({
     mutationFn: (data: Record<string, unknown>) => db.Pendiente.create(data),
-    onSuccess: () => {
+    onSuccess: (result: any) => {
       queryClient.invalidateQueries({ queryKey: ['pendientes'] });
       setShowForm(false);
-      toast.success('Pendiente creado');
+      if (result?._offline) {
+        toast.warning('📶 Sin conexión — Pendiente guardado localmente, se sincronizará cuando haya internet');
+      } else {
+        toast.success('Pendiente creado');
+      }
     },
+    onError: () => toast.error('Error al crear el pendiente'),
   });
 
   const updateMutation = useMutation({
     mutationFn: ({ id, data }: { id: string; data: Record<string, unknown> }) =>
       db.Pendiente.update(id, data),
-    onSuccess: () => {
+    onSuccess: (result: any) => {
       queryClient.invalidateQueries({ queryKey: ['pendientes'] });
       setEditingPendiente(null);
-      toast.success('Pendiente actualizado');
+      if (result?._offline) {
+        toast.warning('📶 Sin conexión — Cambio guardado localmente, se sincronizará cuando haya internet');
+      } else {
+        toast.success('Pendiente actualizado');
+      }
     },
+    onError: () => toast.error('Error al actualizar el pendiente'),
   });
 
   const deleteMutation = useMutation({
@@ -264,6 +266,7 @@ export default function Pendientes() {
       setDeletingId(null);
       toast.success('Pendiente eliminado');
     },
+    onError: () => toast.error('Error al eliminar el pendiente'),
   });
 
   const colegiosFiltrados = useMemo(() =>
@@ -359,7 +362,6 @@ export default function Pendientes() {
         </div>
       ) : (
         <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-          {/* Cabecera tabla */}
           <div className="hidden md:grid grid-cols-12 gap-2 px-5 py-3 bg-slate-50 border-b border-slate-100 text-[10px] font-black text-slate-400 uppercase tracking-widest">
             <div className="col-span-1">Territorio</div>
             <div className="col-span-1">Colegio</div>
@@ -442,14 +444,12 @@ export default function Pendientes() {
         </div>
       )}
 
-      {/* Formulario crear */}
       <PendienteForm
         open={showForm}
         onClose={() => setShowForm(false)}
         onSubmit={data => createMutation.mutate(data)}
       />
 
-      {/* Formulario editar */}
       <PendienteForm
         open={!!editingPendiente}
         onClose={() => setEditingPendiente(null)}
@@ -457,7 +457,6 @@ export default function Pendientes() {
         pendiente={editingPendiente}
       />
 
-      {/* Modal eliminar */}
       {deletingId && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 p-4">
           <div className="bg-white rounded-lg shadow-xl max-w-sm w-full p-6">

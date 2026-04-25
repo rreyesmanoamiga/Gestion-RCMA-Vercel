@@ -5,6 +5,7 @@ import { Link } from 'react-router-dom';
 import { FolderKanban, MapPin, Calendar, User, ChevronDown } from 'lucide-react';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
+import { toast } from 'sonner';
 import PageHeader from '@/components/shared/PageHeader';
 import EmptyState from '@/components/shared/EmptyState';
 import StatusBadge from '@/components/shared/StatusBadge';
@@ -48,9 +49,17 @@ export default function Projects() {
 
   const createMutation = useMutation({
     mutationFn: (data: Record<string, unknown>) => db.Project.create(data),
-    onSuccess: () => {
+    onSuccess: (result: any) => {
       queryClient.invalidateQueries({ queryKey: ['projects'] });
       setShowForm(false);
+      if (result?._offline) {
+        toast.warning('📶 Sin conexión — Proyecto guardado localmente, se sincronizará cuando haya internet');
+      } else {
+        toast.success('Proyecto creado correctamente');
+      }
+    },
+    onError: () => {
+      toast.error('Error al crear el proyecto');
     },
   });
 
@@ -61,7 +70,6 @@ export default function Projects() {
     [filterTerritorio]
   );
 
-  // Reset visibleCount al cambiar filtros
   const handleFilterChange = (setter: React.Dispatch<React.SetStateAction<string>>) =>
     (e: React.ChangeEvent<HTMLSelectElement>) => {
       setter(e.target.value);
