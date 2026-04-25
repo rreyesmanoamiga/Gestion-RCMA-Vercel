@@ -42,13 +42,14 @@ export default function Maintenance() {
   const createMutation = useMutation({
     mutationFn: (data: Record<string, unknown>) => db.MaintenanceRecord.create(data),
     onSuccess: (result: any) => {
-      queryClient.invalidateQueries({ queryKey: ['maintenance'] });
-      setShowForm(false);
       if (result?._offline) {
+        queryClient.setQueryData(['maintenance'], (old: any) => [result, ...(old ?? [])]);
         toast.warning('📶 Sin conexión — Mantenimiento guardado localmente, se sincronizará cuando haya internet');
       } else {
+        queryClient.invalidateQueries({ queryKey: ['maintenance'] });
         toast.success('Mantenimiento creado correctamente');
       }
+      setShowForm(false);
     },
     onError: () => {
       toast.error('Error al crear el mantenimiento');

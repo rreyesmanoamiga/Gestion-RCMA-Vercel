@@ -233,13 +233,14 @@ export default function Pendientes() {
   const createMutation = useMutation({
     mutationFn: (data: Record<string, unknown>) => db.Pendiente.create(data),
     onSuccess: (result: any) => {
-      queryClient.invalidateQueries({ queryKey: ['pendientes'] });
-      setShowForm(false);
       if (result?._offline) {
+        queryClient.setQueryData(['pendientes'], (old: any) => [result, ...(old ?? [])]);
         toast.warning('📶 Sin conexión — Pendiente guardado localmente, se sincronizará cuando haya internet');
       } else {
+        queryClient.invalidateQueries({ queryKey: ['pendientes'] });
         toast.success('Pendiente creado');
       }
+      setShowForm(false);
     },
     onError: () => toast.error('Error al crear el pendiente'),
   });
@@ -248,13 +249,16 @@ export default function Pendientes() {
     mutationFn: ({ id, data }: { id: string; data: Record<string, unknown> }) =>
       db.Pendiente.update(id, data),
     onSuccess: (result: any) => {
-      queryClient.invalidateQueries({ queryKey: ['pendientes'] });
-      setEditingPendiente(null);
       if (result?._offline) {
+        queryClient.setQueryData(['pendientes'], (old: any) =>
+          (old ?? []).map((p: any) => p.id === result.id ? { ...p, ...result } : p)
+        );
         toast.warning('📶 Sin conexión — Cambio guardado localmente, se sincronizará cuando haya internet');
       } else {
+        queryClient.invalidateQueries({ queryKey: ['pendientes'] });
         toast.success('Pendiente actualizado');
       }
+      setEditingPendiente(null);
     },
     onError: () => toast.error('Error al actualizar el pendiente'),
   });

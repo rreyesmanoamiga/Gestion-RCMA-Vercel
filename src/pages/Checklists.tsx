@@ -66,13 +66,14 @@ export default function Checklists() {
   const createMutation = useMutation({
     mutationFn: (data: Record<string, unknown>) => db.Checklist.create(data),
     onSuccess: (result: any) => {
-      queryClient.invalidateQueries({ queryKey: ['checklists'] });
-      setShowForm(false);
       if (result?._offline) {
+        queryClient.setQueryData(['checklists'], (old: any) => [result, ...(old ?? [])]);
         toast.warning('📶 Sin conexión — Inspección guardada localmente, se sincronizará cuando haya internet');
       } else {
+        queryClient.invalidateQueries({ queryKey: ['checklists'] });
         toast.success('Inspección creada correctamente');
       }
+      setShowForm(false);
     },
     onError: () => {
       toast.error('Error al crear la inspección');

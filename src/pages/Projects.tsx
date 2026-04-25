@@ -50,13 +50,14 @@ export default function Projects() {
   const createMutation = useMutation({
     mutationFn: (data: Record<string, unknown>) => db.Project.create(data),
     onSuccess: (result: any) => {
-      queryClient.invalidateQueries({ queryKey: ['projects'] });
-      setShowForm(false);
       if (result?._offline) {
+        queryClient.setQueryData(['projects'], (old: any) => [result, ...(old ?? [])]);
         toast.warning('📶 Sin conexión — Proyecto guardado localmente, se sincronizará cuando haya internet');
       } else {
+        queryClient.invalidateQueries({ queryKey: ['projects'] });
         toast.success('Proyecto creado correctamente');
       }
+      setShowForm(false);
     },
     onError: () => {
       toast.error('Error al crear el proyecto');
