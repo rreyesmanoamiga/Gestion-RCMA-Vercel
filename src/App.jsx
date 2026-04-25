@@ -18,6 +18,7 @@ import Reports from '@/pages/Reports';
 import UserManagement from '@/pages/UserManagement';
 import Accesos from '@/pages/Accesos';
 import Pendientes from '@/pages/Pendientes';
+import CalendarioMantenimiento from '@/pages/CalendarioMantenimiento';
 
 const inputClass = "w-full px-3 py-2 border border-slate-300 rounded-md text-sm focus:ring-2 focus:ring-slate-900 focus:outline-none bg-white";
 
@@ -35,7 +36,7 @@ function SetPasswordPage() {
     const hash = window.location.hash;
     const params = new URLSearchParams(hash.replace('#', ''));
     const token = params.get('token') || params.get('access_token');
-    const type  = params.get('type'); // sin cast TypeScript
+    const type  = params.get('type');
 
     if (token && (type === 'invite' || type === 'recovery')) {
       supabase.auth.verifyOtp({
@@ -62,7 +63,7 @@ function SetPasswordPage() {
     }
   }, []);
 
-  const handleSubmit = async (e) => { // sin tipo TypeScript
+  const handleSubmit = async (e) => {
     e.preventDefault();
     if (password !== confirm) { setError('Las contraseñas no coinciden'); return; }
     if (password.length < 6)  { setError('Mínimo 6 caracteres'); return; }
@@ -235,6 +236,7 @@ function AuthenticatedApp() {
           <Route path="/usuarios"          element={<UserManagement />} />
           <Route path="/accesos"           element={<Accesos />} />
           <Route path="/pendientes"        element={<Pendientes />} />
+          <Route path="/calendario"        element={<CalendarioMantenimiento />} />
           <Route path="/login"             element={<Navigate to="/" replace />} />
           <Route path="*"                  element={<PageNotFound />} />
         </Route>
