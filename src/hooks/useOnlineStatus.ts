@@ -12,7 +12,6 @@ export function useOnlineStatus() {
     setPendingCount(count);
   }, []);
 
-  // Función de sincronización reutilizable
   const doSync = useCallback(async (showRestoredToast = true) => {
     const count = await getPendingCount();
     if (count > 0) {
@@ -45,18 +44,14 @@ export function useOnlineStatus() {
     window.addEventListener('online', handleOnline);
     window.addEventListener('offline', handleOffline);
 
-    // Sincronizar al cargar si ya hay internet y hay cambios pendientes
-    if (navigator.onLine) {
-      doSync(false);
-    } else {
-      refreshPendingCount();
-    }
+    // Solo contar pendientes al cargar, no sincronizar automáticamente
+    refreshPendingCount();
 
     return () => {
       window.removeEventListener('online', handleOnline);
       window.removeEventListener('offline', handleOffline);
     };
-  }, [handleOnline, handleOffline, refreshPendingCount, doSync]);
+  }, [handleOnline, handleOffline, refreshPendingCount]);
 
   return { isOnline, pendingCount, syncing, refreshPendingCount };
 }
