@@ -8,6 +8,7 @@ export default defineConfig({
     react(),
     VitePWA({
       registerType: 'autoUpdate',
+      injectRegister: 'auto',
       includeAssets: ['favicon.ico', 'logo.png'],
       manifest: {
         name: 'Sistema RCMA',
@@ -32,6 +33,8 @@ export default defineConfig({
         ],
       },
       workbox: {
+        skipWaiting: true,
+        clientsClaim: true,
         // Cachear todos los assets del build
         globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
         // Estrategia: intentar red primero, si falla usar caché
