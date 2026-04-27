@@ -29,15 +29,17 @@ interface Project {
   start_date?: string;
   description?: string;
   progress?:   number;
-  folio?:      string;
+  folio?:        string;
+  tipo_proyecto?: string;
 }
 
 export default function Projects() {
   const [showForm, setShowForm]                 = useState(false);
-  const [filterStatus, setFilterStatus]         = useState('all');
-  const [filterType, setFilterType]             = useState('all');
-  const [filterTerritorio, setFilterTerritorio] = useState('all');
-  const [filterColegio, setFilterColegio]       = useState('all');
+  const [filterStatus, setFilterStatus]               = useState('all');
+  const [filterType, setFilterType]                   = useState('all');
+  const [filterTipoProyecto, setFilterTipoProyecto]   = useState('all');
+  const [filterTerritorio, setFilterTerritorio]       = useState('all');
+  const [filterColegio, setFilterColegio]             = useState('all');
   const [visibleCount, setVisibleCount]         = useState(PAGE_SIZE);
   const queryClient = useQueryClient();
 
@@ -79,13 +81,14 @@ export default function Projects() {
 
   const filtered = useMemo(() =>
     projects.filter(p => {
-      if (filterStatus     !== 'all' && p.status     !== filterStatus)     return false;
-      if (filterType       !== 'all' && p.type       !== filterType)       return false;
-      if (filterTerritorio !== 'all' && p.territorio !== filterTerritorio) return false;
-      if (filterColegio    !== 'all' && p.colegio    !== filterColegio)    return false;
+      if (filterStatus       !== 'all' && p.status        !== filterStatus)       return false;
+      if (filterType         !== 'all' && p.type          !== filterType)         return false;
+      if (filterTipoProyecto !== 'all' && p.tipo_proyecto !== filterTipoProyecto) return false;
+      if (filterTerritorio   !== 'all' && p.territorio    !== filterTerritorio)   return false;
+      if (filterColegio      !== 'all' && p.colegio       !== filterColegio)      return false;
       return true;
     }),
-    [projects, filterStatus, filterType, filterTerritorio, filterColegio]
+    [projects, filterStatus, filterType, filterTipoProyecto, filterTerritorio, filterColegio]
   );
 
   const visible   = useMemo(() => filtered.slice(0, visibleCount), [filtered, visibleCount]);
@@ -135,12 +138,13 @@ export default function Projects() {
 
         <select
           className={selectClass}
-          value={filterType}
-          onChange={handleFilterChange(setFilterType)}
+          value={filterTipoProyecto}
+          onChange={handleFilterChange(setFilterTipoProyecto)}
         >
           <option value="all">Todos los tipos</option>
-          <option value="construccion">Construcción</option>
-          <option value="mantenimiento">Mantenimiento</option>
+          {['MEJORA','CONSTRUCCIÓN','REMODELACIÓN','ADECUACIÓN','MANTENIMIENTO','PORTAFOLIO','GARANTÍAS','REVISIÓN'].map(t => (
+            <option key={t} value={t}>{t}</option>
+          ))}
         </select>
 
         <select
@@ -183,6 +187,11 @@ export default function Projects() {
                   <div className="flex items-center gap-2 flex-wrap">
                     <StatusBadge status={project.status} />
                     <PriorityBadge priority={project.priority} />
+                    {project.tipo_proyecto && (
+                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 uppercase">
+                        {project.tipo_proyecto}
+                      </span>
+                    )}
                   </div>
                   <div className="text-right shrink-0 ml-2">
                     {project.folio && (
