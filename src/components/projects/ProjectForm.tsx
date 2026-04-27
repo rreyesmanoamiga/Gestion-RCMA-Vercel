@@ -9,8 +9,6 @@ const readOnlyClass = "w-full px-3 py-2 border border-slate-200 rounded-md text-
 
 const DEFAULT_PROJECT_TYPE = 'Mantenimiento';
 
-const TIPOS_PROYECTO = ['MEJORA', 'CONSTRUCCIÓN', 'REMODELACIÓN', 'ADECUACIÓN', 'MANTENIMIENTO', 'PORTAFOLIO', 'GARANTÍAS', 'REVISIÓN'];
-
 interface FormData {
   name:           string;
   description:    string;
@@ -26,13 +24,12 @@ interface FormData {
   notes:          string;
   budget:         string;
   ticket_number:  string;
-  tipo_proyecto:  string;
 }
 
 const INITIAL_FORM: FormData = {
   name:           '',
   description:    '',
-  status:         'planificado',
+  status:         'en_espera',
   priority:       'media',
   territorio:     '',
   colegio:        '',
@@ -44,7 +41,6 @@ const INITIAL_FORM: FormData = {
   notes:          '',
   budget:         '',
   ticket_number:  '',
-  tipo_proyecto:  '',
 };
 
 interface ProjectFormProps {
@@ -63,7 +59,7 @@ export default function ProjectForm({ open, onClose, onSubmit, project = null }:
         ...INITIAL_FORM,
         name:          String(project.name          ?? ''),
         description:   String(project.description   ?? ''),
-        status:        String(project.status         ?? 'planificado'),
+        status:        String(project.status         ?? 'en_espera'),
         priority:      String(project.priority       ?? 'media'),
         territorio:    String(project.territorio     ?? ''),
         colegio:       String(project.colegio    ?? project.location ?? ''),
@@ -75,7 +71,6 @@ export default function ProjectForm({ open, onClose, onSubmit, project = null }:
         notes:         String(project.notes          ?? ''),
         budget:        project.budget != null ? String(project.budget) : '',
         ticket_number: project.ticket_number != null ? String(project.ticket_number) : '',
-        tipo_proyecto: String(project.tipo_proyecto ?? ''),
       });
     } else {
       setFormData(INITIAL_FORM);
@@ -104,7 +99,6 @@ export default function ProjectForm({ open, onClose, onSubmit, project = null }:
       notes:         formData.notes,
       budget:        formData.budget ? parseFloat(formData.budget) : null,
       ticket_number: formData.ticket_number ? parseInt(formData.ticket_number) : null,
-      tipo_proyecto: formData.tipo_proyecto || null,
       folio,
       type:          DEFAULT_PROJECT_TYPE,
     });
@@ -190,10 +184,11 @@ export default function ProjectForm({ open, onClose, onSubmit, project = null }:
               <label className={labelClass}>Estado</label>
               <select className={inputClass} value={formData.status}
                 onChange={e => setFormData(prev => ({ ...prev, status: e.target.value }))}>
-                <option value="planificado">Planificado</option>
-                <option value="en_progreso">En Progreso</option>
+                <option value="en_espera">En Espera</option>
+                <option value="en_proceso">En Proceso</option>
                 <option value="pausado">Pausado</option>
                 <option value="completado">Completado</option>
+                <option value="cancelado">Cancelado</option>
               </select>
             </div>
             <div>
@@ -205,15 +200,6 @@ export default function ProjectForm({ open, onClose, onSubmit, project = null }:
                 <option value="alta">Alta</option>
               </select>
             </div>
-          </div>
-
-          <div>
-            <label className={labelClass}>Tipo de Proyecto</label>
-            <select className={inputClass} value={formData.tipo_proyecto}
-              onChange={e => setFormData(prev => ({ ...prev, tipo_proyecto: e.target.value }))}>
-              <option value="">Seleccionar...</option>
-              {TIPOS_PROYECTO.map(t => <option key={t} value={t}>{t}</option>)}
-            </select>
           </div>
 
           <div>
