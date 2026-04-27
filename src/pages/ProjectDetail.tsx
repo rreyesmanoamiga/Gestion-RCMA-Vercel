@@ -36,6 +36,10 @@ interface Project {
   colegio?:     string;
   eco?:         string;
   folio_num?:   string;
+  notes?:       string;
+  budget?:      number;
+  end_date?:    string;
+  ticket_number?: number;
 }
 
 export default function ProjectDetail() {
@@ -127,9 +131,15 @@ export default function ProjectDetail() {
             )}
           </div>
           <h1 className="text-3xl font-black text-slate-900 leading-tight">{project.name}</h1>
-          <p className="text-slate-500 mt-2 max-w-2xl text-sm leading-relaxed italic">
-            {project.description || 'Sin descripción técnica detallada.'}
-          </p>
+          {project.notes ? (
+            <p className="text-red-600 mt-2 max-w-2xl text-sm leading-relaxed font-medium">
+              {project.notes}
+            </p>
+          ) : (
+            <p className="text-slate-400 mt-2 max-w-2xl text-sm leading-relaxed italic">
+              Sin descripción técnica detallada.
+            </p>
+          )}
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 divide-y md:divide-y-0 md:divide-x divide-slate-100 bg-white">
