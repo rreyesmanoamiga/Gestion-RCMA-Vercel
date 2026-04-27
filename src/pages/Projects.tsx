@@ -17,29 +17,27 @@ const PAGE_SIZE   = 20;
 const selectClass = "h-10 px-3 py-2 bg-white border border-slate-300 rounded-md text-sm focus:ring-2 focus:ring-slate-400 focus:outline-none text-slate-700";
 
 interface Project {
-  id:             string;
-  name?:          string;
-  status?:        string;
-  priority?:      string;
-  type?:          string;
-  colegio?:       string;
-  territorio?:    string;
-  location?:      string;
-  responsible?:   string;
-  start_date?:    string;
-  description?:   string;
-  progress?:      number;
-  folio?:         string;
-  tipo_proyecto?: string;
+  id:          string;
+  name?:       string;
+  status?:     string;
+  priority?:   string;
+  type?:       string;
+  colegio?:    string;
+  territorio?: string;
+  location?:   string;
+  responsible?: string;
+  start_date?: string;
+  description?: string;
+  progress?:   number;
+  folio?:      string;
 }
 
 export default function Projects() {
   const [showForm, setShowForm]                 = useState(false);
-  const [filterStatus, setFilterStatus]             = useState('all');
-  const [filterType, setFilterType]                 = useState('all');
-  const [filterTipoProyecto, setFilterTipoProyecto] = useState('all');
-  const [filterTerritorio, setFilterTerritorio]     = useState('all');
-  const [filterColegio, setFilterColegio]           = useState('all');
+  const [filterStatus, setFilterStatus]         = useState('all');
+  const [filterType, setFilterType]             = useState('all');
+  const [filterTerritorio, setFilterTerritorio] = useState('all');
+  const [filterColegio, setFilterColegio]       = useState('all');
   const [visibleCount, setVisibleCount]         = useState(PAGE_SIZE);
   const queryClient = useQueryClient();
 
@@ -81,13 +79,14 @@ export default function Projects() {
 
   const filtered = useMemo(() =>
     projects.filter(p => {
-      if (filterStatus     !== 'all' && p.status     !== filterStatus)     return false;
-      if (filterType       !== 'all' && p.type       !== filterType)       return false;
-      if (filterTerritorio !== 'all' && p.territorio !== filterTerritorio) return false;
-      if (filterColegio    !== 'all' && p.colegio    !== filterColegio)    return false;
+      if (filterStatus === 'all' && (p.status === 'completado' || p.status === 'cancelado')) return false;
+      if (filterStatus       !== 'all' && p.status        !== filterStatus)       return false;
+      if (filterTipoProyecto !== 'all' && p.tipo_proyecto !== filterTipoProyecto) return false;
+      if (filterTerritorio   !== 'all' && p.territorio    !== filterTerritorio)   return false;
+      if (filterColegio      !== 'all' && p.colegio       !== filterColegio)      return false;
       return true;
     }),
-    [projects, filterStatus, filterType, filterTerritorio, filterColegio]
+    [projects, filterStatus, filterTipoProyecto, filterTerritorio, filterColegio]
   );
 
   const visible   = useMemo(() => filtered.slice(0, visibleCount), [filtered, visibleCount]);
@@ -137,13 +136,12 @@ export default function Projects() {
 
         <select
           className={selectClass}
-          value={filterTipoProyecto}
-          onChange={handleFilterChange(setFilterTipoProyecto)}
+          value={filterType}
+          onChange={handleFilterChange(setFilterType)}
         >
           <option value="all">Todos los tipos</option>
-          {['MEJORA','CONSTRUCCIÓN','REMODELACIÓN','ADECUACIÓN','MANTENIMIENTO','PORTAFOLIO','GARANTÍAS','REVISIÓN'].map(t => (
-            <option key={t} value={t}>{t}</option>
-          ))}
+          <option value="construccion">Construcción</option>
+          <option value="mantenimiento">Mantenimiento</option>
         </select>
 
         <select
@@ -152,10 +150,11 @@ export default function Projects() {
           onChange={handleFilterChange(setFilterStatus)}
         >
           <option value="all">Todos los estados</option>
-          <option value="planificado">Planificado</option>
-          <option value="en_progreso">En Progreso</option>
-          <option value="completado">Completado</option>
+          <option value="en_espera">En Espera</option>
+          <option value="en_proceso">En Proceso</option>
           <option value="pausado">Pausado</option>
+          <option value="cancelado">Cancelado</option>
+          <option value="completado">Completado</option>
         </select>
 
         {filtered.length > 0 && (
@@ -186,11 +185,6 @@ export default function Projects() {
                   <div className="flex items-center gap-2 flex-wrap">
                     <StatusBadge status={project.status} />
                     <PriorityBadge priority={project.priority} />
-                    {project.tipo_proyecto && (
-                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 uppercase">
-                        {project.tipo_proyecto}
-                      </span>
-                    )}
                   </div>
                   <div className="text-right shrink-0 ml-2">
                     {project.folio && (
