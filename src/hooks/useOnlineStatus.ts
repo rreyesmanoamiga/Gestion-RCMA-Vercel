@@ -12,10 +12,9 @@ export function useOnlineStatus() {
     setPendingCount(count);
   }, []);
 
-  const handleOnline = useCallback(async () => {
-    setIsOnline(true);
+  // Función de sincronización reutilizable
+  const doSync = useCallback(async (showRestoredToast = true) => {
     const count = await getPendingCount();
-
     if (count > 0) {
       setSyncing(true);
       toast.info(`Sincronizando ${count} cambio${count !== 1 ? 's' : ''} pendiente${count !== 1 ? 's' : ''}...`);
@@ -27,10 +26,15 @@ export function useOnlineStatus() {
       } else {
         toast.warning(`⚠️ ${success} sincronizados, ${failed} fallaron`);
       }
-    } else {
+    } else if (showRestoredToast) {
       toast.success('✅ Conexión restaurada');
     }
   }, []);
+
+  const handleOnline = useCallback(async () => {
+    setIsOnline(true);
+    await doSync(true);
+  }, [doSync]);
 
   const handleOffline = useCallback(() => {
     setIsOnline(false);
@@ -40,12 +44,19 @@ export function useOnlineStatus() {
   useEffect(() => {
     window.addEventListener('online', handleOnline);
     window.addEventListener('offline', handleOffline);
-    refreshPendingCount();
+
+    // Sincronizar al cargar si ya hay internet y hay cambios pendientes
+    if (navigator.onLine) {
+      doSync(false);
+    } else {
+      refreshPendingCount();
+    }
+
     return () => {
       window.removeEventListener('online', handleOnline);
       window.removeEventListener('offline', handleOffline);
     };
-  }, [handleOnline, handleOffline, refreshPendingCount]);
+  }, [handleOnline, handleOffline, refreshPendingCount, doSync]);
 
   return { isOnline, pendingCount, syncing, refreshPendingCount };
 }
