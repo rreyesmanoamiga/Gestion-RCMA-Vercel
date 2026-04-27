@@ -236,10 +236,10 @@ export default function ProjectForm({ open, onClose, onSubmit, project = null }:
           </div>
 
           <div>
-            <label className={labelClass}>Notas</label>
+            <label className={labelClass}>Descripción Técnica Detallada</label>
             <textarea className={`${inputClass} h-20 resize-none`} value={formData.notes}
               onChange={e => setFormData(prev => ({ ...prev, notes: e.target.value }))}
-              placeholder="Observaciones o detalles adicionales..." />
+              placeholder="Describe la descripción técnica del proyecto..." />
           </div>
 
           <div className="pt-6 border-t border-slate-100 flex justify-end gap-3 mt-4">
