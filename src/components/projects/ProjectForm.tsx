@@ -20,6 +20,7 @@ interface FormData {
   responsible: string;
   start_date:  string;
   progress:    number;
+  folio_num:   string;
 }
 
 const INITIAL_FORM: FormData = {
@@ -33,6 +34,7 @@ const INITIAL_FORM: FormData = {
   responsible: '',
   start_date:  '',
   progress:    0,
+  folio_num:   '',
 };
 
 interface ProjectFormProps {
@@ -58,7 +60,7 @@ export default function ProjectForm({ open, onClose, onSubmit, project = null }:
         eco:         String(project.eco          ?? ''),
         responsible: String(project.responsible  ?? ''),
         start_date:  String(project.start_date   ?? ''),
-        progress:    Number(project.progress     ?? 0),
+        folio_num:   String(project.folio_num   ?? ''),
       });
     } else {
       setFormData(INITIAL_FORM);
@@ -69,8 +71,12 @@ export default function ProjectForm({ open, onClose, onSubmit, project = null }:
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    const folio = formData.folio_num
+      ? `TCMM${String(formData.folio_num).padStart(3, '0')}`
+      : null;
     onSubmit({
       ...formData,
+      folio,
       progress: formData.progress || 0,
       type:     DEFAULT_PROJECT_TYPE,
     });
@@ -92,6 +98,26 @@ export default function ProjectForm({ open, onClose, onSubmit, project = null }:
 
         {/* Body */}
         <form onSubmit={handleSubmit} className="p-6 overflow-y-auto space-y-1 flex-1">
+
+          <div>
+            <label className={labelClass}>Número de Folio (opcional)</label>
+            <div className="relative">
+              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-black text-red-500 pointer-events-none">TCMM</span>
+              <input
+                type="number"
+                min="1"
+                className="w-full pl-14 pr-3 py-2 border border-slate-300 rounded-md text-sm focus:ring-2 focus:ring-slate-900 focus:outline-none bg-white text-slate-900"
+                value={formData.folio_num}
+                onChange={e => setFormData(prev => ({ ...prev, folio_num: e.target.value }))}
+                placeholder="Ej. 10 → TCMM010"
+              />
+            </div>
+            {formData.folio_num && (
+              <p className="text-xs font-bold text-red-500 mt-1">
+                Folio: TCMM{String(formData.folio_num).padStart(3, '0')}
+              </p>
+            )}
+          </div>
 
           <div>
             <label className={labelClass}>Nombre del Proyecto *</label>

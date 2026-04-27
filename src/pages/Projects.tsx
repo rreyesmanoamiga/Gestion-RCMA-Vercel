@@ -29,6 +29,7 @@ interface Project {
   start_date?: string;
   description?: string;
   progress?:   number;
+  folio?:      string;
 }
 
 export default function Projects() {
@@ -50,14 +51,13 @@ export default function Projects() {
   const createMutation = useMutation({
     mutationFn: (data: Record<string, unknown>) => db.Project.create(data),
     onSuccess: (result: any) => {
+      queryClient.invalidateQueries({ queryKey: ['projects'] });
+      setShowForm(false);
       if (result?._offline) {
-        queryClient.setQueryData(['projects'], (old: any) => [result, ...(old ?? [])]);
         toast.warning('📶 Sin conexión — Proyecto guardado localmente, se sincronizará cuando haya internet');
       } else {
-        queryClient.invalidateQueries({ queryKey: ['projects'] });
         toast.success('Proyecto creado correctamente');
       }
-      setShowForm(false);
     },
     onError: () => {
       toast.error('Error al crear el proyecto');
@@ -185,6 +185,12 @@ export default function Projects() {
                     <PriorityBadge priority={project.priority} />
                   </div>
                   <div className="text-right shrink-0 ml-2">
+                    {project.folio && (
+                      <p className="text-xs font-black text-red-500">{project.folio}</p>
+                    )}
+                    {!project.folio && (
+                      <p className="text-[10px] font-bold text-slate-300">Sin Ticket</p>
+                    )}
                     {project.colegio    && <p className="text-xs font-bold text-slate-800">{project.colegio}</p>}
                     {project.territorio && <p className="text-[10px] text-slate-400 font-medium uppercase">{project.territorio}</p>}
                   </div>
