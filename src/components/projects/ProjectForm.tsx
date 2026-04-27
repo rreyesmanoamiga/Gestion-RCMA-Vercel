@@ -7,6 +7,16 @@ const inputClass    = "w-full px-3 py-2 border border-slate-300 rounded-md text-
 const labelClass    = "block text-xs font-bold text-slate-500 uppercase mb-1 mt-3";
 const readOnlyClass = "w-full px-3 py-2 border border-slate-200 rounded-md text-sm bg-slate-50 font-semibold text-slate-600 cursor-default";
 
+// ─── Helpers de moneda ────────────────────────────────────────────────────────
+const formatMXN = (value: string): string => {
+  const clean = value.replace(/[^0-9.]/g, '');
+  const parts = clean.split('.');
+  const integer = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+  const decimal = parts[1] !== undefined ? '.' + parts[1].slice(0, 2) : '';
+  return clean ? '$' + integer + decimal : '';
+};
+const parseMXN = (value: string): string => value.replace(/[^0-9.]/g, '');
+
 const DEFAULT_PROJECT_TYPE = 'Mantenimiento';
 
 interface FormData {
@@ -225,9 +235,10 @@ export default function ProjectForm({ open, onClose, onSubmit, project = null }:
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className={labelClass}>Presupuesto (MXN)</label>
-              <input type="number" min="0" step="0.01" className={inputClass} value={formData.budget}
-                onChange={e => setFormData(prev => ({ ...prev, budget: e.target.value }))}
-                placeholder="0.00" />
+              <input type="text" className={inputClass}
+                value={formatMXN(formData.budget)}
+                onChange={e => setFormData(prev => ({ ...prev, budget: parseMXN(e.target.value) }))}
+                placeholder="$0.00" />
             </div>
             <div>
               <label className={labelClass}>Progreso (%)</label>

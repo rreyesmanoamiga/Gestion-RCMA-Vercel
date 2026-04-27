@@ -15,6 +15,15 @@ const PAGE_SIZE = 20;
 
 const inputClass  = "w-full px-3 py-2 border border-slate-300 rounded-md text-sm focus:ring-2 focus:ring-slate-900 focus:outline-none bg-white text-slate-900";
 const labelClass  = "block text-xs font-bold text-slate-500 uppercase mb-1";
+
+const formatMXN = (value: string): string => {
+  const clean = value.replace(/[^0-9.]/g, '');
+  const parts = clean.split('.');
+  const integer = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+  const decimal = parts[1] !== undefined ? '.' + parts[1].slice(0, 2) : '';
+  return clean ? '$' + integer + decimal : '';
+};
+const parseMXN = (value: string): string => value.replace(/[^0-9.]/g, '');
 const selectClass = "h-10 px-3 py-2 bg-white border border-slate-300 rounded-md text-sm focus:ring-2 focus:ring-slate-400 focus:outline-none text-slate-700";
 
 const TIPOS_PROYECTO = ['MEJORA', 'CONSTRUCCIÓN', 'REMODELACIÓN', 'ADECUACIÓN', 'MANTENIMIENTO', 'PORTAFOLIO', 'GARANTÍAS', 'REVISIÓN'];
@@ -209,9 +218,10 @@ function AnteproyectoForm({
           {/* Presupuesto */}
           <div>
             <label className={labelClass}>Presupuesto Estimado (MXN)</label>
-            <input type="number" min="0" step="0.01" className={inputClass} value={formData.presupuesto}
-              onChange={e => setFormData(p => ({ ...p, presupuesto: e.target.value }))}
-              placeholder="0.00" />
+            <input type="text" className={inputClass}
+              value={formatMXN(formData.presupuesto)}
+              onChange={e => setFormData(p => ({ ...p, presupuesto: parseMXN(e.target.value) }))}
+              placeholder="$0.00" />
           </div>
 
           {/* Vincular con Proyecto */}
