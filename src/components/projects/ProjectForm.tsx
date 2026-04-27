@@ -10,31 +10,37 @@ const readOnlyClass = "w-full px-3 py-2 border border-slate-200 rounded-md text-
 const DEFAULT_PROJECT_TYPE = 'Mantenimiento';
 
 interface FormData {
-  name:        string;
-  description: string;
-  status:      string;
-  priority:    string;
-  territorio:  string;
-  colegio:     string;
-  eco:         string;
-  responsible: string;
-  start_date:  string;
-  progress:    number;
-  folio_num:   string;
+  name:           string;
+  description:    string;
+  status:         string;
+  priority:       string;
+  territorio:     string;
+  colegio:        string;
+  eco:            string;
+  responsible:    string;
+  start_date:     string;
+  end_date:       string;
+  progress:       number;
+  notes:          string;
+  budget:         string;
+  ticket_number:  string;
 }
 
 const INITIAL_FORM: FormData = {
-  name:        '',
-  description: '',
-  status:      'planificado',
-  priority:    'media',
-  territorio:  '',
-  colegio:     '',
-  eco:         '',
-  responsible: '',
-  start_date:  '',
-  progress:    0,
-  folio_num:   '',
+  name:           '',
+  description:    '',
+  status:         'planificado',
+  priority:       'media',
+  territorio:     '',
+  colegio:        '',
+  eco:            '',
+  responsible:    '',
+  start_date:     '',
+  end_date:       '',
+  progress:       0,
+  notes:          '',
+  budget:         '',
+  ticket_number:  '',
 };
 
 interface ProjectFormProps {
@@ -51,16 +57,20 @@ export default function ProjectForm({ open, onClose, onSubmit, project = null }:
     if (project) {
       setFormData({
         ...INITIAL_FORM,
-        name:        String(project.name        ?? ''),
-        description: String(project.description ?? ''),
-        status:      String(project.status      ?? 'planificado'),
-        priority:    String(project.priority     ?? 'media'),
-        territorio:  String(project.territorio   ?? ''),
-        colegio:     String(project.colegio  ?? project.location ?? ''),
-        eco:         String(project.eco          ?? ''),
-        responsible: String(project.responsible  ?? ''),
-        start_date:  String(project.start_date   ?? ''),
-        folio_num:   String(project.folio_num   ?? ''),
+        name:          String(project.name          ?? ''),
+        description:   String(project.description   ?? ''),
+        status:        String(project.status         ?? 'planificado'),
+        priority:      String(project.priority       ?? 'media'),
+        territorio:    String(project.territorio     ?? ''),
+        colegio:       String(project.colegio    ?? project.location ?? ''),
+        eco:           String(project.eco            ?? ''),
+        responsible:   String(project.responsible    ?? ''),
+        start_date:    String(project.start_date     ?? ''),
+        end_date:      String(project.end_date       ?? ''),
+        progress:      Number(project.progress       ?? 0),
+        notes:         String(project.notes          ?? ''),
+        budget:        project.budget != null ? String(project.budget) : '',
+        ticket_number: project.ticket_number != null ? String(project.ticket_number) : '',
       });
     } else {
       setFormData(INITIAL_FORM);
@@ -71,14 +81,26 @@ export default function ProjectForm({ open, onClose, onSubmit, project = null }:
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    const folio = formData.folio_num
-      ? `TCMM${String(formData.folio_num).padStart(3, '0')}`
+    const folio = formData.ticket_number
+      ? `TCMM${String(formData.ticket_number).padStart(3, '0')}`
       : null;
     onSubmit({
-      ...formData,
+      name:          formData.name,
+      description:   formData.description,
+      status:        formData.status,
+      priority:      formData.priority,
+      territorio:    formData.territorio,
+      colegio:       formData.colegio,
+      eco:           formData.eco,
+      responsible:   formData.responsible,
+      start_date:    formData.start_date || null,
+      end_date:      formData.end_date   || null,
+      progress:      formData.progress   || 0,
+      notes:         formData.notes,
+      budget:        formData.budget ? parseFloat(formData.budget) : null,
+      ticket_number: formData.ticket_number ? parseInt(formData.ticket_number) : null,
       folio,
-      progress: formData.progress || 0,
-      type:     DEFAULT_PROJECT_TYPE,
+      type:          DEFAULT_PROJECT_TYPE,
     });
   };
 
@@ -99,6 +121,7 @@ export default function ProjectForm({ open, onClose, onSubmit, project = null }:
         {/* Body */}
         <form onSubmit={handleSubmit} className="p-6 overflow-y-auto space-y-1 flex-1">
 
+          {/* Folio de Ticket */}
           <div>
             <label className={labelClass}>Número de Folio (opcional)</label>
             <div className="relative">
@@ -107,18 +130,19 @@ export default function ProjectForm({ open, onClose, onSubmit, project = null }:
                 type="number"
                 min="1"
                 className="w-full pl-14 pr-3 py-2 border border-slate-300 rounded-md text-sm focus:ring-2 focus:ring-slate-900 focus:outline-none bg-white text-slate-900"
-                value={formData.folio_num}
-                onChange={e => setFormData(prev => ({ ...prev, folio_num: e.target.value }))}
+                value={formData.ticket_number}
+                onChange={e => setFormData(prev => ({ ...prev, ticket_number: e.target.value }))}
                 placeholder="Ej. 10 → TCMM010"
               />
             </div>
-            {formData.folio_num && (
+            {formData.ticket_number && (
               <p className="text-xs font-bold text-red-500 mt-1">
-                Folio: TCMM{String(formData.folio_num).padStart(3, '0')}
+                Folio: TCMM{String(formData.ticket_number).padStart(3, '0')}
               </p>
             )}
           </div>
 
+          {/* Nombre */}
           <div>
             <label className={labelClass}>Nombre del Proyecto *</label>
             <input
@@ -158,11 +182,8 @@ export default function ProjectForm({ open, onClose, onSubmit, project = null }:
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className={labelClass}>Estado</label>
-              <select
-                className={inputClass}
-                value={formData.status}
-                onChange={e => setFormData(prev => ({ ...prev, status: e.target.value }))}
-              >
+              <select className={inputClass} value={formData.status}
+                onChange={e => setFormData(prev => ({ ...prev, status: e.target.value }))}>
                 <option value="planificado">Planificado</option>
                 <option value="en_progreso">En Progreso</option>
                 <option value="pausado">Pausado</option>
@@ -171,11 +192,8 @@ export default function ProjectForm({ open, onClose, onSubmit, project = null }:
             </div>
             <div>
               <label className={labelClass}>Prioridad</label>
-              <select
-                className={inputClass}
-                value={formData.priority}
-                onChange={e => setFormData(prev => ({ ...prev, priority: e.target.value }))}
-              >
+              <select className={inputClass} value={formData.priority}
+                onChange={e => setFormData(prev => ({ ...prev, priority: e.target.value }))}>
                 <option value="baja">Baja</option>
                 <option value="media">Media</option>
                 <option value="alta">Alta</option>
@@ -185,36 +203,43 @@ export default function ProjectForm({ open, onClose, onSubmit, project = null }:
 
           <div>
             <label className={labelClass}>Responsable de Ejecución</label>
-            <input
-              type="text"
-              className={inputClass}
-              value={formData.responsible}
+            <input type="text" className={inputClass} value={formData.responsible}
               onChange={e => setFormData(prev => ({ ...prev, responsible: e.target.value }))}
-              placeholder="Persona a cargo"
-            />
+              placeholder="Persona a cargo" />
           </div>
 
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className={labelClass}>Fecha de Inicio</label>
-              <input
-                type="date"
-                className={inputClass}
-                value={formData.start_date}
-                onChange={e => setFormData(prev => ({ ...prev, start_date: e.target.value }))}
-              />
+              <input type="date" className={inputClass} value={formData.start_date}
+                onChange={e => setFormData(prev => ({ ...prev, start_date: e.target.value }))} />
+            </div>
+            <div>
+              <label className={labelClass}>Fecha de Fin</label>
+              <input type="date" className={inputClass} value={formData.end_date}
+                onChange={e => setFormData(prev => ({ ...prev, end_date: e.target.value }))} />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className={labelClass}>Presupuesto (MXN)</label>
+              <input type="number" min="0" step="0.01" className={inputClass} value={formData.budget}
+                onChange={e => setFormData(prev => ({ ...prev, budget: e.target.value }))}
+                placeholder="0.00" />
             </div>
             <div>
               <label className={labelClass}>Progreso (%)</label>
-              <input
-                type="number"
-                min="0"
-                max="100"
-                className={inputClass}
-                value={formData.progress}
-                onChange={e => setFormData(prev => ({ ...prev, progress: Number(e.target.value) }))}
-              />
+              <input type="number" min="0" max="100" className={inputClass} value={formData.progress}
+                onChange={e => setFormData(prev => ({ ...prev, progress: Number(e.target.value) }))} />
             </div>
+          </div>
+
+          <div>
+            <label className={labelClass}>Notas</label>
+            <textarea className={`${inputClass} h-20 resize-none`} value={formData.notes}
+              onChange={e => setFormData(prev => ({ ...prev, notes: e.target.value }))}
+              placeholder="Observaciones o detalles adicionales..." />
           </div>
 
           <div className="pt-6 border-t border-slate-100 flex justify-end gap-3 mt-4">
