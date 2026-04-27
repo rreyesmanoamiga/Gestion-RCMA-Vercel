@@ -13,6 +13,7 @@ import ProjectDetail from '@/pages/ProjectDetail';
 import Checklists from '@/pages/Checklists';
 import ChecklistDetail from '@/pages/ChecklistDetail';
 import Anteproyectos from '@/pages/Anteproyectos';
+import Tickets from '@/pages/Tickets';
 import Reports from '@/pages/Reports';
 import UserManagement from '@/pages/UserManagement';
 import Accesos from '@/pages/Accesos';
@@ -225,6 +226,7 @@ function AuthenticatedApp() {
       ) : (
         <Route element={<AppLayout />}>
           <Route path="/"                  element={<Dashboard />} />
+          <Route path="/tickets"           element={<Tickets />} />
           <Route path="/proyectos"         element={<Projects />} />
           <Route path="/proyectos/:id"     element={<ProjectDetail />} />
           <Route path="/checklists"        element={<Checklists />} />

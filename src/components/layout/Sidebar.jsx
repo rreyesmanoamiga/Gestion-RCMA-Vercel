@@ -13,6 +13,7 @@ import {
   Lock,
   ClockAlert,
   CalendarDays,
+  TicketCheck,
 } from 'lucide-react';
 import { useAuth } from '@/lib/AuthContext';
 import { cn } from '@/lib/utils';
@@ -20,13 +21,14 @@ import { useIsMobile } from '@/hooks/use-mobile';
 import { supabase } from '@/lib/supabaseClient';
 
 const NAV_ITEMS = [
-  { label: 'Dashboard',      path: '/',               icon: LayoutDashboard },
-  { label: 'Proyectos',      path: '/proyectos',      icon: FolderKanban    },
-  { label: 'Anteproyectos',  path: '/anteproyectos',  icon: FolderOpen      },
-  { label: 'Checklists',     path: '/checklists',     icon: ClipboardCheck  },
-  { label: 'Calendario',     path: '/calendario',     icon: CalendarDays    },
-  { label: 'Pendientes',     path: '/pendientes',     icon: ClockAlert      },
-  { label: 'Reportes',       path: '/reportes',       icon: FileText        },
+  { label: 'Dashboard',         path: '/',               icon: LayoutDashboard },
+  { label: 'Tickets Registrados', path: '/tickets',      icon: TicketCheck     },
+  { label: 'Proyectos',         path: '/proyectos',      icon: FolderKanban    },
+  { label: 'Anteproyectos',     path: '/anteproyectos',  icon: FolderOpen      },
+  { label: 'Checklists',        path: '/checklists',     icon: ClipboardCheck  },
+  { label: 'Calendario',        path: '/calendario',     icon: CalendarDays    },
+  { label: 'Pendientes',        path: '/pendientes',     icon: ClockAlert      },
+  { label: 'Reportes',          path: '/reportes',       icon: FileText        },
 ];
 
 export default function Sidebar({ isOpen, onToggle }) {
