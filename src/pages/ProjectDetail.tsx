@@ -14,6 +14,7 @@ import {
   Clock,
   AlertTriangle,
 } from 'lucide-react';
+import ProjectForm from '@/components/projects/ProjectForm';
 import StatusBadge from '@/components/shared/StatusBadge';
 import PriorityBadge from '@/components/shared/PriorityBadge';
 
@@ -30,6 +31,11 @@ interface Project {
   responsible?: string;
   start_date?:  string;
   progress?:    number;
+  folio?:       string;
+  territorio?:  string;
+  colegio?:     string;
+  eco?:         string;
+  folio_num?:   string;
 }
 
 export default function ProjectDetail() {
@@ -37,6 +43,7 @@ export default function ProjectDetail() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [showEdit, setShowEdit] = useState(false);
 
   const { data, isLoading, isError } = useQuery({
     queryKey: ['projects', id],
@@ -45,6 +52,15 @@ export default function ProjectDetail() {
   });
 
   const project = (data as unknown as Project[] | undefined)?.[0];
+
+  const updateMutation = useMutation({
+    mutationFn: (formData: Record<string, unknown>) => db.Project.update(id!, formData),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['projects', id] });
+      queryClient.invalidateQueries({ queryKey: ['projects'] });
+      setShowEdit(false);
+    },
+  });
 
   const deleteMutation = useMutation({
     mutationFn: () => db.Project.delete(id!),
@@ -85,7 +101,7 @@ export default function ProjectDetail() {
           <ArrowLeft className="w-4 h-4" /> Volver a Proyectos
         </Link>
         <div className="flex gap-2">
-          <button className={btnOutline} disabled title="Función en desarrollo">
+          <button className={btnOutline} onClick={() => setShowEdit(true)}>
             <Pencil className="w-4 h-4" /> Editar
           </button>
           <button className={btnDanger} onClick={() => setShowDeleteConfirm(true)}>
@@ -100,6 +116,15 @@ export default function ProjectDetail() {
           <div className="flex flex-wrap gap-2 mb-4">
             <StatusBadge status={project.status} />
             <PriorityBadge priority={project.priority} />
+            {project.folio ? (
+              <span className="text-xs font-black text-red-500 bg-red-50 border border-red-200 px-2 py-0.5 rounded-full">
+                {project.folio}
+              </span>
+            ) : (
+              <span className="text-xs font-bold text-slate-300 bg-slate-50 border border-slate-200 px-2 py-0.5 rounded-full">
+                Sin Ticket
+              </span>
+            )}
           </div>
           <h1 className="text-3xl font-black text-slate-900 leading-tight">{project.name}</h1>
           <p className="text-slate-500 mt-2 max-w-2xl text-sm leading-relaxed italic">
@@ -168,6 +193,14 @@ export default function ProjectDetail() {
           </div>
         </div>
       </div>
+
+      {/* Modal editar */}
+      <ProjectForm
+        open={showEdit}
+        onClose={() => setShowEdit(false)}
+        onSubmit={data => updateMutation.mutate(data)}
+        project={project as unknown as Record<string, unknown>}
+      />
 
       {/* Modal de confirmación de eliminación */}
       {showDeleteConfirm && (
