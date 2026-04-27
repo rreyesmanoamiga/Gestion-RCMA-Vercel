@@ -31,14 +31,14 @@ interface Project {
   responsible?: string;
   start_date?:  string;
   progress?:    number;
-  folio?:       string;
-  territorio?:  string;
-  colegio?:     string;
-  eco?:         string;
-  folio_num?:   string;
-  notes?:       string;
-  budget?:      number;
-  end_date?:    string;
+  folio?:         string;
+  territorio?:    string;
+  colegio?:       string;
+  eco?:           string;
+  folio_num?:     string;
+  notes?:         string;
+  budget?:        number;
+  end_date?:      string;
   ticket_number?: number;
 }
 
@@ -148,7 +148,11 @@ export default function ProjectDetail() {
               <MapPin className="w-4 h-4 text-slate-400" />
               <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Ubicación / Colegio</span>
             </div>
-            <p className="text-sm font-bold text-slate-800 ml-7">{project.location || 'No especificada'}</p>
+            <p className="text-sm font-bold text-slate-800 ml-7">
+              {project.territorio && project.colegio
+                ? `${project.territorio} / ${project.colegio}`
+                : project.colegio || project.location || 'No especificada'}
+            </p>
           </div>
           <div className="p-6">
             <div className="flex items-center gap-3 mb-1">
