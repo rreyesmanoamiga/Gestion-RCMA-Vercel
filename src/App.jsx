@@ -12,8 +12,7 @@ import Projects from '@/pages/Projects';
 import ProjectDetail from '@/pages/ProjectDetail';
 import Checklists from '@/pages/Checklists';
 import ChecklistDetail from '@/pages/ChecklistDetail';
-import Maintenance from '@/pages/Maintenance';
-import MaintenanceDetail from '@/pages/MaintenanceDetail';
+import Anteproyectos from '@/pages/Anteproyectos';
 import Reports from '@/pages/Reports';
 import UserManagement from '@/pages/UserManagement';
 import Accesos from '@/pages/Accesos';
@@ -230,8 +229,7 @@ function AuthenticatedApp() {
           <Route path="/proyectos/:id"     element={<ProjectDetail />} />
           <Route path="/checklists"        element={<Checklists />} />
           <Route path="/checklists/:id"    element={<ChecklistDetail />} />
-          <Route path="/mantenimiento"     element={<Maintenance />} />
-          <Route path="/mantenimiento/:id" element={<MaintenanceDetail />} />
+          <Route path="/anteproyectos"     element={<Anteproyectos />} />
           <Route path="/reportes"          element={<Reports />} />
           <Route path="/usuarios"          element={<UserManagement />} />
           <Route path="/accesos"           element={<Accesos />} />
