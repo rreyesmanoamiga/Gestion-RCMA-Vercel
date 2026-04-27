@@ -80,13 +80,14 @@ export default function Projects() {
 
   const filtered = useMemo(() =>
     projects.filter(p => {
-      if (filterStatus     !== 'all' && p.status     !== filterStatus)     return false;
-      if (filterType       !== 'all' && p.type       !== filterType)       return false;
-      if (filterTerritorio !== 'all' && p.territorio !== filterTerritorio) return false;
-      if (filterColegio    !== 'all' && p.colegio    !== filterColegio)    return false;
+      if (filterStatus === 'all' && (p.status === 'completado' || p.status === 'cancelado')) return false;
+      if (filterStatus       !== 'all' && p.status        !== filterStatus)       return false;
+      if (filterTipoProyecto !== 'all' && p.tipo_proyecto !== filterTipoProyecto) return false;
+      if (filterTerritorio   !== 'all' && p.territorio    !== filterTerritorio)   return false;
+      if (filterColegio      !== 'all' && p.colegio       !== filterColegio)      return false;
       return true;
     }),
-    [projects, filterStatus, filterType, filterTerritorio, filterColegio]
+    [projects, filterStatus, filterTipoProyecto, filterTerritorio, filterColegio]
   );
 
   const visible   = useMemo(() => filtered.slice(0, visibleCount), [filtered, visibleCount]);
@@ -151,10 +152,11 @@ export default function Projects() {
           onChange={handleFilterChange(setFilterStatus)}
         >
           <option value="all">Todos los estados</option>
-          <option value="planificado">Planificado</option>
-          <option value="en_progreso">En Progreso</option>
-          <option value="completado">Completado</option>
+          <option value="en_espera">En Espera</option>
+          <option value="en_proceso">En Proceso</option>
           <option value="pausado">Pausado</option>
+          <option value="cancelado">Cancelado</option>
+          <option value="completado">Completado</option>
         </select>
 
         {filtered.length > 0 && (
