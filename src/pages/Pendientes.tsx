@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { db } from '@/lib/db';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { ClockAlert, ChevronDown, Pencil, Trash2, X, Save, MapPin, User, Calendar } from 'lucide-react';
+import { ClockAlert, ChevronDown, Pencil, Trash2, X, Save, MapPin, User, Calendar, Link2 } from 'lucide-react';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { toast } from 'sonner';
@@ -36,6 +36,13 @@ interface Pendiente {
   fecha_actualizacion?: string;
   notas?:              string;
   created_at?:         string;
+  proyecto_id?:        string | null;
+}
+
+interface Project {
+  id:    string;
+  name?: string;
+  folio?: string;
 }
 
 interface FormData {
@@ -49,6 +56,7 @@ interface FormData {
   eco:             string;
   estatus:         string;
   notas:           string;
+  proyecto_id:     string;
 }
 
 const INITIAL_FORM: FormData = {
@@ -62,16 +70,18 @@ const INITIAL_FORM: FormData = {
   eco:             '',
   estatus:         'pendiente',
   notas:           '',
+  proyecto_id:     '',
 };
 
 // ─── Formulario ───────────────────────────────────────────────────────────────
 function PendienteForm({
-  open, onClose, onSubmit, pendiente = null,
+  open, onClose, onSubmit, pendiente = null, projects = [],
 }: {
   open: boolean;
   onClose: () => void;
   onSubmit: (data: Record<string, unknown>) => void;
   pendiente?: Pendiente | null;
+  projects?: Project[];
 }) {
   const [formData, setFormData] = useState<FormData>(INITIAL_FORM);
 
@@ -88,6 +98,7 @@ function PendienteForm({
         eco:             String(pendiente.eco             ?? ''),
         estatus:         String(pendiente.estatus         ?? 'pendiente'),
         notas:           String(pendiente.notas           ?? ''),
+        proyecto_id:     String(pendiente.proyecto_id     ?? ''),
       });
     } else {
       setFormData(INITIAL_FORM);
@@ -101,6 +112,7 @@ function PendienteForm({
     onSubmit({
       ...formData,
       presupuesto: formData.presupuesto ? parseFloat(formData.presupuesto) : null,
+      proyecto_id: formData.proyecto_id || null,
     });
   };
 
@@ -188,6 +200,21 @@ function PendienteForm({
           </div>
 
           <div>
+            <label className={labelClass}>
+              <span className="flex items-center gap-1.5"><Link2 className="w-3 h-3" /> Vincular con Proyecto (opcional)</span>
+            </label>
+            <select className={inputClass} value={formData.proyecto_id}
+              onChange={e => setFormData(p => ({ ...p, proyecto_id: e.target.value }))}>
+              <option value="">Sin vincular</option>
+              {projects.map(p => (
+                <option key={p.id} value={p.id}>
+                  {p.folio ? `${p.folio} — ` : ''}{p.name}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div>
             <label className={labelClass}>Notas / Pendiente *</label>
             <textarea required className={`${inputClass} h-32 resize-none`} value={formData.notas}
               onChange={e => setFormData(p => ({ ...p, notas: e.target.value }))}
@@ -228,7 +255,13 @@ export default function Pendientes() {
     queryFn: () => db.Pendiente.list('-fecha_actualizacion', 500),
   });
 
+  const { data: rawProjects = [] } = useQuery({
+    queryKey: ['projects'],
+    queryFn: () => db.Project.list('-created_at', 500),
+  });
+
   const pendientes = rawPendientes as unknown as Pendiente[];
+  const projects   = rawProjects   as unknown as Project[];
 
   const createMutation = useMutation({
     mutationFn: (data: Record<string, unknown>) => db.Pendiente.create(data),
@@ -452,6 +485,7 @@ export default function Pendientes() {
         open={showForm}
         onClose={() => setShowForm(false)}
         onSubmit={data => createMutation.mutate(data)}
+        projects={projects}
       />
 
       <PendienteForm
@@ -459,6 +493,7 @@ export default function Pendientes() {
         onClose={() => setEditingPendiente(null)}
         onSubmit={data => updateMutation.mutate({ id: editingPendiente!.id, data })}
         pendiente={editingPendiente}
+        projects={projects}
       />
 
       {deletingId && (

@@ -9,6 +9,8 @@ const STATUS_CONFIGS: Record<string, { label: string; class: string }> = {
   aprobado:          { label: 'Aprobado',             class: 'bg-cyan-100   text-cyan-700   border-cyan-200'      },
   atrasado:          { label: 'Atrasado',             class: 'bg-sky-100    text-sky-700    border-sky-200'       },
   en_espera:         { label: 'En Espera',            class: 'bg-blue-100   text-blue-600   border-blue-200'      },
+  en_proceso:        { label: 'En Progreso',          class: 'bg-amber-100  text-amber-700  border-amber-200'     },
+  cancelado:         { label: 'Cancelado',            class: 'bg-red-100    text-red-700    border-red-200'       },
   en_proceso_cierre: { label: 'En Proceso de Cierre', class: 'bg-yellow-200 text-yellow-800 border-yellow-300'    },
 
   // Estados legado
