@@ -15,15 +15,6 @@ const PAGE_SIZE = 20;
 
 const inputClass  = "w-full px-3 py-2 border border-slate-300 rounded-md text-sm focus:ring-2 focus:ring-slate-900 focus:outline-none bg-white text-slate-900";
 const labelClass  = "block text-xs font-bold text-slate-500 uppercase mb-1";
-
-const formatMXN = (value: string): string => {
-  const clean = value.replace(/[^0-9.]/g, '');
-  const parts = clean.split('.');
-  const integer = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ',');
-  const decimal = parts[1] !== undefined ? '.' + parts[1].slice(0, 2) : '';
-  return clean ? '$' + integer + decimal : '';
-};
-const parseMXN = (value: string): string => value.replace(/[^0-9.]/g, '');
 const selectClass = "h-10 px-3 py-2 bg-white border border-slate-300 rounded-md text-sm focus:ring-2 focus:ring-slate-400 focus:outline-none text-slate-700";
 
 const TIPOS_PROYECTO = ['MEJORA', 'CONSTRUCCIÓN', 'REMODELACIÓN', 'ADECUACIÓN', 'MANTENIMIENTO', 'PORTAFOLIO', 'GARANTÍAS', 'REVISIÓN'];
@@ -61,8 +52,9 @@ interface Anteproyecto {
 }
 
 interface Project {
-  id:   string;
+  id:    string;
   name?: string;
+  folio?: string;
 }
 
 interface FormData {
@@ -218,10 +210,9 @@ function AnteproyectoForm({
           {/* Presupuesto */}
           <div>
             <label className={labelClass}>Presupuesto Estimado (MXN)</label>
-            <input type="text" className={inputClass}
-              value={formatMXN(formData.presupuesto)}
-              onChange={e => setFormData(p => ({ ...p, presupuesto: parseMXN(e.target.value) }))}
-              placeholder="$0.00" />
+            <input type="number" min="0" step="0.01" className={inputClass} value={formData.presupuesto}
+              onChange={e => setFormData(p => ({ ...p, presupuesto: e.target.value }))}
+              placeholder="0.00" />
           </div>
 
           {/* Vincular con Proyecto */}
@@ -235,10 +226,10 @@ function AnteproyectoForm({
               onChange={e => setFormData(p => ({ ...p, proyecto_id: e.target.value }))}>
               <option value="">Sin vincular</option>
               {projects.map(p => (
-                <option key={p.id} value={p.id}>{p.name}</option>
+                <option key={p.id} value={p.id}>{p.folio ? `${p.folio} — ` : ''}{p.name}</option>
               ))}
             </select>
-            <p className="text-[10px] text-slate-400 mt-1">Puedes vincular este anteproyecto con un proyecto nuevo, en ejecución o completado.</p>
+            <p className="text-[10px] text-slate-400 mt-1">Solo se muestran proyectos con folio TCMM asignado.</p>
           </div>
 
           {/* Notas */}
@@ -300,6 +291,17 @@ export default function Anteproyectos() {
 
   const projectMap = useMemo(
     () => Object.fromEntries(projects.map(p => [p.id, p.name ?? ''])),
+    [projects]
+  );
+
+  // Solo proyectos con folio TCMM y que no estén ya vinculados a otro anteproyecto
+  const linkedProjectIds = useMemo(
+    () => new Set(anteproyectos.map(a => a.proyecto_id).filter(Boolean)),
+    [anteproyectos]
+  );
+
+  const projectsVinculables = useMemo(
+    () => projects.filter(p => p.folio && p.folio.startsWith('TCMM')),
     [projects]
   );
 
@@ -558,7 +560,7 @@ export default function Anteproyectos() {
         open={showForm}
         onClose={() => setShowForm(false)}
         onSubmit={data => createMutation.mutate(data)}
-        projects={projects}
+        projects={projectsVinculables}
       />
 
       {/* Formulario editar */}
@@ -567,7 +569,7 @@ export default function Anteproyectos() {
         onClose={() => setEditingAnteproyecto(null)}
         onSubmit={data => updateMutation.mutate({ id: editingAnteproyecto!.id, data })}
         anteproyecto={editingAnteproyecto}
-        projects={projects}
+        projects={projectsVinculables}
       />
 
       {/* Modal eliminar */}
