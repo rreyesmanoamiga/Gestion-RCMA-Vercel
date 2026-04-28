@@ -2,7 +2,12 @@ import React, { useMemo } from 'react';
 import { db } from '@/lib/db';
 import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
-import { FolderKanban, ClipboardCheck, Wrench, AlertTriangle, ArrowRight, Building2, MapPin } from 'lucide-react';
+import {
+  FolderKanban, ClipboardCheck, Wrench, AlertTriangle, ArrowRight,
+  Building2, MapPin, TicketCheck, FolderOpen, CalendarDays, ClockAlert,
+  ChevronRight
+} from 'lucide-react';
+import { supabase } from '@/lib/supabaseClient';
 import StatCard from '@/components/dashboard/StatCard';
 import StatusBadge from '@/components/shared/StatusBadge';
 import PriorityBadge from '@/components/shared/PriorityBadge';
@@ -40,6 +45,20 @@ interface MaintenanceRecord {
   scheduled_date?: string;
 }
 
+interface Pendiente {
+  id:               string;
+  nombre_proyecto?: string;
+  estatus?:         string;
+  colegio?:         string;
+  territorio?:      string;
+}
+
+interface TicketRecord {
+  id:       string;
+  folio?:   string;
+  estatus?: string;
+}
+
 export default function Dashboard() {
   const projectsQuery = useQuery({
     queryKey: ['projects'],
@@ -56,21 +75,38 @@ export default function Dashboard() {
     queryFn: () => db.MaintenanceRecord.list('-created_at', 500),
   });
 
+  const pendientesQuery = useQuery({
+    queryKey: ['pendientes'],
+    queryFn: () => db.Pendiente.list('-fecha_actualizacion', 100),
+  });
+
+  const ticketsQuery = useQuery({
+    queryKey: ['tickets'],
+    queryFn: async () => {
+      const { data } = await supabase.from('tickets').select('*').order('created_at', { ascending: false }).limit(100);
+      return data ?? [];
+    },
+  });
+
   // Memoizados con cast — evita que ?? [] cree un nuevo array en cada render
   const projects    = useMemo(() => (projectsQuery.data    ?? []) as unknown as Project[],    [projectsQuery.data]);
   const checklists  = useMemo(() => (checklistsQuery.data  ?? []) as unknown as Checklist[],  [checklistsQuery.data]);
   const maintenance = useMemo(() => (maintenanceQuery.data ?? []) as unknown as MaintenanceRecord[], [maintenanceQuery.data]);
+  const pendientes  = useMemo(() => (pendientesQuery.data  ?? []) as unknown as Pendiente[],  [pendientesQuery.data]);
+  const tickets     = useMemo(() => (ticketsQuery.data     ?? []) as unknown as TicketRecord[], [ticketsQuery.data]);
 
   const isLoading = projectsQuery.isLoading
     || checklistsQuery.isLoading
     || maintenanceQuery.isLoading;
 
+  const recentPendientes = useMemo(() => pendientes.slice(0, 5), [pendientes]);
+
   const stats = useMemo(() => ({
-    activeProjects:     projects.filter(p => p.status === 'en_progreso').length,
+    activeProjects:     projects.filter(p => p.status === 'en_proceso' || p.status === 'en_espera').length,
     criticalChecklists: checklists.filter(c => c.overall_status === 'critico' || c.overall_status === 'malo').length,
-    pendingMaintenance: maintenance.filter(m => m.status === 'pendiente').length,
-    urgentItems:        maintenance.filter(m => m.priority === 'urgente' && m.status !== 'completado').length,
-  }), [projects, checklists, maintenance]);
+    pendingMaintenance: pendientes.filter(m => m.estatus === 'pendiente' || m.estatus === 'en_progreso').length,
+    urgentItems:        projects.filter(p => p.priority === 'urgente' && p.status !== 'completado' && p.status !== 'cancelado').length,
+  }), [projects, checklists, pendientes]);
 
   const urgentColegios = useMemo(() => {
     const s = new Set<string>();
@@ -147,9 +183,9 @@ export default function Dashboard() {
           color="green"
         />
         <StatCard
-          title="Mtto. Pendiente"
+          title="Pendientes"
           value={stats.pendingMaintenance}
-          subtitle={`${maintenance.length} registros totales`}
+          subtitle={`${pendientes.length} registros totales`}
           icon={Wrench}
           color="orange"
         />
@@ -187,9 +223,9 @@ export default function Dashboard() {
               </div>
               <div className="text-center p-2 bg-muted/50 rounded-lg">
                 <p className="text-xl font-bold text-foreground">
-                  {tProjects.filter(p => p.status === 'completado').length}
+                  {tMaint.filter(m => m.status !== 'completado').length}
                 </p>
-                <p className="text-[10px] text-muted-foreground">Completados</p>
+                <p className="text-[10px] text-muted-foreground">Mtto. Pend.</p>
               </div>
             </div>
 
@@ -244,39 +280,59 @@ export default function Dashboard() {
           </div>
         </div>
 
-        {/* Recent Maintenance */}
+        {/* Recent Pendientes */}
         <div className="bg-card rounded-xl border border-border">
           <div className="flex items-center justify-between p-5 border-b border-border">
-            <h2 className="font-semibold text-foreground">Mantenimientos Recientes</h2>
-            <Link to="/mantenimiento" className="text-xs text-primary font-medium flex items-center gap-1 hover:underline">
+            <h2 className="font-semibold text-foreground">Pendientes Recientes</h2>
+            <Link to="/pendientes" className="text-xs text-primary font-medium flex items-center gap-1 hover:underline">
               Ver todos <ArrowRight className="w-3 h-3" />
             </Link>
           </div>
           <div className="divide-y divide-border">
-            {recentMaintenance.length === 0 && (
-              <p className="p-5 text-sm text-muted-foreground text-center">No hay registros de mantenimiento</p>
+            {recentPendientes.length === 0 && (
+              <p className="p-5 text-sm text-muted-foreground text-center">No hay pendientes registrados</p>
             )}
-            {recentMaintenance.map(record => (
-              <Link
-                key={record.id}
-                to={`/mantenimiento/${record.id}`}
-                className="flex items-center justify-between p-4 hover:bg-muted/50 transition-colors"
-              >
+            {recentPendientes.map((p: any) => (
+              <div key={p.id} className="flex items-center justify-between p-4">
                 <div className="min-w-0">
-                  <p className="text-sm font-medium text-foreground truncate">{record.title}</p>
-                  <p className="text-xs text-muted-foreground">
-                    {record.scheduled_date
-                      ? format(new Date(record.scheduled_date), 'dd MMM yyyy', { locale: es })
-                      : 'Sin fecha'}
-                  </p>
+                  <p className="text-sm font-medium text-foreground truncate">{p.nombre_proyecto}</p>
+                  <p className="text-xs text-muted-foreground">{p.colegio || 'Sin colegio'}</p>
                 </div>
-                <div className="flex items-center gap-2 ml-3">
-                  <StatusBadge status={record.type} />
-                  <PriorityBadge priority={record.priority} />
+                <div className="ml-3">
+                  <StatusBadge status={p.estatus} />
                 </div>
-              </Link>
+              </div>
             ))}
           </div>
+        </div>
+      </div>
+
+      {/* Accesos Rápidos */}
+      <div>
+        <h2 className="font-semibold text-foreground mb-4">Accesos Rápidos</h2>
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+          {[
+            { label: 'Tickets',       path: '/tickets',       icon: TicketCheck,    color: 'bg-red-50 text-red-600 border-red-200',         count: tickets.length },
+            { label: 'Proyectos',     path: '/proyectos',     icon: FolderKanban,   color: 'bg-blue-50 text-blue-600 border-blue-200',       count: projects.filter(p => p.status !== 'completado' && p.status !== 'cancelado').length },
+            { label: 'Anteproyectos', path: '/anteproyectos', icon: FolderOpen,     color: 'bg-indigo-50 text-indigo-600 border-indigo-200', count: null },
+            { label: 'Checklists',    path: '/checklists',    icon: ClipboardCheck, color: 'bg-green-50 text-green-600 border-green-200',    count: checklists.length },
+            { label: 'Pendientes',    path: '/pendientes',    icon: ClockAlert,     color: 'bg-amber-50 text-amber-600 border-amber-200',    count: pendientes.filter((p: any) => p.estatus !== 'completado').length },
+            { label: 'Calendario',    path: '/calendario',    icon: CalendarDays,   color: 'bg-purple-50 text-purple-600 border-purple-200', count: null },
+          ].map(({ label, path, icon: Icon, color, count }) => (
+            <Link key={path} to={path}
+              className={`flex flex-col items-center gap-2 p-4 rounded-xl border ${color} hover:shadow-md transition-all duration-200 group`}>
+              <div className="relative">
+                <Icon className="w-6 h-6" />
+                {count !== null && count > 0 && (
+                  <span className="absolute -top-2 -right-2 text-[10px] font-black bg-white border rounded-full w-4 h-4 flex items-center justify-center shadow-sm">
+                    {count > 99 ? '99+' : count}
+                  </span>
+                )}
+              </div>
+              <span className="text-xs font-bold text-center leading-tight">{label}</span>
+              <ChevronRight className="w-3 h-3 opacity-0 group-hover:opacity-100 transition-opacity" />
+            </Link>
+          ))}
         </div>
       </div>
     </div>
