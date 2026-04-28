@@ -94,6 +94,13 @@ export default function Projects() {
   const hasMore   = visibleCount < filtered.length;
   const remaining = filtered.length - visibleCount;
 
+  const kpis = useMemo(() => ({
+    total:       projects.length,
+    conTicket:   projects.filter(p => p.folio && p.folio.startsWith('TCMM')).length,
+    sinTicket:   projects.filter(p => !p.folio || !p.folio.startsWith('TCMM')).length,
+    completados: projects.filter(p => p.status === 'completado').length,
+  }), [projects]);
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center py-20">
@@ -110,6 +117,20 @@ export default function Projects() {
         actionLabel="Nuevo Proyecto"
         onAction={() => setShowForm(true)}
       />
+
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+        {[
+          { label: 'Total Proyectos',           value: kpis.total,       color: 'text-slate-900'   },
+          { label: 'Con Ticket',                value: kpis.conTicket,   color: 'text-red-500'     },
+          { label: 'Sin Ticket',                value: kpis.sinTicket,   color: 'text-slate-400'   },
+          { label: 'Completados',               value: kpis.completados, color: 'text-emerald-600' },
+        ].map(({ label, value, color }) => (
+          <div key={label} className="bg-white rounded-xl border border-slate-200 p-4 shadow-sm">
+            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">{label}</p>
+            <p className={`text-xl font-black ${color}`}>{value}</p>
+          </div>
+        ))}
+      </div>
 
       <div className="flex flex-wrap gap-3 mb-6">
         <select
