@@ -17,15 +17,6 @@ const PAGE_SIZE = 20;
 
 const inputClass  = "w-full px-3 py-2 border border-slate-300 rounded-md text-sm focus:ring-2 focus:ring-slate-900 focus:outline-none bg-white text-slate-900";
 const labelClass  = "block text-xs font-bold text-slate-500 uppercase mb-1 mt-3";
-
-const formatMXN = (value: string): string => {
-  const clean = value.replace(/[^0-9.]/g, '');
-  const parts = clean.split('.');
-  const integer = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ',');
-  const decimal = parts[1] !== undefined ? '.' + parts[1].slice(0, 2) : '';
-  return clean ? '$' + integer + decimal : '';
-};
-const parseMXN = (value: string): string => value.replace(/[^0-9.]/g, '');
 const selectClass = "h-10 px-3 py-2 bg-white border border-slate-300 rounded-md text-sm focus:ring-2 focus:ring-slate-400 focus:outline-none text-slate-700";
 
 const TIPOS_PROYECTO      = ['MEJORA','CONSTRUCCIÓN','REMODELACIÓN','ADECUACIÓN','MANTENIMIENTO','PORTAFOLIO','GARANTÍAS','REVISIÓN'];
@@ -251,10 +242,9 @@ function TicketForm({
             </div>
             <div>
               <label className={labelClass}>Costo / Presupuesto (MXN)</label>
-              <input type="text" className={inputClass}
-                value={formatMXN(formData.presupuesto)}
-                onChange={e => setFormData(p => ({ ...p, presupuesto: parseMXN(e.target.value) }))}
-                placeholder="$0.00" />
+              <input type="number" min="0" step="0.01" className={inputClass} value={formData.presupuesto}
+                onChange={e => setFormData(p => ({ ...p, presupuesto: e.target.value }))}
+                placeholder="0.00" />
             </div>
           </div>
 
@@ -353,6 +343,17 @@ export default function Tickets() {
 
   const projectMap = useMemo(
     () => Object.fromEntries(projects.map(p => [p.id, { name: p.name ?? '', folio: p.folio ?? '' }])),
+    [projects]
+  );
+
+  // Solo proyectos con folio TCMM y que no estén ya vinculados a otro ticket
+  const linkedProjectIds = useMemo(
+    () => new Set(tickets.map(t => t.proyecto_id).filter(Boolean)),
+    [tickets]
+  );
+
+  const projectsVinculables = useMemo(
+    () => projects.filter(p => p.folio && p.folio.startsWith('TCMM')),
     [projects]
   );
 
@@ -604,11 +605,15 @@ export default function Tickets() {
       )}
 
       <TicketForm open={showForm} onClose={() => setShowForm(false)}
-        onSubmit={data => createMutation.mutate(data)} projects={projects} />
+        onSubmit={data => createMutation.mutate(data)}
+        projects={projectsVinculables} />
 
       <TicketForm open={!!editingTicket} onClose={() => setEditingTicket(null)}
         onSubmit={data => updateMutation.mutate({ id: editingTicket!.id, data })}
-        ticket={editingTicket} projects={projects} />
+        ticket={editingTicket}
+        projects={projectsVinculables.filter(p =>
+          !linkedProjectIds.has(p.id) || p.id === editingTicket?.proyecto_id
+        )} />
 
       {deletingId && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 p-4">
