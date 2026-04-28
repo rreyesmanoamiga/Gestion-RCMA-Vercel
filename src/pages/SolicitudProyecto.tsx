@@ -127,6 +127,18 @@ export default function SolicitudProyecto() {
         monto_otras:            otrasMonto  || null,
       });
       if (error) throw error;
+
+      // Notificar al admin que llegó una nueva solicitud
+      await supabase.functions.invoke('send-solicitud-recibida', {
+        body: {
+          tipo:    'nueva_solicitud',
+          correo:  form.correo_solicitante,
+          nombre:  form.nombre_solicitante,
+          proyecto: form.nombre_proyecto,
+          centro:  form.nombre_centro,
+        },
+      });
+
       setEnviado(true);
     } catch {
       toast.error('Error al enviar la solicitud, intenta de nuevo');
