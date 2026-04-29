@@ -4,7 +4,7 @@ import { supabase } from '@/lib/supabaseClient';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
-import { ChevronDown, CheckCircle, Eye, X, Building2, User, Mail, Calendar, DollarSign, Printer } from 'lucide-react';
+import { ChevronDown, CheckCircle, Eye, X, Building2, User, Mail, Calendar, DollarSign, Printer, Trash2 } from 'lucide-react';
 import PageHeader from '@/components/shared/PageHeader';
 
 const PAGE_SIZE = 20;
@@ -122,6 +122,7 @@ export default function SolicitudesRecibidas() {
   const [filterEstatus, setFilterEstatus] = useState('all');
   const [visibleCount, setVisibleCount]   = useState(PAGE_SIZE);
   const [viewing, setViewing]             = useState<Solicitud | null>(null);
+  const [deletingId, setDeletingId]       = useState<string | null>(null);
   const queryClient = useQueryClient();
 
   const { data: raw = [], isLoading } = useQuery({
@@ -166,6 +167,19 @@ export default function SolicitudesRecibidas() {
       toast.success('Solicitud marcada como recibida y notificación enviada');
     },
     onError: () => toast.error('Error al procesar la solicitud'),
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase.from('solicitudes').delete().eq('id', id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['solicitudes'] });
+      setDeletingId(null);
+      toast.success('Solicitud eliminada');
+    },
+    onError: () => toast.error('Error al eliminar la solicitud'),
   });
 
   const filtered = useMemo(() =>
@@ -291,6 +305,10 @@ export default function SolicitudesRecibidas() {
                       <CheckCircle className="w-4 h-4" /> Recibida
                     </button>
                   )}
+                  <button onClick={() => setDeletingId(s.id)}
+                    className="p-2 border border-red-200 rounded-md text-red-500 hover:bg-red-50 transition-colors">
+                    <Trash2 className="w-4 h-4" />
+                  </button>
                 </div>
               </div>
             </div>
@@ -416,6 +434,27 @@ export default function SolicitudesRecibidas() {
                   </button>
                 )}
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal confirmar eliminación */}
+      {deletingId && (
+        <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/50 p-4">
+          <div className="bg-white rounded-lg shadow-xl max-w-sm w-full p-6">
+            <h2 className="text-lg font-bold text-slate-900">¿Eliminar solicitud?</h2>
+            <p className="text-sm text-slate-500 mt-2">Esta acción no se puede deshacer.</p>
+            <div className="flex justify-end gap-3 mt-6">
+              <button onClick={() => setDeletingId(null)}
+                className="px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100 rounded-md transition-colors">
+                Cancelar
+              </button>
+              <button onClick={() => deleteMutation.mutate(deletingId)}
+                disabled={deleteMutation.isPending}
+                className="px-4 py-2 text-sm font-medium bg-red-600 text-white hover:bg-red-700 rounded-md disabled:opacity-50 transition-colors">
+                {deleteMutation.isPending ? 'Eliminando...' : 'Eliminar'}
+              </button>
             </div>
           </div>
         </div>
