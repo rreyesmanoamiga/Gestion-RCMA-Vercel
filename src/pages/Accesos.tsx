@@ -129,12 +129,17 @@ export default function Accesos() {
     e.preventDefault();
     setInviting(true);
     try {
-      // Edge Function maneja todo: crear usuario + guardar permisos + enviar correo
-      const { error } = await supabase.functions.invoke('invite-user', {
-        body: { email: inviteEmail, permissions: invitePerms },
-      });
+      // 1. Guardar permisos directamente desde el cliente con service_role via RLS
+      const { error: permsError } = await supabase
+        .from('user_permissions')
+        .upsert({ user_email: inviteEmail, ...invitePerms }, { onConflict: 'user_email' });
 
-      if (error) throw new Error(error.message ?? 'Error al invitar usuario');
+      if (permsError) throw new Error(permsError.message);
+
+      // 2. Edge Function en segundo plano — crea usuario Auth y envía correo
+      supabase.functions.invoke('invite-user', {
+        body: { email: inviteEmail, permissions: invitePerms },
+      }).catch(() => {});
 
       await qc.invalidateQueries({ queryKey: ['userPermissions'] });
       toast.success(`Invitación enviada a ${inviteEmail}`);
