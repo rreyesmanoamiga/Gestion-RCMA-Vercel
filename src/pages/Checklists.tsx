@@ -1,6 +1,5 @@
 import React, { useState, useMemo } from 'react';
 import { db } from '@/lib/db';
-import { supabase } from '@/lib/supabaseClient';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import { ClipboardCheck, Search, ChevronDown } from 'lucide-react';
@@ -30,7 +29,14 @@ interface Checklist {
   project_id?:         string;
   inspector?:          string;
   inspection_date?:    string;
-  items?:              ChecklistItem[];
+  items?:              unknown;
+}
+
+function parseItems(raw: unknown): ChecklistItem[] {
+  if (!raw) return [];
+  if (Array.isArray(raw)) return raw as ChecklistItem[];
+  if (typeof raw === 'string') { try { return JSON.parse(raw); } catch { return []; } }
+  return [];
 }
 
 interface ChecklistWithCounts extends Checklist {
@@ -53,15 +59,7 @@ export default function Checklists() {
 
   const { data: rawChecklists = [], isLoading } = useQuery({
     queryKey: ['checklists'],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from('checklists')
-        .select('*')
-        .order('created_at', { ascending: false })
-        .limit(500);
-      if (error) throw error;
-      return data ?? [];
-    },
+    queryFn: () => db.Checklist.list('-created_at', 500),
   });
 
   const { data: rawProjects = [] } = useQuery({
@@ -73,18 +71,15 @@ export default function Checklists() {
   const projects   = rawProjects   as unknown as Project[];
 
   const createMutation = useMutation({
-    mutationFn: async (data: Record<string, unknown>) => {
-      const { data: result, error } = await supabase
-        .from('checklists')
-        .insert(data)
-        .select()
-        .single();
-      if (error) throw error;
-      return result;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['checklists'] });
-      toast.success('Inspección creada correctamente');
+    mutationFn: (data: Record<string, unknown>) => db.Checklist.create(data),
+    onSuccess: (result: any) => {
+      if (result?._offline) {
+        queryClient.setQueryData(['checklists'], (old: any) => [result, ...(old ?? [])]);
+        toast.warning('📶 Sin conexión — Inspección guardada localmente, se sincronizará cuando haya internet');
+      } else {
+        queryClient.invalidateQueries({ queryKey: ['checklists'] });
+        toast.success('Inspección creada correctamente');
+      }
       setShowForm(false);
     },
     onError: () => {
@@ -100,7 +95,7 @@ export default function Checklists() {
   const checklistsWithCounts = useMemo((): ChecklistWithCounts[] =>
     checklists.map(c => {
       const counts = { bueno: 0, regular: 0, malo: 0, critico: 0 };
-      (c.items || []).forEach(item => {
+      parseItems(c.items).forEach(item => {
         if (item.condition && item.condition in counts) {
           counts[item.condition as keyof typeof counts]++;
         }
@@ -194,13 +189,9 @@ export default function Checklists() {
           value={filterType}
           onChange={e => handleFilterChange(setFilterType)(e.target.value)}
         >
-          <option value="all">Todos los Materiales</option>
-          <option value="petreos">Pétreos (piedra, arena, arcilla)</option>
-          <option value="metalicos">Metálicos (acero, aluminio)</option>
-          <option value="aglomerantes">Aglomerantes (cemento, cal, yeso)</option>
-          <option value="ceramicos">Cerámicos (ladrillos, azulejos)</option>
-          <option value="madera">Madera</option>
-          <option value="sinteticos">Sintéticos (plásticos, aislantes)</option>
+          <option value="all">Todas las Estructuras</option>
+          <option value="concreto">Concreto</option>
+          <option value="metalica">Metálica</option>
         </select>
 
         {filtered.length > 0 && (
