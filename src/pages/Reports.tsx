@@ -1,5 +1,6 @@
 import React, { useMemo } from 'react';
 import { db } from '@/lib/db';
+import { supabase } from '@/lib/supabaseClient';
 import { useQuery } from '@tanstack/react-query';
 import {
   BarChart3,
@@ -24,16 +25,19 @@ interface Project {
   territorio?: string;
 }
 
-interface Pendiente {
-  id:              string;
-  territorio?:     string;
-  colegio?:        string;
-  nombre_proyecto?: string;
-  estatus?:        string;
-  prioridad?:      string;
-  asignacion?:     string;
-  notas?:          string;
-  fecha_actualizacion?: string;
+interface Solicitud {
+  id:          string;
+  territorio?: string;
+  colegio?:    string;
+  estatus?:    string;
+  created_at?: string;
+}
+
+interface Ticket {
+  id:          string;
+  folio?:      string;
+  territorio?: string;
+  proyecto_id?: string;
 }
 
 interface Stats {
@@ -55,13 +59,71 @@ async function loadJsPDF(): Promise<typeof import('jspdf').jsPDF> {
   return w.jspdf!.jsPDF;
 }
 
+// ── helpers de gráfica circular (jsPDF nativo, sin canvas) ──────────────────
+function drawPieChart(
+  doc: InstanceType<typeof import('jspdf').jsPDF>,
+  cx: number, cy: number, r: number,
+  slices: { value: number; color: [number, number, number]; label: string }[],
+  title: string,
+): void {
+  const total = slices.reduce((s, sl) => s + sl.value, 0);
+  if (total === 0) {
+    doc.setFontSize(8);
+    doc.setTextColor(160, 160, 160);
+    doc.text('Sin datos', cx, cy, { align: 'center' });
+    return;
+  }
+  let startAngle = -Math.PI / 2;
+  slices.forEach(sl => {
+    if (sl.value === 0) return;
+    const sweep = (sl.value / total) * 2 * Math.PI;
+    const endAngle = startAngle + sweep;
+    // Dibuja sector con líneas
+    const steps = Math.max(4, Math.round(sweep * 12));
+    const pts: [number, number][] = [[cx, cy]];
+    for (let i = 0; i <= steps; i++) {
+      const a = startAngle + (sweep * i) / steps;
+      pts.push([cx + r * Math.cos(a), cy + r * Math.sin(a)]);
+    }
+    doc.setFillColor(...sl.color);
+    doc.setDrawColor(...sl.color);
+    // jsPDF expone lines(), usamos esa API — deltas como bezier lineal [dx,dy,dx,dy]
+    doc.setLineWidth(0.1);
+    const deltas = pts.slice(1).map((p, i) => {
+      const dx = p[0] - pts[i][0];
+      const dy = p[1] - pts[i][1];
+      return [dx, dy, dx, dy] as [number, number, number, number];
+    });
+    doc.lines(deltas, pts[0][0], pts[0][1], [1, 1], 'FD', true);
+    startAngle = endAngle;
+  });
+  // Título
+  doc.setFontSize(8);
+  doc.setFont('helvetica', 'bold');
+  doc.setTextColor(30, 30, 30);
+  doc.text(title, cx, cy - r - 4, { align: 'center' });
+  // Leyenda
+  let ly = cy + r + 6;
+  slices.forEach(sl => {
+    if (sl.value === 0) return;
+    doc.setFillColor(...sl.color);
+    doc.rect(cx - 14, ly - 3, 4, 4, 'F');
+    doc.setFontSize(7);
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(50, 50, 50);
+    doc.text(`${sl.label}: ${sl.value}`, cx - 8, ly);
+    ly += 6;
+  });
+}
+
 async function exportResumenPDF({
-  stats, projects, checklists, pendientes,
+  stats, projects, checklists, solicitudes, tickets,
 }: {
   stats:       Stats;
   projects:    Project[];
   checklists:  unknown[];
-  pendientes:  Pendiente[];
+  solicitudes: Solicitud[];
+  tickets:     Ticket[];
 }): Promise<void> {
   const JsPDF = await loadJsPDF();
   const doc   = new JsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
@@ -83,7 +145,7 @@ async function exportResumenPDF({
     y += 6;
   };
 
-  // Encabezado
+  // ── Encabezado ─────────────────────────────────────────────────────────────
   doc.setFillColor(15, 23, 42);
   doc.rect(0, 0, W, 28, 'F');
   doc.setFontSize(16);
@@ -118,25 +180,68 @@ async function exportResumenPDF({
   line('Resumen Ejecutivo', 13, true);
   y += 2;
   divider();
-  line(`Proyectos totales:       ${stats.total}`,        10);
-  line(`Proyectos completados:   ${stats.completed}`,    10);
-  line(`Avance promedio:         ${stats.avgProgress}%`, 10);
-  line(`Inspecciones realizadas: ${checklists.length}`,  10);
-  line(`Pendientes totales:      ${pendientes.length}`,  10);
 
-  // Pendientes por estatus
-  const pendByEstatus: Record<string, number> = {};
-  pendientes.forEach(p => {
-    const k = p.estatus || 'sin estatus';
-    pendByEstatus[k] = (pendByEstatus[k] || 0) + 1;
-  });
-  Object.entries(pendByEstatus).forEach(([est, cnt]) => {
-    line(`  • ${est}: ${cnt}`, 9, false, [80, 80, 80]);
-  });
+  // Solo proyectos activos (excluye completados y cancelados)
+  const activeProjects = projects.filter(p => p.status !== 'completado' && p.status !== 'cancelado');
+  const activeAvg = activeProjects.length > 0
+    ? Math.round(activeProjects.reduce((acc, p) => acc + (p.progress || 0), 0) / activeProjects.length)
+    : 0;
+
+  line(`Proyectos totales:        ${stats.total}`,          10);
+  line(`Proyectos activos:        ${activeProjects.length}`, 10);
+  line(`Proyectos completados:    ${stats.completed}`,       10);
+  line(`Avance promedio (activos):${activeAvg}%`,            10);
+  line(`Inspecciones realizadas:  ${checklists.length}`,     10);
+  line(`Solicitudes recibidas:    ${solicitudes.length}`,    10);
+  line(`Tickets TCMM:             ${tickets.length}`,        10);
   y += 4;
 
-  // ── Tabla de proyectos ────────────────────────────────────────────────────
-  line('Detalle de Proyectos', 13, true);
+  // ── Gráficas circulares por territorio ────────────────────────────────────
+  if (y > 200) { doc.addPage(); y = 20; }
+  line('Proyectos por Territorio', 13, true);
+  y += 2;
+  divider();
+
+  // Obtener territorios únicos
+  const territorios = Array.from(
+    new Set(projects.map(p => p.territorio || 'Sin territorio'))
+  ).sort();
+
+  const COLS    = 3;
+  const R       = 16; // radio del pie
+  const colW    = (W - 40) / COLS;
+  const rowH    = R * 2 + 32; // alto total por pie: arco + leyenda estimada
+  let pieCol    = 0;
+  let pieRowY   = y + R + 8;
+
+  territorios.forEach(ter => {
+    const tProj  = projects.filter(p => (p.territorio || 'Sin territorio') === ter);
+    const active = tProj.filter(p => p.status !== 'completado' && p.status !== 'cancelado').length;
+    const comp   = tProj.filter(p => p.status === 'completado').length;
+
+    const cx = 20 + colW * pieCol + colW / 2;
+    const cy = pieRowY;
+
+    drawPieChart(doc, cx, cy, R, [
+      { value: active, color: [59, 130, 246],  label: 'Activos'     },
+      { value: comp,   color: [34, 197, 94],   label: 'Completados' },
+    ], ter.length > 18 ? ter.slice(0, 16) + '…' : ter);
+
+    pieCol++;
+    if (pieCol >= COLS) {
+      pieCol  = 0;
+      pieRowY += rowH;
+      if (pieRowY + rowH > 270) { doc.addPage(); pieRowY = R + 20; y = 20; }
+    }
+  });
+
+  // Ajustar y al final de las gráficas
+  y = pieRowY + (pieCol > 0 ? rowH : 0) + 6;
+  if (y > 250) { doc.addPage(); y = 20; }
+
+  // ── Detalle de proyectos activos (sin completados/cancelados) ─────────────
+  y += 4;
+  line('Detalle de Proyectos Activos', 13, true);
   y += 2;
   divider();
 
@@ -146,76 +251,113 @@ async function exportResumenPDF({
   doc.setFontSize(8);
   doc.setFont('helvetica', 'bold');
   doc.setTextColor(100, 116, 139);
-  doc.text('Proyecto',   pCols.name,     y);
-  doc.text('Estado',     pCols.status,   y);
-  doc.text('Avance',     pCols.progress, y);
+  doc.text('Proyecto',   pCols.name,      y);
+  doc.text('Estado',     pCols.status,    y);
+  doc.text('Avance',     pCols.progress,  y);
   doc.text('Territorio', pCols.territory, y);
   y += 6;
   divider();
 
   doc.setFont('helvetica', 'normal');
   doc.setTextColor(30, 30, 30);
-  projects.slice(0, 30).forEach((p, i) => {
+  activeProjects.slice(0, 40).forEach((p, i) => {
     if (y > 270) { doc.addPage(); y = 20; }
     if (i % 2 === 0) { doc.setFillColor(248, 250, 252); doc.rect(18, y - 4, W - 36, 7, 'F'); }
     doc.setFontSize(8);
     const name = p.name && p.name.length > 45 ? p.name.slice(0, 42) + '…' : (p.name || '—');
-    doc.text(name,                  pCols.name,     y);
-    doc.text(p.status    || '—',    pCols.status,   y);
-    doc.text(`${p.progress || 0}%`, pCols.progress, y);
+    doc.text(name,                  pCols.name,      y);
+    doc.text(p.status    || '—',    pCols.status,    y);
+    doc.text(`${p.progress || 0}%`, pCols.progress,  y);
     doc.text(p.territorio || '—',   pCols.territory, y);
     y += 7;
   });
-  if (projects.length > 30) {
+  if (activeProjects.length > 40) {
     y += 2;
     doc.setFontSize(8);
     doc.setTextColor(100, 116, 139);
-    doc.text(`... y ${projects.length - 30} proyectos más.`, 20, y);
+    doc.text(`... y ${activeProjects.length - 40} proyectos más.`, 20, y);
     y += 6;
   }
 
-  // ── Tabla de pendientes ───────────────────────────────────────────────────
+  // ── Solicitudes vs Tickets por Territorio ─────────────────────────────────
   if (y > 230) { doc.addPage(); y = 20; }
   y += 4;
-  line('Pendientes', 13, true);
+  line('Solicitudes vs Tickets por Territorio', 13, true);
   y += 2;
   divider();
 
-  const pendCols = { colegio: 20, proyecto: 55, estatus: 130, prioridad: 165 };
+  // Construir mapa territorio → { solicitudes, tickets }
+  const terMap: Record<string, { solicitudes: number; tickets: number }> = {};
+  const allTers = Array.from(new Set([
+    ...solicitudes.map(s => s.territorio || 'Sin territorio'),
+    ...tickets.map(t => t.territorio || 'Sin territorio'),
+  ])).sort();
+
+  allTers.forEach(ter => {
+    terMap[ter] = {
+      solicitudes: solicitudes.filter(s => (s.territorio || 'Sin territorio') === ter).length,
+      tickets:     tickets.filter(t => (t.territorio || 'Sin territorio') === ter).length,
+    };
+  });
+
+  const stCols = { territorio: 20, solicitudes: 110, tickets: 155, diferencia: 175 };
   doc.setFillColor(241, 245, 249);
   doc.rect(18, y - 4, W - 36, 8, 'F');
   doc.setFontSize(8);
   doc.setFont('helvetica', 'bold');
   doc.setTextColor(100, 116, 139);
-  doc.text('Colegio',   pendCols.colegio,   y);
-  doc.text('Proyecto',  pendCols.proyecto,  y);
-  doc.text('Estatus',   pendCols.estatus,   y);
-  doc.text('Prioridad', pendCols.prioridad, y);
+  doc.text('Territorio',   stCols.territorio,   y);
+  doc.text('Solicitudes',  stCols.solicitudes,  y);
+  doc.text('Tickets',      stCols.tickets,      y);
+  doc.text('Diferencia',   stCols.diferencia,   y);
   y += 6;
   divider();
 
   doc.setFont('helvetica', 'normal');
   doc.setTextColor(30, 30, 30);
-  pendientes.slice(0, 40).forEach((p, i) => {
+  allTers.forEach((ter, i) => {
     if (y > 270) { doc.addPage(); y = 20; }
     if (i % 2 === 0) { doc.setFillColor(248, 250, 252); doc.rect(18, y - 4, W - 36, 7, 'F'); }
-    doc.setFontSize(7.5);
-    const colegio  = (p.colegio || '—').slice(0, 20);
-    const proyecto = (p.nombre_proyecto || '—').slice(0, 38);
-    doc.text(colegio,            pendCols.colegio,   y);
-    doc.text(proyecto,           pendCols.proyecto,  y);
-    doc.text(p.estatus  || '—',  pendCols.estatus,   y);
-    doc.text(p.prioridad || '—', pendCols.prioridad, y);
+    doc.setFontSize(8);
+    const { solicitudes: s, tickets: t } = terMap[ter];
+    const diff = s - t;
+    const terLabel = ter.length > 45 ? ter.slice(0, 42) + '…' : ter;
+    doc.text(terLabel,    stCols.territorio,  y);
+    doc.text(String(s),   stCols.solicitudes, y);
+    doc.text(String(t),   stCols.tickets,     y);
+    // Color diferencia: rojo si hay más solicitudes que tickets (sin atender), verde si equilibrado
+    if (diff > 0)  doc.setTextColor(185, 28, 28);
+    else if (diff < 0) doc.setTextColor(21, 128, 61);
+    else           doc.setTextColor(100, 116, 139);
+    doc.text(diff > 0 ? `+${diff}` : String(diff), stCols.diferencia, y);
+    doc.setTextColor(30, 30, 30);
     y += 7;
   });
-  if (pendientes.length > 40) {
-    y += 2;
-    doc.setFontSize(8);
-    doc.setTextColor(100, 116, 139);
-    doc.text(`... y ${pendientes.length - 40} pendientes más.`, 20, y);
-  }
 
-  // Pie de página
+  // Totales
+  y += 2;
+  const totSol = solicitudes.length;
+  const totTck = tickets.length;
+  const totDif = totSol - totTck;
+  doc.setFillColor(15, 23, 42);
+  doc.rect(18, y - 4, W - 36, 8, 'F');
+  doc.setFontSize(8);
+  doc.setFont('helvetica', 'bold');
+  doc.setTextColor(255, 255, 255);
+  doc.text('TOTAL',          stCols.territorio,  y);
+  doc.text(String(totSol),   stCols.solicitudes, y);
+  doc.text(String(totTck),   stCols.tickets,     y);
+  doc.text(totDif > 0 ? `+${totDif}` : String(totDif), stCols.diferencia, y);
+  y += 10;
+
+  // Nota explicativa
+  doc.setFontSize(7.5);
+  doc.setFont('helvetica', 'italic');
+  doc.setTextColor(100, 116, 139);
+  doc.text('Diferencia = Solicitudes − Tickets. Valor positivo indica solicitudes pendientes de convertir en ticket TCMM.', 20, y);
+  y += 8;
+
+  // ── Pie de página ──────────────────────────────────────────────────────────
   const pages = doc.getNumberOfPages();
   for (let i = 1; i <= pages; i++) {
     doc.setPage(i);
@@ -237,14 +379,27 @@ export default function Reports() {
     queryKey: ['checklists'],
     queryFn: () => db.Checklist.list('-created_at', 500),
   });
-  const { data: rawPendientes = [] } = useQuery({
-    queryKey: ['pendientes'],
-    queryFn: () => db.Pendiente.list('-fecha_actualizacion', 500),
+  const { data: rawSolicitudes = [] } = useQuery({
+    queryKey: ['solicitudes'],
+    queryFn: async () => {
+      const { data, error } = await supabase.from('solicitudes').select('*').order('created_at', { ascending: false }).limit(500);
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+  const { data: rawTickets = [] } = useQuery({
+    queryKey: ['tickets'],
+    queryFn: async () => {
+      const { data, error } = await supabase.from('tickets').select('*').order('created_at', { ascending: false }).limit(500);
+      if (error) throw error;
+      return data ?? [];
+    },
   });
 
-  const projects   = rawProjects   as unknown as Project[];
-  const checklists = rawChecklists as unknown[];
-  const pendientes = rawPendientes as unknown as Pendiente[];
+  const projects    = rawProjects    as unknown as Project[];
+  const checklists  = rawChecklists  as unknown[];
+  const solicitudes = rawSolicitudes as unknown as Solicitud[];
+  const tickets     = rawTickets     as unknown as Ticket[];
 
   const stats = useMemo((): Stats => ({
     total:       projects.length,
@@ -254,17 +409,27 @@ export default function Reports() {
       : 0,
   }), [projects]);
 
-  // Stats de pendientes
-  const pendStats = useMemo(() => ({
-    total:      pendientes.length,
-    pendiente:  pendientes.filter(p => p.estatus === 'pendiente').length,
-    enProgreso: pendientes.filter(p => p.estatus === 'en_progreso').length,
-    completado: pendientes.filter(p => p.estatus === 'completado').length,
-    pausado:    pendientes.filter(p => p.estatus === 'pausado').length,
-  }), [pendientes]);
+  // Solo proyectos activos para KPIs en pantalla
+  const activeProjects = useMemo(
+    () => projects.filter(p => p.status !== 'completado' && p.status !== 'cancelado'),
+    [projects],
+  );
+
+  // Solicitudes vs Tickets por territorio (para la tarjeta en pantalla)
+  const terData = useMemo(() => {
+    const allTers = Array.from(new Set([
+      ...solicitudes.map(s => s.territorio || 'Sin territorio'),
+      ...tickets.map(t => t.territorio || 'Sin territorio'),
+    ])).sort();
+    return allTers.map(ter => ({
+      territorio:  ter,
+      solicitudes: solicitudes.filter(s => (s.territorio || 'Sin territorio') === ter).length,
+      tickets:     tickets.filter(t => (t.territorio || 'Sin territorio') === ter).length,
+    }));
+  }, [solicitudes, tickets]);
 
   const handleExportPDF = () => {
-    exportResumenPDF({ stats, projects, checklists, pendientes }).catch(err => {
+    exportResumenPDF({ stats, projects, checklists, solicitudes, tickets }).catch(err => {
       console.error('Error generando PDF:', err);
     });
   };
@@ -279,11 +444,12 @@ export default function Reports() {
       {/* KPIs */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <div className={`${cardClass} border-l-4 border-l-slate-900`}>
-          <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Proyectos Totales</p>
+          <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Proyectos Activos</p>
           <div className="flex items-center justify-between">
-            <h3 className="text-3xl font-black text-slate-900">{stats.total}</h3>
+            <h3 className="text-3xl font-black text-slate-900">{activeProjects.length}</h3>
             <BarChart3 className="w-8 h-8 text-slate-100" />
           </div>
+          <p className="text-xs text-slate-400 mt-1">{stats.completed} completados · {stats.total} total</p>
         </div>
         <div className={`${cardClass} border-l-4 border-l-blue-600`}>
           <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Avance General</p>
@@ -300,33 +466,67 @@ export default function Reports() {
           </div>
         </div>
         <div className={`${cardClass} border-l-4 border-l-amber-500`}>
-          <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Pendientes</p>
+          <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Solicitudes</p>
           <div className="flex items-center justify-between">
-            <h3 className="text-3xl font-black text-slate-900">{pendStats.total}</h3>
+            <h3 className="text-3xl font-black text-slate-900">{solicitudes.length}</h3>
             <ClockAlert className="w-8 h-8 text-amber-100" />
           </div>
+          <p className="text-xs text-slate-400 mt-1">{tickets.length} tickets TCMM vinculados</p>
         </div>
       </div>
 
-      {/* Resumen de pendientes por estatus */}
-      {pendStats.total > 0 && (
+      {/* Solicitudes vs Tickets por territorio */}
+      {terData.length > 0 && (
         <div className={cardClass}>
           <h3 className="font-bold text-slate-900 mb-4 flex items-center gap-2">
-            <ClockAlert className="w-4 h-4 text-amber-500" />
-            Pendientes por Estatus
+            <PieChart className="w-4 h-4 text-blue-500" />
+            Solicitudes vs Tickets por Territorio
           </h3>
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-            {[
-              { label: 'Pendiente',   value: pendStats.pendiente,  color: 'bg-amber-50  text-amber-700  border-amber-200'  },
-              { label: 'En Progreso', value: pendStats.enProgreso, color: 'bg-blue-50   text-blue-700   border-blue-200'   },
-              { label: 'Completado',  value: pendStats.completado, color: 'bg-green-50  text-green-700  border-green-200'  },
-              { label: 'Pausado',     value: pendStats.pausado,    color: 'bg-slate-50  text-slate-700  border-slate-200'  },
-            ].map(({ label, value, color }) => (
-              <div key={label} className={`p-4 rounded-xl border text-center ${color}`}>
-                <p className="text-2xl font-black">{value}</p>
-                <p className="text-xs font-bold uppercase tracking-wide mt-1">{label}</p>
-              </div>
-            ))}
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="text-[10px] font-black uppercase tracking-widest text-slate-400 border-b border-slate-100">
+                  <th className="text-left pb-2 pr-4">Territorio</th>
+                  <th className="text-right pb-2 pr-4">Solicitudes</th>
+                  <th className="text-right pb-2 pr-4">Tickets TCMM</th>
+                  <th className="text-right pb-2">Diferencia</th>
+                </tr>
+              </thead>
+              <tbody>
+                {terData.map(({ territorio, solicitudes: s, tickets: t }) => {
+                  const diff = s - t;
+                  return (
+                    <tr key={territorio} className="border-b border-slate-50 hover:bg-slate-50">
+                      <td className="py-2 pr-4 text-slate-700 font-medium">{territorio}</td>
+                      <td className="py-2 pr-4 text-right tabular-nums text-slate-600">{s}</td>
+                      <td className="py-2 pr-4 text-right tabular-nums text-slate-600">{t}</td>
+                      <td className={`py-2 text-right tabular-nums font-bold ${
+                        diff > 0 ? 'text-red-600' : diff < 0 ? 'text-green-600' : 'text-slate-400'
+                      }`}>
+                        {diff > 0 ? `+${diff}` : diff}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+              <tfoot>
+                <tr className="bg-slate-900 text-white text-xs font-bold">
+                  <td className="py-2 px-2 rounded-l-lg">TOTAL</td>
+                  <td className="py-2 text-right tabular-nums pr-4">{solicitudes.length}</td>
+                  <td className="py-2 text-right tabular-nums pr-4">{tickets.length}</td>
+                  <td className={`py-2 text-right tabular-nums rounded-r-lg ${
+                    solicitudes.length - tickets.length > 0 ? 'text-red-300' : 'text-green-300'
+                  }`}>
+                    {solicitudes.length - tickets.length > 0
+                      ? `+${solicitudes.length - tickets.length}`
+                      : solicitudes.length - tickets.length}
+                  </td>
+                </tr>
+              </tfoot>
+            </table>
+            <p className="text-xs text-slate-400 mt-2">
+              Diferencia positiva = solicitudes pendientes de convertir en ticket TCMM.
+            </p>
           </div>
         </div>
       )}
