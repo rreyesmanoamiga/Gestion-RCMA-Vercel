@@ -86,9 +86,9 @@ async function generarPDF(c: ChecklistRecord) {
         cv.getContext('2d')!.drawImage(img, 0, 0);
         res(cv.toDataURL('image/png'));
       };
-      img.onerror = rej; img.src = '/colegio-mano-amiga.png';
+      img.onerror = rej; img.src = '/logo.png';
     });
-    doc.addImage(logoImg, 'PNG', W - 38, 2, 24, 24);
+    doc.addImage(logoImg, 'PNG', W - 38, 2, 28, 24);
   } catch { /* sin logo */ }
 
   y = 40;
