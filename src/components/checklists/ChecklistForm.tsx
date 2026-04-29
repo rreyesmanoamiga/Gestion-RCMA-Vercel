@@ -147,11 +147,25 @@ export default function ChecklistForm({
   const handleSubmit = (e: React.MouseEvent | React.FormEvent) => {
     e.preventDefault();
     if (!formData.title || !formData.territorio || !formData.colegio) return;
-    onSubmit({
-      ...formData,
-      overall_status: computeOverallStatus(formData.items),
-      description:    formData.general_observations,
-    });
+
+    const payload: Record<string, unknown> = {
+      title:               formData.title,
+      territorio:          formData.territorio,
+      colegio:             formData.colegio,
+      infrastructure_type: formData.infrastructure_type,
+      inspector:           formData.inspector || null,
+      general_observations: formData.general_observations || null,
+      description:         formData.general_observations || null,
+      items:               formData.items,
+      overall_status:      computeOverallStatus(formData.items),
+    };
+
+    // Solo incluir fecha si tiene valor válido
+    if (formData.inspection_date) {
+      payload.inspection_date = formData.inspection_date;
+    }
+
+    onSubmit(payload);
   };
 
   return (
