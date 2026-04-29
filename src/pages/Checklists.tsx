@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
-import { Plus, Search, ClipboardCheck, User, Calendar } from 'lucide-react';
+import { Search, ClipboardCheck, User, Calendar } from 'lucide-react';
 import { toast } from 'sonner';
 import { db } from '@/lib/db';
 import { TERRITORIOS, COLEGIOS } from '@/lib/colegios';
@@ -81,18 +81,12 @@ export default function Checklists() {
   const selectClass = "px-3 py-2 border border-slate-300 rounded-md text-sm bg-white text-slate-700 focus:ring-2 focus:ring-slate-900 focus:outline-none";
 
   return (
-    <div className="p-6 max-w-6xl mx-auto">
+    <div className="p-6">
       <PageHeader
         title="Checklists de Inspección"
         subtitle="Validación visual de infraestructuras"
-        action={
-          <button
-            onClick={() => setFormOpen(true)}
-            className="flex items-center gap-2 px-4 py-2 bg-slate-900 text-white text-sm font-semibold rounded-lg hover:bg-slate-700 transition-colors"
-          >
-            <Plus className="w-4 h-4" /> Nueva Inspección
-          </button>
-        }
+        actionLabel="Nueva Inspección"
+        onAction={() => setFormOpen(true)}
       />
 
       {/* Filtros */}
