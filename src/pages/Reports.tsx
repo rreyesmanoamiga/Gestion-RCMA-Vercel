@@ -59,61 +59,52 @@ async function loadJsPDF(): Promise<typeof import('jspdf').jsPDF> {
   return w.jspdf!.jsPDF;
 }
 
-// ── helpers de gráfica circular (jsPDF nativo, sin canvas) ──────────────────
-function drawPieChart(
+// ── Gráfica de barras por territorio (jsPDF nativo, sin canvas) ─────────────
+function drawTerritoryBar(
   doc: InstanceType<typeof import('jspdf').jsPDF>,
-  cx: number, cy: number, r: number,
-  slices: { value: number; color: [number, number, number]; label: string }[],
-  title: string,
+  x: number, y: number, barW: number,
+  active: number, completed: number,
+  label: string,
 ): void {
-  const total = slices.reduce((s, sl) => s + sl.value, 0);
-  if (total === 0) {
-    doc.setFontSize(8);
-    doc.setTextColor(160, 160, 160);
-    doc.text('Sin datos', cx, cy, { align: 'center' });
-    return;
+  const total   = active + completed;
+  const maxBarH = 20;
+
+  // Barra activos (azul)
+  const hActive = total > 0 ? Math.max(2, Math.round((active / total) * maxBarH)) : 0;
+  // Barra completados (verde)
+  const hComp   = total > 0 ? Math.max(2, Math.round((completed / total) * maxBarH)) : 0;
+
+  const barW2 = Math.floor(barW * 0.35);
+  const gap   = 3;
+  const baseY = y + maxBarH;
+
+  // Barra activos
+  if (hActive > 0) {
+    doc.setFillColor(59, 130, 246);
+    doc.rect(x, baseY - hActive, barW2, hActive, 'F');
   }
-  let startAngle = -Math.PI / 2;
-  slices.forEach(sl => {
-    if (sl.value === 0) return;
-    const sweep = (sl.value / total) * 2 * Math.PI;
-    const endAngle = startAngle + sweep;
-    // Dibuja sector con líneas
-    const steps = Math.max(4, Math.round(sweep * 12));
-    const pts: [number, number][] = [[cx, cy]];
-    for (let i = 0; i <= steps; i++) {
-      const a = startAngle + (sweep * i) / steps;
-      pts.push([cx + r * Math.cos(a), cy + r * Math.sin(a)]);
-    }
-    doc.setFillColor(...sl.color);
-    doc.setDrawColor(...sl.color);
-    // jsPDF expone lines(), usamos esa API — deltas como bezier lineal [dx,dy,dx,dy]
-    doc.setLineWidth(0.1);
-    const deltas = pts.slice(1).map((p, i) => {
-      const dx = p[0] - pts[i][0];
-      const dy = p[1] - pts[i][1];
-      return [dx, dy, dx, dy] as [number, number, number, number];
-    });
-    doc.lines(deltas, pts[0][0], pts[0][1], [1, 1], 'FD', true);
-    startAngle = endAngle;
-  });
-  // Título
-  doc.setFontSize(8);
+  // Barra completados
+  if (hComp > 0) {
+    doc.setFillColor(34, 197, 94);
+    doc.rect(x + barW2 + gap, baseY - hComp, barW2, hComp, 'F');
+  }
+  // Línea base
+  doc.setDrawColor(200, 200, 200);
+  doc.line(x - 2, baseY + 1, x + barW, baseY + 1);
+
+  // Valores sobre barras
+  doc.setFontSize(6.5);
   doc.setFont('helvetica', 'bold');
   doc.setTextColor(30, 30, 30);
-  doc.text(title, cx, cy - r - 4, { align: 'center' });
-  // Leyenda
-  let ly = cy + r + 6;
-  slices.forEach(sl => {
-    if (sl.value === 0) return;
-    doc.setFillColor(...sl.color);
-    doc.rect(cx - 14, ly - 3, 4, 4, 'F');
-    doc.setFontSize(7);
-    doc.setFont('helvetica', 'normal');
-    doc.setTextColor(50, 50, 50);
-    doc.text(`${sl.label}: ${sl.value}`, cx - 8, ly);
-    ly += 6;
-  });
+  if (hActive > 0)  doc.text(String(active),    x + barW2 / 2,         baseY - hActive - 1.5, { align: 'center' });
+  if (hComp > 0)    doc.text(String(completed), x + barW2 + gap + barW2 / 2, baseY - hComp - 1.5,  { align: 'center' });
+
+  // Etiqueta territorio
+  doc.setFontSize(6.5);
+  doc.setFont('helvetica', 'normal');
+  doc.setTextColor(80, 80, 80);
+  const lbl = label.length > 12 ? label.slice(0, 10) + '…' : label;
+  doc.text(lbl, x + barW / 2, baseY + 5, { align: 'center' });
 }
 
 async function exportResumenPDF({
@@ -196,47 +187,52 @@ async function exportResumenPDF({
   line(`Tickets TCMM:             ${tickets.length}`,        10);
   y += 4;
 
-  // ── Gráficas circulares por territorio ────────────────────────────────────
+  // ── Gráficas de barras por territorio ────────────────────────────────────
   if (y > 200) { doc.addPage(); y = 20; }
   line('Proyectos por Territorio', 13, true);
   y += 2;
   divider();
+
+  // Leyenda global
+  doc.setFillColor(59, 130, 246);
+  doc.rect(20, y - 3, 5, 5, 'F');
+  doc.setFontSize(7.5);
+  doc.setFont('helvetica', 'normal');
+  doc.setTextColor(50, 50, 50);
+  doc.text('Activos', 27, y);
+  doc.setFillColor(34, 197, 94);
+  doc.rect(58, y - 3, 5, 5, 'F');
+  doc.text('Completados', 65, y);
+  y += 8;
 
   // Obtener territorios únicos
   const territorios = Array.from(
     new Set(projects.map(p => p.territorio || 'Sin territorio'))
   ).sort();
 
-  const COLS    = 3;
-  const R       = 16; // radio del pie
-  const colW    = (W - 40) / COLS;
-  const rowH    = R * 2 + 32; // alto total por pie: arco + leyenda estimada
-  let pieCol    = 0;
-  let pieRowY   = y + R + 8;
+  const COLS  = 4;
+  const barW  = (W - 40) / COLS;
+  const rowH  = 38;
+  let col     = 0;
+  let rowY    = y;
 
   territorios.forEach(ter => {
     const tProj  = projects.filter(p => (p.territorio || 'Sin territorio') === ter);
     const active = tProj.filter(p => p.status !== 'completado' && p.status !== 'cancelado').length;
     const comp   = tProj.filter(p => p.status === 'completado').length;
+    const bx     = 20 + col * barW;
 
-    const cx = 20 + colW * pieCol + colW / 2;
-    const cy = pieRowY;
+    drawTerritoryBar(doc, bx, rowY, barW - 4, active, comp, ter);
 
-    drawPieChart(doc, cx, cy, R, [
-      { value: active, color: [59, 130, 246],  label: 'Activos'     },
-      { value: comp,   color: [34, 197, 94],   label: 'Completados' },
-    ], ter.length > 18 ? ter.slice(0, 16) + '…' : ter);
-
-    pieCol++;
-    if (pieCol >= COLS) {
-      pieCol  = 0;
-      pieRowY += rowH;
-      if (pieRowY + rowH > 270) { doc.addPage(); pieRowY = R + 20; y = 20; }
+    col++;
+    if (col >= COLS) {
+      col   = 0;
+      rowY += rowH;
+      if (rowY + rowH > 270) { doc.addPage(); rowY = 20; }
     }
   });
 
-  // Ajustar y al final de las gráficas
-  y = pieRowY + (pieCol > 0 ? rowH : 0) + 6;
+  y = rowY + (col > 0 ? rowH : 0) + 6;
   if (y > 250) { doc.addPage(); y = 20; }
 
   // ── Detalle de proyectos activos (sin completados/cancelados) ─────────────
