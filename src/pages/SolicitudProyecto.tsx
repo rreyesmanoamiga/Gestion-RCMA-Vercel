@@ -131,11 +131,12 @@ export default function SolicitudProyecto() {
       // Notificar al admin que llegó una nueva solicitud
       await supabase.functions.invoke('send-solicitud-recibida', {
         body: {
-          tipo:    'nueva_solicitud',
-          correo:  form.correo_solicitante,
-          nombre:  form.nombre_solicitante,
-          proyecto: form.nombre_proyecto,
-          centro:  form.nombre_centro,
+          tipo:         'nueva_solicitud',
+          correo:       form.correo_solicitante,
+          nombre:       form.nombre_solicitante,
+          proyecto:     form.nombre_proyecto,
+          centro:       form.nombre_centro,
+          correoAdmin:  'rreyes@manoamiga.edu.mx',
         },
       });
 

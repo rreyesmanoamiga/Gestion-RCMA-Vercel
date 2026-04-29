@@ -153,11 +153,12 @@ export default function SolicitudesRecibidas() {
       // Enviar email via Edge Function
       await supabase.functions.invoke('send-solicitud-recibida', {
         body: {
-          tipo:    'solicitud_recibida',
-          correo:  sol.correo_solicitante,
-          nombre:  sol.nombre_solicitante,
-          proyecto: sol.nombre_proyecto,
-          centro:  sol.nombre_centro,
+          tipo:        'solicitud_recibida',
+          correo:      sol.correo_solicitante,
+          nombre:      sol.nombre_solicitante,
+          proyecto:    sol.nombre_proyecto,
+          centro:      sol.nombre_centro,
+          correoAdmin: 'rreyes@manoamiga.edu.mx',
         },
       });
     },
