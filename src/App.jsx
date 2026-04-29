@@ -10,8 +10,6 @@ import AppLayout from '@/components/layout/AppLayout';
 import Dashboard from '@/pages/Dashboard';
 import Projects from '@/pages/Projects';
 import ProjectDetail from '@/pages/ProjectDetail';
-import Checklists from '@/pages/Checklists';
-import ChecklistDetail from '@/pages/ChecklistDetail';
 import Anteproyectos from '@/pages/Anteproyectos';
 import Tickets from '@/pages/Tickets';
 import SolicitudProyecto from '@/pages/SolicitudProyecto';
@@ -231,8 +229,6 @@ function AuthenticatedApp() {
           <Route path="/tickets"           element={<Tickets />} />
           <Route path="/proyectos"         element={<Projects />} />
           <Route path="/proyectos/:id"     element={<ProjectDetail />} />
-          <Route path="/checklists"        element={<Checklists />} />
-          <Route path="/checklists/:id"    element={<ChecklistDetail />} />
           <Route path="/anteproyectos"     element={<Anteproyectos />} />
           <Route path="/solicitud"           element={<SolicitudProyecto />} />
           <Route path="/solicitudes"         element={<SolicitudesRecibidas />} />

@@ -3,7 +3,6 @@ import { Link, useLocation } from 'react-router-dom';
 import {
   LayoutDashboard,
   FolderKanban,
-  ClipboardCheck,
   FolderOpen,
   FileText,
   Building2,
@@ -116,14 +115,6 @@ export default function Sidebar({ isOpen, onToggle }) {
             <Link to="/anteproyectos" onClick={handleNavClick} className={navLinkClass('/anteproyectos')}>
               <FolderOpen className="w-[18px] h-[18px]" />
               Anteproyectos
-            </Link>
-          )}
-
-          {/* Checklists */}
-          {can('ver_checklists') && (
-            <Link to="/checklists" onClick={handleNavClick} className={navLinkClass('/checklists')}>
-              <ClipboardCheck className="w-[18px] h-[18px]" />
-              Checklists
             </Link>
           )}
 
