@@ -14,8 +14,6 @@ import {
   ClockAlert,
   CalendarDays,
   TicketCheck,
-  ClipboardList,
-  Inbox,
 } from 'lucide-react';
 import { useAuth } from '@/lib/AuthContext';
 import { cn } from '@/lib/utils';
@@ -31,7 +29,6 @@ const NAV_ITEMS = [
   { label: 'Calendario',            path: '/calendario',     icon: CalendarDays    },
   { label: 'Pendientes',            path: '/pendientes',     icon: ClockAlert      },
   { label: 'Solicitud de Proyecto', path: '/solicitud',      icon: ClipboardList   },
-  { label: 'Reportes',              path: '/reportes',       icon: FileText        },
 ];
 
 export default function Sidebar({ isOpen, onToggle }) {
@@ -50,7 +47,7 @@ export default function Sidebar({ isOpen, onToggle }) {
 
   const navLinkClass = (path) => cn(
     'flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-200',
-    location.pathname === path || (path !== '/' && path !== '/solicitud' && path !== '/solicitudes' && location.pathname.startsWith(path))
+    (location.pathname === path || (path !== '/' && location.pathname.startsWith(path)))
       ? 'bg-sidebar-primary text-sidebar-primary-foreground shadow-md'
       : 'text-sidebar-foreground/70 hover:text-sidebar-foreground hover:bg-sidebar-accent'
   );
@@ -117,15 +114,17 @@ export default function Sidebar({ isOpen, onToggle }) {
 
           {/* Solicitudes Recibidas — solo admin */}
           {isAdmin && (
-            <Link
-              to="/solicitudes"
-              onClick={handleNavClick}
-              className={navLinkClass('/solicitudes')}
-            >
+            <Link to="/solicitudes" onClick={handleNavClick} className={navLinkClass('/solicitudes')}>
               <Inbox className="w-[18px] h-[18px]" />
               Solicitudes Recibidas
             </Link>
           )}
+
+          {/* Reportes — todos */}
+          <Link to="/reportes" onClick={handleNavClick} className={navLinkClass('/reportes')}>
+            <FileText className="w-[18px] h-[18px]" />
+            Reportes
+          </Link>
 
           {/* Accesos — solo admin */}
           {isAdmin && (
