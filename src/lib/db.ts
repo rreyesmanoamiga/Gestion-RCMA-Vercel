@@ -141,7 +141,6 @@ function createEntityClient(tableName: string) {
 
 export const db = {
   Project:           createEntityClient('projects'),
-  Checklist:         createEntityClient('checklists'),
   MaintenanceRecord: createEntityClient('maintenance_records'),
   Report:            createEntityClient('reports'),
   UserPermissions:   createEntityClient('user_permissions'),
