@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { db } from '@/lib/db';
+import { supabase } from '@/lib/supabaseClient';
 import {
   ArrowLeft, AlertTriangle, Trash2, MapPin, User,
   Calendar, ClipboardCheck, Pencil, FileText,
@@ -82,6 +83,23 @@ async function exportChecklistPDF(checklist: Checklist) {
   doc.text('Reporte de Inspección — Sistema RCMA', 20, 13);
   doc.setFontSize(9); doc.setFont('helvetica', 'normal'); doc.setTextColor(180, 180, 200);
   doc.text(`Generado el ${now}`, 20, 22);
+
+  // Logo
+  try {
+    const logoImg = await new Promise<string>((resolve, reject) => {
+      const img = new Image();
+      img.crossOrigin = 'anonymous';
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        canvas.width = img.width; canvas.height = img.height;
+        canvas.getContext('2d')!.drawImage(img, 0, 0);
+        resolve(canvas.toDataURL('image/png'));
+      };
+      img.onerror = reject;
+      img.src = '/colegio-mano-amiga.png';
+    });
+    doc.addImage(logoImg, 'PNG', W - 38, 2, 24, 24);
+  } catch { /* sin logo */ }
   y = 38;
 
   // Título
@@ -193,11 +211,19 @@ export default function ChecklistDetail() {
 
   const { data, isLoading, isError } = useQuery({
     queryKey: ['checklists', id],
-    queryFn: () => db.Checklist.filter({ id }, '-created_at', 1),
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('checklists')
+        .select('*')
+        .eq('id', id!)
+        .single();
+      if (error) throw error;
+      return data;
+    },
     enabled: !!id,
   });
 
-  const checklist = (data as unknown as Checklist[] | undefined)?.[0];
+  const checklist = data as unknown as Checklist | undefined;
 
   const deleteMutation = useMutation({
     mutationFn: () => db.Checklist.delete(id!),
@@ -208,7 +234,13 @@ export default function ChecklistDetail() {
   });
 
   const updateMutation = useMutation({
-    mutationFn: (data: Record<string, unknown>) => db.Checklist.update(id!, data),
+    mutationFn: async (data: Record<string, unknown>) => {
+      const { error } = await supabase
+        .from('checklists')
+        .update(data)
+        .eq('id', id!);
+      if (error) throw error;
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['checklists', id] });
       queryClient.invalidateQueries({ queryKey: ['checklists'] });

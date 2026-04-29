@@ -1,5 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { db } from '@/lib/db';
+import { supabase } from '@/lib/supabaseClient';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import { ClipboardCheck, Search, ChevronDown } from 'lucide-react';
@@ -52,7 +53,15 @@ export default function Checklists() {
 
   const { data: rawChecklists = [], isLoading } = useQuery({
     queryKey: ['checklists'],
-    queryFn: () => db.Checklist.list('-created_at', 500),
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('checklists')
+        .select('*')
+        .order('created_at', { ascending: false })
+        .limit(500);
+      if (error) throw error;
+      return data ?? [];
+    },
   });
 
   const { data: rawProjects = [] } = useQuery({
@@ -64,15 +73,18 @@ export default function Checklists() {
   const projects   = rawProjects   as unknown as Project[];
 
   const createMutation = useMutation({
-    mutationFn: (data: Record<string, unknown>) => db.Checklist.create(data),
-    onSuccess: (result: any) => {
-      if (result?._offline) {
-        queryClient.setQueryData(['checklists'], (old: any) => [result, ...(old ?? [])]);
-        toast.warning('📶 Sin conexión — Inspección guardada localmente, se sincronizará cuando haya internet');
-      } else {
-        queryClient.invalidateQueries({ queryKey: ['checklists'] });
-        toast.success('Inspección creada correctamente');
-      }
+    mutationFn: async (data: Record<string, unknown>) => {
+      const { data: result, error } = await supabase
+        .from('checklists')
+        .insert(data)
+        .select()
+        .single();
+      if (error) throw error;
+      return result;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['checklists'] });
+      toast.success('Inspección creada correctamente');
       setShowForm(false);
     },
     onError: () => {
