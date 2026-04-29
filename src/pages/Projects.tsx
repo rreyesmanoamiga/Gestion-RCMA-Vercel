@@ -1,8 +1,9 @@
 import React, { useState, useMemo } from 'react';
 import { db } from '@/lib/db';
+import { supabase } from '@/lib/supabaseClient';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
-import { FolderKanban, MapPin, Calendar, User, ChevronDown } from 'lucide-react';
+import { FolderKanban, MapPin, Calendar, User, ChevronDown, TicketCheck } from 'lucide-react';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { toast } from 'sonner';
@@ -15,6 +16,12 @@ import { COLEGIOS, TERRITORIOS } from '@/lib/colegios';
 
 const PAGE_SIZE   = 20;
 const selectClass = "h-10 px-3 py-2 bg-white border border-slate-300 rounded-md text-sm focus:ring-2 focus:ring-slate-400 focus:outline-none text-slate-700";
+
+interface Ticket {
+  id:           string;
+  folio?:       string;
+  proyecto_id?: string | null;
+}
 
 interface Project {
   id:             string;
@@ -47,7 +54,27 @@ export default function Projects() {
     queryFn: () => db.Project.list('-created_at', 500),
   });
 
+  const { data: rawTickets = [] } = useQuery({
+    queryKey: ['tickets-vinculados'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('tickets')
+        .select('id, folio, proyecto_id')
+        .not('proyecto_id', 'is', null);
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+
   const projects = rawProjects as unknown as Project[];
+  const tickets  = rawTickets  as unknown as Ticket[];
+
+  // Mapa proyecto_id → ticket (para buscar rápido en cada tarjeta)
+  const ticketByProject = useMemo(() => {
+    const map: Record<string, Ticket> = {};
+    tickets.forEach(t => { if (t.proyecto_id) map[t.proyecto_id] = t; });
+    return map;
+  }, [tickets]);
 
   const createMutation = useMutation({
     mutationFn: (data: Record<string, unknown>) => db.Project.create(data),
@@ -266,6 +293,12 @@ export default function Projects() {
                     <span className="flex items-center gap-1.5">
                       <Calendar className="w-3 h-3 text-slate-300" />
                       {format(new Date(project.start_date), 'dd MMM', { locale: es })}
+                    </span>
+                  )}
+                  {ticketByProject[project.id] && (
+                    <span className="flex items-center gap-1.5 text-blue-500 font-bold normal-case">
+                      <TicketCheck className="w-3 h-3" />
+                      {ticketByProject[project.id].folio}
                     </span>
                   )}
                 </div>
