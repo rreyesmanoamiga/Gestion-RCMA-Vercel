@@ -14,6 +14,8 @@ import {
   ClockAlert,
   CalendarDays,
   TicketCheck,
+  ClipboardEdit,
+  Inbox,
 } from 'lucide-react';
 import { useAuth } from '@/lib/AuthContext';
 import { cn } from '@/lib/utils';
@@ -21,14 +23,14 @@ import { useIsMobile } from '@/hooks/use-mobile';
 import { supabase } from '@/lib/supabaseClient';
 
 const NAV_ITEMS = [
-  { label: 'Dashboard',         path: '/',               icon: LayoutDashboard },
-  { label: 'Tickets Registrados', path: '/tickets',      icon: TicketCheck     },
-  { label: 'Proyectos',         path: '/proyectos',      icon: FolderKanban    },
-  { label: 'Anteproyectos',     path: '/anteproyectos',  icon: FolderOpen      },
-  { label: 'Checklists',        path: '/checklists',     icon: ClipboardCheck  },
-  { label: 'Calendario',        path: '/calendario',     icon: CalendarDays    },
-  { label: 'Pendientes',        path: '/pendientes',     icon: ClockAlert      },
-  { label: 'Reportes',          path: '/reportes',       icon: FileText        },
+  { label: 'Dashboard',             path: '/',               icon: LayoutDashboard },
+  { label: 'Tickets Registrados',   path: '/tickets',        icon: TicketCheck     },
+  { label: 'Proyectos',             path: '/proyectos',      icon: FolderKanban    },
+  { label: 'Anteproyectos',         path: '/anteproyectos',  icon: FolderOpen      },
+  { label: 'Checklists',            path: '/checklists',     icon: ClipboardCheck  },
+  { label: 'Calendario',            path: '/calendario',     icon: CalendarDays    },
+  { label: 'Pendientes',            path: '/pendientes',     icon: ClockAlert      },
+  { label: 'Solicitud de Proyecto', path: '/solicitud',      icon: ClipboardEdit   },
 ];
 
 export default function Sidebar({ isOpen, onToggle }) {
@@ -47,7 +49,7 @@ export default function Sidebar({ isOpen, onToggle }) {
 
   const navLinkClass = (path) => cn(
     'flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-200',
-    (location.pathname === path || (path !== '/' && location.pathname.startsWith(path)))
+    location.pathname === path || (path !== '/' && path !== '/solicitud' && path !== '/solicitudes' && location.pathname.startsWith(path))
       ? 'bg-sidebar-primary text-sidebar-primary-foreground shadow-md'
       : 'text-sidebar-foreground/70 hover:text-sidebar-foreground hover:bg-sidebar-accent'
   );
@@ -111,6 +113,28 @@ export default function Sidebar({ isOpen, onToggle }) {
               {label}
             </Link>
           ))}
+
+          {/* Solicitudes Recibidas — solo admin */}
+          {isAdmin && (
+            <Link
+              to="/solicitudes"
+              onClick={handleNavClick}
+              className={navLinkClass('/solicitudes')}
+            >
+              <Inbox className="w-[18px] h-[18px]" />
+              Solicitudes Recibidas
+            </Link>
+          )}
+
+          {/* Reportes — todos */}
+          <Link
+            to="/reportes"
+            onClick={handleNavClick}
+            className={navLinkClass('/reportes')}
+          >
+            <FileText className="w-[18px] h-[18px]" />
+            Reportes
+          </Link>
 
           {/* Accesos — solo admin */}
           {isAdmin && (
