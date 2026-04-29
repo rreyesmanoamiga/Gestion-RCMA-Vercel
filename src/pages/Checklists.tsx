@@ -182,9 +182,13 @@ export default function Checklists() {
           value={filterType}
           onChange={e => handleFilterChange(setFilterType)(e.target.value)}
         >
-          <option value="all">Todas las Estructuras</option>
-          <option value="concreto">Concreto</option>
-          <option value="metalica">Metálica</option>
+          <option value="all">Todos los Materiales</option>
+          <option value="petreos">Pétreos (piedra, arena, arcilla)</option>
+          <option value="metalicos">Metálicos (acero, aluminio)</option>
+          <option value="aglomerantes">Aglomerantes (cemento, cal, yeso)</option>
+          <option value="ceramicos">Cerámicos (ladrillos, azulejos)</option>
+          <option value="madera">Madera</option>
+          <option value="sinteticos">Sintéticos (plásticos, aislantes)</option>
         </select>
 
         {filtered.length > 0 && (
