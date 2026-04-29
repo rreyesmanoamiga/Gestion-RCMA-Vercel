@@ -2,60 +2,45 @@ import React, { useState } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { db } from '@/lib/db';
-import { supabase } from '@/lib/supabaseClient';
-import {
-  ArrowLeft, AlertTriangle, Trash2, MapPin, User,
-  Calendar, ClipboardCheck, Pencil, FileText,
-} from 'lucide-react';
+import { ArrowLeft, AlertTriangle, Trash2, MapPin, User, Calendar, ClipboardCheck, Pencil, FileText } from 'lucide-react';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { toast } from 'sonner';
 import StatusBadge from '@/components/shared/StatusBadge';
 import ChecklistForm from '@/components/checklists/ChecklistForm';
 
-const btnDanger   = "inline-flex items-center gap-2 px-4 py-2 border border-red-200 text-red-600 rounded-md text-sm font-bold hover:bg-red-50 transition-colors";
-const btnOutline  = "inline-flex items-center gap-2 px-4 py-2 border border-slate-300 text-slate-700 rounded-md text-sm font-bold hover:bg-slate-50 transition-colors";
-const btnPrimary  = "inline-flex items-center gap-2 px-4 py-2 bg-slate-900 text-white rounded-md text-sm font-bold hover:bg-slate-700 transition-colors";
+const btnDanger  = "inline-flex items-center gap-2 px-4 py-2 border border-red-200 text-red-600 rounded-md text-sm font-bold hover:bg-red-50 transition-colors";
+const btnOutline = "inline-flex items-center gap-2 px-4 py-2 border border-slate-300 text-slate-700 rounded-md text-sm font-bold hover:bg-slate-50 transition-colors";
+const btnPrimary = "inline-flex items-center gap-2 px-4 py-2 bg-slate-900 text-white rounded-md text-sm font-bold hover:bg-slate-700 transition-colors";
 
 const TIPOS_MATERIAL: Record<string, string> = {
-  petreos:      'Pétreos (piedra, arena, arcilla)',
-  metalicos:    'Metálicos (acero, aluminio)',
-  aglomerantes: 'Aglomerantes (cemento, cal, yeso)',
-  ceramicos:    'Cerámicos (ladrillos, azulejos)',
-  madera:       'Madera',
-  sinteticos:   'Sintéticos (plásticos, aislantes)',
-  // compatibilidad con registros viejos
-  concreto:     'Concreto',
-  metalica:     'Metálica',
+  petreos: 'Pétreos (piedra, arena, arcilla)', metalicos: 'Metálicos (acero, aluminio)',
+  aglomerantes: 'Aglomerantes (cemento, cal, yeso)', ceramicos: 'Cerámicos (ladrillos, azulejos)',
+  madera: 'Madera', sinteticos: 'Sintéticos (plásticos, aislantes)',
+  concreto: 'Concreto', metalica: 'Metálica',
 };
 
-interface ChecklistItem {
-  label?:     string;
-  condition?: string;
-  notes?:     string;
-}
-
+interface ChecklistItem { label?: string; condition?: string; notes?: string; }
 interface Checklist {
-  id:                   string;
-  title?:               string;
-  overall_status?:      string;
-  infrastructure_type?: string;
-  colegio?:             string;
-  territorio?:          string;
-  inspector?:           string;
-  inspection_date?:     string;
-  description?:         string;
-  general_observations?: string;
-  items?:               ChecklistItem[];
+  id: string; title?: string; overall_status?: string; infrastructure_type?: string;
+  colegio?: string; territorio?: string; inspector?: string; inspection_date?: string;
+  description?: string; general_observations?: string; items?: unknown;
   [key: string]: unknown;
 }
 
-const conditionConfig: Record<string, { label: string; class: string; badge: string }> = {
-  bueno:   { label: 'Bueno',   class: 'bg-emerald-50 text-emerald-700 border-emerald-200', badge: 'bg-emerald-100 text-emerald-800 border-emerald-200' },
-  regular: { label: 'Regular', class: 'bg-amber-50  text-amber-700  border-amber-200',    badge: 'bg-amber-100  text-amber-800  border-amber-200'    },
-  malo:    { label: 'Malo',    class: 'bg-red-50    text-red-700    border-red-200',       badge: 'bg-red-100   text-red-800   border-red-200'        },
-  critico: { label: 'Crítico', class: 'bg-red-100   text-red-800    border-red-300',      badge: 'bg-red-200   text-red-900   border-red-300'        },
+const conditionConfig: Record<string, { label: string; class: string }> = {
+  bueno:   { label: 'Bueno',   class: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
+  regular: { label: 'Regular', class: 'bg-amber-50  text-amber-700  border-amber-200'    },
+  malo:    { label: 'Malo',    class: 'bg-red-50    text-red-700    border-red-200'       },
+  critico: { label: 'Crítico', class: 'bg-red-100   text-red-800    border-red-300'      },
 };
+
+function parseItems(raw: unknown): ChecklistItem[] {
+  if (!raw) return [];
+  if (Array.isArray(raw)) return raw as ChecklistItem[];
+  if (typeof raw === 'string') { try { return JSON.parse(raw); } catch { return []; } }
+  return [];
+}
 
 async function loadJsPDF() {
   const w = window as Window & { jspdf?: { jsPDF: unknown } };
@@ -71,134 +56,68 @@ async function loadJsPDF() {
 
 async function exportChecklistPDF(checklist: Checklist) {
   const JsPDF = await loadJsPDF();
-  const doc   = new JsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
-  const W     = 210;
-  let   y     = 20;
-  const now   = new Date().toLocaleDateString('es-MX', { year: 'numeric', month: 'long', day: 'numeric' });
-
-  // Encabezado
-  doc.setFillColor(15, 23, 42);
-  doc.rect(0, 0, W, 28, 'F');
-  doc.setFontSize(15); doc.setFont('helvetica', 'bold'); doc.setTextColor(255, 255, 255);
+  const doc = new JsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+  const W = 210; let y = 20;
+  const now = new Date().toLocaleDateString('es-MX', { year: 'numeric', month: 'long', day: 'numeric' });
+  doc.setFillColor(15,23,42); doc.rect(0,0,W,28,'F');
+  doc.setFontSize(15); doc.setFont('helvetica','bold'); doc.setTextColor(255,255,255);
   doc.text('Reporte de Inspección — Sistema RCMA', 20, 13);
-  doc.setFontSize(9); doc.setFont('helvetica', 'normal'); doc.setTextColor(180, 180, 200);
-  doc.text(`Generado el ${now}`, 20, 22);
-
-  // Logo
+  doc.setFontSize(9); doc.setFont('helvetica','normal'); doc.setTextColor(180,180,200);
+  doc.text('Generado el ' + now, 20, 22);
   try {
     const logoImg = await new Promise<string>((resolve, reject) => {
-      const img = new Image();
-      img.crossOrigin = 'anonymous';
-      img.onload = () => {
-        const canvas = document.createElement('canvas');
-        canvas.width = img.width; canvas.height = img.height;
-        canvas.getContext('2d')!.drawImage(img, 0, 0);
-        resolve(canvas.toDataURL('image/png'));
-      };
-      img.onerror = reject;
-      img.src = '/colegio-mano-amiga.png';
+      const img = new Image(); img.crossOrigin = 'anonymous';
+      img.onload = () => { const c = document.createElement('canvas'); c.width=img.width; c.height=img.height; c.getContext('2d')!.drawImage(img,0,0); resolve(c.toDataURL('image/png')); };
+      img.onerror = reject; img.src = '/colegio-mano-amiga.png';
     });
-    doc.addImage(logoImg, 'PNG', W - 38, 2, 24, 24);
+    doc.addImage(logoImg, 'PNG', W-38, 2, 24, 24);
   } catch { /* sin logo */ }
   y = 38;
-
-  // Título
-  doc.setFontSize(16); doc.setFont('helvetica', 'bold'); doc.setTextColor(15, 23, 42);
+  doc.setFontSize(16); doc.setFont('helvetica','bold'); doc.setTextColor(15,23,42);
   doc.text(checklist.title || 'Sin título', 20, y); y += 8;
-
-  // Ficha
-  doc.setFontSize(9); doc.setFont('helvetica', 'normal'); doc.setTextColor(100, 116, 139);
-  const fecha = checklist.inspection_date
-    ? format(new Date(checklist.inspection_date), 'dd MMM yyyy', { locale: es })
-    : 'Sin fecha';
-  doc.text(`Colegio: ${checklist.colegio || '—'}   Territorio: ${checklist.territorio || '—'}`, 20, y); y += 6;
-  doc.text(`Inspector: ${checklist.inspector || 'Sin asignar'}   Fecha: ${fecha}`, 20, y); y += 6;
-  doc.text(`Material: ${TIPOS_MATERIAL[checklist.infrastructure_type || ''] || checklist.infrastructure_type || '—'}`, 20, y); y += 6;
-  if (checklist.description || checklist.general_observations) {
-    const obs = String(checklist.description || checklist.general_observations || '');
-    const lines = doc.splitTextToSize(obs, W - 40);
-    doc.text(lines, 20, y); y += lines.length * 5;
-  }
-  y += 4;
-
-  // Separador
-  doc.setDrawColor(220, 220, 220); doc.line(20, y, W - 20, y); y += 8;
-
-  // Conteos
-  const items: ChecklistItem[] = checklist.items ?? [];
-  const counts = { bueno: 0, regular: 0, malo: 0, critico: 0 };
+  const items = parseItems(checklist.items);
+  const fecha = checklist.inspection_date ? format(new Date(checklist.inspection_date), 'dd MMM yyyy', { locale: es }) : 'Sin fecha';
+  doc.setFontSize(9); doc.setFont('helvetica','normal'); doc.setTextColor(100,116,139);
+  doc.text('Colegio: '+(checklist.colegio||'—')+'   Territorio: '+(checklist.territorio||'—'), 20, y); y+=6;
+  doc.text('Inspector: '+(checklist.inspector||'Sin asignar')+'   Fecha: '+fecha, 20, y); y+=6;
+  doc.text('Material: '+(TIPOS_MATERIAL[checklist.infrastructure_type||'']||checklist.infrastructure_type||'—'), 20, y); y+=6;
+  const obs = String(checklist.description||checklist.general_observations||'');
+  if (obs) { const lines = doc.splitTextToSize(obs, W-40); doc.text(lines,20,y); y+=lines.length*5; }
+  y+=4; doc.setDrawColor(220,220,220); doc.line(20,y,W-20,y); y+=8;
+  const counts = { bueno:0, regular:0, malo:0, critico:0 };
   items.forEach(it => { if (it.condition && it.condition in counts) counts[it.condition as keyof typeof counts]++; });
-
-  doc.setFontSize(10); doc.setFont('helvetica', 'bold'); doc.setTextColor(15, 23, 42);
-  doc.text('Resumen de Condiciones', 20, y); y += 7;
-
-  const countCols = [
-    { label: 'BUENO',   val: counts.bueno,   r: 34, g: 197, b: 94  },
-    { label: 'REGULAR', val: counts.regular, r: 245, g: 158, b: 11  },
-    { label: 'MALO',    val: counts.malo,    r: 239, g: 68,  b: 68  },
-    { label: 'CRÍTICO', val: counts.critico, r: 185, g: 28,  b: 28  },
-  ];
-  countCols.forEach((c, i) => {
-    const bx = 20 + i * 44;
-    doc.setFillColor(c.r, c.g, c.b);
-    doc.rect(bx, y, 38, 14, 'F');
-    doc.setFontSize(18); doc.setFont('helvetica', 'bold'); doc.setTextColor(255, 255, 255);
-    doc.text(String(c.val), bx + 19, y + 9, { align: 'center' });
-    doc.setFontSize(7); doc.setFont('helvetica', 'normal');
-    doc.text(c.label, bx + 19, y + 13, { align: 'center' });
-  });
-  y += 20;
-  doc.setDrawColor(220, 220, 220); doc.line(20, y, W - 20, y); y += 8;
-
-  // Tabla de items
-  doc.setFontSize(10); doc.setFont('helvetica', 'bold'); doc.setTextColor(15, 23, 42);
-  doc.text('Items Inspeccionados', 20, y); y += 7;
-
-  if (items.length === 0) {
-    doc.setFontSize(9); doc.setFont('helvetica', 'italic'); doc.setTextColor(150, 150, 150);
-    doc.text('No hay items registrados en esta inspección.', 20, y);
-  } else {
-    // Encabezado tabla
-    doc.setFillColor(241, 245, 249);
-    doc.rect(18, y - 4, W - 36, 8, 'F');
-    doc.setFontSize(8); doc.setFont('helvetica', 'bold'); doc.setTextColor(100, 116, 139);
-    doc.text('Item', 22, y);
-    doc.text('Notas', 120, y);
-    doc.text('Estado', W - 22, y, { align: 'right' });
-    y += 6;
-    doc.setDrawColor(220, 220, 220); doc.line(20, y, W - 20, y); y += 4;
-
-    items.forEach((item, i) => {
-      if (y > 270) { doc.addPage(); y = 20; }
-      if (i % 2 === 0) { doc.setFillColor(248, 250, 252); doc.rect(18, y - 3, W - 36, 7, 'F'); }
-      doc.setFontSize(8); doc.setFont('helvetica', 'normal'); doc.setTextColor(30, 30, 30);
-      const lbl = (item.label || `Item ${i + 1}`).slice(0, 50);
-      const nts = (item.notes || '').slice(0, 35);
-      doc.text(lbl, 22, y);
-      doc.text(nts, 120, y);
-      const cond = item.condition || 'bueno';
-      const cfg  = conditionConfig[cond];
-      if (cond === 'bueno')   doc.setTextColor(5,  150, 105);
-      if (cond === 'regular') doc.setTextColor(180, 110, 0);
-      if (cond === 'malo')    doc.setTextColor(220, 38, 38);
-      if (cond === 'critico') doc.setTextColor(153, 27, 27);
-      doc.setFont('helvetica', 'bold');
-      doc.text(cfg?.label ?? cond, W - 22, y, { align: 'right' });
-      doc.setTextColor(30, 30, 30); doc.setFont('helvetica', 'normal');
-      y += 7;
+  doc.setFontSize(10); doc.setFont('helvetica','bold'); doc.setTextColor(15,23,42);
+  doc.text('Resumen de Condiciones', 20, y); y+=7;
+  [{l:'BUENO',v:counts.bueno,r:34,g:197,b:94},{l:'REGULAR',v:counts.regular,r:245,g:158,b:11},{l:'MALO',v:counts.malo,r:239,g:68,b:68},{l:'CRÍTICO',v:counts.critico,r:185,g:28,b:28}]
+    .forEach((c,i)=>{const bx=20+i*44; doc.setFillColor(c.r,c.g,c.b); doc.rect(bx,y,38,14,'F'); doc.setFontSize(18); doc.setFont('helvetica','bold'); doc.setTextColor(255,255,255); doc.text(String(c.v),bx+19,y+9,{align:'center'}); doc.setFontSize(7); doc.setFont('helvetica','normal'); doc.text(c.l,bx+19,y+13,{align:'center'});});
+  y+=20; doc.setDrawColor(220,220,220); doc.line(20,y,W-20,y); y+=8;
+  doc.setFontSize(10); doc.setFont('helvetica','bold'); doc.setTextColor(15,23,42);
+  doc.text('Items Inspeccionados', 20, y); y+=7;
+  if (items.length===0) { doc.setFontSize(9); doc.setFont('helvetica','italic'); doc.setTextColor(150,150,150); doc.text('No hay items registrados.',20,y); }
+  else {
+    doc.setFillColor(241,245,249); doc.rect(18,y-4,W-36,8,'F');
+    doc.setFontSize(8); doc.setFont('helvetica','bold'); doc.setTextColor(100,116,139);
+    doc.text('Item',22,y); doc.text('Notas',120,y); doc.text('Estado',W-22,y,{align:'right'});
+    y+=6; doc.setDrawColor(220,220,220); doc.line(20,y,W-20,y); y+=4;
+    items.forEach((item,i)=>{
+      if(y>270){doc.addPage();y=20;}
+      if(i%2===0){doc.setFillColor(248,250,252);doc.rect(18,y-3,W-36,7,'F');}
+      doc.setFontSize(8); doc.setFont('helvetica','normal'); doc.setTextColor(30,30,30);
+      doc.text((item.label||`Item ${i+1}`).slice(0,50),22,y);
+      doc.text((item.notes||'').slice(0,35),120,y);
+      const cond=item.condition||'bueno';
+      if(cond==='bueno') doc.setTextColor(5,150,105);
+      if(cond==='regular') doc.setTextColor(180,110,0);
+      if(cond==='malo') doc.setTextColor(220,38,38);
+      if(cond==='critico') doc.setTextColor(153,27,27);
+      doc.setFont('helvetica','bold');
+      doc.text(conditionConfig[cond]?.label??cond,W-22,y,{align:'right'});
+      doc.setTextColor(30,30,30); doc.setFont('helvetica','normal'); y+=7;
     });
   }
-
-  // Pie de página
-  const pages = doc.getNumberOfPages();
-  for (let i = 1; i <= pages; i++) {
-    doc.setPage(i);
-    doc.setFontSize(7); doc.setTextColor(160, 160, 160);
-    doc.text(`Sistema RCMA — Página ${i} de ${pages}`, 20, 290);
-    doc.text('Documento confidencial', W - 20, 290, { align: 'right' });
-  }
-
-  doc.save(`inspeccion-${(checklist.title || 'checklist').replace(/\s+/g, '-').toLowerCase()}.pdf`);
+  const pages=doc.getNumberOfPages();
+  for(let i=1;i<=pages;i++){doc.setPage(i);doc.setFontSize(7);doc.setTextColor(160,160,160);doc.text('Sistema RCMA — Página '+i+' de '+pages,20,290);doc.text('Documento confidencial',W-20,290,{align:'right'});}
+  doc.save('inspeccion-'+(checklist.title||'checklist').replace(/\s+/g,'-').toLowerCase()+'.pdf');
 }
 
 export default function ChecklistDetail() {
@@ -211,36 +130,19 @@ export default function ChecklistDetail() {
 
   const { data, isLoading, isError } = useQuery({
     queryKey: ['checklists', id],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from('checklists')
-        .select('*')
-        .eq('id', id!)
-        .single();
-      if (error) throw error;
-      return data;
-    },
+    queryFn: () => db.Checklist.filter({ id }, '-created_at', 1),
     enabled: !!id,
   });
 
-  const checklist = data as unknown as Checklist | undefined;
+  const checklist = (data as unknown as Checklist[] | undefined)?.[0];
 
   const deleteMutation = useMutation({
     mutationFn: () => db.Checklist.delete(id!),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['checklists'] });
-      navigate('/checklists');
-    },
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['checklists'] }); navigate('/checklists'); },
   });
 
   const updateMutation = useMutation({
-    mutationFn: async (data: Record<string, unknown>) => {
-      const { error } = await supabase
-        .from('checklists')
-        .update(data)
-        .eq('id', id!);
-      if (error) throw error;
-    },
+    mutationFn: (data: Record<string, unknown>) => db.Checklist.update(id!, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['checklists', id] });
       queryClient.invalidateQueries({ queryKey: ['checklists'] });
@@ -250,56 +152,34 @@ export default function ChecklistDetail() {
     onError: () => toast.error('Error al actualizar la inspección'),
   });
 
-  if (isLoading) {
-    return (
-      <div className="flex items-center justify-center py-20">
-        <div className="w-8 h-8 border-4 border-slate-200 border-t-slate-800 rounded-full animate-spin" />
-      </div>
-    );
-  }
+  if (isLoading) return <div className="flex items-center justify-center py-20"><div className="w-8 h-8 border-4 border-slate-200 border-t-slate-800 rounded-full animate-spin" /></div>;
 
-  if (isError || !checklist) {
-    return (
-      <div className="flex flex-col items-center justify-center py-20 gap-3 text-slate-500">
-        <AlertTriangle className="w-8 h-8 text-amber-400" />
-        <p className="text-sm">La inspección no existe o ha sido eliminada.</p>
-        <Link to="/checklists" className="text-sm text-blue-600 hover:underline">Volver al listado</Link>
-      </div>
-    );
-  }
+  if (isError || !checklist) return (
+    <div className="flex flex-col items-center justify-center py-20 gap-3 text-slate-500">
+      <AlertTriangle className="w-8 h-8 text-amber-400" />
+      <p className="text-sm">La inspección no existe o ha sido eliminada.</p>
+      <Link to="/checklists" className="text-sm text-blue-600 hover:underline">Volver al listado</Link>
+    </div>
+  );
 
-  const items: ChecklistItem[] = checklist.items ?? [];
-  const counts = { bueno: 0, regular: 0, malo: 0, critico: 0 };
-  items.forEach(item => {
-    if (item.condition && item.condition in counts) counts[item.condition as keyof typeof counts]++;
-  });
-
-  const filteredItems = filterCondition === 'all'
-    ? items
-    : items.filter(it => it.condition === filterCondition);
+  const items = parseItems(checklist.items);
+  const counts = { bueno:0, regular:0, malo:0, critico:0 };
+  items.forEach(item => { if (item.condition && item.condition in counts) counts[item.condition as keyof typeof counts]++; });
+  const filteredItems = filterCondition === 'all' ? items : items.filter(it => it.condition === filterCondition);
 
   return (
     <div className="max-w-4xl mx-auto space-y-6 p-4">
-
-      {/* Nav y acciones */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <Link to="/checklists" className="flex items-center gap-2 text-sm font-bold text-slate-400 hover:text-slate-900 transition-colors uppercase tracking-tighter">
           <ArrowLeft className="w-4 h-4" /> Volver a Inspecciones
         </Link>
-        <div className="flex gap-2">
-          <button className={btnPrimary} onClick={() => exportChecklistPDF(checklist)}>
-            <FileText className="w-4 h-4" /> Imprimir PDF
-          </button>
-          <button className={btnOutline} onClick={() => setShowEdit(true)}>
-            <Pencil className="w-4 h-4" /> Editar
-          </button>
-          <button className={btnDanger} onClick={() => setShowDeleteConfirm(true)}>
-            <Trash2 className="w-4 h-4" /> Eliminar
-          </button>
+        <div className="flex gap-2 flex-wrap">
+          <button className={btnPrimary} onClick={() => exportChecklistPDF(checklist)}><FileText className="w-4 h-4" /> Imprimir PDF</button>
+          <button className={btnOutline} onClick={() => setShowEdit(true)}><Pencil className="w-4 h-4" /> Editar</button>
+          <button className={btnDanger} onClick={() => setShowDeleteConfirm(true)}><Trash2 className="w-4 h-4" /> Eliminar</button>
         </div>
       </div>
 
-      {/* Cabecera */}
       <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
         <div className="p-6 sm:p-8 border-b border-slate-100 bg-slate-50/30">
           <div className="flex flex-wrap gap-2 mb-4">
@@ -310,57 +190,35 @@ export default function ChecklistDetail() {
               </span>
             )}
           </div>
-          <h1 className="text-2xl font-black text-slate-900 leading-tight">
-            {checklist.title || 'Sin título'}
-          </h1>
+          <h1 className="text-2xl font-black text-slate-900 leading-tight">{checklist.title || 'Sin título'}</h1>
           {(checklist.description || checklist.general_observations) && (
-            <p className="text-slate-500 mt-2 text-sm leading-relaxed italic">
-              {String(checklist.description || checklist.general_observations || '')}
-            </p>
+            <p className="text-slate-500 mt-2 text-sm leading-relaxed italic">{String(checklist.description||checklist.general_observations||'')}</p>
           )}
         </div>
-
         <div className="grid grid-cols-1 md:grid-cols-3 divide-y md:divide-y-0 md:divide-x divide-slate-100 bg-white">
           <div className="p-6">
-            <div className="flex items-center gap-3 mb-1">
-              <MapPin className="w-4 h-4 text-slate-400" />
-              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Colegio</span>
-            </div>
+            <div className="flex items-center gap-3 mb-1"><MapPin className="w-4 h-4 text-slate-400" /><span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Colegio</span></div>
             <p className="text-sm font-bold text-slate-800 ml-7">{checklist.colegio || 'No especificado'}</p>
             {checklist.territorio && <p className="text-xs text-slate-400 ml-7 mt-0.5">{checklist.territorio}</p>}
           </div>
           <div className="p-6">
-            <div className="flex items-center gap-3 mb-1">
-              <User className="w-4 h-4 text-slate-400" />
-              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Inspector</span>
-            </div>
+            <div className="flex items-center gap-3 mb-1"><User className="w-4 h-4 text-slate-400" /><span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Inspector</span></div>
             <p className="text-sm font-bold text-slate-800 ml-7">{checklist.inspector || 'Sin asignar'}</p>
           </div>
           <div className="p-6">
-            <div className="flex items-center gap-3 mb-1">
-              <Calendar className="w-4 h-4 text-slate-400" />
-              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Fecha</span>
-            </div>
-            <p className="text-sm font-bold text-slate-800 ml-7">
-              {checklist.inspection_date
-                ? format(new Date(checklist.inspection_date), 'dd MMM yyyy', { locale: es })
-                : 'Sin fecha'}
-            </p>
+            <div className="flex items-center gap-3 mb-1"><Calendar className="w-4 h-4 text-slate-400" /><span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Fecha</span></div>
+            <p className="text-sm font-bold text-slate-800 ml-7">{checklist.inspection_date ? format(new Date(checklist.inspection_date), 'dd MMM yyyy', { locale: es }) : 'Sin fecha'}</p>
           </div>
         </div>
       </div>
 
-      {/* Contadores */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
         {Object.entries(counts).map(([key, count]) => {
           const config = conditionConfig[key];
-          const isActive = filterCondition === key;
+          const active = filterCondition === key;
           return (
-            <button
-              key={key}
-              onClick={() => setFilterCondition(isActive ? 'all' : key)}
-              className={`p-4 rounded-xl border text-center transition-all ${config.class} ${isActive ? 'ring-2 ring-offset-1 ring-slate-900 scale-105' : 'hover:scale-105'}`}
-            >
+            <button key={key} onClick={() => setFilterCondition(active ? 'all' : key)}
+              className={`p-4 rounded-xl border text-center transition-all ${config.class} ${active ? 'ring-2 ring-offset-1 ring-slate-900 scale-105' : 'hover:scale-105'}`}>
               <p className="text-2xl font-black">{count}</p>
               <p className="text-xs font-bold uppercase tracking-wide mt-1">{config.label}</p>
             </button>
@@ -368,31 +226,18 @@ export default function ChecklistDetail() {
         })}
       </div>
 
-      {/* Items */}
       <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-        <div className="px-6 py-4 border-b border-slate-100 bg-slate-50/50 flex items-center justify-between gap-2">
+        <div className="px-6 py-4 border-b border-slate-100 bg-slate-50/50 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <ClipboardCheck className="w-4 h-4 text-slate-400" />
             <h2 className="text-sm font-bold text-slate-800 uppercase tracking-tight">
-              Items Inspeccionados ({filteredItems.length}{filterCondition !== 'all' ? ` de ${items.length}` : ''})
+              Items Inspeccionados ({filteredItems.length}{filterCondition !== 'all' ? ' de '+items.length : ''})
             </h2>
           </div>
-          {filterCondition !== 'all' && (
-            <button
-              onClick={() => setFilterCondition('all')}
-              className="text-xs text-blue-600 font-bold hover:underline"
-            >
-              Ver todos
-            </button>
-          )}
+          {filterCondition !== 'all' && <button onClick={() => setFilterCondition('all')} className="text-xs text-blue-600 font-bold hover:underline">Ver todos</button>}
         </div>
-
         {filteredItems.length === 0 ? (
-          <div className="py-12 text-center">
-            <p className="text-slate-400 text-sm">
-              {filterCondition === 'all' ? 'No hay items registrados en esta inspección.' : `No hay items con estado "${conditionConfig[filterCondition]?.label}".`}
-            </p>
-          </div>
+          <div className="py-12 text-center"><p className="text-slate-400 text-sm">{filterCondition === 'all' ? 'No hay items registrados en esta inspección.' : `No hay items con estado "${conditionConfig[filterCondition]?.label}".`}</p></div>
         ) : (
           <div className="divide-y divide-slate-100">
             {filteredItems.map((item, i) => {
@@ -403,11 +248,7 @@ export default function ChecklistDetail() {
                     <p className="text-sm font-medium text-slate-800">{item.label || `Item ${i + 1}`}</p>
                     {item.notes && <p className="text-xs text-slate-500 mt-0.5 italic">{item.notes}</p>}
                   </div>
-                  {config && (
-                    <span className={`px-2 py-0.5 rounded border text-[10px] font-black uppercase tracking-wider shrink-0 ${config.badge}`}>
-                      {config.label}
-                    </span>
-                  )}
+                  {config && <span className={`px-2 py-0.5 rounded border text-[10px] font-black uppercase tracking-wider shrink-0 ${config.class}`}>{config.label}</span>}
                 </div>
               );
             })}
@@ -415,31 +256,17 @@ export default function ChecklistDetail() {
         )}
       </div>
 
-      {/* Modal editar */}
-      <ChecklistForm
-        open={showEdit}
-        onClose={() => setShowEdit(false)}
-        onSubmit={(data) => updateMutation.mutate(data)}
-        checklist={checklist as never}
-      />
+      <ChecklistForm open={showEdit} onClose={() => setShowEdit(false)} onSubmit={(data) => updateMutation.mutate(data)} checklist={checklist as never} />
 
-      {/* Modal eliminar */}
       {showDeleteConfirm && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 p-4">
           <div className="bg-white rounded-lg shadow-xl max-w-sm w-full p-6">
             <h2 className="text-lg font-bold text-slate-900">¿Eliminar inspección?</h2>
-            <p className="text-sm text-slate-500 mt-2">
-              Esta acción no se puede deshacer y la inspección desaparecerá permanentemente.
-            </p>
+            <p className="text-sm text-slate-500 mt-2">Esta acción no se puede deshacer.</p>
             <div className="flex justify-end gap-3 mt-6">
-              <button onClick={() => setShowDeleteConfirm(false)} className="px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100 rounded-md">
-                Cancelar
-              </button>
-              <button
-                onClick={() => { deleteMutation.mutate(); setShowDeleteConfirm(false); }}
-                disabled={deleteMutation.isPending}
-                className="px-4 py-2 text-sm font-medium bg-red-600 text-white hover:bg-red-700 rounded-md disabled:opacity-50"
-              >
+              <button onClick={() => setShowDeleteConfirm(false)} className="px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100 rounded-md">Cancelar</button>
+              <button onClick={() => { deleteMutation.mutate(); setShowDeleteConfirm(false); }} disabled={deleteMutation.isPending}
+                className="px-4 py-2 text-sm font-medium bg-red-600 text-white hover:bg-red-700 rounded-md disabled:opacity-50">
                 {deleteMutation.isPending ? 'Eliminando...' : 'Eliminar Inspección'}
               </button>
             </div>
