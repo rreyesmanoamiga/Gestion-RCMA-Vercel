@@ -6,7 +6,7 @@ import { hasPermission } from '@/lib/permissions';
 
 export function usePermissions() {
   const { user } = useAuth();
-  const isAdmin = user?.role === 'admin';
+  const isAdmin = user?.user_metadata?.role === 'admin' || user?.role === 'service_role';
 
   const { data: permsRecord } = useQuery({
     queryKey: ['userPermissions', user?.email],
