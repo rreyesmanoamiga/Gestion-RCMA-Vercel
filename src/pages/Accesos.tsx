@@ -129,15 +129,12 @@ export default function Accesos() {
     e.preventDefault();
     setInviting(true);
     try {
-      // 1. Llamar Edge Function en segundo plano — falle o no, continuamos
-      supabase.functions.invoke('invite-user', {
+      // Edge Function maneja todo: crear usuario + guardar permisos + enviar correo
+      const { error } = await supabase.functions.invoke('invite-user', {
         body: { email: inviteEmail, permissions: invitePerms },
-      }).catch(() => {});
+      });
 
-      // 2. Guardar permisos directamente desde el cliente como respaldo
-      await supabase
-        .from('user_permissions')
-        .upsert({ user_email: inviteEmail, ...invitePerms }, { onConflict: 'user_email' });
+      if (error) throw new Error(error.message ?? 'Error al invitar usuario');
 
       await qc.invalidateQueries({ queryKey: ['userPermissions'] });
       toast.success(`Invitación enviada a ${inviteEmail}`);
