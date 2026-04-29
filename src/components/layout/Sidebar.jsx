@@ -21,31 +21,17 @@ import { useAuth } from '@/lib/AuthContext';
 import { cn } from '@/lib/utils';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { supabase } from '@/lib/supabaseClient';
-
-const NAV_ITEMS = [
-  { label: 'Dashboard',             path: '/',               icon: LayoutDashboard },
-  { label: 'Tickets Registrados',   path: '/tickets',        icon: TicketCheck     },
-  { label: 'Proyectos',             path: '/proyectos',      icon: FolderKanban    },
-  { label: 'Anteproyectos',         path: '/anteproyectos',  icon: FolderOpen      },
-  { label: 'Checklists',            path: '/checklists',     icon: ClipboardCheck  },
-  { label: 'Calendario',            path: '/calendario',     icon: CalendarDays    },
-  { label: 'Pendientes',            path: '/pendientes',     icon: ClockAlert      },
-  { label: 'Solicitud de Proyecto', path: '/solicitud',      icon: ClipboardEdit   },
-];
+import { usePermissions } from '@/hooks/usePermissions';
 
 export default function Sidebar({ isOpen, onToggle }) {
-  const location = useLocation();
-  const { user } = useAuth();
-  const isAdmin  = user?.user_metadata?.role === 'admin';
-  const isMobile = useIsMobile();
+  const location    = useLocation();
+  const { user }    = useAuth();
+  const { can }     = usePermissions();
+  const isAdmin     = user?.user_metadata?.role === 'admin';
+  const isMobile    = useIsMobile();
 
-  const handleNavClick = () => {
-    if (isMobile) onToggle();
-  };
-
-  const handleLogout = async () => {
-    await supabase.auth.signOut();
-  };
+  const handleNavClick = () => { if (isMobile) onToggle(); };
+  const handleLogout   = async () => { await supabase.auth.signOut(); };
 
   const navLinkClass = (path) => cn(
     'flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-200',
@@ -101,48 +87,89 @@ export default function Sidebar({ isOpen, onToggle }) {
         </div>
 
         {/* Navegación */}
-        <nav className="flex-1 p-4 space-y-1" aria-label="Menú principal">
-          {NAV_ITEMS.map(({ label, path, icon: Icon }) => (
-            <Link
-              key={path}
-              to={path}
-              onClick={handleNavClick}
-              className={navLinkClass(path)}
-            >
-              <Icon className="w-[18px] h-[18px]" />
-              {label}
+        <nav className="flex-1 p-4 space-y-1 overflow-y-auto" aria-label="Menú principal">
+
+          {/* Dashboard — siempre visible */}
+          <Link to="/" onClick={handleNavClick} className={navLinkClass('/')}>
+            <LayoutDashboard className="w-[18px] h-[18px]" />
+            Dashboard
+          </Link>
+
+          {/* Tickets */}
+          {can('ver_tickets') && (
+            <Link to="/tickets" onClick={handleNavClick} className={navLinkClass('/tickets')}>
+              <TicketCheck className="w-[18px] h-[18px]" />
+              Tickets Registrados
             </Link>
-          ))}
+          )}
+
+          {/* Proyectos */}
+          {can('ver_proyectos') && (
+            <Link to="/proyectos" onClick={handleNavClick} className={navLinkClass('/proyectos')}>
+              <FolderKanban className="w-[18px] h-[18px]" />
+              Proyectos
+            </Link>
+          )}
+
+          {/* Anteproyectos */}
+          {can('ver_anteproyectos') && (
+            <Link to="/anteproyectos" onClick={handleNavClick} className={navLinkClass('/anteproyectos')}>
+              <FolderOpen className="w-[18px] h-[18px]" />
+              Anteproyectos
+            </Link>
+          )}
+
+          {/* Checklists */}
+          {can('ver_checklists') && (
+            <Link to="/checklists" onClick={handleNavClick} className={navLinkClass('/checklists')}>
+              <ClipboardCheck className="w-[18px] h-[18px]" />
+              Checklists
+            </Link>
+          )}
+
+          {/* Calendario */}
+          {can('ver_calendario') && (
+            <Link to="/calendario" onClick={handleNavClick} className={navLinkClass('/calendario')}>
+              <CalendarDays className="w-[18px] h-[18px]" />
+              Calendario
+            </Link>
+          )}
+
+          {/* Pendientes */}
+          {can('ver_pendientes') && (
+            <Link to="/pendientes" onClick={handleNavClick} className={navLinkClass('/pendientes')}>
+              <ClockAlert className="w-[18px] h-[18px]" />
+              Pendientes
+            </Link>
+          )}
+
+          {/* Solicitud de Proyecto */}
+          {can('ver_solicitud_proyecto') && (
+            <Link to="/solicitud" onClick={handleNavClick} className={navLinkClass('/solicitud')}>
+              <ClipboardEdit className="w-[18px] h-[18px]" />
+              Solicitud de Proyecto
+            </Link>
+          )}
 
           {/* Solicitudes Recibidas — solo admin */}
           {isAdmin && (
-            <Link
-              to="/solicitudes"
-              onClick={handleNavClick}
-              className={navLinkClass('/solicitudes')}
-            >
+            <Link to="/solicitudes" onClick={handleNavClick} className={navLinkClass('/solicitudes')}>
               <Inbox className="w-[18px] h-[18px]" />
               Solicitudes Recibidas
             </Link>
           )}
 
-          {/* Reportes — todos */}
-          <Link
-            to="/reportes"
-            onClick={handleNavClick}
-            className={navLinkClass('/reportes')}
-          >
-            <FileText className="w-[18px] h-[18px]" />
-            Reportes
-          </Link>
+          {/* Reportes */}
+          {can('ver_reportes') && (
+            <Link to="/reportes" onClick={handleNavClick} className={navLinkClass('/reportes')}>
+              <FileText className="w-[18px] h-[18px]" />
+              Reportes
+            </Link>
+          )}
 
           {/* Accesos — solo admin */}
           {isAdmin && (
-            <Link
-              to="/accesos"
-              onClick={handleNavClick}
-              className={navLinkClass('/accesos')}
-            >
+            <Link to="/accesos" onClick={handleNavClick} className={navLinkClass('/accesos')}>
               <Lock className="w-[18px] h-[18px]" />
               Accesos
             </Link>
@@ -158,7 +185,6 @@ export default function Sidebar({ isOpen, onToggle }) {
             <LogOut className="w-[18px] h-[18px]" />
             Cerrar sesión
           </button>
-
           <p className="text-[10px] font-bold text-sidebar-foreground/40 text-center uppercase tracking-tighter pt-1">
             Sistema RCMA © 2026
           </p>
