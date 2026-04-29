@@ -4,7 +4,7 @@ import { supabase } from '@/lib/supabaseClient';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
-import { ChevronDown, CheckCircle, Eye, X, Building2, User, Mail, Calendar, DollarSign } from 'lucide-react';
+import { ChevronDown, CheckCircle, Eye, X, Building2, User, Mail, Calendar, DollarSign, Printer } from 'lucide-react';
 import PageHeader from '@/components/shared/PageHeader';
 
 const PAGE_SIZE = 20;
@@ -38,6 +38,87 @@ const fmx = (n?: number | null) =>
   n != null ? Number(n).toLocaleString('es-MX', { style: 'currency', currency: 'MXN' }) : '—';
 
 export default function SolicitudesRecibidas() {
+  const handlePrint = (s: Solicitud) => {
+    const fmxP = (n?: number | null) =>
+      n != null ? Number(n).toLocaleString('es-MX', { style: 'currency', currency: 'MXN' }) : '—';
+    const costo = s.costo_aproximado ?? 0;
+    const pct = (m?: number | null) => costo > 0 && m != null ? ((m / costo) * 100).toFixed(0) + '%' : '0%';
+
+    const html = `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8"/>
+  <title>Solicitud — ${s.nombre_proyecto}</title>
+  <style>
+    * { margin:0; padding:0; box-sizing:border-box; }
+    body { font-family: Arial, sans-serif; font-size: 11px; color: #1e293b; padding: 20px; }
+    .header { background:#1e293b; color:white; padding:12px 16px; display:flex; align-items:center; justify-content:space-between; }
+    .header-text h1 { font-size:13px; font-weight:900; text-transform:uppercase; letter-spacing:0.05em; }
+    .header-text h2 { font-size:10px; color:#94a3b8; text-transform:uppercase; margin-top:2px; }
+    .header img { height:48px; width:auto; object-fit:contain; }
+    .section-title { background:#e2e8f0; padding:5px 10px; font-size:10px; font-weight:900; text-transform:uppercase; letter-spacing:0.05em; color:#475569; border-bottom:1px solid #cbd5e1; }
+    table { width:100%; border-collapse:collapse; }
+    td { border:1px solid #cbd5e1; padding:5px 8px; font-size:11px; }
+    .label { background:#f8fafc; font-weight:700; color:#475569; width:160px; text-transform:uppercase; font-size:10px; }
+    .value { color:#1e293b; }
+    .th { background:#1e293b; color:white; font-size:10px; font-weight:700; text-transform:uppercase; padding:6px 8px; text-align:center; }
+    .num { text-align:right; font-family:monospace; }
+    .total-row td { background:#f1f5f9; font-weight:900; }
+    .footer { margin-top:20px; border-top:1px solid #e2e8f0; padding-top:10px; text-align:center; font-size:9px; color:#94a3b8; }
+    @media print { body { padding:10px; } }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <div class="header-text">
+      <h1>Red de Colegios Mano Amiga</h1>
+      <h2>Solicitud de Inicio de Obra o Mantenimiento</h2>
+    </div>
+    <img src="/colegio-mano-amiga.png" alt="Logo" />
+  </div>
+
+  <div class="section-title">I. Identificación</div>
+  <table>
+    <tr><td class="label">División</td><td class="value" colspan="3">Red de Colegios Mano Amiga</td></tr>
+    <tr><td class="label">Nombre del Centro</td><td class="value">${s.nombre_centro || '—'}</td><td class="label">Ciclo / Año Fiscal</td><td class="value">${s.ciclo_año_fiscal || '—'}</td></tr>
+    <tr><td class="label">Razón Social</td><td class="value">${s.razon_social || '—'}</td><td class="label">Sociedad</td><td class="value">${s.sociedad || '—'}</td></tr>
+    <tr><td class="label">Centro de Gestor</td><td class="value" colspan="3">${s.centro_gestor || '—'}</td></tr>
+    <tr><td class="label">Nombre del Proyecto</td><td class="value" colspan="3">${s.nombre_proyecto || '—'}</td></tr>
+    <tr><td class="label">Tipo de Iniciativa</td><td class="value" colspan="3">${s.tipo_iniciativa || '—'}</td></tr>
+    <tr><td class="label">Solicitante</td><td class="value">${s.nombre_solicitante || '—'}</td><td class="label">Puesto</td><td class="value">${s.puesto_solicitante || '—'}</td></tr>
+    <tr><td class="label">Correo</td><td class="value" colspan="3">${s.correo_solicitante || '—'}</td></tr>
+  </table>
+
+  <div class="section-title" style="margin-top:10px;">II. Resumen del Proyecto</div>
+  <table>
+    <tr><td class="label">Descripción / Justificación</td><td class="value" colspan="3" style="white-space:pre-wrap;">${s.resumen_proyecto || '—'}</td></tr>
+    <tr><td class="label">Fecha propuesta inicio</td><td class="value">${s.fecha_inicio_propuesta || '—'}</td><td class="label">Fecha conclusión</td><td class="value">${s.fecha_fin_propuesta || '—'}</td></tr>
+  </table>
+
+  <div class="section-title" style="margin-top:10px;">III. Plan de Financiamiento</div>
+  <table>
+    <tr><td class="th" style="width:200px;">Fuente</td><td class="th">Monto (MXN)</td><td class="th" style="width:80px;">% del Total</td></tr>
+    <tr><td class="label">Costo Aproximado Total</td><td class="num">${fmxP(s.costo_aproximado)}</td><td class="num" style="font-weight:900;">100%</td></tr>
+    <tr><td class="label">Operación</td><td class="num">${fmxP(s.monto_operacion)}</td><td class="num">${pct(s.monto_operacion)}</td></tr>
+    <tr><td class="label">FBC</td><td class="num">${fmxP(s.monto_fbc)}</td><td class="num">${pct(s.monto_fbc)}</td></tr>
+    <tr><td class="label">Donativos</td><td class="num">${fmxP(s.monto_donativos)}</td><td class="num">${pct(s.monto_donativos)}</td></tr>
+    <tr><td class="label">Otras Fuentes</td><td class="num">${fmxP(s.monto_otras)}</td><td class="num">${pct(s.monto_otras)}</td></tr>
+  </table>
+
+  <div class="footer">
+    Para iniciar el proyecto se deberá tener el visto bueno de la Gerencia y de la Coordinación de Obras y Mantenimientos RCMA.<br/>
+    Sistema RCMA — Coordinación de Obras © ${new Date().getFullYear()}
+  </div>
+</body>
+</html>`;
+
+    const win = window.open('', '_blank');
+    if (win) {
+      win.document.write(html);
+      win.document.close();
+      win.onload = () => { win.focus(); win.print(); };
+    }
+  };
   const [filterEstatus, setFilterEstatus] = useState('all');
   const [visibleCount, setVisibleCount]   = useState(PAGE_SIZE);
   const [viewing, setViewing]             = useState<Solicitud | null>(null);
@@ -241,9 +322,12 @@ export default function SolicitudesRecibidas() {
             <div className="overflow-y-auto flex-1">
               <div className="border-2 border-slate-700 m-4">
                 {/* Header formato */}
-                <div className="bg-slate-800 text-white text-center py-2">
-                  <p className="text-xs font-black uppercase tracking-widest">Red de Colegios Mano Amiga</p>
-                  <p className="text-[10px] text-slate-300 uppercase tracking-wider">Solicitud de Inicio de Obra o Mantenimiento</p>
+                <div className="bg-slate-800 text-white py-2 px-4 flex items-center justify-between">
+                  <div>
+                    <p className="text-xs font-black uppercase tracking-widest">Red de Colegios Mano Amiga</p>
+                    <p className="text-[10px] text-slate-300 uppercase tracking-wider">Solicitud de Inicio de Obra o Mantenimiento</p>
+                  </div>
+                  <img src="/colegio-mano-amiga.png" alt="Logo" className="h-10 w-auto object-contain rounded" />
                 </div>
 
                 {/* I. Identificación */}
@@ -313,19 +397,25 @@ export default function SolicitudesRecibidas() {
               </div>
             </div>
 
-            <div className="p-4 border-t border-slate-100 flex justify-end gap-3 bg-slate-50">
-              <button onClick={() => setViewing(null)}
-                className="px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-200 rounded-md transition-colors">
-                Cerrar
+            <div className="p-4 border-t border-slate-100 flex justify-between items-center bg-slate-50">
+              <button onClick={() => handlePrint(viewing)}
+                className="flex items-center gap-2 px-4 py-2 border border-slate-300 rounded-md text-sm font-medium text-slate-700 hover:bg-slate-100 transition-colors">
+                <Printer className="w-4 h-4" /> Imprimir / PDF
               </button>
-              {viewing.estatus === 'pendiente' && (
-                <button onClick={() => recibirMutation.mutate(viewing.id)}
-                  disabled={recibirMutation.isPending}
-                  className="flex items-center gap-2 px-5 py-2 bg-emerald-600 text-white rounded-md text-sm font-bold hover:bg-emerald-700 transition-colors disabled:opacity-50">
-                  <CheckCircle className="w-4 h-4" />
-                  {recibirMutation.isPending ? 'Procesando...' : 'Marcar como Recibida'}
+              <div className="flex gap-3">
+                <button onClick={() => setViewing(null)}
+                  className="px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-200 rounded-md transition-colors">
+                  Cerrar
                 </button>
-              )}
+                {viewing.estatus === 'pendiente' && (
+                  <button onClick={() => recibirMutation.mutate(viewing.id)}
+                    disabled={recibirMutation.isPending}
+                    className="flex items-center gap-2 px-5 py-2 bg-emerald-600 text-white rounded-md text-sm font-bold hover:bg-emerald-700 transition-colors disabled:opacity-50">
+                    <CheckCircle className="w-4 h-4" />
+                    {recibirMutation.isPending ? 'Procesando...' : 'Marcar como Recibida'}
+                  </button>
+                )}
+              </div>
             </div>
           </div>
         </div>

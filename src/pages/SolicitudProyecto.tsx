@@ -170,9 +170,12 @@ export default function SolicitudProyecto() {
       {/* Encabezado tipo formato oficial */}
       <div className="border-2 border-slate-800">
         {/* Título principal */}
-        <div className="bg-slate-800 text-white text-center py-3">
-          <h1 className="text-sm font-black uppercase tracking-widest">Red de Colegios Mano Amiga</h1>
-          <h2 className="text-xs font-bold uppercase tracking-wider mt-0.5 text-slate-300">Solicitud de Inicio de Obra o Mantenimiento</h2>
+        <div className="bg-slate-800 text-white py-3 px-4 flex items-center justify-between">
+          <div className="text-center flex-1">
+            <h1 className="text-sm font-black uppercase tracking-widest">Red de Colegios Mano Amiga</h1>
+            <h2 className="text-xs font-bold uppercase tracking-wider mt-0.5 text-slate-300">Solicitud de Inicio de Obra o Mantenimiento</h2>
+          </div>
+          <img src="/colegio-mano-amiga.png" alt="Mano Amiga" className="h-12 w-auto object-contain ml-4 rounded" />
         </div>
 
         <form onSubmit={handleSubmit}>
