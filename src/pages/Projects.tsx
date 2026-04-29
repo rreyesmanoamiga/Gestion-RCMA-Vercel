@@ -1,9 +1,8 @@
 import React, { useState, useMemo } from 'react';
 import { db } from '@/lib/db';
-import { supabase } from '@/lib/supabaseClient';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
-import { FolderKanban, MapPin, Calendar, User, ChevronDown, TicketCheck } from 'lucide-react';
+import { FolderKanban, MapPin, Calendar, User, ChevronDown } from 'lucide-react';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { toast } from 'sonner';
@@ -34,12 +33,6 @@ interface Project {
   tipo_proyecto?: string;
 }
 
-interface Ticket {
-  id:          string;
-  folio?:      string;
-  proyecto_id?: string | null;
-}
-
 export default function Projects() {
   const [showForm, setShowForm]                 = useState(false);
   const [filterStatus, setFilterStatus]             = useState('all');
@@ -54,27 +47,7 @@ export default function Projects() {
     queryFn: () => db.Project.list('-created_at', 500),
   });
 
-  const { data: rawTickets = [] } = useQuery({
-    queryKey: ['tickets'],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from('tickets')
-        .select('id, folio, proyecto_id')
-        .not('proyecto_id', 'is', null);
-      if (error) throw error;
-      return data ?? [];
-    },
-  });
-
   const projects = rawProjects as unknown as Project[];
-  const tickets  = rawTickets  as unknown as Ticket[];
-
-  // Mapa proyecto_id → ticket
-  const ticketByProject = useMemo(() => {
-    const map: Record<string, Ticket> = {};
-    tickets.forEach(t => { if (t.proyecto_id) map[t.proyecto_id] = t; });
-    return map;
-  }, [tickets]);
 
   const createMutation = useMutation({
     mutationFn: (data: Record<string, unknown>) => db.Project.create(data),
@@ -242,12 +215,10 @@ export default function Projects() {
                     )}
                   </div>
                   <div className="text-right shrink-0 ml-2">
-                    {ticketByProject[project.id] ? (
-                      <span className="inline-flex items-center gap-1 text-xs font-black text-red-500">
-                        <TicketCheck className="w-3 h-3" />
-                        {ticketByProject[project.id].folio}
-                      </span>
-                    ) : (
+                    {project.folio && (
+                      <p className="text-xs font-black text-red-500">{project.folio}</p>
+                    )}
+                    {!project.folio && (
                       <p className="text-[10px] font-bold text-slate-300">Sin Ticket</p>
                     )}
                     {project.colegio    && <p className="text-xs font-bold text-slate-800">{project.colegio}</p>}
