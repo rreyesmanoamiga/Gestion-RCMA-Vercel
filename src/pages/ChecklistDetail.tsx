@@ -7,7 +7,6 @@ import { db } from '@/lib/db';
 import ChecklistForm, { type ChecklistItem } from '@/components/checklists/ChecklistForm';
 import { format, parseISO } from 'date-fns';
 import { es } from 'date-fns/locale';
-import jsPDF from 'jspdf';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 const STATUS_CONFIG: Record<string, { label: string; color: string; bg: string; border: string }> = {
@@ -44,111 +43,8 @@ interface ChecklistRecord {
   created_at?: string;
 }
 
-// ─── Generador de PDF ─────────────────────────────────────────────────────────
+// ─── Generador de PDF (html2canvas) ──────────────────────────────────────────
 async function generarPDF(c: ChecklistRecord) {
-  const doc = new jsPDF({ unit: 'mm', format: 'a4' });
-  const W = 210, marginL = 20, marginR = 20, contentW = W - marginL - marginR;
-  let y = 20;
-
-  // Logo
-  try {
-    const img = new Image();
-    img.src = '/colegio-mano-amiga.png';
-    await new Promise(res => { img.onload = res; img.onerror = res; });
-    if (img.complete && img.naturalWidth > 0) {
-      doc.addImage(img, 'PNG', marginL, y, 30, 30);
-    }
-  } catch { /* sin logo */ }
-
-  // Encabezado
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(10);
-  doc.setTextColor(100, 100, 100);
-  doc.text('Reporte de Inspección — Sistema RCMA', marginL + 34, y + 8);
-  doc.setFontSize(8);
-  doc.setFont('helvetica', 'normal');
-  doc.text(`Generado el ${format(new Date(), "d 'de' MMMM 'de' yyyy", { locale: es })}`, marginL + 34, y + 14);
-  y += 36;
-
-  // Línea divisoria
-  doc.setDrawColor(220, 220, 220);
-  doc.line(marginL, y, W - marginR, y);
-  y += 8;
-
-  // Título
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(15);
-  doc.setTextColor(15, 23, 42);
-  doc.text(c.titulo ?? 'Sin título', marginL, y);
-  y += 8;
-
-  // Badges de estado y material
-  const statusLabel = STATUS_CONFIG[c.overall_status ?? 'bueno']?.label ?? 'Bueno';
-  doc.setFontSize(8);
-  doc.setFont('helvetica', 'bold');
-  doc.setTextColor(255, 255, 255);
-  // Estado badge
-  const colores: Record<string, [number, number, number]> = {
-    bueno:   [22, 163, 74], regular: [202, 138, 4],
-    malo:    [234, 88, 12], critico: [220, 38, 38],
-  };
-  const [r, g, b] = colores[c.overall_status ?? 'bueno'] ?? colores.bueno;
-  doc.setFillColor(r, g, b);
-  doc.roundedRect(marginL, y, 20, 6, 1, 1, 'F');
-  doc.text(statusLabel, marginL + 2, y + 4.2);
-  if (c.material) {
-    doc.setFillColor(71, 85, 105);
-    doc.roundedRect(marginL + 23, y, 40, 6, 1, 1, 'F');
-    doc.text(c.material.replace(/\(.*\)/, '').trim().toUpperCase(), marginL + 25, y + 4.2);
-  }
-  y += 12;
-
-  // Descripción
-  if (c.descripcion) {
-    doc.setFont('helvetica', 'italic');
-    doc.setFontSize(9);
-    doc.setTextColor(71, 85, 105);
-    const descLines = doc.splitTextToSize(c.descripcion, contentW);
-    doc.text(descLines, marginL, y);
-    y += descLines.length * 5 + 4;
-  }
-
-  // Info grid
-  doc.setDrawColor(226, 232, 240);
-  doc.setFillColor(248, 250, 252);
-  doc.roundedRect(marginL, y, contentW, 20, 2, 2, 'FD');
-  const colW = contentW / 3;
-  const infoItems = [
-    { icon: 'Colegio', label: c.colegio ?? '—', sub: c.territorio ?? '' },
-    { icon: 'Inspector', label: c.inspector || 'Sin asignar', sub: '' },
-    { icon: 'Fecha', label: formatFechaCorta(c.fecha ?? c.created_at), sub: '' },
-  ];
-  infoItems.forEach((item, i) => {
-    const x = marginL + i * colW + 4;
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(7);
-    doc.setTextColor(148, 163, 184);
-    doc.text(item.icon.toUpperCase(), x, y + 5);
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(9);
-    doc.setTextColor(15, 23, 42);
-    doc.text(item.label, x, y + 11);
-    if (item.sub) {
-      doc.setFont('helvetica', 'normal');
-      doc.setFontSize(7);
-      doc.setTextColor(148, 163, 184);
-      doc.text(item.sub, x, y + 16);
-    }
-  });
-  y += 26;
-
-  // Resumen de condiciones
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(10);
-  doc.setTextColor(15, 23, 42);
-  doc.text('Resumen de Condiciones', marginL, y);
-  y += 6;
-
   const items = (c.items ?? []) as ChecklistItem[];
   const counts = {
     Bueno:   items.filter(i => i.estado === 'Bueno').length,
@@ -156,84 +52,149 @@ async function generarPDF(c: ChecklistRecord) {
     Malo:    items.filter(i => i.estado === 'Malo').length,
     Crítico: items.filter(i => i.estado === 'Crítico').length,
   };
-  const kpiW = contentW / 4;
-  const kpiColors: Record<string, [number, number, number]> = {
-    Bueno: [240, 253, 244], Regular: [254, 252, 232], Malo: [255, 247, 237], Crítico: [254, 242, 242],
+
+  const statusLabel = STATUS_CONFIG[c.overall_status ?? 'bueno']?.label ?? 'Bueno';
+  const materialCorto = c.material ? c.material.replace(/\(.*\)/, '').trim().toUpperCase() : '';
+
+  const badgeColors: Record<string, string> = {
+    bueno:   '#16a34a', regular: '#ca8a04', malo: '#ea580c', critico: '#dc2626',
   };
-  const kpiText: Record<string, [number, number, number]> = {
-    Bueno: [22, 163, 74], Regular: [202, 138, 4], Malo: [234, 88, 12], Crítico: [220, 38, 38],
+  const badgeBg: Record<string, string> = {
+    bueno: '#f0fdf4', regular: '#fefce8', malo: '#fff7ed', critico: '#fef2f2',
   };
-  Object.entries(counts).forEach(([label, count], i) => {
-    const x = marginL + i * kpiW;
-    const [br, bg, bb] = kpiColors[label];
-    const [tr, tg, tb] = kpiText[label];
-    doc.setFillColor(br, bg, bb);
-    doc.setDrawColor(220, 220, 220);
-    doc.roundedRect(x, y, kpiW - 2, 18, 2, 2, 'FD');
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(16);
-    doc.setTextColor(tr, tg, tb);
-    doc.text(String(count), x + kpiW / 2 - 2, y + 11, { align: 'center' });
-    doc.setFontSize(7);
-    doc.text(label.toUpperCase(), x + kpiW / 2 - 2, y + 16, { align: 'center' });
-  });
-  y += 24;
+  const badgeColor = badgeColors[c.overall_status ?? 'bueno'] ?? badgeColors.bueno;
 
-  // Items inspeccionados
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(10);
-  doc.setTextColor(15, 23, 42);
-  doc.text('Items Inspeccionados', marginL, y);
-  y += 6;
+  const itemBadgeStyle = (estado: string) => {
+    const colors: Record<string, { bg: string; color: string }> = {
+      Bueno:   { bg: '#dcfce7', color: '#15803d' },
+      Regular: { bg: '#fef9c3', color: '#a16207' },
+      Malo:    { bg: '#ffedd5', color: '#c2410c' },
+      Crítico: { bg: '#fee2e2', color: '#b91c1c' },
+    };
+    return colors[estado] ?? colors.Bueno;
+  };
 
-  if (items.length === 0) {
-    doc.setFont('helvetica', 'italic');
-    doc.setFontSize(9);
-    doc.setTextColor(148, 163, 184);
-    doc.text('No hay items registrados en esta inspección.', marginL, y);
-    y += 8;
-  } else {
-    items.forEach(item => {
-      if (y > 260) { doc.addPage(); y = 20; }
-      doc.setFillColor(248, 250, 252);
-      doc.setDrawColor(226, 232, 240);
-      doc.roundedRect(marginL, y, contentW, item.observacion ? 14 : 10, 1, 1, 'FD');
+  const kpiStyle = (label: string) => {
+    const map: Record<string, { bg: string; border: string; color: string }> = {
+      Bueno:   { bg: '#f0fdf4', border: '#bbf7d0', color: '#16a34a' },
+      Regular: { bg: '#fefce8', border: '#fde68a', color: '#ca8a04' },
+      Malo:    { bg: '#fff7ed', border: '#fed7aa', color: '#ea580c' },
+      Crítico: { bg: '#fef2f2', border: '#fecaca', color: '#dc2626' },
+    };
+    return map[label] ?? map.Bueno;
+  };
 
-      // Estado badge
-      const [ir, ig, ib] = kpiText[item.estado] ?? kpiText.Bueno;
-      doc.setFillColor(...(kpiColors[item.estado] ?? kpiColors.Bueno) as [number, number, number]);
-      doc.roundedRect(marginL + 2, y + 2, 18, 6, 1, 1, 'F');
-      doc.setFont('helvetica', 'bold');
-      doc.setFontSize(7);
-      doc.setTextColor(ir, ig, ib);
-      doc.text(item.estado.toUpperCase(), marginL + 3, y + 6.2);
+  const fechaGenerado = format(new Date(), "d 'de' MMMM 'de' yyyy", { locale: es });
+  const fechaInspeccion = formatFechaCorta(c.fecha ?? c.created_at);
 
-      // Nombre
-      doc.setFont('helvetica', 'bold');
-      doc.setFontSize(9);
-      doc.setTextColor(15, 23, 42);
-      doc.text(item.nombre, marginL + 23, y + 6.2);
+  const itemsHTML = items.length === 0
+    ? `<p style="text-align:center;color:#94a3b8;font-style:italic;padding:24px 0;">No hay ítems registrados en esta inspección.</p>`
+    : items.map(item => {
+        const { bg, color } = itemBadgeStyle(item.estado);
+        return `
+          <div style="display:flex;align-items:flex-start;gap:12px;padding:12px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;margin-bottom:8px;">
+            <span style="background:${bg};color:${color};font-size:10px;font-weight:700;padding:3px 8px;border-radius:20px;white-space:nowrap;margin-top:1px;">${item.estado.toUpperCase()}</span>
+            <div>
+              <p style="margin:0;font-weight:700;font-size:13px;color:#0f172a;">${item.nombre}</p>
+              ${item.observacion ? `<p style="margin:3px 0 0;font-size:11px;color:#64748b;">${item.observacion}</p>` : ''}
+            </div>
+          </div>`;
+      }).join('');
 
-      // Observación
-      if (item.observacion) {
-        doc.setFont('helvetica', 'normal');
-        doc.setFontSize(8);
-        doc.setTextColor(100, 116, 139);
-        doc.text(item.observacion, marginL + 23, y + 11.5);
-      }
+  const html = `
+    <div id="pdf-content" style="width:794px;background:white;padding:40px;font-family:Arial,sans-serif;box-sizing:border-box;">
 
-      y += (item.observacion ? 14 : 10) + 2;
+      <!-- Header con logo -->
+      <div style="display:flex;align-items:flex-start;gap:16px;margin-bottom:24px;">
+        <img src="/colegio-mano-amiga.png" style="width:72px;height:72px;object-fit:contain;" crossorigin="anonymous" />
+        <div style="padding-top:6px;">
+          <p style="margin:0;font-weight:700;font-size:13px;color:#374151;">Reporte de Inspección — Sistema RCMA</p>
+          <p style="margin:4px 0 0;font-size:11px;color:#6b7280;">Generado el ${fechaGenerado}</p>
+        </div>
+      </div>
+
+      <!-- Línea divisoria -->
+      <hr style="border:none;border-top:1px solid #e2e8f0;margin-bottom:24px;" />
+
+      <!-- Título -->
+      <h1 style="margin:0 0 12px;font-size:26px;font-weight:800;color:#0f172a;">${c.titulo ?? 'Sin título'}</h1>
+
+      <!-- Badges estado + material -->
+      <div style="display:flex;gap:8px;margin-bottom:12px;">
+        <span style="background:${badgeColor};color:white;font-size:11px;font-weight:700;padding:4px 12px;border-radius:20px;">${statusLabel}</span>
+        ${materialCorto ? `<span style="background:#475569;color:white;font-size:11px;font-weight:700;padding:4px 12px;border-radius:20px;">${materialCorto}</span>` : ''}
+      </div>
+
+      <!-- Descripción -->
+      ${c.descripcion ? `<p style="margin:0 0 16px;font-size:12px;color:#64748b;font-style:italic;">${c.descripcion}</p>` : ''}
+
+      <!-- Info grid -->
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:0;border:1px solid #e2e8f0;border-radius:8px;background:#f8fafc;padding:16px;margin-bottom:24px;">
+        <div>
+          <p style="margin:0 0 4px;font-size:9px;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:0.05em;">Colegio</p>
+          <p style="margin:0;font-size:13px;font-weight:700;color:#0f172a;">${c.colegio ?? '—'}</p>
+          <p style="margin:0;font-size:10px;color:#94a3b8;">${c.territorio ?? ''}</p>
+        </div>
+        <div>
+          <p style="margin:0 0 4px;font-size:9px;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:0.05em;">Inspector</p>
+          <p style="margin:0;font-size:13px;font-weight:700;color:#0f172a;">${c.inspector || 'Sin asignar'}</p>
+        </div>
+        <div>
+          <p style="margin:0 0 4px;font-size:9px;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:0.05em;">Fecha</p>
+          <p style="margin:0;font-size:13px;font-weight:700;color:#0f172a;">${fechaInspeccion}</p>
+        </div>
+      </div>
+
+      <!-- Resumen de condiciones -->
+      <h2 style="margin:0 0 12px;font-size:14px;font-weight:700;color:#0f172a;">Resumen de Condiciones</h2>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:8px;margin-bottom:24px;">
+        ${Object.entries(counts).map(([label, count]) => {
+          const { bg, border, color } = kpiStyle(label);
+          return `
+            <div style="background:${bg};border:1px solid ${border};border-radius:8px;padding:16px;text-align:center;">
+              <p style="margin:0;font-size:28px;font-weight:800;color:${color};">${count}</p>
+              <p style="margin:4px 0 0;font-size:10px;font-weight:700;color:${color};text-transform:uppercase;">${label}</p>
+            </div>`;
+        }).join('')}
+      </div>
+
+      <!-- Items inspeccionados -->
+      <h2 style="margin:0 0 12px;font-size:14px;font-weight:700;color:#0f172a;">Items Inspeccionados</h2>
+      ${itemsHTML}
+
+      <!-- Footer -->
+      <div style="margin-top:40px;padding-top:12px;border-top:1px solid #e2e8f0;display:flex;justify-content:space-between;">
+        <p style="margin:0;font-size:10px;color:#94a3b8;">Sistema RCMA — Página 1 de 1</p>
+        <p style="margin:0;font-size:10px;color:#94a3b8;">Documento confidencial</p>
+      </div>
+    </div>`;
+
+  // Renderizar en DOM oculto y capturar con html2canvas
+  const container = document.createElement('div');
+  container.style.cssText = 'position:fixed;left:-9999px;top:0;z-index:-1;';
+  container.innerHTML = html;
+  document.body.appendChild(container);
+
+  try {
+    const { default: html2canvas } = await import('html2canvas');
+    const canvas = await html2canvas(container.querySelector('#pdf-content') as HTMLElement, {
+      scale: 2,
+      useCORS: true,
+      allowTaint: true,
+      backgroundColor: '#ffffff',
+      logging: false,
     });
+
+    const imgData = canvas.toDataURL('image/png');
+    const { default: jsPDF } = await import('jspdf');
+    const doc = new jsPDF({ unit: 'mm', format: 'a4' });
+    const pdfW = doc.internal.pageSize.getWidth();
+    const pdfH = (canvas.height * pdfW) / canvas.width;
+    doc.addImage(imgData, 'PNG', 0, 0, pdfW, pdfH);
+    doc.save(`inspeccion-${(c.titulo ?? 'checklist').toLowerCase().replace(/[^a-z0-9]+/g, '-')}.pdf`);
+  } finally {
+    document.body.removeChild(container);
   }
-
-  // Footer
-  doc.setFont('helvetica', 'normal');
-  doc.setFontSize(8);
-  doc.setTextColor(148, 163, 184);
-  doc.text(`Sistema RCMA — Página 1 de 1`, marginL, 285);
-  doc.text('Documento confidencial', W - marginR, 285, { align: 'right' });
-
-  doc.save(`inspeccion-${(c.titulo ?? 'checklist').toLowerCase().replace(/\s+/g, '-')}.pdf`);
 }
 
 // ─── Componente ───────────────────────────────────────────────────────────────
