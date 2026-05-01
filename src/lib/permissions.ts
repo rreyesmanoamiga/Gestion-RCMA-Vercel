@@ -11,6 +11,7 @@ interface PermissionGroup {
 }
 
 const PERMISSION_DEFS: PermissionDef[] = [
+  { key: 'ver_dashboard',             label: 'Ver Dashboard',             group: 'Dashboard',             default: true  },
   { key: 'ver_proyectos',             label: 'Ver Proyectos',             group: 'Proyectos',             default: true  },
   { key: 'crear_proyectos',           label: 'Crear Proyectos',           group: 'Proyectos',             default: false },
   { key: 'editar_proyectos',          label: 'Editar Proyectos',          group: 'Proyectos',             default: false },

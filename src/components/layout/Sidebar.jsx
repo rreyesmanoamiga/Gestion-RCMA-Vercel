@@ -89,11 +89,13 @@ export default function Sidebar({ isOpen, onToggle }) {
         {/* Navegación */}
         <nav className="flex-1 p-4 space-y-1 overflow-y-auto" aria-label="Menú principal">
 
-          {/* Dashboard — siempre visible */}
-          <Link to="/" onClick={handleNavClick} className={navLinkClass('/')}>
-            <LayoutDashboard className="w-[18px] h-[18px]" />
-            Dashboard
-          </Link>
+          {/* Dashboard */}
+          {(isAdmin || can('ver_dashboard')) && (
+            <Link to="/" onClick={handleNavClick} className={navLinkClass('/')}>
+              <LayoutDashboard className="w-[18px] h-[18px]" />
+              Dashboard
+            </Link>
+          )}
 
           {/* Tickets */}
           {can('ver_tickets') && (
