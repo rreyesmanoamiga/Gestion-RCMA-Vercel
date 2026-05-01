@@ -176,15 +176,15 @@ async function exportResumenPDF({ stats, projects, checklists, solicitudes, tick
 
 // ─── Excel Export ─────────────────────────────────────────────────────────────
 async function loadXLSX() {
-  const w = window as Window & { XLSX?: unknown };
-  if (w.XLSX) return w.XLSX as typeof import('xlsx');
+  const w = window as Window & { XlsxStyle?: unknown };
+  if (w.XlsxStyle) return w.XlsxStyle as typeof import('xlsx');
   await new Promise<void>((resolve, reject) => {
     const s = document.createElement('script');
-    s.src = 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
+    s.src = 'https://cdn.jsdelivr.net/npm/xlsx-js-style@1.2.0/dist/xlsx.bundle.js';
     s.onload = () => resolve(); s.onerror = () => reject(new Error('XLSX load error'));
     document.head.appendChild(s);
   });
-  return w.XLSX as typeof import('xlsx');
+  return w.XlsxStyle as typeof import('xlsx');
 }
 
 async function exportMatrizExcel(data: {
