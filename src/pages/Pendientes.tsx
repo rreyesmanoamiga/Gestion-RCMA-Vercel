@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { db } from '@/lib/db';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { ClockAlert, ChevronDown, Pencil, Trash2, X, Save, MapPin, User, Calendar, Link2 } from 'lucide-react';
+import { ClockAlert, ChevronDown, Pencil, Trash2, X, Save, Calendar, Link2, MapPin } from 'lucide-react';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { toast } from 'sonner';
@@ -13,35 +13,41 @@ import { COLEGIOS, TERRITORIOS } from '@/lib/colegios';
 
 const PAGE_SIZE = 20;
 
-const inputClass    = "w-full px-3 py-2 border border-slate-300 rounded-md text-sm focus:ring-2 focus:ring-slate-900 focus:outline-none bg-white text-slate-900";
-const labelClass    = "block text-xs font-bold text-slate-500 uppercase mb-1";
-const selectClass   = "h-10 px-3 py-2 bg-white border border-slate-300 rounded-md text-sm focus:ring-2 focus:ring-slate-400 focus:outline-none text-slate-700";
+const inputClass  = "w-full px-3 py-2 border border-slate-300 rounded-md text-sm focus:ring-2 focus:ring-slate-900 focus:outline-none bg-white text-slate-900";
+const labelClass  = "block text-xs font-bold text-slate-500 uppercase mb-1";
+const selectClass = "h-10 px-3 py-2 bg-white border border-slate-300 rounded-md text-sm focus:ring-2 focus:ring-slate-400 focus:outline-none text-slate-700";
 
 const TIPOS_PROYECTO = ['MEJORA', 'CONSTRUCCIÓN', 'REMODELACIÓN', 'ADECUACIÓN', 'MANTENIMIENTO', 'PORTAFOLIO', 'GARANTÍAS', 'REVISIÓN'];
 const ASIGNACIONES   = ['MANO AMIGA SERVICIOS', 'MA COLEGIO', 'PROVEEDOR', 'ECO', 'JURÍDICO', 'INMOBILIARIA', 'RECAUDACIÓN'];
 const ESTATUSES      = ['pendiente', 'en_progreso', 'completado', 'pausado'];
 const PRIORIDADES    = ['baja', 'media', 'alta', 'urgente'];
 
+const ESTATUS_LABEL: Record<string, string> = {
+  pendiente:   'Pendiente',
+  en_progreso: 'En Progreso',
+  completado:  'Completado',
+  pausado:     'Pausado',
+};
+
 interface Pendiente {
-  id:                  string;
-  territorio?:         string;
-  colegio?:            string;
-  nombre_proyecto?:    string;
-  presupuesto?:        number | null;
-  tipo_proyecto?:      string;
-  prioridad?:          string;
-  asignacion?:         string;
-  eco?:                string;
-  estatus?:            string;
+  id:                   string;
+  territorio?:          string;
+  colegio?:             string;
+  nombre_proyecto?:     string;
+  tipo_proyecto?:       string;
+  prioridad?:           string;
+  asignacion?:          string;
+  eco?:                 string;
+  estatus?:             string;
   fecha_actualizacion?: string;
-  notas?:              string;
-  created_at?:         string;
-  proyecto_id?:        string | null;
+  notas?:               string;
+  created_at?:          string;
+  proyecto_id?:         string | null;
 }
 
 interface Project {
-  id:    string;
-  name?: string;
+  id:     string;
+  name?:  string;
   folio?: string;
 }
 
@@ -49,7 +55,6 @@ interface FormData {
   territorio:      string;
   colegio:         string;
   nombre_proyecto: string;
-  presupuesto:     string;
   tipo_proyecto:   string;
   prioridad:       string;
   asignacion:      string;
@@ -63,7 +68,6 @@ const INITIAL_FORM: FormData = {
   territorio:      '',
   colegio:         '',
   nombre_proyecto: '',
-  presupuesto:     '',
   tipo_proyecto:   '',
   prioridad:       'media',
   asignacion:      '',
@@ -77,11 +81,11 @@ const INITIAL_FORM: FormData = {
 function PendienteForm({
   open, onClose, onSubmit, pendiente = null, projects = [],
 }: {
-  open: boolean;
-  onClose: () => void;
-  onSubmit: (data: Record<string, unknown>) => void;
+  open:       boolean;
+  onClose:    () => void;
+  onSubmit:   (data: Record<string, unknown>) => void;
   pendiente?: Pendiente | null;
-  projects?: Project[];
+  projects?:  Project[];
 }) {
   const [formData, setFormData] = useState<FormData>(INITIAL_FORM);
 
@@ -91,7 +95,6 @@ function PendienteForm({
         territorio:      String(pendiente.territorio      ?? ''),
         colegio:         String(pendiente.colegio         ?? ''),
         nombre_proyecto: String(pendiente.nombre_proyecto ?? ''),
-        presupuesto:     pendiente.presupuesto != null ? String(pendiente.presupuesto) : '',
         tipo_proyecto:   String(pendiente.tipo_proyecto   ?? ''),
         prioridad:       String(pendiente.prioridad       ?? 'media'),
         asignacion:      String(pendiente.asignacion      ?? ''),
@@ -111,7 +114,6 @@ function PendienteForm({
     e.preventDefault();
     onSubmit({
       ...formData,
-      presupuesto: formData.presupuesto ? parseFloat(formData.presupuesto) : null,
       proyecto_id: formData.proyecto_id || null,
     });
   };
@@ -140,9 +142,7 @@ function PendienteForm({
           <ColegioSelector
             territorio={formData.territorio}
             colegio={formData.colegio}
-            onTerritorioChange={val => {
-              setFormData(p => ({ ...p, territorio: val, colegio: '', eco: '' }));
-            }}
+            onTerritorioChange={val => setFormData(p => ({ ...p, territorio: val, colegio: '', eco: '' }))}
             onColegioChange={val => {
               const colegioData = COLEGIOS.find(c => c.colegio === val);
               setFormData(p => ({ ...p, colegio: val, eco: colegioData?.eco ?? '' }));
@@ -152,7 +152,8 @@ function PendienteForm({
 
           <div>
             <label className={labelClass}>ECO (Automático)</label>
-            <input type="text" readOnly className="w-full px-3 py-2 border border-slate-200 rounded-md text-sm bg-slate-50 font-semibold text-slate-600 cursor-default"
+            <input type="text" readOnly
+              className="w-full px-3 py-2 border border-slate-200 rounded-md text-sm bg-slate-50 font-semibold text-slate-600 cursor-default"
               value={formData.eco} placeholder="Se asigna según el colegio" />
           </div>
 
@@ -187,16 +188,9 @@ function PendienteForm({
               <label className={labelClass}>Estatus *</label>
               <select className={inputClass} value={formData.estatus}
                 onChange={e => setFormData(p => ({ ...p, estatus: e.target.value }))}>
-                {ESTATUSES.map(e => <option key={e} value={e}>{e.replace('_', ' ').charAt(0).toUpperCase() + e.replace('_', ' ').slice(1)}</option>)}
+                {ESTATUSES.map(e => <option key={e} value={e}>{ESTATUS_LABEL[e]}</option>)}
               </select>
             </div>
-          </div>
-
-          <div>
-            <label className={labelClass}>Presupuesto Original (MXN)</label>
-            <input type="number" min="0" step="0.01" className={inputClass} value={formData.presupuesto}
-              onChange={e => setFormData(p => ({ ...p, presupuesto: e.target.value }))}
-              placeholder="0.00" />
           </div>
 
           <div>
@@ -207,9 +201,7 @@ function PendienteForm({
               onChange={e => setFormData(p => ({ ...p, proyecto_id: e.target.value }))}>
               <option value="">Sin vincular</option>
               {projects.map(p => (
-                <option key={p.id} value={p.id}>
-                  {p.folio ? `${p.folio} — ` : ''}{p.name}
-                </option>
+                <option key={p.id} value={p.id}>{p.folio ? `${p.folio} — ` : ''}{p.name}</option>
               ))}
             </select>
           </div>
@@ -234,6 +226,19 @@ function PendienteForm({
           </div>
         </form>
       </div>
+    </div>
+  );
+}
+
+// ─── KPI Card ─────────────────────────────────────────────────────────────────
+function KpiCard({ label, value, color = 'text-slate-900', sub }: {
+  label: string; value: string | number; color?: string; sub?: string;
+}) {
+  return (
+    <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-sm">
+      <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">{label}</p>
+      <p className={`text-xl font-black ${color}`}>{value}</p>
+      {sub && <p className="text-[10px] text-slate-400 mt-0.5">{sub}</p>}
     </div>
   );
 }
@@ -263,12 +268,44 @@ export default function Pendientes() {
   const pendientes = rawPendientes as unknown as Pendiente[];
   const projects   = rawProjects   as unknown as Project[];
 
+  const projectMap = useMemo(
+    () => Object.fromEntries(projects.map(p => [p.id, { name: p.name ?? '', folio: p.folio ?? '' }])),
+    [projects]
+  );
+
+  // ── KPIs ──────────────────────────────────────────────────────────────────
+  const kpis = useMemo(() => {
+    const total       = pendientes.length;
+    const pendiente   = pendientes.filter(p => p.estatus === 'pendiente').length;
+    const en_progreso = pendientes.filter(p => p.estatus === 'en_progreso').length;
+    const completado  = pendientes.filter(p => p.estatus === 'completado').length;
+    const pausado     = pendientes.filter(p => p.estatus === 'pausado').length;
+    const urgente     = pendientes.filter(p => p.prioridad === 'urgente').length;
+    const alta        = pendientes.filter(p => p.prioridad === 'alta').length;
+
+    // Tipo más frecuente
+    const tipoCount = TIPOS_PROYECTO.map(t => ({
+      tipo: t,
+      count: pendientes.filter(p => p.tipo_proyecto === t).length,
+    })).sort((a, b) => b.count - a.count);
+    const topTipo = tipoCount[0]?.count > 0 ? tipoCount[0] : null;
+
+    // Territorio con más pendientes
+    const terrCount = TERRITORIOS.map(t => ({
+      terr: t,
+      count: pendientes.filter(p => p.territorio === t).length,
+    })).sort((a, b) => b.count - a.count);
+    const topTerr = terrCount[0]?.count > 0 ? terrCount[0] : null;
+
+    return { total, pendiente, en_progreso, completado, pausado, urgente, alta, topTipo, topTerr, terrCount };
+  }, [pendientes]);
+
   const createMutation = useMutation({
     mutationFn: (data: Record<string, unknown>) => db.Pendiente.create(data),
     onSuccess: (result: any) => {
       if (result?._offline) {
         queryClient.setQueryData(['pendientes'], (old: any) => [result, ...(old ?? [])]);
-        toast.warning('📶 Sin conexión — Pendiente guardado localmente, se sincronizará cuando haya internet');
+        toast.warning('📶 Sin conexión — Pendiente guardado localmente');
       } else {
         queryClient.invalidateQueries({ queryKey: ['pendientes'] });
         toast.success('Pendiente creado');
@@ -286,7 +323,7 @@ export default function Pendientes() {
         queryClient.setQueryData(['pendientes'], (old: any) =>
           (old ?? []).map((p: any) => p.id === result.id ? { ...p, ...result } : p)
         );
-        toast.warning('📶 Sin conexión — Cambio guardado localmente, se sincronizará cuando haya internet');
+        toast.warning('📶 Sin conexión — Cambio guardado localmente');
       } else {
         queryClient.invalidateQueries({ queryKey: ['pendientes'] });
         toast.success('Pendiente actualizado');
@@ -307,17 +344,12 @@ export default function Pendientes() {
   });
 
   const colegiosFiltrados = useMemo(() =>
-    filterTerritorio !== 'all'
-      ? COLEGIOS.filter(c => c.territorio === filterTerritorio)
-      : COLEGIOS,
+    filterTerritorio !== 'all' ? COLEGIOS.filter(c => c.territorio === filterTerritorio) : COLEGIOS,
     [filterTerritorio]
   );
 
   const handleFilterChange = (setter: React.Dispatch<React.SetStateAction<string>>) =>
-    (e: React.ChangeEvent<HTMLSelectElement>) => {
-      setter(e.target.value);
-      setVisibleCount(PAGE_SIZE);
-    };
+    (e: React.ChangeEvent<HTMLSelectElement>) => { setter(e.target.value); setVisibleCount(PAGE_SIZE); };
 
   const filtered = useMemo(() =>
     pendientes.filter(p => {
@@ -351,35 +383,61 @@ export default function Pendientes() {
         onAction={() => setShowForm(true)}
       />
 
+      {/* ── KPIs ── */}
+      <div className="space-y-3">
+        {/* Fila 1: Estatus */}
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+          <KpiCard label="Total"       value={kpis.total}       color="text-slate-900" />
+          <KpiCard label="Pendientes"  value={kpis.pendiente}   color="text-amber-600" />
+          <KpiCard label="En Progreso" value={kpis.en_progreso} color="text-blue-600"  />
+          <KpiCard label="Completados" value={kpis.completado}  color="text-emerald-600" />
+          <KpiCard label="Pausados"    value={kpis.pausado}     color="text-slate-500" />
+        </div>
+
+        {/* Fila 2: Prioridades + Tipo top + Territorios */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <KpiCard label="Prioridad Urgente" value={kpis.urgente} color="text-red-600"
+            sub={`+ ${kpis.alta} de alta prioridad`} />
+          <KpiCard
+            label="Tipo más frecuente"
+            value={kpis.topTipo ? kpis.topTipo.tipo : '—'}
+            color="text-purple-600"
+            sub={kpis.topTipo ? `${kpis.topTipo.count} pendiente${kpis.topTipo.count !== 1 ? 's' : ''}` : undefined}
+          />
+          {kpis.terrCount.filter(t => t.count > 0).slice(0, 2).map(t => (
+            <div key={t.terr} className="bg-white rounded-xl border border-slate-200 p-4 shadow-sm">
+              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 flex items-center gap-1">
+                <MapPin className="w-3 h-3" /> {t.terr}
+              </p>
+              <p className="text-xl font-black text-indigo-600">{t.count}</p>
+              <p className="text-[10px] text-slate-400 mt-0.5">pendiente{t.count !== 1 ? 's' : ''}</p>
+            </div>
+          ))}
+        </div>
+      </div>
+
       {/* Filtros */}
       <div className="flex flex-wrap gap-3">
         <select className={selectClass} value={filterTerritorio}
-          onChange={e => {
-            handleFilterChange(setFilterTerritorio)(e);
-            setFilterColegio('all');
-          }}>
+          onChange={e => { handleFilterChange(setFilterTerritorio)(e); setFilterColegio('all'); }}>
           <option value="all">Todos los Territorios</option>
           {TERRITORIOS.map(t => <option key={t} value={t}>{t}</option>)}
         </select>
-
         <select className={selectClass} value={filterColegio}
           onChange={handleFilterChange(setFilterColegio)}>
           <option value="all">Todos los Colegios</option>
           {colegiosFiltrados.map(c => <option key={c.colegio} value={c.colegio}>{c.colegio}</option>)}
         </select>
-
         <select className={selectClass} value={filterEstatus}
           onChange={handleFilterChange(setFilterEstatus)}>
           <option value="all">Todos los Estatus</option>
-          {ESTATUSES.map(e => <option key={e} value={e}>{e.replace('_', ' ').charAt(0).toUpperCase() + e.replace('_', ' ').slice(1)}</option>)}
+          {ESTATUSES.map(e => <option key={e} value={e}>{ESTATUS_LABEL[e]}</option>)}
         </select>
-
         <select className={selectClass} value={filterPrioridad}
           onChange={handleFilterChange(setFilterPrioridad)}>
           <option value="all">Todas las Prioridades</option>
           {PRIORIDADES.map(p => <option key={p} value={p}>{p.charAt(0).toUpperCase() + p.slice(1)}</option>)}
         </select>
-
         {filtered.length > 0 && (
           <span className="h-10 flex items-center text-sm text-slate-500">
             {filtered.length} pendiente{filtered.length !== 1 ? 's' : ''}
@@ -407,7 +465,7 @@ export default function Pendientes() {
             <div className="col-span-1">Prioridad</div>
             <div className="col-span-1">Asignación</div>
             <div className="col-span-1">Estatus</div>
-            <div className="col-span-1">Presupuesto</div>
+            <div className="col-span-1">Proyecto</div>
             <div className="col-span-2">Notas</div>
             <div className="col-span-1">Acciones</div>
           </div>
@@ -443,11 +501,16 @@ export default function Pendientes() {
                   <StatusBadge status={p.estatus} />
                 </div>
                 <div className="col-span-1">
-                  <span className="text-xs font-semibold text-slate-700">
-                    {p.presupuesto != null
-                      ? Number(p.presupuesto).toLocaleString('es-MX', { style: 'currency', currency: 'MXN' })
-                      : '—'}
-                  </span>
+                  {p.proyecto_id && projectMap[p.proyecto_id] ? (
+                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 flex items-center gap-1 w-fit">
+                      <Link2 className="w-3 h-3 flex-shrink-0" />
+                      {projectMap[p.proyecto_id].folio || projectMap[p.proyecto_id].name}
+                    </span>
+                  ) : (
+                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-slate-100 text-slate-400 font-medium">
+                      Sin vinculación
+                    </span>
+                  )}
                 </div>
                 <div className="col-span-2">
                   <p className="text-xs text-slate-600 line-clamp-3 leading-relaxed">{p.notas || '—'}</p>
