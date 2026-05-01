@@ -188,309 +188,310 @@ async function loadXLSX() {
 }
 
 async function exportMatrizExcel(data: {
-  projects:     unknown[];
-  checklists:   unknown[];
-  tickets:      unknown[];
-  pendientes:   unknown[];
+  projects:      unknown[];
+  checklists:    unknown[];
+  tickets:       unknown[];
+  pendientes:    unknown[];
   anteproyectos: unknown[];
-  solicitudes:  unknown[];
+  solicitudes:   unknown[];
 }) {
   const XLSX = await loadXLSX();
+  const wb   = XLSX.utils.book_new();
+  const now  = new Date().toLocaleDateString('es-MX', { year: 'numeric', month: 'long', day: 'numeric' });
 
-  // Paleta de colores por hoja
-  const HEADER_BG   = 'FF0F172A'; // slate-900
-  const HEADER_FG   = 'FFFFFFFF';
-  const SUBHEAD_BG  = 'FF1E3A5F';
-  const TITLE_BG    = 'FF334155';
-  const ALT_ROW     = 'FFF8FAFC';
-  const BORDER_CLR  = 'FFE2E8F0';
-
-  const wb = XLSX.utils.book_new();
-
-  // ── helpers ──────────────────────────────────────────────────────────────
-  const border = {
-    top:    { style: 'thin', color: { rgb: BORDER_CLR } },
-    bottom: { style: 'thin', color: { rgb: BORDER_CLR } },
-    left:   { style: 'thin', color: { rgb: BORDER_CLR } },
-    right:  { style: 'thin', color: { rgb: BORDER_CLR } },
+  // ── Estilos reutilizables ────────────────────────────────────────────────
+  const bdr = {
+    top:    { style: 'thin', color: { rgb: 'FFD1D5DB' } },
+    bottom: { style: 'thin', color: { rgb: 'FFD1D5DB' } },
+    left:   { style: 'thin', color: { rgb: 'FFD1D5DB' } },
+    right:  { style: 'thin', color: { rgb: 'FFD1D5DB' } },
   };
 
-  const headerStyle = {
-    font:      { bold: true, color: { rgb: HEADER_FG }, sz: 11, name: 'Arial' },
-    fill:      { patternType: 'solid', fgColor: { rgb: HEADER_BG } },
-    alignment: { horizontal: 'center', vertical: 'center', wrapText: true },
-    border,
-  };
-
-  const subHeaderStyle = {
-    font:      { bold: true, color: { rgb: HEADER_FG }, sz: 10, name: 'Arial' },
-    fill:      { patternType: 'solid', fgColor: { rgb: SUBHEAD_BG } },
-    alignment: { horizontal: 'center', vertical: 'center' },
-    border,
-  };
-
-  const titleStyle = {
-    font:      { bold: true, color: { rgb: HEADER_FG }, sz: 14, name: 'Arial' },
-    fill:      { patternType: 'solid', fgColor: { rgb: TITLE_BG } },
+  const sTitle = {
+    font:      { bold: true, sz: 13, name: 'Calibri', color: { rgb: 'FFFFFFFF' } },
+    fill:      { patternType: 'solid', fgColor: { rgb: 'FF0F172A' } },
     alignment: { horizontal: 'left', vertical: 'center' },
   };
-
-  const dataStyle = (alt = false) => ({
-    font:      { sz: 10, name: 'Arial' },
-    fill:      alt ? { patternType: 'solid', fgColor: { rgb: ALT_ROW } } : { patternType: 'none' },
-    alignment: { vertical: 'center', wrapText: false },
-    border,
-  });
-
-  const numStyle = (alt = false) => ({
-    ...dataStyle(alt),
+  const sSubtitle = {
+    font:      { italic: true, sz: 9, name: 'Calibri', color: { rgb: 'FFD1D5DB' } },
+    fill:      { patternType: 'solid', fgColor: { rgb: 'FF0F172A' } },
     alignment: { horizontal: 'right', vertical: 'center' },
-    numFmt: '$#,##0',
+  };
+  const sBlankDark = {
+    fill: { patternType: 'solid', fgColor: { rgb: 'FF0F172A' } },
+  };
+  const sHeader = {
+    font:      { bold: true, sz: 10, name: 'Calibri', color: { rgb: 'FFFFFFFF' } },
+    fill:      { patternType: 'solid', fgColor: { rgb: 'FF1E40AF' } },
+    alignment: { horizontal: 'center', vertical: 'center', wrapText: true },
+    border:    bdr,
+  };
+  const sData = (alt: boolean) => ({
+    font:      { sz: 10, name: 'Calibri', color: { rgb: 'FF111827' } },
+    fill:      { patternType: alt ? 'solid' : 'none', fgColor: { rgb: alt ? 'FFF0F4FF' : 'FFFFFFFF' } },
+    alignment: { vertical: 'center' },
+    border:    bdr,
   });
-
-  const centerStyle = (alt = false) => ({
-    ...dataStyle(alt),
+  const sDataCenter = (alt: boolean) => ({
+    ...sData(alt),
     alignment: { horizontal: 'center', vertical: 'center' },
   });
+  const sDataRight = (alt: boolean) => ({
+    ...sData(alt),
+    alignment: { horizontal: 'right', vertical: 'center' },
+    numFmt: '"$"#,##0.00',
+  });
+  const sTotal = {
+    font:   { bold: true, sz: 10, name: 'Calibri', color: { rgb: 'FF1E40AF' } },
+    fill:   { patternType: 'solid', fgColor: { rgb: 'FFEFF6FF' } },
+    border: bdr,
+  };
 
-  const now = new Date().toLocaleDateString('es-MX', { year: 'numeric', month: 'long', day: 'numeric' });
-
+  // ── Builder de hojas ─────────────────────────────────────────────────────
   function buildSheet(
-    sheetName: string,
-    title: string,
-    headers: string[],
-    rows: (string | number | null | undefined)[][],
+    name:      string,
+    sheetTitle: string,
+    headers:   string[],
+    rows:      (string | number | null | undefined)[][],
     colWidths: number[],
+    moneyCol?: number,   // índice de columna con formato moneda
   ) {
     const ws: Record<string, unknown> = {};
-    const R = { s: { r: 0, c: 0 }, e: { r: 0, c: headers.length - 1 } };
+    const nCols = headers.length;
+    const nRows = rows.length;
 
-    // Fila 1: Título + fecha
-    ws['A1'] = { v: `${title}  —  Sistema RCMA`, s: titleStyle };
-    ws['B1'] = { v: `Generado: ${now}`, s: { font: { italic: true, sz: 9, name: 'Arial', color: { rgb: 'FF64748B' } }, alignment: { horizontal: 'right' } } };
-    for (let c = 0; c < headers.length; c++) {
-      if (c === 0) continue;
-      if (c === headers.length - 1) continue;
-      ws[XLSX.utils.encode_cell({ r: 0, c })] = { v: '', s: titleStyle };
+    // Fila 0 — Título (dark bg, sin merges para evitar errores)
+    for (let c = 0; c < nCols; c++) {
+      ws[XLSX.utils.encode_cell({ r: 0, c })] = {
+        v: c === 0 ? sheetTitle : c === nCols - 1 ? `Generado: ${now}` : '',
+        t: 's',
+        s: c === nCols - 1 ? sSubtitle : sTitle,
+      };
     }
 
-    // Fila 2: Vacía con color
-    for (let c = 0; c < headers.length; c++) {
-      ws[XLSX.utils.encode_cell({ r: 1, c })] = { v: '', s: { fill: { patternType: 'solid', fgColor: { rgb: HEADER_BG } } } };
+    // Fila 1 — separador oscuro
+    for (let c = 0; c < nCols; c++) {
+      ws[XLSX.utils.encode_cell({ r: 1, c })] = { v: '', t: 's', s: sBlankDark };
     }
 
-    // Fila 3: Encabezados
+    // Fila 2 — encabezados azules
     headers.forEach((h, c) => {
-      ws[XLSX.utils.encode_cell({ r: 2, c })] = { v: h, s: subHeaderStyle };
+      ws[XLSX.utils.encode_cell({ r: 2, c })] = { v: h, t: 's', s: sHeader };
     });
 
     // Filas de datos
     rows.forEach((row, ri) => {
       const alt = ri % 2 === 1;
       row.forEach((val, ci) => {
-        const cell: Record<string, unknown> = { v: val ?? '—' };
-        if (typeof val === 'number' && headers[ci]?.toLowerCase().includes('presupuesto')) {
-          cell.s = numStyle(alt);
-          cell.t = 'n';
-        } else if (typeof val === 'number') {
-          cell.s = centerStyle(alt);
-          cell.t = 'n';
-        } else {
-          cell.s = dataStyle(alt);
-          cell.t = 's';
-        }
+        const isMoney  = moneyCol !== undefined && ci === moneyCol;
+        const isNumber = typeof val === 'number';
+        const cell: Record<string, unknown> = {
+          v: val ?? '—',
+          t: isNumber ? 'n' : 's',
+          s: isMoney ? sDataRight(alt) : isNumber ? sDataCenter(alt) : sData(alt),
+        };
+        if (isMoney) cell.z = '"$"#,##0.00';
         ws[XLSX.utils.encode_cell({ r: ri + 3, c: ci })] = cell;
       });
     });
 
-    // Total de registros al final
-    const lastR = rows.length + 4;
-    ws[XLSX.utils.encode_cell({ r: lastR, c: 0 })] = {
-      v: `Total de registros: ${rows.length}`,
-      s: { font: { bold: true, sz: 10, name: 'Arial', color: { rgb: 'FF64748B' } }, alignment: { horizontal: 'left' } },
+    // Fila de total
+    const totalRow = nRows + 3;
+    ws[XLSX.utils.encode_cell({ r: totalRow, c: 0 })] = {
+      v: `Total de registros: ${nRows}`, t: 's', s: sTotal,
     };
+    for (let c = 1; c < nCols; c++) {
+      ws[XLSX.utils.encode_cell({ r: totalRow, c })] = { v: '', t: 's', s: sTotal };
+    }
 
-    const ref = `A1:${XLSX.utils.encode_cell({ r: rows.length + 4, c: headers.length - 1 })}`;
-    ws['!ref'] = ref;
-    ws['!cols'] = colWidths.map(w => ({ wch: w }));
-    ws['!rows'] = [{ hpt: 28 }, { hpt: 6 }, { hpt: 22 }, ...rows.map(() => ({ hpt: 18 }))];
-    ws['!merges'] = [
-      R,
-      { s: { r: 0, c: 0 }, e: { r: 0, c: Math.floor(headers.length / 2) - 1 } },
-      { s: { r: 0, c: Math.floor(headers.length / 2) }, e: { r: 0, c: headers.length - 1 } },
+    ws['!ref']        = `A1:${XLSX.utils.encode_cell({ r: totalRow, c: nCols - 1 })}`;
+    ws['!cols']       = colWidths.map(w => ({ wch: w }));
+    ws['!rows']       = [
+      { hpt: 26 },
+      { hpt: 4  },
+      { hpt: 22 },
+      ...rows.map(() => ({ hpt: 18 })),
+      { hpt: 18 },
     ];
-    // AutoFilter en la fila de encabezados (fila 3, índice 2)
-    ws['!autofilter'] = {
-      ref: `A3:${XLSX.utils.encode_cell({ r: 2, c: headers.length - 1 })}`,
-    };
+    ws['!autofilter'] = { ref: `A3:${XLSX.utils.encode_cell({ r: 2, c: nCols - 1 })}` };
 
-    XLSX.utils.book_append_sheet(wb, ws as import('xlsx').WorkSheet, sheetName);
+    XLSX.utils.book_append_sheet(wb, ws as import('xlsx').WorkSheet, name);
   }
 
-  const fmt = (d?: string) => d ? new Date(d).toLocaleDateString('es-MX') : '—';
-  const peso = (n?: number | null) => n != null ? n : 0;
+  const fmt  = (d?: string | null) => d ? new Date(d).toLocaleDateString('es-MX') : '—';
+  const num  = (n?: number | null) => (n != null ? n : 0);
 
   // ── 1. PROYECTOS ─────────────────────────────────────────────────────────
   buildSheet(
-    '📁 Proyectos',
-    'Proyectos',
+    '📁 Proyectos', 'Proyectos — Sistema RCMA',
     ['Folio', 'Nombre del Proyecto', 'Estatus', 'Avance %', 'Territorio', 'Colegio', 'Responsable', 'Tipo', 'Prioridad', 'Fecha Inicio'],
     (data.projects as Record<string, unknown>[]).map(p => [
-      p.folio ?? '—',
-      p.name ?? '—',
-      p.status ?? '—',
-      p.progress ?? 0,
-      p.territorio ?? '—',
-      p.colegio ?? '—',
-      p.responsible ?? '—',
-      p.tipo_proyecto ?? '—',
-      p.priority ?? '—',
-      fmt(p.start_date as string),
+      p.folio ?? '—', p.name ?? '—', p.status ?? '—', p.progress ?? 0,
+      p.territorio ?? '—', p.colegio ?? '—', p.responsible ?? '—',
+      p.tipo_proyecto ?? '—', p.priority ?? '—', fmt(p.start_date as string),
     ]),
-    [12, 38, 14, 10, 12, 14, 24, 20, 12, 14],
+    [12, 36, 14, 10, 12, 14, 26, 22, 12, 14],
   );
 
   // ── 2. TICKETS TCMM ──────────────────────────────────────────────────────
   buildSheet(
-    '🎫 Tickets TCMM',
-    'Tickets TCMM',
+    '🎫 Tickets TCMM', 'Tickets TCMM — Sistema RCMA',
     ['Folio', 'Territorio', 'Colegio', 'ECO', 'Tipo', 'Estatus', 'Proveedor', 'Presupuesto', 'Plan Financ.', 'Ticket Físico', 'Fecha'],
     (data.tickets as Record<string, unknown>[]).map(t => [
-      t.folio ?? '—',
-      t.territorio ?? '—',
-      t.colegio ?? '—',
-      t.eco ?? '—',
-      t.tipo_proyecto ?? '—',
-      t.estatus ?? '—',
-      t.nombre_proveedor ?? '—',
-      peso(t.presupuesto as number),
-      t.plan_financiamiento ?? '—',
-      t.ticket_fisico ? 'Sí' : 'No',
-      fmt(t.fecha as string),
+      t.folio ?? '—', t.territorio ?? '—', t.colegio ?? '—', t.eco ?? '—',
+      t.tipo_proyecto ?? '—', t.estatus ?? '—', t.nombre_proveedor ?? '—',
+      num(t.presupuesto as number), t.plan_financiamiento ?? '—',
+      t.ticket_fisico ? 'Sí' : 'No', fmt(t.fecha as string),
     ]),
-    [14, 12, 14, 24, 18, 12, 22, 14, 16, 12, 14],
+    [14, 12, 14, 26, 18, 12, 24, 16, 16, 13, 14],
+    7,
   );
 
   // ── 3. PENDIENTES ─────────────────────────────────────────────────────────
   buildSheet(
-    '⏳ Pendientes',
-    'Pendientes',
-    ['Territorio', 'Colegio', 'Proyecto', 'ECO', 'Tipo', 'Prioridad', 'Estatus', 'Asignación', 'Presupuesto', 'Última Actualización'],
+    '⏳ Pendientes', 'Pendientes — Sistema RCMA',
+    ['Territorio', 'Colegio', 'Proyecto', 'ECO', 'Tipo', 'Prioridad', 'Estatus', 'Asignación', 'Presupuesto', 'Última Actualiz.'],
     (data.pendientes as Record<string, unknown>[]).map(p => [
-      p.territorio ?? '—',
-      p.colegio ?? '—',
-      p.nombre_proyecto ?? '—',
-      p.eco ?? '—',
-      p.tipo_proyecto ?? '—',
-      p.prioridad ?? '—',
-      p.estatus ?? '—',
-      p.asignacion ?? '—',
-      peso(p.presupuesto as number),
-      fmt(p.fecha_actualizacion as string),
+      p.territorio ?? '—', p.colegio ?? '—', p.nombre_proyecto ?? '—',
+      p.eco ?? '—', p.tipo_proyecto ?? '—', p.prioridad ?? '—',
+      p.estatus ?? '—', p.asignacion ?? '—',
+      num(p.presupuesto as number), fmt(p.fecha_actualizacion as string),
     ]),
-    [12, 14, 34, 24, 18, 12, 14, 22, 14, 20],
+    [12, 14, 34, 26, 18, 12, 14, 24, 16, 18],
+    8,
   );
 
   // ── 4. ANTEPROYECTOS ─────────────────────────────────────────────────────
   buildSheet(
-    '📐 Anteproyectos',
-    'Anteproyectos',
-    ['Territorio', 'Colegio', 'Proyecto', 'ECO', 'Tipo', 'Prioridad', 'Estatus', 'Asignación', 'Presupuesto', 'Última Actualización'],
+    '📐 Anteproyectos', 'Anteproyectos — Sistema RCMA',
+    ['Territorio', 'Colegio', 'Proyecto', 'ECO', 'Tipo', 'Prioridad', 'Estatus', 'Asignación', 'Presupuesto', 'Última Actualiz.'],
     (data.anteproyectos as Record<string, unknown>[]).map(a => [
-      a.territorio ?? '—',
-      a.colegio ?? '—',
-      a.nombre_proyecto ?? '—',
-      a.eco ?? '—',
-      a.tipo_proyecto ?? '—',
-      a.prioridad ?? '—',
-      a.estatus ?? '—',
-      a.asignacion ?? '—',
-      peso(a.presupuesto as number),
-      fmt(a.fecha_actualizacion as string),
+      a.territorio ?? '—', a.colegio ?? '—', a.nombre_proyecto ?? '—',
+      a.eco ?? '—', a.tipo_proyecto ?? '—', a.prioridad ?? '—',
+      a.estatus ?? '—', a.asignacion ?? '—',
+      num(a.presupuesto as number), fmt(a.fecha_actualizacion as string),
     ]),
-    [12, 14, 34, 24, 18, 12, 14, 22, 14, 20],
+    [12, 14, 34, 26, 18, 12, 14, 24, 16, 18],
+    8,
   );
 
-  // ── 5. CHECKLISTS ─────────────────────────────────────────────────────────
+  // ── 5. INSPECCIONES ───────────────────────────────────────────────────────
   buildSheet(
-    '✅ Inspecciones',
-    'Checklists de Inspección',
-    ['Título', 'Colegio', 'Territorio', 'Inspector', 'Material', 'Estado General', 'Ítems', 'Fecha'],
+    '✅ Inspecciones', 'Checklists de Inspección — Sistema RCMA',
+    ['Título', 'Colegio', 'Territorio', 'Inspector', 'Material', 'Estado General', 'Núm. Ítems', 'Fecha'],
     (data.checklists as Record<string, unknown>[]).map(c => [
-      c.titulo ?? '—',
-      c.colegio ?? '—',
-      c.territorio ?? '—',
-      c.inspector ?? 'Sin asignar',
-      c.material ?? '—',
-      c.overall_status ?? '—',
+      c.titulo ?? '—', c.colegio ?? '—', c.territorio ?? '—',
+      c.inspector ?? 'Sin asignar', c.material ?? '—', c.overall_status ?? '—',
       Array.isArray(c.items) ? (c.items as unknown[]).length : 0,
       fmt((c.fecha ?? c.created_at) as string),
     ]),
-    [36, 14, 12, 22, 30, 14, 8, 14],
+    [38, 14, 12, 24, 32, 16, 12, 14],
   );
 
   // ── 6. SOLICITUDES ────────────────────────────────────────────────────────
   buildSheet(
-    '📩 Solicitudes',
-    'Solicitudes de Proyecto',
+    '📩 Solicitudes', 'Solicitudes de Proyecto — Sistema RCMA',
     ['Centro', 'Proyecto', 'Solicitante', 'Puesto', 'Tipo Iniciativa', 'Costo Aprox.', 'Estatus', 'Fecha Solicitud', 'Fecha Inicio Prop.'],
     (data.solicitudes as Record<string, unknown>[]).map(s => [
-      s.nombre_centro ?? '—',
-      s.nombre_proyecto ?? '—',
-      s.nombre_solicitante ?? '—',
-      s.puesto_solicitante ?? '—',
-      s.tipo_iniciativa ?? '—',
-      peso(s.costo_aproximado as number),
-      s.estatus ?? '—',
-      fmt(s.created_at as string),
+      s.nombre_centro ?? '—', s.nombre_proyecto ?? '—',
+      s.nombre_solicitante ?? '—', s.puesto_solicitante ?? '—',
+      s.tipo_iniciativa ?? '—', num(s.costo_aproximado as number),
+      s.estatus ?? '—', fmt(s.created_at as string),
       fmt(s.fecha_inicio_propuesta as string),
     ]),
-    [20, 34, 22, 18, 20, 14, 12, 16, 18],
+    [22, 34, 24, 20, 22, 16, 14, 18, 20],
+    5,
   );
 
   // ── 7. RESUMEN EJECUTIVO ──────────────────────────────────────────────────
   const ws7: Record<string, unknown> = {};
-  const summaryRows = [
-    ['SISTEMA RCMA — MATRIZ DE CONCENTRADO', ''],
-    ['', ''],
-    ['Generado', now],
-    ['', ''],
-    ['MÓDULO', 'TOTAL DE REGISTROS'],
-    ['Proyectos',     data.projects.length],
-    ['Tickets TCMM',  data.tickets.length],
-    ['Pendientes',    data.pendientes.length],
-    ['Anteproyectos', data.anteproyectos.length],
-    ['Inspecciones',  data.checklists.length],
-    ['Solicitudes',   data.solicitudes.length],
-    ['', ''],
-    ['TOTAL GENERAL', data.projects.length + data.tickets.length + data.pendientes.length + data.anteproyectos.length + data.checklists.length + data.solicitudes.length],
+
+  const sResTitle = {
+    font: { bold: true, sz: 16, name: 'Calibri', color: { rgb: 'FFFFFFFF' } },
+    fill: { patternType: 'solid', fgColor: { rgb: 'FF0F172A' } },
+    alignment: { horizontal: 'left', vertical: 'center' },
+  };
+  const sResDate = {
+    font: { italic: true, sz: 10, name: 'Calibri', color: { rgb: 'FFD1D5DB' } },
+    fill: { patternType: 'solid', fgColor: { rgb: 'FF0F172A' } },
+    alignment: { horizontal: 'right', vertical: 'center' },
+  };
+  const sResHeader = {
+    font: { bold: true, sz: 11, name: 'Calibri', color: { rgb: 'FFFFFFFF' } },
+    fill: { patternType: 'solid', fgColor: { rgb: 'FF1E40AF' } },
+    alignment: { horizontal: 'left', vertical: 'center' },
+    border: bdr,
+  };
+  const sResHeaderNum = {
+    ...sResHeader,
+    alignment: { horizontal: 'right', vertical: 'center' },
+  };
+  const sResRow = (alt: boolean) => ({
+    font:  { sz: 11, name: 'Calibri', color: { rgb: 'FF111827' } },
+    fill:  { patternType: alt ? 'solid' : 'none', fgColor: { rgb: alt ? 'FFF0F4FF' : 'FFFFFFFF' } },
+    alignment: { horizontal: 'left', vertical: 'center' },
+    border: bdr,
+  });
+  const sResNum = (alt: boolean) => ({
+    ...sResRow(alt),
+    font: { bold: true, sz: 12, name: 'Calibri', color: { rgb: 'FF1E40AF' } },
+    alignment: { horizontal: 'right', vertical: 'center' },
+  });
+  const sResTotalLabel = {
+    font:   { bold: true, sz: 12, name: 'Calibri', color: { rgb: 'FFFFFFFF' } },
+    fill:   { patternType: 'solid', fgColor: { rgb: 'FF0F172A' } },
+    alignment: { horizontal: 'left', vertical: 'center' },
+    border: bdr,
+  };
+  const sResTotalNum = {
+    ...sResTotalLabel,
+    alignment: { horizontal: 'right', vertical: 'center' },
+  };
+
+  const resRows = [
+    { label: 'Proyectos',     count: data.projects.length      },
+    { label: 'Tickets TCMM',  count: data.tickets.length       },
+    { label: 'Pendientes',    count: data.pendientes.length     },
+    { label: 'Anteproyectos', count: data.anteproyectos.length },
+    { label: 'Inspecciones',  count: data.checklists.length     },
+    { label: 'Solicitudes',   count: data.solicitudes.length    },
+  ];
+  const totalGeneral = resRows.reduce((a, r) => a + r.count, 0);
+
+  // R0: título
+  ws7['A1'] = { v: 'SISTEMA RCMA — MATRIZ DE CONCENTRADO', t: 's', s: sResTitle };
+  ws7['B1'] = { v: `Generado: ${now}`,                    t: 's', s: sResDate  };
+  // R1: separador
+  ws7['A2'] = { v: '', t: 's', s: { fill: { patternType: 'solid', fgColor: { rgb: 'FF0F172A' } } } };
+  ws7['B2'] = { v: '', t: 's', s: { fill: { patternType: 'solid', fgColor: { rgb: 'FF0F172A' } } } };
+  // R2: encabezados
+  ws7['A3'] = { v: 'MÓDULO',             t: 's', s: sResHeader    };
+  ws7['B3'] = { v: 'TOTAL DE REGISTROS', t: 's', s: sResHeaderNum };
+  // Datos
+  resRows.forEach((row, i) => {
+    const alt = i % 2 === 1;
+    ws7[`A${i + 4}`] = { v: row.label, t: 's', s: sResRow(alt) };
+    ws7[`B${i + 4}`] = { v: row.count, t: 'n', s: sResNum(alt) };
+  });
+  // Separador
+  const sepR = resRows.length + 4;
+  ws7[`A${sepR}`] = { v: '', t: 's', s: { fill: { patternType: 'solid', fgColor: { rgb: 'FFD1D5DB' } } } };
+  ws7[`B${sepR}`] = { v: '', t: 's', s: { fill: { patternType: 'solid', fgColor: { rgb: 'FFD1D5DB' } } } };
+  // Total general
+  ws7[`A${sepR + 1}`] = { v: 'TOTAL GENERAL', t: 's', s: sResTotalLabel };
+  ws7[`B${sepR + 1}`] = { v: totalGeneral,    t: 'n', s: sResTotalNum   };
+
+  ws7['!ref']  = `A1:B${sepR + 1}`;
+  ws7['!cols'] = [{ wch: 28 }, { wch: 22 }];
+  ws7['!rows'] = [
+    { hpt: 32 }, { hpt: 5 }, { hpt: 22 },
+    ...resRows.map(() => ({ hpt: 22 })),
+    { hpt: 4 }, { hpt: 26 },
   ];
 
-  summaryRows.forEach((row, ri) => {
-    row.forEach((val, ci) => {
-      const isMainTitle = ri === 0;
-      const isColHeader = ri === 4;
-      const isTotal     = ri === summaryRows.length - 1;
-      const isNum       = typeof val === 'number';
-      ws7[XLSX.utils.encode_cell({ r: ri, c: ci })] = {
-        v: val,
-        t: isNum ? 'n' : 's',
-        s: isMainTitle ? { font: { bold: true, sz: 16, name: 'Arial', color: { rgb: HEADER_FG } }, fill: { patternType: 'solid', fgColor: { rgb: HEADER_BG } }, alignment: { horizontal: ci === 0 ? 'left' : 'right' } }
-         : isColHeader ? subHeaderStyle
-         : isTotal     ? { font: { bold: true, sz: 12, name: 'Arial' }, fill: { patternType: 'solid', fgColor: { rgb: 'FFEFF6FF' } }, alignment: { horizontal: ci === 0 ? 'left' : 'right' } }
-         : isNum       ? { font: { bold: true, sz: 11, name: 'Arial' }, alignment: { horizontal: 'right' } }
-         : { font: { sz: 11, name: 'Arial' }, alignment: { horizontal: 'left' } },
-      };
-    });
-  });
-
-  ws7['!ref']    = `A1:B${summaryRows.length}`;
-  ws7['!cols']   = [{ wch: 28 }, { wch: 22 }];
-  ws7['!rows']   = summaryRows.map((_, i) => ({ hpt: i === 0 ? 36 : 22 }));
-  ws7['!merges'] = [{ s: { r: 0, c: 0 }, e: { r: 0, c: 1 } }];
   XLSX.utils.book_append_sheet(wb, ws7 as import('xlsx').WorkSheet, '📊 Resumen Ejecutivo');
 
-  // Reordenar hojas: Resumen primero
+  // Resumen siempre primera hoja
   wb.SheetNames = [
     '📊 Resumen Ejecutivo',
     '📁 Proyectos',
@@ -504,6 +505,7 @@ async function exportMatrizExcel(data: {
   const fecha = new Date().toISOString().slice(0, 10);
   XLSX.writeFile(wb, `Matriz_Sistema_RCMA_${fecha}.xlsx`);
 }
+
 
 export default function Reports() {
   const { data: rawProjects   = [] } = useQuery({ queryKey:['projects'],   queryFn:()=>db.Project.list('-created_at',500) });
