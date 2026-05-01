@@ -1,6 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { db } from '@/lib/db';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useNavigate } from 'react-router-dom';
 import { ClockAlert, ChevronDown, Pencil, Trash2, X, Save, Calendar, Link2, MapPin } from 'lucide-react';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
@@ -254,6 +255,7 @@ export default function Pendientes() {
   const [filterPrioridad, setFilterPrioridad]   = useState('all');
   const [visibleCount, setVisibleCount]         = useState(PAGE_SIZE);
   const queryClient = useQueryClient();
+  const navigate     = useNavigate();
 
   const { data: rawPendientes = [], isLoading } = useQuery({
     queryKey: ['pendientes'],
@@ -278,26 +280,17 @@ export default function Pendientes() {
     const total       = pendientes.length;
     const pendiente   = pendientes.filter(p => p.estatus === 'pendiente').length;
     const en_progreso = pendientes.filter(p => p.estatus === 'en_progreso').length;
-    const completado  = pendientes.filter(p => p.estatus === 'completado').length;
     const pausado     = pendientes.filter(p => p.estatus === 'pausado').length;
     const urgente     = pendientes.filter(p => p.prioridad === 'urgente').length;
     const alta        = pendientes.filter(p => p.prioridad === 'alta').length;
-
-    // Tipo más frecuente
-    const tipoCount = TIPOS_PROYECTO.map(t => ({
-      tipo: t,
-      count: pendientes.filter(p => p.tipo_proyecto === t).length,
-    })).sort((a, b) => b.count - a.count);
-    const topTipo = tipoCount[0]?.count > 0 ? tipoCount[0] : null;
 
     // Territorio con más pendientes
     const terrCount = TERRITORIOS.map(t => ({
       terr: t,
       count: pendientes.filter(p => p.territorio === t).length,
     })).sort((a, b) => b.count - a.count);
-    const topTerr = terrCount[0]?.count > 0 ? terrCount[0] : null;
 
-    return { total, pendiente, en_progreso, completado, pausado, urgente, alta, topTipo, topTerr, terrCount };
+    return { total, pendiente, en_progreso, pausado, urgente, alta, terrCount };
   }, [pendientes]);
 
   const createMutation = useMutation({
@@ -386,24 +379,17 @@ export default function Pendientes() {
       {/* ── KPIs ── */}
       <div className="space-y-3">
         {/* Fila 1: Estatus */}
-        <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
           <KpiCard label="Total"       value={kpis.total}       color="text-slate-900" />
           <KpiCard label="Pendientes"  value={kpis.pendiente}   color="text-amber-600" />
           <KpiCard label="En Progreso" value={kpis.en_progreso} color="text-blue-600"  />
-          <KpiCard label="Completados" value={kpis.completado}  color="text-emerald-600" />
           <KpiCard label="Pausados"    value={kpis.pausado}     color="text-slate-500" />
         </div>
 
         {/* Fila 2: Prioridades + Tipo top + Territorios */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
           <KpiCard label="Prioridad Urgente" value={kpis.urgente} color="text-red-600"
             sub={`+ ${kpis.alta} de alta prioridad`} />
-          <KpiCard
-            label="Tipo más frecuente"
-            value={kpis.topTipo ? kpis.topTipo.tipo : '—'}
-            color="text-purple-600"
-            sub={kpis.topTipo ? `${kpis.topTipo.count} pendiente${kpis.topTipo.count !== 1 ? 's' : ''}` : undefined}
-          />
           {kpis.terrCount.filter(t => t.count > 0).slice(0, 2).map(t => (
             <div key={t.terr} className="bg-white rounded-xl border border-slate-200 p-4 shadow-sm">
               <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 flex items-center gap-1">
@@ -502,10 +488,14 @@ export default function Pendientes() {
                 </div>
                 <div className="col-span-1">
                   {p.proyecto_id && projectMap[p.proyecto_id] ? (
-                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 flex items-center gap-1 w-fit">
+                    <button
+                      onClick={() => navigate(`/projects/${p.proyecto_id}`)}
+                      className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 flex items-center gap-1 w-fit hover:bg-blue-100 transition-colors cursor-pointer"
+                      title="Ver proyecto"
+                    >
                       <Link2 className="w-3 h-3 flex-shrink-0" />
                       {projectMap[p.proyecto_id].folio || projectMap[p.proyecto_id].name}
-                    </span>
+                    </button>
                   ) : (
                     <span className="text-[10px] px-2 py-0.5 rounded-full bg-slate-100 text-slate-400 font-medium">
                       Sin vinculación
