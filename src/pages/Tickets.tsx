@@ -385,12 +385,32 @@ export default function Tickets() {
     mutationFn: async ({ id, data }: { id: string; data: Record<string, unknown> }) => {
       const { data: result, error } = await supabase.from('tickets').update(data).eq('id', id).select().single();
       if (error) throw error;
+
+      // Si se canceló el ticket y tiene proyecto vinculado, cancelar el proyecto también
+      if (data.estatus === 'cancelado') {
+        const ticket = tickets.find(t => t.id === id);
+        const proyectoId = (data.proyecto_id as string) || ticket?.proyecto_id;
+        if (proyectoId) {
+          await supabase.from('projects').update({ status: 'cancelado' }).eq('id', proyectoId);
+        }
+      }
+
       return result;
     },
-    onSuccess: () => {
+    onSuccess: (_, { id, data }) => {
       queryClient.invalidateQueries({ queryKey: ['tickets'] });
+      queryClient.invalidateQueries({ queryKey: ['projects'] });
       setEditingTicket(null);
-      toast.success('Ticket actualizado');
+      if (data.estatus === 'cancelado') {
+        const ticket = tickets.find(t => t.id === id);
+        const proyectoId = (data.proyecto_id as string) || ticket?.proyecto_id;
+        toast.success(proyectoId
+          ? 'Ticket cancelado — proyecto vinculado cancelado automáticamente'
+          : 'Ticket cancelado'
+        );
+      } else {
+        toast.success('Ticket actualizado');
+      }
     },
     onError: () => toast.error('Error al actualizar el ticket'),
   });
@@ -432,7 +452,7 @@ export default function Tickets() {
   const remaining = filtered.length - visibleCount;
 
   const totalPresupuesto = useMemo(() =>
-    filtered.reduce((sum, t) => sum + (t.presupuesto ?? 0), 0),
+    filtered.filter(t => t.estatus !== 'cancelado').reduce((sum, t) => sum + (t.presupuesto ?? 0), 0),
     [filtered]
   );
 
