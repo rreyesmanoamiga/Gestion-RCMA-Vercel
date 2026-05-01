@@ -174,6 +174,337 @@ async function exportResumenPDF({ stats, projects, checklists, solicitudes, tick
   doc.save('reporte-mano-amiga-'+Date.now()+'.pdf');
 }
 
+// ─── Excel Export ─────────────────────────────────────────────────────────────
+async function loadXLSX() {
+  const w = window as Window & { XLSX?: unknown };
+  if (w.XLSX) return w.XLSX as typeof import('xlsx');
+  await new Promise<void>((resolve, reject) => {
+    const s = document.createElement('script');
+    s.src = 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
+    s.onload = () => resolve(); s.onerror = () => reject(new Error('XLSX load error'));
+    document.head.appendChild(s);
+  });
+  return w.XLSX as typeof import('xlsx');
+}
+
+async function exportMatrizExcel(data: {
+  projects:     unknown[];
+  checklists:   unknown[];
+  tickets:      unknown[];
+  pendientes:   unknown[];
+  anteproyectos: unknown[];
+  solicitudes:  unknown[];
+}) {
+  const XLSX = await loadXLSX();
+
+  // Paleta de colores por hoja
+  const HEADER_BG   = 'FF0F172A'; // slate-900
+  const HEADER_FG   = 'FFFFFFFF';
+  const SUBHEAD_BG  = 'FF1E3A5F';
+  const TITLE_BG    = 'FF334155';
+  const ALT_ROW     = 'FFF8FAFC';
+  const BORDER_CLR  = 'FFE2E8F0';
+
+  const wb = XLSX.utils.book_new();
+
+  // ── helpers ──────────────────────────────────────────────────────────────
+  const border = {
+    top:    { style: 'thin', color: { rgb: BORDER_CLR } },
+    bottom: { style: 'thin', color: { rgb: BORDER_CLR } },
+    left:   { style: 'thin', color: { rgb: BORDER_CLR } },
+    right:  { style: 'thin', color: { rgb: BORDER_CLR } },
+  };
+
+  const headerStyle = {
+    font:      { bold: true, color: { rgb: HEADER_FG }, sz: 11, name: 'Arial' },
+    fill:      { patternType: 'solid', fgColor: { rgb: HEADER_BG } },
+    alignment: { horizontal: 'center', vertical: 'center', wrapText: true },
+    border,
+  };
+
+  const subHeaderStyle = {
+    font:      { bold: true, color: { rgb: HEADER_FG }, sz: 10, name: 'Arial' },
+    fill:      { patternType: 'solid', fgColor: { rgb: SUBHEAD_BG } },
+    alignment: { horizontal: 'center', vertical: 'center' },
+    border,
+  };
+
+  const titleStyle = {
+    font:      { bold: true, color: { rgb: HEADER_FG }, sz: 14, name: 'Arial' },
+    fill:      { patternType: 'solid', fgColor: { rgb: TITLE_BG } },
+    alignment: { horizontal: 'left', vertical: 'center' },
+  };
+
+  const dataStyle = (alt = false) => ({
+    font:      { sz: 10, name: 'Arial' },
+    fill:      alt ? { patternType: 'solid', fgColor: { rgb: ALT_ROW } } : { patternType: 'none' },
+    alignment: { vertical: 'center', wrapText: false },
+    border,
+  });
+
+  const numStyle = (alt = false) => ({
+    ...dataStyle(alt),
+    alignment: { horizontal: 'right', vertical: 'center' },
+    numFmt: '$#,##0',
+  });
+
+  const centerStyle = (alt = false) => ({
+    ...dataStyle(alt),
+    alignment: { horizontal: 'center', vertical: 'center' },
+  });
+
+  const now = new Date().toLocaleDateString('es-MX', { year: 'numeric', month: 'long', day: 'numeric' });
+
+  function buildSheet(
+    sheetName: string,
+    title: string,
+    headers: string[],
+    rows: (string | number | null | undefined)[][],
+    colWidths: number[],
+  ) {
+    const ws: Record<string, unknown> = {};
+    const R = { s: { r: 0, c: 0 }, e: { r: 0, c: headers.length - 1 } };
+
+    // Fila 1: Título + fecha
+    ws['A1'] = { v: `${title}  —  Sistema RCMA`, s: titleStyle };
+    ws['B1'] = { v: `Generado: ${now}`, s: { font: { italic: true, sz: 9, name: 'Arial', color: { rgb: 'FF64748B' } }, alignment: { horizontal: 'right' } } };
+    for (let c = 0; c < headers.length; c++) {
+      if (c === 0) continue;
+      if (c === headers.length - 1) continue;
+      ws[XLSX.utils.encode_cell({ r: 0, c })] = { v: '', s: titleStyle };
+    }
+
+    // Fila 2: Vacía con color
+    for (let c = 0; c < headers.length; c++) {
+      ws[XLSX.utils.encode_cell({ r: 1, c })] = { v: '', s: { fill: { patternType: 'solid', fgColor: { rgb: HEADER_BG } } } };
+    }
+
+    // Fila 3: Encabezados
+    headers.forEach((h, c) => {
+      ws[XLSX.utils.encode_cell({ r: 2, c })] = { v: h, s: subHeaderStyle };
+    });
+
+    // Filas de datos
+    rows.forEach((row, ri) => {
+      const alt = ri % 2 === 1;
+      row.forEach((val, ci) => {
+        const cell: Record<string, unknown> = { v: val ?? '—' };
+        if (typeof val === 'number' && headers[ci]?.toLowerCase().includes('presupuesto')) {
+          cell.s = numStyle(alt);
+          cell.t = 'n';
+        } else if (typeof val === 'number') {
+          cell.s = centerStyle(alt);
+          cell.t = 'n';
+        } else {
+          cell.s = dataStyle(alt);
+          cell.t = 's';
+        }
+        ws[XLSX.utils.encode_cell({ r: ri + 3, c: ci })] = cell;
+      });
+    });
+
+    // Total de registros al final
+    const lastR = rows.length + 4;
+    ws[XLSX.utils.encode_cell({ r: lastR, c: 0 })] = {
+      v: `Total de registros: ${rows.length}`,
+      s: { font: { bold: true, sz: 10, name: 'Arial', color: { rgb: 'FF64748B' } }, alignment: { horizontal: 'left' } },
+    };
+
+    const ref = `A1:${XLSX.utils.encode_cell({ r: rows.length + 4, c: headers.length - 1 })}`;
+    ws['!ref'] = ref;
+    ws['!cols'] = colWidths.map(w => ({ wch: w }));
+    ws['!rows'] = [{ hpt: 28 }, { hpt: 6 }, { hpt: 22 }, ...rows.map(() => ({ hpt: 18 }))];
+    ws['!merges'] = [
+      R,
+      { s: { r: 0, c: 0 }, e: { r: 0, c: Math.floor(headers.length / 2) - 1 } },
+      { s: { r: 0, c: Math.floor(headers.length / 2) }, e: { r: 0, c: headers.length - 1 } },
+    ];
+    // AutoFilter en la fila de encabezados (fila 3, índice 2)
+    ws['!autofilter'] = {
+      ref: `A3:${XLSX.utils.encode_cell({ r: 2, c: headers.length - 1 })}`,
+    };
+
+    XLSX.utils.book_append_sheet(wb, ws as import('xlsx').WorkSheet, sheetName);
+  }
+
+  const fmt = (d?: string) => d ? new Date(d).toLocaleDateString('es-MX') : '—';
+  const peso = (n?: number | null) => n != null ? n : 0;
+
+  // ── 1. PROYECTOS ─────────────────────────────────────────────────────────
+  buildSheet(
+    '📁 Proyectos',
+    'Proyectos',
+    ['Folio', 'Nombre del Proyecto', 'Estatus', 'Avance %', 'Territorio', 'Colegio', 'Responsable', 'Tipo', 'Prioridad', 'Fecha Inicio'],
+    (data.projects as Record<string, unknown>[]).map(p => [
+      p.folio ?? '—',
+      p.name ?? '—',
+      p.status ?? '—',
+      p.progress ?? 0,
+      p.territorio ?? '—',
+      p.colegio ?? '—',
+      p.responsible ?? '—',
+      p.tipo_proyecto ?? '—',
+      p.priority ?? '—',
+      fmt(p.start_date as string),
+    ]),
+    [12, 38, 14, 10, 12, 14, 24, 20, 12, 14],
+  );
+
+  // ── 2. TICKETS TCMM ──────────────────────────────────────────────────────
+  buildSheet(
+    '🎫 Tickets TCMM',
+    'Tickets TCMM',
+    ['Folio', 'Territorio', 'Colegio', 'ECO', 'Tipo', 'Estatus', 'Proveedor', 'Presupuesto', 'Plan Financ.', 'Ticket Físico', 'Fecha'],
+    (data.tickets as Record<string, unknown>[]).map(t => [
+      t.folio ?? '—',
+      t.territorio ?? '—',
+      t.colegio ?? '—',
+      t.eco ?? '—',
+      t.tipo_proyecto ?? '—',
+      t.estatus ?? '—',
+      t.nombre_proveedor ?? '—',
+      peso(t.presupuesto as number),
+      t.plan_financiamiento ?? '—',
+      t.ticket_fisico ? 'Sí' : 'No',
+      fmt(t.fecha as string),
+    ]),
+    [14, 12, 14, 24, 18, 12, 22, 14, 16, 12, 14],
+  );
+
+  // ── 3. PENDIENTES ─────────────────────────────────────────────────────────
+  buildSheet(
+    '⏳ Pendientes',
+    'Pendientes',
+    ['Territorio', 'Colegio', 'Proyecto', 'ECO', 'Tipo', 'Prioridad', 'Estatus', 'Asignación', 'Presupuesto', 'Última Actualización'],
+    (data.pendientes as Record<string, unknown>[]).map(p => [
+      p.territorio ?? '—',
+      p.colegio ?? '—',
+      p.nombre_proyecto ?? '—',
+      p.eco ?? '—',
+      p.tipo_proyecto ?? '—',
+      p.prioridad ?? '—',
+      p.estatus ?? '—',
+      p.asignacion ?? '—',
+      peso(p.presupuesto as number),
+      fmt(p.fecha_actualizacion as string),
+    ]),
+    [12, 14, 34, 24, 18, 12, 14, 22, 14, 20],
+  );
+
+  // ── 4. ANTEPROYECTOS ─────────────────────────────────────────────────────
+  buildSheet(
+    '📐 Anteproyectos',
+    'Anteproyectos',
+    ['Territorio', 'Colegio', 'Proyecto', 'ECO', 'Tipo', 'Prioridad', 'Estatus', 'Asignación', 'Presupuesto', 'Última Actualización'],
+    (data.anteproyectos as Record<string, unknown>[]).map(a => [
+      a.territorio ?? '—',
+      a.colegio ?? '—',
+      a.nombre_proyecto ?? '—',
+      a.eco ?? '—',
+      a.tipo_proyecto ?? '—',
+      a.prioridad ?? '—',
+      a.estatus ?? '—',
+      a.asignacion ?? '—',
+      peso(a.presupuesto as number),
+      fmt(a.fecha_actualizacion as string),
+    ]),
+    [12, 14, 34, 24, 18, 12, 14, 22, 14, 20],
+  );
+
+  // ── 5. CHECKLISTS ─────────────────────────────────────────────────────────
+  buildSheet(
+    '✅ Inspecciones',
+    'Checklists de Inspección',
+    ['Título', 'Colegio', 'Territorio', 'Inspector', 'Material', 'Estado General', 'Ítems', 'Fecha'],
+    (data.checklists as Record<string, unknown>[]).map(c => [
+      c.titulo ?? '—',
+      c.colegio ?? '—',
+      c.territorio ?? '—',
+      c.inspector ?? 'Sin asignar',
+      c.material ?? '—',
+      c.overall_status ?? '—',
+      Array.isArray(c.items) ? (c.items as unknown[]).length : 0,
+      fmt((c.fecha ?? c.created_at) as string),
+    ]),
+    [36, 14, 12, 22, 30, 14, 8, 14],
+  );
+
+  // ── 6. SOLICITUDES ────────────────────────────────────────────────────────
+  buildSheet(
+    '📩 Solicitudes',
+    'Solicitudes de Proyecto',
+    ['Centro', 'Proyecto', 'Solicitante', 'Puesto', 'Tipo Iniciativa', 'Costo Aprox.', 'Estatus', 'Fecha Solicitud', 'Fecha Inicio Prop.'],
+    (data.solicitudes as Record<string, unknown>[]).map(s => [
+      s.nombre_centro ?? '—',
+      s.nombre_proyecto ?? '—',
+      s.nombre_solicitante ?? '—',
+      s.puesto_solicitante ?? '—',
+      s.tipo_iniciativa ?? '—',
+      peso(s.costo_aproximado as number),
+      s.estatus ?? '—',
+      fmt(s.created_at as string),
+      fmt(s.fecha_inicio_propuesta as string),
+    ]),
+    [20, 34, 22, 18, 20, 14, 12, 16, 18],
+  );
+
+  // ── 7. RESUMEN EJECUTIVO ──────────────────────────────────────────────────
+  const ws7: Record<string, unknown> = {};
+  const summaryRows = [
+    ['SISTEMA RCMA — MATRIZ DE CONCENTRADO', ''],
+    ['', ''],
+    ['Generado', now],
+    ['', ''],
+    ['MÓDULO', 'TOTAL DE REGISTROS'],
+    ['Proyectos',     data.projects.length],
+    ['Tickets TCMM',  data.tickets.length],
+    ['Pendientes',    data.pendientes.length],
+    ['Anteproyectos', data.anteproyectos.length],
+    ['Inspecciones',  data.checklists.length],
+    ['Solicitudes',   data.solicitudes.length],
+    ['', ''],
+    ['TOTAL GENERAL', data.projects.length + data.tickets.length + data.pendientes.length + data.anteproyectos.length + data.checklists.length + data.solicitudes.length],
+  ];
+
+  summaryRows.forEach((row, ri) => {
+    row.forEach((val, ci) => {
+      const isMainTitle = ri === 0;
+      const isColHeader = ri === 4;
+      const isTotal     = ri === summaryRows.length - 1;
+      const isNum       = typeof val === 'number';
+      ws7[XLSX.utils.encode_cell({ r: ri, c: ci })] = {
+        v: val,
+        t: isNum ? 'n' : 's',
+        s: isMainTitle ? { font: { bold: true, sz: 16, name: 'Arial', color: { rgb: HEADER_FG } }, fill: { patternType: 'solid', fgColor: { rgb: HEADER_BG } }, alignment: { horizontal: ci === 0 ? 'left' : 'right' } }
+         : isColHeader ? subHeaderStyle
+         : isTotal     ? { font: { bold: true, sz: 12, name: 'Arial' }, fill: { patternType: 'solid', fgColor: { rgb: 'FFEFF6FF' } }, alignment: { horizontal: ci === 0 ? 'left' : 'right' } }
+         : isNum       ? { font: { bold: true, sz: 11, name: 'Arial' }, alignment: { horizontal: 'right' } }
+         : { font: { sz: 11, name: 'Arial' }, alignment: { horizontal: 'left' } },
+      };
+    });
+  });
+
+  ws7['!ref']    = `A1:B${summaryRows.length}`;
+  ws7['!cols']   = [{ wch: 28 }, { wch: 22 }];
+  ws7['!rows']   = summaryRows.map((_, i) => ({ hpt: i === 0 ? 36 : 22 }));
+  ws7['!merges'] = [{ s: { r: 0, c: 0 }, e: { r: 0, c: 1 } }];
+  XLSX.utils.book_append_sheet(wb, ws7 as import('xlsx').WorkSheet, '📊 Resumen Ejecutivo');
+
+  // Reordenar hojas: Resumen primero
+  wb.SheetNames = [
+    '📊 Resumen Ejecutivo',
+    '📁 Proyectos',
+    '🎫 Tickets TCMM',
+    '⏳ Pendientes',
+    '📐 Anteproyectos',
+    '✅ Inspecciones',
+    '📩 Solicitudes',
+  ];
+
+  const fecha = new Date().toISOString().slice(0, 10);
+  XLSX.writeFile(wb, `Matriz_Sistema_RCMA_${fecha}.xlsx`);
+}
+
 export default function Reports() {
   const { data: rawProjects   = [] } = useQuery({ queryKey:['projects'],   queryFn:()=>db.Project.list('-created_at',500) });
   const { data: rawChecklists = [] } = useQuery({ queryKey:['checklists'], queryFn:()=>db.Checklist.list('-created_at',500) });
@@ -192,10 +523,44 @@ export default function Reports() {
     },
   });
 
-  const projects    = rawProjects    as unknown as Project[];
+  const { data: rawPendientes = [] } = useQuery({
+    queryKey: ['pendientes-report'],
+    queryFn: () => db.Pendiente.list('-created_at', 500),
+  });
+  const { data: rawAnteproyectos = [] } = useQuery({
+    queryKey: ['anteproyectos-report'],
+    queryFn: async () => {
+      const { data, error } = await supabase.from('anteproyectos').select('*').order('created_at', { ascending: false }).limit(500);
+      if (error) throw error; return data ?? [];
+    },
+  });
+  const { data: rawSolicitudesAll = [] } = useQuery({
+    queryKey: ['solicitudes-all-report'],
+    queryFn: async () => {
+      const { data, error } = await supabase.from('solicitudes').select('*').order('created_at', { ascending: false }).limit(500);
+      if (error) throw error; return data ?? [];
+    },
+  });
+  const { data: rawTicketsFull = [] } = useQuery({
+    queryKey: ['tickets-full-report'],
+    queryFn: async () => {
+      const { data, error } = await supabase.from('tickets').select('*').order('created_at', { ascending: false }).limit(500);
+      if (error) throw error; return data ?? [];
+    },
+  });
   const checklists  = rawChecklists  as unknown[];
   const solicitudes = rawSolicitudes as unknown as Solicitud[];
   const tickets     = rawTickets     as unknown as Ticket[];
+  const projects    = rawProjects    as unknown as Project[];
+
+  const handleExportExcel = () => exportMatrizExcel({
+    projects:      rawProjects,
+    checklists:    rawChecklists,
+    tickets:       rawTicketsFull,
+    pendientes:    rawPendientes,
+    anteproyectos: rawAnteproyectos,
+    solicitudes:   rawSolicitudesAll,
+  }).catch(e => console.error('Error generando Excel:', e));
 
   const stats = useMemo(():Stats => ({
     total:       projects.length,
@@ -294,8 +659,8 @@ export default function Reports() {
             <button className={btnOutline} onClick={handleExportPDF}>
               <FileText className="w-4 h-4 text-red-600" /> Resumen General (.pdf)
             </button>
-            <button className={btnOutline} disabled title="Próximamente">
-              <FileSpreadsheet className="w-4 h-4 text-green-600" /> Resumen de Obras (.xlsx)
+            <button className={btnOutline} onClick={handleExportExcel}>
+              <FileSpreadsheet className="w-4 h-4 text-green-600" /> Matriz RCMA (.xlsx)
             </button>
             <button className={btnOutline} disabled title="Próximamente">
               <PieChart className="w-4 h-4 text-blue-600" /> Estatus por Colegio
