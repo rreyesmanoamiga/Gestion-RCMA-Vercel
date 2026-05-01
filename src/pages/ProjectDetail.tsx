@@ -13,6 +13,7 @@ import {
   CheckCircle2,
   Clock,
   AlertTriangle,
+  DollarSign,
 } from 'lucide-react';
 import ProjectForm from '@/components/projects/ProjectForm';
 import StatusBadge from '@/components/shared/StatusBadge';
@@ -142,7 +143,7 @@ export default function ProjectDetail() {
           )}
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 divide-y md:divide-y-0 md:divide-x divide-slate-100 bg-white">
+        <div className="grid grid-cols-1 md:grid-cols-4 divide-y md:divide-y-0 md:divide-x divide-slate-100 bg-white">
           <div className="p-6">
             <div className="flex items-center gap-3 mb-1">
               <MapPin className="w-4 h-4 text-slate-400" />
@@ -167,6 +168,17 @@ export default function ProjectDetail() {
               <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Fecha de Inicio</span>
             </div>
             <p className="text-sm font-bold text-slate-800 ml-7">{project.start_date || 'Pendiente'}</p>
+          </div>
+          <div className="p-6">
+            <div className="flex items-center gap-3 mb-1">
+              <DollarSign className="w-4 h-4 text-slate-400" />
+              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Presupuesto</span>
+            </div>
+            <p className="text-sm font-bold text-blue-600 ml-7">
+              {project.budget != null
+                ? project.budget.toLocaleString('es-MX', { style: 'currency', currency: 'MXN' })
+                : 'Sin definir'}
+            </p>
           </div>
         </div>
       </div>

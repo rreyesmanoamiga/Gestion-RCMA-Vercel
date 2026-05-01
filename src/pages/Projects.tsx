@@ -38,11 +38,12 @@ interface Project {
   progress?:      number;
   folio?:         string;
   tipo_proyecto?: string;
+  budget?:        number | null;
 }
 
 export default function Projects() {
   const [showForm, setShowForm]                 = useState(false);
-  const [filterStatus, setFilterStatus]             = useState('all');
+  const [filterStatuses, setFilterStatuses]         = useState<Set<string>>(new Set());
   const [filterTipoProyecto, setFilterTipoProyecto] = useState('all');
   const [filterTerritorio, setFilterTerritorio]     = useState('all');
   const [filterColegio, setFilterColegio]           = useState('all');
@@ -107,14 +108,13 @@ export default function Projects() {
 
   const filtered = useMemo(() =>
     projects.filter(p => {
-      if (filterStatus === 'all' && (p.status === 'completado' || p.status === 'cancelado')) return false;
-      if (filterStatus       !== 'all' && p.status        !== filterStatus)       return false;
+      if (filterStatuses.size > 0 && !filterStatuses.has(p.status ?? '')) return false;
       if (filterTipoProyecto !== 'all' && p.tipo_proyecto !== filterTipoProyecto) return false;
       if (filterTerritorio   !== 'all' && p.territorio    !== filterTerritorio)   return false;
       if (filterColegio      !== 'all' && p.colegio       !== filterColegio)      return false;
       return true;
     }),
-    [projects, filterStatus, filterTipoProyecto, filterTerritorio, filterColegio]
+    [projects, filterStatuses, filterTipoProyecto, filterTerritorio, filterColegio]
   );
 
   const visible   = useMemo(() => filtered.slice(0, visibleCount), [filtered, visibleCount]);
@@ -122,10 +122,11 @@ export default function Projects() {
   const remaining = filtered.length - visibleCount;
 
   const kpis = useMemo(() => ({
-    total:       projects.length,
-    conTicket:   projects.filter(p => p.folio && p.folio.startsWith('TCMM')).length,
-    sinTicket:   projects.filter(p => !p.folio || !p.folio.startsWith('TCMM')).length,
-    completados: projects.filter(p => p.status === 'completado').length,
+    total:        projects.length,
+    conTicket:    projects.filter(p => p.folio && p.folio.startsWith('TCMM')).length,
+    sinTicket:    projects.filter(p => !p.folio || !p.folio.startsWith('TCMM')).length,
+    completados:  projects.filter(p => p.status === 'completado').length,
+    presupuesto:  projects.reduce((sum, p) => sum + (p.budget ?? 0), 0),
   }), [projects]);
 
   if (isLoading) {
@@ -145,18 +146,24 @@ export default function Projects() {
         onAction={() => setShowForm(true)}
       />
 
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-6">
         {[
-          { label: 'Total Proyectos',           value: kpis.total,       color: 'text-slate-900'   },
-          { label: 'Con Ticket',                value: kpis.conTicket,   color: 'text-red-500'     },
-          { label: 'Sin Ticket',                value: kpis.sinTicket,   color: 'text-slate-400'   },
-          { label: 'Completados',               value: kpis.completados, color: 'text-emerald-600' },
+          { label: 'Total Proyectos', value: kpis.total,       color: 'text-slate-900'   },
+          { label: 'Con Ticket',      value: kpis.conTicket,   color: 'text-red-500'     },
+          { label: 'Sin Ticket',      value: kpis.sinTicket,   color: 'text-slate-400'   },
+          { label: 'Completados',     value: kpis.completados, color: 'text-emerald-600' },
         ].map(({ label, value, color }) => (
           <div key={label} className="bg-white rounded-xl border border-slate-200 p-4 shadow-sm">
             <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">{label}</p>
             <p className={`text-xl font-black ${color}`}>{value}</p>
           </div>
         ))}
+        <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-sm">
+          <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Presupuesto Total</p>
+          <p className="text-lg font-black text-blue-600">
+            {kpis.presupuesto.toLocaleString('es-MX', { style: 'currency', currency: 'MXN' })}
+          </p>
+        </div>
       </div>
 
       <div className="flex flex-wrap gap-3 mb-6">
@@ -194,18 +201,44 @@ export default function Projects() {
           ))}
         </select>
 
-        <select
-          className={selectClass}
-          value={filterStatus}
-          onChange={handleFilterChange(setFilterStatus)}
-        >
-          <option value="all">Todos los estados</option>
-          <option value="en_espera">En Espera</option>
-          <option value="en_proceso">En Proceso</option>
-          <option value="pausado">Pausado</option>
-          <option value="cancelado">Cancelado</option>
-          <option value="completado">Completado</option>
-        </select>
+        <div className="flex flex-wrap gap-2 items-center">
+          {[
+            { value: 'en_espera',   label: 'En Espera',   color: 'bg-slate-100 text-slate-600 border-slate-300' },
+            { value: 'en_proceso',  label: 'En Proceso',  color: 'bg-blue-50 text-blue-700 border-blue-200'     },
+            { value: 'en_progreso', label: 'En Progreso', color: 'bg-blue-50 text-blue-700 border-blue-200'     },
+            { value: 'pausado',     label: 'Pausado',     color: 'bg-amber-50 text-amber-700 border-amber-200'  },
+            { value: 'cancelado',   label: 'Cancelado',   color: 'bg-red-50 text-red-700 border-red-200'        },
+            { value: 'completado',  label: 'Completado',  color: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
+          ].map(({ value, label, color }) => {
+            const active = filterStatuses.has(value);
+            return (
+              <button
+                key={value}
+                onClick={() => {
+                  setFilterStatuses(prev => {
+                    const next = new Set(prev);
+                    active ? next.delete(value) : next.add(value);
+                    return next;
+                  });
+                  setVisibleCount(PAGE_SIZE);
+                }}
+                className={`px-3 py-1.5 rounded-full text-xs font-bold border transition-all ${
+                  active ? color + ' ring-2 ring-offset-1 ring-current' : 'bg-white text-slate-400 border-slate-200 hover:border-slate-300'
+                }`}
+              >
+                {label}
+              </button>
+            );
+          })}
+          {filterStatuses.size > 0 && (
+            <button
+              onClick={() => { setFilterStatuses(new Set()); setVisibleCount(PAGE_SIZE); }}
+              className="px-3 py-1.5 rounded-full text-xs font-bold border bg-slate-900 text-white border-slate-900 hover:bg-slate-700 transition-colors"
+            >
+              Limpiar filtros
+            </button>
+          )}
+        </div>
 
         {filtered.length > 0 && (
           <span className="h-10 flex items-center text-sm text-slate-500">
