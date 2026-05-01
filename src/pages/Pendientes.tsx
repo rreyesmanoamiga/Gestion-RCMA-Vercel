@@ -20,12 +20,12 @@ const selectClass = "h-10 px-3 py-2 bg-white border border-slate-300 rounded-md 
 
 const TIPOS_PROYECTO = ['MEJORA', 'CONSTRUCCIÓN', 'REMODELACIÓN', 'ADECUACIÓN', 'MANTENIMIENTO', 'PORTAFOLIO', 'GARANTÍAS', 'REVISIÓN'];
 const ASIGNACIONES   = ['MANO AMIGA SERVICIOS', 'MA COLEGIO', 'PROVEEDOR', 'ECO', 'JURÍDICO', 'INMOBILIARIA', 'RECAUDACIÓN'];
-const ESTATUSES      = ['pendiente', 'en_progreso', 'completado', 'pausado'];
+const ESTATUSES      = ['pendiente', 'en_proceso', 'completado', 'pausado'];
 const PRIORIDADES    = ['baja', 'media', 'alta', 'urgente'];
 
 const ESTATUS_LABEL: Record<string, string> = {
   pendiente:   'Pendiente',
-  en_progreso: 'En Progreso',
+  en_proceso: 'En Proceso',
   completado:  'Completado',
   pausado:     'Pausado',
 };
@@ -279,7 +279,7 @@ export default function Pendientes() {
   const kpis = useMemo(() => {
     const total       = pendientes.length;
     const pendiente   = pendientes.filter(p => p.estatus === 'pendiente').length;
-    const en_progreso = pendientes.filter(p => p.estatus === 'en_progreso').length;
+    const en_proceso = pendientes.filter(p => p.estatus === 'en_proceso').length;
     const pausado     = pendientes.filter(p => p.estatus === 'pausado').length;
     const urgente     = pendientes.filter(p => p.prioridad === 'urgente').length;
     const alta        = pendientes.filter(p => p.prioridad === 'alta').length;
@@ -290,7 +290,7 @@ export default function Pendientes() {
       count: pendientes.filter(p => p.territorio === t).length,
     })).sort((a, b) => b.count - a.count);
 
-    return { total, pendiente, en_progreso, pausado, urgente, alta, terrCount };
+    return { total, pendiente, en_proceso, pausado, urgente, alta, terrCount };
   }, [pendientes]);
 
   const createMutation = useMutation({
@@ -382,7 +382,7 @@ export default function Pendientes() {
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
           <KpiCard label="Total"       value={kpis.total}       color="text-slate-900" />
           <KpiCard label="Pendientes"  value={kpis.pendiente}   color="text-amber-600" />
-          <KpiCard label="En Progreso" value={kpis.en_progreso} color="text-blue-600"  />
+          <KpiCard label="En Proceso" value={kpis.en_proceso} color="text-blue-600"  />
           <KpiCard label="Pausados"    value={kpis.pausado}     color="text-slate-500" />
         </div>
 

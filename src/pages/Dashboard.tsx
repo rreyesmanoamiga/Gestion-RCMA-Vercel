@@ -104,7 +104,7 @@ export default function Dashboard() {
   const stats = useMemo(() => ({
     activeProjects:     projects.filter(p => p.status === 'en_proceso' || p.status === 'en_espera').length,
     criticalChecklists: checklists.filter(c => c.overall_status === 'critico' || c.overall_status === 'malo').length,
-    pendingMaintenance: pendientes.filter(m => m.estatus === 'pendiente' || m.estatus === 'en_progreso').length,
+    pendingMaintenance: pendientes.filter(m => m.estatus === 'pendiente' || m.estatus === 'en_proceso').length,
     urgentItems:        projects.filter(p => p.priority === 'urgente' && p.status !== 'completado' && p.status !== 'cancelado').length,
   }), [projects, checklists, pendientes]);
 
