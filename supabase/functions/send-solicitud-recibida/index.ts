@@ -1,5 +1,4 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -11,7 +10,6 @@ async function sendEmail(to: string, subject: string, html: string) {
   const smtpPort = parseInt(Deno.env.get('SMTP_PORT') ?? '587');
   const smtpUser = Deno.env.get('SMTP_USER') ?? '';
   const smtpPass = Deno.env.get('SMTP_PASS') ?? '';
-  const siteUrl  = Deno.env.get('SITE_URL')  ?? '';
 
   const conn = await Deno.connect({ hostname: smtpHost, port: smtpPort });
   const encoder = new TextEncoder();
@@ -22,20 +20,16 @@ async function sendEmail(to: string, subject: string, html: string) {
     const n = await conn.read(buf);
     return decoder.decode(buf.subarray(0, n ?? 0));
   };
-
   const write = async (data: string) => {
     await conn.write(encoder.encode(data + '\r\n'));
   };
 
-  await read(); // 220 greeting
-
+  await read();
   await write('EHLO outlook.com');
   await read();
-
   await write('STARTTLS');
   await read();
 
-  // Upgrade a TLS
   const tlsConn = await Deno.startTls(conn, { hostname: smtpHost });
   const tlsWrite = async (data: string) => {
     await tlsConn.write(encoder.encode(data + '\r\n'));
@@ -48,22 +42,16 @@ async function sendEmail(to: string, subject: string, html: string) {
 
   await tlsWrite('EHLO outlook.com');
   await tlsRead();
-
   await tlsWrite('AUTH LOGIN');
   await tlsRead();
-
   await tlsWrite(btoa(smtpUser));
   await tlsRead();
-
   await tlsWrite(btoa(smtpPass));
   await tlsRead();
-
   await tlsWrite(`MAIL FROM:<${smtpUser}>`);
   await tlsRead();
-
   await tlsWrite(`RCPT TO:<${to}>`);
   await tlsRead();
-
   await tlsWrite('DATA');
   await tlsRead();
 
@@ -86,7 +74,6 @@ async function sendEmail(to: string, subject: string, html: string) {
 
   await tlsWrite(message);
   await tlsRead();
-
   await tlsWrite('QUIT');
   tlsConn.close();
 }
@@ -97,30 +84,18 @@ serve(async (req) => {
   }
 
   try {
-    const { email, permissions } = await req.json();
+    const { correo, nombre, proyecto, centro } = await req.json();
 
-    if (!email) {
+    if (!correo) {
       return new Response(
-        JSON.stringify({ error: 'El campo email es requerido' }),
+        JSON.stringify({ error: 'El campo correo es requerido' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    const supabaseAdmin = createClient(
-      Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
-      { auth: { autoRefreshToken: false, persistSession: false } }
-    );
-
-    // Invitar usuario via Supabase Auth (genera magic link)
-    const { data, error } = await supabaseAdmin.auth.admin.inviteUserByEmail(email, {
-      redirectTo: Deno.env.get('SITE_URL') + '/login',
-    });
-
-    if (error) throw error;
-
-    const siteUrl = Deno.env.get('SITE_URL') ?? '';
     const smtpUser = Deno.env.get('SMTP_USER') ?? '';
+    const siteUrl  = Deno.env.get('SITE_URL')  ?? '';
+    const fecha    = new Date().toLocaleDateString('es-MX', { year: 'numeric', month: 'long', day: 'numeric' });
 
     const html = `
     <!DOCTYPE html>
@@ -137,28 +112,51 @@ serve(async (req) => {
                 <p style="margin:4px 0 0;color:#94a3b8;font-size:13px;">Coordinación de Obras — Colegios Mano Amiga</p>
               </td>
             </tr>
+            <!-- Alerta verde -->
+            <tr>
+              <td style="background:#16a34a;padding:16px 40px;">
+                <p style="margin:0;color:#ffffff;font-size:14px;font-weight:600;">
+                  ✅ Tu solicitud ha sido recibida y está en revisión
+                </p>
+              </td>
+            </tr>
             <!-- Body -->
             <tr>
               <td style="padding:40px;">
-                <h2 style="margin:0 0 16px;color:#0f172a;font-size:20px;">Has sido invitado 🎉</h2>
+                <p style="color:#475569;font-size:15px;line-height:1.6;margin:0 0 8px;">
+                  Hola <strong>${nombre ?? 'solicitante'}</strong>,
+                </p>
                 <p style="color:#475569;font-size:15px;line-height:1.6;margin:0 0 24px;">
-                  El administrador del sistema te ha invitado a acceder a <strong>Sistema RCMA</strong> — 
-                  la plataforma de gestión de obras de Colegios Mano Amiga.
+                  La Coordinación de Obras de <strong>Colegios Mano Amiga</strong> ha recibido 
+                  y registrado tu solicitud de proyecto. A continuación el resumen:
                 </p>
-                <p style="color:#475569;font-size:15px;line-height:1.6;margin:0 0 32px;">
-                  Haz clic en el botón para activar tu cuenta y crear tu contraseña:
-                </p>
-                <table cellpadding="0" cellspacing="0" style="margin:0 auto 32px;">
+                <!-- Tabla de datos -->
+                <table width="100%" cellpadding="0" cellspacing="0" style="border:1px solid #e2e8f0;border-radius:8px;overflow:hidden;margin-bottom:32px;">
+                  <tr style="background:#f8fafc;">
+                    <td style="padding:12px 16px;font-size:12px;font-weight:700;color:#64748b;text-transform:uppercase;width:40%;border-bottom:1px solid #e2e8f0;">Proyecto</td>
+                    <td style="padding:12px 16px;font-size:14px;font-weight:600;color:#1e40af;border-bottom:1px solid #e2e8f0;">${proyecto ?? '—'}</td>
+                  </tr>
                   <tr>
-                    <td style="background:#0f172a;border-radius:8px;padding:14px 32px;">
-                      <a href="${siteUrl}" style="color:#ffffff;font-size:15px;font-weight:600;text-decoration:none;">
-                        Activar mi cuenta →
-                      </a>
+                    <td style="padding:12px 16px;font-size:12px;font-weight:700;color:#64748b;text-transform:uppercase;border-bottom:1px solid #e2e8f0;">Centro</td>
+                    <td style="padding:12px 16px;font-size:14px;color:#0f172a;border-bottom:1px solid #e2e8f0;">${centro ?? '—'}</td>
+                  </tr>
+                  <tr style="background:#f8fafc;">
+                    <td style="padding:12px 16px;font-size:12px;font-weight:700;color:#64748b;text-transform:uppercase;border-bottom:1px solid #e2e8f0;">Estatus</td>
+                    <td style="padding:12px 16px;font-size:14px;color:#0f172a;border-bottom:1px solid #e2e8f0;">
+                      <span style="background:#dcfce7;color:#16a34a;padding:3px 10px;border-radius:20px;font-size:12px;font-weight:700;">RECIBIDA</span>
                     </td>
                   </tr>
+                  <tr>
+                    <td style="padding:12px 16px;font-size:12px;font-weight:700;color:#64748b;text-transform:uppercase;">Fecha de recepción</td>
+                    <td style="padding:12px 16px;font-size:14px;color:#0f172a;">${fecha}</td>
+                  </tr>
                 </table>
-                <p style="color:#94a3b8;font-size:13px;margin:0;">
-                  Si no esperabas esta invitación puedes ignorar este correo.
+                <p style="color:#475569;font-size:14px;line-height:1.6;margin:0 0 8px;">
+                  El equipo de Coordinación de Obras revisará tu solicitud y se pondrá en contacto contigo 
+                  si se requiere información adicional.
+                </p>
+                <p style="color:#94a3b8;font-size:13px;margin:24px 0 0;">
+                  Si tienes alguna duda puedes responder directamente a este correo.
                 </p>
               </td>
             </tr>
@@ -177,8 +175,8 @@ serve(async (req) => {
     </html>`;
 
     await sendEmail(
-      email,
-      '🔐 Invitación al Sistema RCMA — Colegios Mano Amiga',
+      correo,
+      `✅ Solicitud recibida: ${proyecto ?? 'Tu proyecto'} — Colegios Mano Amiga`,
       html
     );
 
