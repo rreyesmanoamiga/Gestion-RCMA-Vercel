@@ -4,6 +4,28 @@ import { QueryClientProvider } from '@tanstack/react-query';
 import { queryClientInstance } from '@/lib/query-client';
 import { BrowserRouter as Router, Route, Routes, Navigate, useNavigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from '@/lib/AuthContext';
+import { usePermissions } from '@/hooks/usePermissions';
+
+// Mapa de permisos "ver_X" → ruta
+const PERM_ROUTES = [
+  { perm: 'ver_dashboard',          route: '/'              },
+  { perm: 'ver_tickets',            route: '/tickets'       },
+  { perm: 'ver_proyectos',          route: '/proyectos'     },
+  { perm: 'ver_anteproyectos',      route: '/anteproyectos' },
+  { perm: 'ver_checklists',         route: '/checklists'    },
+  { perm: 'ver_calendario',         route: '/calendario'    },
+  { perm: 'ver_pendientes',         route: '/pendientes'    },
+  { perm: 'ver_solicitud_proyecto', route: '/solicitud'     },
+  { perm: 'ver_reportes',           route: '/reportes'      },
+];
+
+function getFirstRoute(permissions, isAdmin) {
+  if (isAdmin) return '/';
+  for (const { perm, route } of PERM_ROUTES) {
+    if (permissions?.[perm] === true) return route;
+  }
+  return '/solicitud'; // fallback
+}
 import { supabase } from '@/lib/supabaseClient';
 import PageNotFound from './lib/PageNotFound';
 import AppLayout from '@/components/layout/AppLayout';
@@ -96,9 +118,7 @@ function SetPasswordPage() {
           </div>
           <h2 className="text-lg font-black text-slate-900 mb-2">¡Contraseña establecida!</h2>
           <p className="text-sm text-slate-500 mb-6">Ya puedes iniciar sesión con tu correo y contraseña.</p>
-          <a href="/" className="block w-full py-2 bg-slate-900 text-white rounded-md text-sm font-medium hover:bg-slate-800 transition-colors text-center">
-            Ir al Sistema
-          </a>
+          <SmartRedirectButton />
         </div>
       </div>
     );
@@ -137,6 +157,17 @@ function SetPasswordPage() {
         )}
       </div>
     </div>
+  );
+}
+
+// ─── Botón que redirige al primer módulo disponible ─────────────────────────
+function SmartRedirectButton() {
+  const { can, isAdmin, permsRecord } = usePermissions();
+  const target = getFirstRoute(permsRecord, isAdmin);
+  return (
+    <a href={target} className="block w-full py-2 bg-slate-900 text-white rounded-md text-sm font-medium hover:bg-slate-800 transition-colors text-center">
+      Ir al Sistema
+    </a>
   );
 }
 
@@ -208,6 +239,14 @@ function AuthHashHandler() {
   return null;
 }
 
+// ─── Dashboard protegido ─────────────────────────────────────────────────────
+function ProtectedDashboard() {
+  const { can, isAdmin, permsRecord } = usePermissions();
+  if (isAdmin || can('ver_dashboard')) return <Dashboard />;
+  const target = getFirstRoute(permsRecord, isAdmin);
+  return <Navigate to={target} replace />;
+}
+
 // ─── App autenticada ──────────────────────────────────────────────────────────
 function AuthenticatedApp() {
   const { user, loading } = useAuth();
@@ -227,7 +266,7 @@ function AuthenticatedApp() {
         <Route path="*" element={<LoginPage />} />
       ) : (
         <Route element={<AppLayout />}>
-          <Route path="/"                  element={<Dashboard />} />
+          <Route path="/"                  element={<ProtectedDashboard />} />
           <Route path="/tickets"           element={<Tickets />} />
           <Route path="/proyectos"         element={<Projects />} />
           <Route path="/proyectos/:id"     element={<ProjectDetail />} />
