@@ -2,7 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabaseClient';
 import { db } from '@/lib/db';
-import { FolderOpen, ChevronDown, Pencil, Trash2, X, Save, Calendar, Link2 } from 'lucide-react';
+import { FolderOpen, ChevronDown, Pencil, Trash2, X, Save, Calendar, Link2, FolderInput, TrendingUp, CheckCircle2, Clock, DollarSign } from 'lucide-react';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { toast } from 'sonner';
@@ -34,26 +34,39 @@ const ESTATUS_COLORS: Record<string, string> = {
   entregado:   'bg-blue-100 text-blue-800',
 };
 
+// Formato MXN
+const formatMXN = (val: string) => {
+  const num = val.replace(/[^0-9.]/g, '');
+  if (!num) return '';
+  const parts = num.split('.');
+  parts[0] = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+  return '$' + parts.join('.');
+};
+const parseMXN = (val: string) => val.replace(/[$,]/g, '');
+
 interface Anteproyecto {
-  id:                  string;
-  territorio?:         string;
-  colegio?:            string;
-  nombre_proyecto?:    string;
-  presupuesto?:        number | null;
-  tipo_proyecto?:      string;
-  prioridad?:          string;
-  asignacion?:         string;
-  eco?:                string;
-  estatus?:            string;
-  proyecto_id?:        string | null;
-  notas?:              string;
+  id:                   string;
+  territorio?:          string;
+  colegio?:             string;
+  nombre_proyecto?:     string;
+  presupuesto?:         number | null;
+  tipo_proyecto?:       string;
+  prioridad?:           string;
+  asignacion?:          string;
+  eco?:                 string;
+  estatus?:             string;
+  proyecto_id?:         string | null;
+  notas?:               string;
+  fecha_solicitud?:     string | null;
+  fecha_entrega?:       string | null;
+  ruta_onedrive?:       string | null;
   fecha_actualizacion?: string;
-  created_at?:         string;
+  created_at?:          string;
 }
 
 interface Project {
-  id:    string;
-  name?: string;
+  id:     string;
+  name?:  string;
   folio?: string;
 }
 
@@ -69,6 +82,9 @@ interface FormData {
   estatus:         string;
   proyecto_id:     string;
   notas:           string;
+  fecha_solicitud: string;
+  fecha_entrega:   string;
+  ruta_onedrive:   string;
 }
 
 const INITIAL_FORM: FormData = {
@@ -83,6 +99,9 @@ const INITIAL_FORM: FormData = {
   estatus:         'en_revision',
   proyecto_id:     '',
   notas:           '',
+  fecha_solicitud: '',
+  fecha_entrega:   '',
+  ruta_onedrive:   '',
 };
 
 // ─── Formulario ───────────────────────────────────────────────────────────────
@@ -111,6 +130,9 @@ function AnteproyectoForm({
         estatus:         String(anteproyecto.estatus         ?? 'en_revision'),
         proyecto_id:     String(anteproyecto.proyecto_id     ?? ''),
         notas:           String(anteproyecto.notas           ?? ''),
+        fecha_solicitud: anteproyecto.fecha_solicitud ? anteproyecto.fecha_solicitud.split('T')[0] : '',
+        fecha_entrega:   anteproyecto.fecha_entrega   ? anteproyecto.fecha_entrega.split('T')[0]   : '',
+        ruta_onedrive:   String(anteproyecto.ruta_onedrive   ?? ''),
       });
     } else {
       setFormData(INITIAL_FORM);
@@ -123,8 +145,11 @@ function AnteproyectoForm({
     e.preventDefault();
     onSubmit({
       ...formData,
-      presupuesto: formData.presupuesto ? parseFloat(formData.presupuesto) : null,
-      proyecto_id: formData.proyecto_id || null,
+      presupuesto:     formData.presupuesto ? parseFloat(parseMXN(formData.presupuesto)) : null,
+      proyecto_id:     formData.proyecto_id     || null,
+      fecha_solicitud: formData.fecha_solicitud || null,
+      fecha_entrega:   formData.fecha_entrega   || null,
+      ruta_onedrive:   formData.ruta_onedrive   || null,
     });
   };
 
@@ -169,6 +194,20 @@ function AnteproyectoForm({
               value={formData.eco} placeholder="Se asigna según el colegio" />
           </div>
 
+          {/* Fechas solicitud y entrega */}
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className={labelClass}>Fecha de Solicitud</label>
+              <input type="date" className={inputClass} value={formData.fecha_solicitud}
+                onChange={e => setFormData(p => ({ ...p, fecha_solicitud: e.target.value }))} />
+            </div>
+            <div>
+              <label className={labelClass}>Fecha de Entrega</label>
+              <input type="date" className={inputClass} value={formData.fecha_entrega}
+                onChange={e => setFormData(p => ({ ...p, fecha_entrega: e.target.value }))} />
+            </div>
+          </div>
+
           {/* Tipo + Prioridad */}
           <div className="grid grid-cols-2 gap-3">
             <div>
@@ -210,9 +249,10 @@ function AnteproyectoForm({
           {/* Presupuesto */}
           <div>
             <label className={labelClass}>Presupuesto Estimado (MXN)</label>
-            <input type="number" min="0" step="0.01" className={inputClass} value={formData.presupuesto}
-              onChange={e => setFormData(p => ({ ...p, presupuesto: e.target.value }))}
-              placeholder="0.00" />
+            <input type="text" className={inputClass}
+              value={formatMXN(formData.presupuesto)}
+              onChange={e => setFormData(p => ({ ...p, presupuesto: parseMXN(e.target.value) }))}
+              placeholder="$0.00" />
           </div>
 
           {/* Vincular con Proyecto */}
@@ -230,6 +270,19 @@ function AnteproyectoForm({
               ))}
             </select>
             <p className="text-[10px] text-slate-400 mt-1">Solo se muestran proyectos con folio TCMM asignado.</p>
+          </div>
+
+          {/* Ruta OneDrive */}
+          <div>
+            <label className={labelClass}>
+              <span className="flex items-center gap-1.5">
+                <FolderInput className="w-3 h-3" /> Ruta OneDrive (opcional)
+              </span>
+            </label>
+            <input type="text" className={inputClass} value={formData.ruta_onedrive}
+              onChange={e => setFormData(p => ({ ...p, ruta_onedrive: e.target.value }))}
+              placeholder="Ej. Colegios/MA CIM/Anteproyectos/Construcción Aula" />
+            <p className="text-[10px] text-slate-400 mt-1">Pega la ruta de la carpeta en OneDrive donde están los archivos del anteproyecto.</p>
           </div>
 
           {/* Notas */}
@@ -294,16 +347,19 @@ export default function Anteproyectos() {
     [projects]
   );
 
-  // Solo proyectos con folio TCMM y que no estén ya vinculados a otro anteproyecto
-  const linkedProjectIds = useMemo(
-    () => new Set(anteproyectos.map(a => a.proyecto_id).filter(Boolean)),
-    [anteproyectos]
-  );
-
   const projectsVinculables = useMemo(
     () => projects.filter(p => p.folio && p.folio.startsWith('TCMM')),
     [projects]
   );
+
+  // ── KPIs ──────────────────────────────────────────────────────────────────
+  const kpis = useMemo(() => ({
+    total:       anteproyectos.length,
+    entregados:  anteproyectos.filter(a => a.estatus === 'entregado').length,
+    pendientes:  anteproyectos.filter(a => a.estatus !== 'entregado').length,
+    presupuesto: anteproyectos.reduce((sum, a) => sum + (a.presupuesto ?? 0), 0),
+    vinculados:  anteproyectos.filter(a => !!a.proyecto_id).length,
+  }), [anteproyectos]);
 
   const createMutation = useMutation({
     mutationFn: async (data: Record<string, unknown>) => {
@@ -412,6 +468,42 @@ export default function Anteproyectos() {
         onAction={() => setShowForm(true)}
       />
 
+      {/* KPIs */}
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+        <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-sm">
+          <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 flex items-center gap-1">
+            <TrendingUp className="w-3 h-3" /> Solicitados
+          </p>
+          <p className="text-2xl font-black text-slate-900">{kpis.total}</p>
+        </div>
+        <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-sm">
+          <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 flex items-center gap-1">
+            <CheckCircle2 className="w-3 h-3" /> Entregados
+          </p>
+          <p className="text-2xl font-black text-emerald-600">{kpis.entregados}</p>
+        </div>
+        <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-sm">
+          <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 flex items-center gap-1">
+            <Clock className="w-3 h-3" /> Pendientes
+          </p>
+          <p className="text-2xl font-black text-amber-600">{kpis.pendientes}</p>
+        </div>
+        <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-sm">
+          <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 flex items-center gap-1">
+            <DollarSign className="w-3 h-3" /> Presupuesto Total
+          </p>
+          <p className="text-lg font-black text-blue-600">
+            {kpis.presupuesto.toLocaleString('es-MX', { style: 'currency', currency: 'MXN' })}
+          </p>
+        </div>
+        <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-sm">
+          <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 flex items-center gap-1">
+            <Link2 className="w-3 h-3" /> Vinculados
+          </p>
+          <p className="text-2xl font-black text-purple-600">{kpis.vinculados}</p>
+        </div>
+      </div>
+
       {/* Filtros */}
       <div className="flex flex-wrap gap-3">
         <select className={selectClass} value={filterTerritorio}
@@ -459,16 +551,16 @@ export default function Anteproyectos() {
         <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
           {/* Cabecera */}
           <div className="hidden md:grid grid-cols-12 gap-2 px-5 py-3 bg-slate-50 border-b border-slate-100 text-[10px] font-black text-slate-400 uppercase tracking-widest">
-            <div className="col-span-1">Territorio</div>
             <div className="col-span-1">Colegio</div>
             <div className="col-span-2">Proyecto</div>
             <div className="col-span-1">Tipo</div>
             <div className="col-span-1">Prioridad</div>
-            <div className="col-span-1">Asignación</div>
             <div className="col-span-1">Estatus</div>
             <div className="col-span-1">Presupuesto</div>
+            <div className="col-span-1">F. Solicitud</div>
+            <div className="col-span-1">F. Entrega</div>
             <div className="col-span-1">Vinculado</div>
-            <div className="col-span-1">Notas</div>
+            <div className="col-span-1">OneDrive</div>
             <div className="col-span-1">Acciones</div>
           </div>
 
@@ -476,28 +568,18 @@ export default function Anteproyectos() {
             {visible.map(a => (
               <div key={a.id} className="px-5 py-4 hover:bg-slate-50/50 transition-colors grid grid-cols-1 md:grid-cols-12 gap-2 items-start">
                 <div className="col-span-1">
-                  <span className="text-xs font-bold text-slate-500">{a.territorio || '—'}</span>
-                </div>
-                <div className="col-span-1">
-                  <span className="text-xs font-semibold text-slate-800">{a.colegio || '—'}</span>
+                  <p className="text-xs font-bold text-slate-800">{a.colegio || '—'}</p>
+                  <p className="text-[10px] text-slate-400">{a.territorio || ''}</p>
                 </div>
                 <div className="col-span-2">
                   <p className="text-sm font-bold text-slate-900 leading-tight">{a.nombre_proyecto || '—'}</p>
-                  {a.fecha_actualizacion && (
-                    <p className="text-[10px] text-slate-400 mt-0.5 flex items-center gap-1">
-                      <Calendar className="w-3 h-3" />
-                      {format(new Date(a.fecha_actualizacion), 'dd MMM yyyy', { locale: es })}
-                    </p>
-                  )}
+                  {a.eco && <p className="text-[10px] text-slate-400 mt-0.5">{a.eco}</p>}
                 </div>
                 <div className="col-span-1">
                   <span className="text-xs text-slate-600">{a.tipo_proyecto || '—'}</span>
                 </div>
                 <div className="col-span-1">
                   <PriorityBadge priority={a.prioridad} />
-                </div>
-                <div className="col-span-1">
-                  <span className="text-xs text-slate-600">{a.asignacion || '—'}</span>
                 </div>
                 <div className="col-span-1">
                   {a.estatus ? (
@@ -514,6 +596,22 @@ export default function Anteproyectos() {
                   </span>
                 </div>
                 <div className="col-span-1">
+                  {a.fecha_solicitud ? (
+                    <span className="text-xs text-slate-600 flex items-center gap-1">
+                      <Calendar className="w-3 h-3 text-slate-400" />
+                      {format(new Date(a.fecha_solicitud), 'dd MMM yyyy', { locale: es })}
+                    </span>
+                  ) : <span className="text-xs text-slate-400">—</span>}
+                </div>
+                <div className="col-span-1">
+                  {a.fecha_entrega ? (
+                    <span className="text-xs text-slate-600 flex items-center gap-1">
+                      <Calendar className="w-3 h-3 text-slate-400" />
+                      {format(new Date(a.fecha_entrega), 'dd MMM yyyy', { locale: es })}
+                    </span>
+                  ) : <span className="text-xs text-slate-400">—</span>}
+                </div>
+                <div className="col-span-1">
                   {a.proyecto_id && projectMap[a.proyecto_id] ? (
                     <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 flex items-center gap-1">
                       <Link2 className="w-3 h-3" />
@@ -524,7 +622,12 @@ export default function Anteproyectos() {
                   )}
                 </div>
                 <div className="col-span-1">
-                  <p className="text-xs text-slate-600 line-clamp-2 leading-relaxed">{a.notas || '—'}</p>
+                  {a.ruta_onedrive ? (
+                    <span className="text-[10px] text-slate-500 flex items-center gap-1 truncate" title={a.ruta_onedrive}>
+                      <FolderInput className="w-3 h-3 flex-shrink-0 text-blue-500" />
+                      <span className="truncate">{a.ruta_onedrive}</span>
+                    </span>
+                  ) : <span className="text-xs text-slate-400">—</span>}
                 </div>
                 <div className="col-span-1 flex gap-2">
                   <button onClick={() => setEditingAnteproyecto(a)}
@@ -555,7 +658,6 @@ export default function Anteproyectos() {
         </div>
       )}
 
-      {/* Formulario crear */}
       <AnteproyectoForm
         open={showForm}
         onClose={() => setShowForm(false)}
@@ -563,7 +665,6 @@ export default function Anteproyectos() {
         projects={projectsVinculables}
       />
 
-      {/* Formulario editar */}
       <AnteproyectoForm
         open={!!editingAnteproyecto}
         onClose={() => setEditingAnteproyecto(null)}
@@ -572,7 +673,6 @@ export default function Anteproyectos() {
         projects={projectsVinculables}
       />
 
-      {/* Modal eliminar */}
       {deletingId && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 p-4">
           <div className="bg-white rounded-lg shadow-xl max-w-sm w-full p-6">
