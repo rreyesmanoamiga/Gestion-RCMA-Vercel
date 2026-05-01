@@ -489,7 +489,7 @@ export default function Pendientes() {
                 <div className="col-span-1">
                   {p.proyecto_id && projectMap[p.proyecto_id] ? (
                     <button
-                      onClick={() => navigate(`/projects/${p.proyecto_id}`)}
+                      onClick={() => navigate(`/proyectos/${p.proyecto_id}`)}
                       className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 flex items-center gap-1 w-fit hover:bg-blue-100 transition-colors cursor-pointer"
                       title="Ver proyecto"
                     >
