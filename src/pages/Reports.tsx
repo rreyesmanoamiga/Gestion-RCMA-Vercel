@@ -176,15 +176,21 @@ async function exportResumenPDF({ stats, projects, checklists, solicitudes, tick
 
 // ─── Excel Export ─────────────────────────────────────────────────────────────
 async function loadXLSX() {
-  const w = window as Window & { XlsxStyle?: unknown };
-  if (w.XlsxStyle) return w.XlsxStyle as typeof import('xlsx');
+  type XLSXType = typeof import('xlsx');
+  const w = window as Window & { XLSX?: XLSXType; XlsxStyle?: XLSXType };
+  if (w.XLSX?.utils) return w.XLSX;
+  if (w.XlsxStyle?.utils) return w.XlsxStyle;
   await new Promise<void>((resolve, reject) => {
     const s = document.createElement('script');
+    // xlsx-js-style expone window.XLSX con soporte de estilos
     s.src = 'https://cdn.jsdelivr.net/npm/xlsx-js-style@1.2.0/dist/xlsx.bundle.js';
     s.onload = () => resolve(); s.onerror = () => reject(new Error('XLSX load error'));
     document.head.appendChild(s);
   });
-  return w.XlsxStyle as typeof import('xlsx');
+  // xlsx-js-style puede exponer XLSX o XlsxStyle según la versión
+  const lib = (w.XLSX?.utils ? w.XLSX : w.XlsxStyle) as XLSXType;
+  if (!lib?.utils) throw new Error('xlsx-js-style no cargó correctamente');
+  return lib;
 }
 
 async function exportMatrizExcel(data: {
