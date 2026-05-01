@@ -105,13 +105,14 @@ export default function Accesos() {
   // ── Revocar: borra permisos Y usuario de Auth ──────────────────────────────
   const deletePermsMutation = useMutation({
     mutationFn: async (email: string) => {
+      // 1. Eliminar de Auth primero
+      await supabase.functions.invoke('delete-user', { body: { email } });
+      // 2. Eliminar permisos de la tabla
       const { error } = await supabase
         .from('user_permissions')
         .delete()
         .eq('user_email', email);
       if (error) throw error;
-      // Borrar de Auth en segundo plano
-      supabase.functions.invoke('delete-user', { body: { email } }).catch(() => {});
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['userPermissions'] });
