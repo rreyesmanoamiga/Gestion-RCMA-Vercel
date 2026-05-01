@@ -15,7 +15,6 @@ const STATUS_CONFIGS: Record<string, { label: string; class: string }> = {
 
   // Estados legado
   planificado:       { label: 'Planificado',          class: 'bg-blue-100   text-blue-700   border-blue-200'      },
-  en_proceso:       { label: 'En Proceso',          class: 'bg-amber-100  text-amber-700  border-amber-200'     },
   completado:        { label: 'Completado',           class: 'bg-emerald-100 text-emerald-700 border-emerald-200' },
   pausado:           { label: 'Pausado',              class: 'bg-slate-100  text-slate-600  border-slate-200'     },
   pendiente:         { label: 'Pendiente',            class: 'bg-orange-100 text-orange-700 border-orange-200'    },
