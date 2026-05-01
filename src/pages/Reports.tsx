@@ -183,7 +183,7 @@ async function loadXLSX() {
   await new Promise<void>((resolve, reject) => {
     const s = document.createElement('script');
     // xlsx-js-style expone window.XLSX con soporte de estilos
-    s.src = 'https://cdn.jsdelivr.net/npm/xlsx-js-style@1.2.0/dist/xlsx.bundle.js';
+    s.src = 'https://unpkg.com/xlsx-js-style@1.2.0/dist/xlsx.bundle.js';
     s.onload = () => resolve(); s.onerror = () => reject(new Error('XLSX load error'));
     document.head.appendChild(s);
   });
@@ -266,13 +266,14 @@ async function exportMatrizExcel(data: {
     const nCols = headers.length;
     const nRows = rows.length;
 
-    // Fila 0 — Título (dark bg, sin merges para evitar errores)
+    // Fila 0 — Título izquierda + Fecha derecha (con merge cada uno)
+    const splitCol = Math.floor(nCols * 0.6);
     for (let c = 0; c < nCols; c++) {
-      ws[XLSX.utils.encode_cell({ r: 0, c })] = {
-        v: c === 0 ? sheetTitle : c === nCols - 1 ? `Generado: ${now}` : '',
-        t: 's',
-        s: c === nCols - 1 ? sSubtitle : sTitle,
-      };
+      // Solo A1 lleva el título, splitCol lleva la fecha
+      // Las demás celdas del rango merged deben existir pero vacías con el mismo estilo
+      const v = c === 0 ? sheetTitle : c === splitCol ? `Generado: ${now}` : '';
+      const s = c >= splitCol ? sSubtitle : sTitle;
+      ws[XLSX.utils.encode_cell({ r: 0, c })] = { v, t: 's', s };
     }
 
     // Fila 1 — separador oscuro
@@ -320,6 +321,12 @@ async function exportMatrizExcel(data: {
       { hpt: 18 },
     ];
     ws['!autofilter'] = { ref: `A3:${XLSX.utils.encode_cell({ r: 2, c: nCols - 1 })}` };
+    // Merge título izquierda (65%) y fecha derecha (35%)
+    ws['!merges'] = [
+      { s: { r: 0, c: 0 },        e: { r: 0, c: splitCol - 1 } },
+      { s: { r: 0, c: splitCol }, e: { r: 0, c: nCols - 1    } },
+      { s: { r: 1, c: 0 },        e: { r: 1, c: nCols - 1    } },
+    ];
 
     XLSX.utils.book_append_sheet(wb, ws as import('xlsx').WorkSheet, name);
   }
@@ -487,12 +494,16 @@ async function exportMatrizExcel(data: {
   ws7[`A${sepR + 1}`] = { v: 'TOTAL GENERAL', t: 's', s: sResTotalLabel };
   ws7[`B${sepR + 1}`] = { v: totalGeneral,    t: 'n', s: sResTotalNum   };
 
-  ws7['!ref']  = `A1:B${sepR + 1}`;
-  ws7['!cols'] = [{ wch: 28 }, { wch: 22 }];
-  ws7['!rows'] = [
+  ws7['!ref']    = `A1:B${sepR + 1}`;
+  ws7['!cols']   = [{ wch: 38 }, { wch: 22 }];
+  ws7['!rows']   = [
     { hpt: 32 }, { hpt: 5 }, { hpt: 22 },
     ...resRows.map(() => ({ hpt: 22 })),
     { hpt: 4 }, { hpt: 26 },
+  ];
+  ws7['!merges'] = [
+    { s: { r: 0, c: 0 }, e: { r: 0, c: 1 } },
+    { s: { r: 1, c: 0 }, e: { r: 1, c: 1 } },
   ];
 
   XLSX.utils.book_append_sheet(wb, ws7 as import('xlsx').WorkSheet, '📊 Resumen Ejecutivo');
