@@ -12,10 +12,13 @@ jobs:
     steps:
       - name: Llamar Edge Function de recordatorios
         run: |
+          echo "🔧 Iniciando envío de recordatorios de mantenimiento..."
+
           response=$(curl -s -o /tmp/response.json -w "%{http_code}" \
             -X POST \
             -H "Authorization: Bearer ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" \
             -H "Content-Type: application/json" \
+            -d '{}' \
             "https://wwghvummkxekrenfgzsd.supabase.co/functions/v1/send-maintenance-reminders")
 
           echo "HTTP Status: $response"
@@ -23,6 +26,8 @@ jobs:
           cat /tmp/response.json
 
           if [ "$response" != "200" ]; then
-            echo "Error: La función retornó status $response"
+            echo "❌ Error: La función retornó status $response"
             exit 1
           fi
+
+          echo "✅ Recordatorios enviados correctamente"
