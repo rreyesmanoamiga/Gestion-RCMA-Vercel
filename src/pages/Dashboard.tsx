@@ -5,82 +5,117 @@ import { Link } from 'react-router-dom';
 import {
   FolderKanban, ClipboardCheck, Wrench, AlertTriangle, ArrowRight,
   Building2, MapPin, TicketCheck, FolderOpen, CalendarDays, ClockAlert,
-  ChevronRight
+  ChevronRight, Activity, type LucideIcon
 } from 'lucide-react';
 import { supabase } from '@/lib/supabaseClient';
-import StatCard from '@/components/dashboard/StatCard';
 import StatusBadge from '@/components/shared/StatusBadge';
-import PriorityBadge from '@/components/shared/PriorityBadge';
-import { format } from 'date-fns';
-import { es } from 'date-fns/locale';
 import { COLEGIOS, type Colegio } from '@/lib/colegios';
+import {
+  PieChart, Pie, Cell, Tooltip, ResponsiveContainer, Legend,
+  BarChart, Bar, XAxis, YAxis, CartesianGrid
+} from 'recharts';
 
 // ─── Interfaces ───────────────────────────────────────────────────────────────
 interface Project {
-  id:          string;
-  name?:       string;
-  status?:     string;
-  priority?:   string;
-  colegio?:    string;
-  territorio?: string;
-  location?:   string;
-  progress?:   number;
+  id: string; name?: string; status?: string; priority?: string;
+  colegio?: string; territorio?: string; location?: string; progress?: number;
+  created_at?: string;
 }
-
 interface Checklist {
-  id:               string;
-  overall_status?:  string;
-  colegio?:         string;
-  territorio?:      string;
+  id: string; overall_status?: string; colegio?: string; territorio?: string;
 }
-
 interface MaintenanceRecord {
-  id:             string;
-  title?:         string;
-  status?:        string;
-  priority?:      string;
-  colegio?:       string;
-  territorio?:    string;
-  type?:          string;
-  scheduled_date?: string;
+  id: string; title?: string; status?: string; priority?: string;
+  colegio?: string; territorio?: string; type?: string; scheduled_date?: string;
 }
-
 interface Pendiente {
-  id:               string;
-  nombre_proyecto?: string;
-  estatus?:         string;
-  colegio?:         string;
-  territorio?:      string;
+  id: string; nombre_proyecto?: string; estatus?: string;
+  colegio?: string; territorio?: string; created_at?: string;
 }
-
 interface TicketRecord {
-  id:       string;
-  folio?:   string;
-  estatus?: string;
+  id: string; folio?: string; estatus?: string; titulo?: string;
+  colegio?: string; created_at?: string;
+}
+interface ActivityItem {
+  id: string; label: string; sub: string; type: string; date: string; to?: string;
 }
 
+// ─── Colores para gráficas ────────────────────────────────────────────────────
+const STATUS_COLORS: Record<string, string> = {
+  en_proceso: '#3b82f6', en_espera:  '#f59e0b',
+  completado: '#10b981', cancelado:  '#ef4444',
+  pendiente:  '#8b5cf6', revision:   '#06b6d4',
+};
+const STATUS_LABELS: Record<string, string> = {
+  en_proceso: 'En Proceso', en_espera: 'En Espera',
+  completado: 'Completado', cancelado: 'Cancelado',
+  pendiente:  'Pendiente',  revision:  'Revisión',
+};
+
+// ─── KPI Card ─────────────────────────────────────────────────────────────────
+interface KPICardProps {
+  title: string;
+  value: number | string;
+  subtitle?: string;
+  icon: LucideIcon;
+  color: 'blue' | 'green' | 'orange' | 'red' | 'purple';
+  trend?: 'up' | 'down' | 'neutral';
+  trendLabel?: string;
+  to?: string;
+}
+function KPICard({ title, value, subtitle, icon: Icon, color, trend, trendLabel, to }: KPICardProps) {
+  const colorMap: Record<string, { bg: string; icon: string; border: string }> = {
+    blue:   { bg: 'bg-blue-50',    icon: 'text-blue-600',    border: 'border-blue-100' },
+    green:  { bg: 'bg-emerald-50', icon: 'text-emerald-600', border: 'border-emerald-100' },
+    orange: { bg: 'bg-amber-50',   icon: 'text-amber-600',   border: 'border-amber-100' },
+    red:    { bg: 'bg-red-50',     icon: 'text-red-600',     border: 'border-red-100' },
+    purple: { bg: 'bg-purple-50',  icon: 'text-purple-600',  border: 'border-purple-100' },
+  };
+  const c = colorMap[color];
+
+  const inner = (
+    <div className={`bg-white rounded-xl border ${c.border} p-5 hover:shadow-md transition-all duration-200 h-full`}>
+      <div className="flex items-start justify-between mb-3">
+        <div className={`w-10 h-10 rounded-lg ${c.bg} flex items-center justify-center`}>
+          <Icon className={`w-5 h-5 ${c.icon}`} />
+        </div>
+        {trend && trendLabel && (
+          <span className={`text-xs font-semibold flex items-center gap-0.5 px-2 py-0.5 rounded-full ${
+            trend === 'up'   ? 'bg-emerald-50 text-emerald-600' :
+            trend === 'down' ? 'bg-red-50 text-red-600' :
+                               'bg-slate-100 text-slate-500'}`}>
+            {trend === 'up' ? '↑' : trend === 'down' ? '↓' : '→'} {trendLabel}
+          </span>
+        )}
+      </div>
+      <p className="text-3xl font-black text-slate-900 mb-0.5">{value}</p>
+      <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-0.5">{title}</p>
+      {subtitle && <p className="text-xs text-slate-400">{subtitle}</p>}
+    </div>
+  );
+  return to ? <Link to={to} className="block h-full">{inner}</Link> : inner;
+}
+
+// ─── Tooltip personalizado ────────────────────────────────────────────────────
+const CustomTooltip = ({ active, payload }: { active?: boolean; payload?: { name: string; value: number }[] }) => {
+  if (active && payload?.length) {
+    return (
+      <div className="bg-white border border-slate-200 rounded-lg shadow-lg px-3 py-2">
+        <p className="text-xs font-bold text-slate-800">{payload[0].name}</p>
+        <p className="text-sm font-black text-slate-900">{payload[0].value}</p>
+      </div>
+    );
+  }
+  return null;
+};
+
+// ─── Componente principal ─────────────────────────────────────────────────────
 export default function Dashboard() {
-  const projectsQuery = useQuery({
-    queryKey: ['projects'],
-    queryFn: () => db.Project.list('-created_at', 500),
-  });
-
-  const checklistsQuery = useQuery({
-    queryKey: ['checklists'],
-    queryFn: () => db.Checklist.list('-created_at', 500),
-  });
-
-  const maintenanceQuery = useQuery({
-    queryKey: ['maintenance'],
-    queryFn: () => db.MaintenanceRecord.list('-created_at', 500),
-  });
-
-  const pendientesQuery = useQuery({
-    queryKey: ['pendientes'],
-    queryFn: () => db.Pendiente.list('-fecha_actualizacion', 100),
-  });
-
-  const ticketsQuery = useQuery({
+  const projectsQuery    = useQuery({ queryKey: ['projects'],    queryFn: () => db.Project.list('-created_at', 500) });
+  const checklistsQuery  = useQuery({ queryKey: ['checklists'],  queryFn: () => db.Checklist.list('-created_at', 500) });
+  const maintenanceQuery = useQuery({ queryKey: ['maintenance'], queryFn: () => db.MaintenanceRecord.list('-created_at', 500) });
+  const pendientesQuery  = useQuery({ queryKey: ['pendientes'],  queryFn: () => db.Pendiente.list('-fecha_actualizacion', 100) });
+  const ticketsQuery     = useQuery({
     queryKey: ['tickets'],
     queryFn: async () => {
       const { data } = await supabase.from('tickets').select('*').order('created_at', { ascending: false }).limit(100);
@@ -88,53 +123,83 @@ export default function Dashboard() {
     },
   });
 
-  // Memoizados con cast — evita que ?? [] cree un nuevo array en cada render
-  const projects    = useMemo(() => (projectsQuery.data    ?? []) as unknown as Project[],    [projectsQuery.data]);
-  const checklists  = useMemo(() => (checklistsQuery.data  ?? []) as unknown as Checklist[],  [checklistsQuery.data]);
+  const projects    = useMemo(() => (projectsQuery.data    ?? []) as unknown as Project[],           [projectsQuery.data]);
+  const checklists  = useMemo(() => (checklistsQuery.data  ?? []) as unknown as Checklist[],         [checklistsQuery.data]);
   const maintenance = useMemo(() => (maintenanceQuery.data ?? []) as unknown as MaintenanceRecord[], [maintenanceQuery.data]);
-  const pendientes  = useMemo(() => (pendientesQuery.data  ?? []) as unknown as Pendiente[],  [pendientesQuery.data]);
-  const tickets     = useMemo(() => (ticketsQuery.data     ?? []) as unknown as TicketRecord[], [ticketsQuery.data]);
+  const pendientes  = useMemo(() => (pendientesQuery.data  ?? []) as unknown as Pendiente[],         [pendientesQuery.data]);
+  const tickets     = useMemo(() => (ticketsQuery.data     ?? []) as unknown as TicketRecord[],      [ticketsQuery.data]);
 
-  const isLoading = projectsQuery.isLoading
-    || checklistsQuery.isLoading
-    || maintenanceQuery.isLoading;
+  const isLoading = projectsQuery.isLoading || checklistsQuery.isLoading || maintenanceQuery.isLoading;
 
-  const recentPendientes = useMemo(() => pendientes.slice(0, 5), [pendientes]);
-
+  // ─── KPIs ──────────────────────────────────────────────────────────────────
   const stats = useMemo(() => ({
     activeProjects:     projects.filter(p => p.status === 'en_proceso' || p.status === 'en_espera').length,
+    completedProjects:  projects.filter(p => p.status === 'completado').length,
     criticalChecklists: checklists.filter(c => c.overall_status === 'critico' || c.overall_status === 'malo').length,
     pendingMaintenance: pendientes.filter(m => m.estatus === 'pendiente' || m.estatus === 'en_proceso').length,
     urgentItems:        projects.filter(p => p.priority === 'urgente' && p.status !== 'completado' && p.status !== 'cancelado').length,
-  }), [projects, checklists, pendientes]);
+    openTickets:        tickets.filter(t => t.estatus !== 'cerrado' && t.estatus !== 'resuelto').length,
+  }), [projects, checklists, pendientes, tickets]);
 
+  // ─── Datos para gráficas ───────────────────────────────────────────────────
+  const projectsByStatus = useMemo(() => {
+    const map: Record<string, number> = {};
+    projects.forEach(p => { const k = p.status ?? 'sin_estado'; map[k] = (map[k] ?? 0) + 1; });
+    return Object.entries(map).map(([status, count]) => ({
+      name: STATUS_LABELS[status] ?? status, value: count, color: STATUS_COLORS[status] ?? '#94a3b8',
+    }));
+  }, [projects]);
+
+  const ticketsByStatus = useMemo(() => {
+    const map: Record<string, number> = {};
+    tickets.forEach(t => { const k = t.estatus ?? 'sin_estado'; map[k] = (map[k] ?? 0) + 1; });
+    return Object.entries(map).map(([status, count]) => ({
+      name: STATUS_LABELS[status] ?? status, value: count, color: STATUS_COLORS[status] ?? '#94a3b8',
+    }));
+  }, [tickets]);
+
+  // ─── Colegios con alertas ──────────────────────────────────────────────────
   const urgentColegios = useMemo(() => {
     const s = new Set<string>();
-    projects.forEach(p => {
-      if (p.priority === 'urgente' && p.status !== 'completado' && p.colegio) s.add(p.colegio);
-    });
-    maintenance.forEach(m => {
-      if (m.priority === 'urgente' && m.status !== 'completado' && m.colegio) s.add(m.colegio);
-    });
-    checklists.forEach(c => {
-      if ((c.overall_status === 'critico' || c.overall_status === 'malo') && c.colegio) s.add(c.colegio);
-    });
+    projects.forEach(p => { if (p.priority === 'urgente' && p.status !== 'completado' && p.colegio) s.add(p.colegio); });
+    maintenance.forEach(m => { if (m.priority === 'urgente' && m.status !== 'completado' && m.colegio) s.add(m.colegio); });
+    checklists.forEach(c => { if ((c.overall_status === 'critico' || c.overall_status === 'malo') && c.colegio) s.add(c.colegio); });
     return s;
   }, [projects, maintenance, checklists]);
 
+  // ─── Resumen por territorio ────────────────────────────────────────────────
   const territorySummary = useMemo(() =>
-    ['NORTE', 'MEXICO'].map(territorio => ({
-      territorio,
-      colegios:    COLEGIOS.filter((c: Colegio) => c.territorio === territorio),
-      projects:    projects.filter(p => p.territorio === territorio),
-      checklists:  checklists.filter(c => c.territorio === territorio),
-      maintenance: maintenance.filter(m => m.territorio === territorio),
-    })),
-    [projects, checklists, maintenance]
+    ['NORTE', 'MEXICO'].map(territorio => {
+      const colegios  = COLEGIOS.filter((c: Colegio) => c.territorio === territorio);
+      const tProjects = projects.filter(p => p.territorio === territorio);
+      const tCheck    = checklists.filter(c => c.territorio === territorio);
+      const tMaint    = maintenance.filter(m => m.territorio === territorio);
+      const sinAlertas = colegios.filter(c => !urgentColegios.has(c.colegio)).length;
+      const pct        = colegios.length > 0 ? Math.round((sinAlertas / colegios.length) * 100) : 100;
+      return { territorio, colegios, tProjects, tCheck, tMaint, sinAlertas, pct };
+    }),
+    [projects, checklists, maintenance, urgentColegios]
   );
 
-  const recentProjects    = useMemo(() => projects.slice(0, 5),    [projects]);
-  const recentMaintenance = useMemo(() => maintenance.slice(0, 5), [maintenance]);
+  // ─── Feed de actividad reciente ────────────────────────────────────────────
+  const recentActivity = useMemo<ActivityItem[]>(() => {
+    const items: ActivityItem[] = [];
+    projects.slice(0, 4).forEach(p => items.push({
+      id: `p-${p.id}`, label: p.name ?? 'Proyecto sin nombre', sub: p.colegio ?? '',
+      type: 'proyecto', date: p.created_at ?? '', to: `/proyectos/${p.id}`,
+    }));
+    tickets.slice(0, 4).forEach(t => items.push({
+      id: `t-${t.id}`, label: t.titulo ?? `Ticket ${t.folio ?? ''}`, sub: t.colegio ?? '',
+      type: 'ticket', date: t.created_at ?? '', to: '/tickets',
+    }));
+    pendientes.slice(0, 4).forEach(p => items.push({
+      id: `pe-${p.id}`, label: p.nombre_proyecto ?? 'Pendiente sin nombre', sub: p.colegio ?? '',
+      type: 'pendiente', date: p.created_at ?? '', to: '/pendientes',
+    }));
+    return items.sort((a, b) => b.date.localeCompare(a.date)).slice(0, 8);
+  }, [projects, tickets, pendientes]);
+
+  const recentProjects = useMemo(() => projects.slice(0, 5), [projects]);
 
   if (isLoading) {
     return (
@@ -144,195 +209,271 @@ export default function Dashboard() {
     );
   }
 
+  const typeIcon: Record<string, LucideIcon> = {
+    proyecto: FolderKanban, ticket: TicketCheck, pendiente: ClockAlert,
+  };
+  const typeColor: Record<string, string> = {
+    proyecto:  'bg-blue-100 text-blue-600',
+    ticket:    'bg-red-100 text-red-600',
+    pendiente: 'bg-amber-100 text-amber-600',
+  };
+
   return (
-    <div className="space-y-8">
+    <div className="space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
           <div className="flex items-center gap-3 mb-1">
-            <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center">
-              <Building2 className="w-4 h-4 text-primary" />
+            <div className="w-8 h-8 rounded-lg bg-slate-900 flex items-center justify-center">
+              <Building2 className="w-4 h-4 text-white" />
             </div>
-            <h1 className="text-2xl font-bold text-foreground">Colegios Mano Amiga</h1>
+            <h1 className="text-2xl font-black text-slate-900 uppercase tracking-tight">Colegios Mano Amiga</h1>
           </div>
-          <p className="text-sm text-muted-foreground ml-11">Panel de Gestión de Proyectos y Mantenimiento</p>
+          <p className="text-sm text-slate-500 ml-11">
+            Panel de Gestión · {projects.length} proyectos · {tickets.length} tickets · {pendientes.length} pendientes
+          </p>
         </div>
         <div className="hidden sm:flex items-center justify-center bg-white rounded-xl p-3 shadow-sm border border-slate-100">
-          <img
-            src="/logo.png"
-            alt="Mano Amiga"
-            className="h-20 w-auto object-contain"
-          />
+          <img src="/logo.png" alt="Mano Amiga" className="h-16 w-auto object-contain" />
         </div>
       </div>
 
-      {/* Stats */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard
-          title="Proyectos Activos"
-          value={stats.activeProjects}
-          subtitle={`${projects.length} total`}
-          icon={FolderKanban}
-          color="blue"
-        />
-        <StatCard
-          title="Inspecciones"
-          value={checklists.length}
-          subtitle={stats.criticalChecklists > 0 ? `${stats.criticalChecklists} requieren atención` : 'Todo en orden'}
-          icon={ClipboardCheck}
-          color="green"
-        />
-        <StatCard
-          title="Pendientes"
-          value={stats.pendingMaintenance}
-          subtitle={`${pendientes.length} registros totales`}
-          icon={Wrench}
-          color="orange"
-        />
-        <StatCard
-          title="Urgentes"
-          value={stats.urgentItems}
-          subtitle="Requieren acción inmediata"
-          icon={AlertTriangle}
-          color="red"
-        />
+      {/* ─── KPIs ────────────────────────────────────────────────────────────── */}
+      <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
+        <KPICard title="Proyectos Activos" value={stats.activeProjects}
+          subtitle={`${stats.completedProjects} completados`}
+          icon={FolderKanban} color="blue" to="/proyectos"
+          trend={stats.activeProjects > 0 ? 'up' : 'neutral'} trendLabel={`${projects.length} total`} />
+        <KPICard title="Tickets Abiertos" value={stats.openTickets}
+          subtitle={`${tickets.length} tickets totales`}
+          icon={TicketCheck} color="red" to="/tickets"
+          trend={stats.openTickets > 5 ? 'down' : 'neutral'} trendLabel={`${tickets.length} total`} />
+        <KPICard title="Pendientes" value={stats.pendingMaintenance}
+          subtitle={`${pendientes.length} registros`}
+          icon={ClockAlert} color="orange" to="/pendientes"
+          trend="neutral" trendLabel={`${pendientes.length} total`} />
+        <KPICard title="Inspecciones" value={stats.criticalChecklists > 0 ? stats.criticalChecklists : checklists.length}
+          subtitle={stats.criticalChecklists > 0 ? 'requieren atención' : 'sin alertas críticas'}
+          icon={ClipboardCheck} color={stats.criticalChecklists > 0 ? 'red' : 'green'} to="/checklists"
+          trend={stats.criticalChecklists > 0 ? 'down' : 'up'} trendLabel={`${checklists.length} total`} />
+        <KPICard title="Urgentes" value={stats.urgentItems}
+          subtitle="Acción inmediata"
+          icon={AlertTriangle} color={stats.urgentItems > 0 ? 'red' : 'green'}
+          trend={stats.urgentItems > 0 ? 'down' : 'up'} trendLabel="prioridad alta" />
       </div>
 
-      {/* Territory summary */}
+      {/* ─── Gráficas ─────────────────────────────────────────────────────────── */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        {/* Dona — proyectos por estatus */}
+        <div className="bg-white rounded-xl border border-slate-200 p-5">
+          <div className="flex items-center gap-2 mb-4">
+            <div className="w-7 h-7 rounded-lg bg-blue-50 flex items-center justify-center">
+              <FolderKanban className="w-4 h-4 text-blue-600" />
+            </div>
+            <div>
+              <h2 className="text-sm font-bold text-slate-800">Proyectos por Estatus</h2>
+              <p className="text-xs text-slate-400">{projects.length} proyectos totales</p>
+            </div>
+          </div>
+          {projectsByStatus.length === 0 ? (
+            <div className="flex items-center justify-center h-48 text-sm text-slate-400">Sin datos</div>
+          ) : (
+            <ResponsiveContainer width="100%" height={220}>
+              <PieChart>
+                <Pie data={projectsByStatus} cx="50%" cy="50%" innerRadius={55} outerRadius={85}
+                  paddingAngle={3} dataKey="value">
+                  {projectsByStatus.map((entry, i) => <Cell key={i} fill={entry.color} />)}
+                </Pie>
+                <Tooltip content={<CustomTooltip />} />
+                <Legend iconType="circle" iconSize={8} wrapperStyle={{ fontSize: '11px' }} />
+              </PieChart>
+            </ResponsiveContainer>
+          )}
+        </div>
+
+        {/* Barras — tickets por estatus */}
+        <div className="bg-white rounded-xl border border-slate-200 p-5">
+          <div className="flex items-center gap-2 mb-4">
+            <div className="w-7 h-7 rounded-lg bg-red-50 flex items-center justify-center">
+              <TicketCheck className="w-4 h-4 text-red-600" />
+            </div>
+            <div>
+              <h2 className="text-sm font-bold text-slate-800">Tickets por Estatus</h2>
+              <p className="text-xs text-slate-400">{tickets.length} tickets totales</p>
+            </div>
+          </div>
+          {ticketsByStatus.length === 0 ? (
+            <div className="flex items-center justify-center h-48 text-sm text-slate-400">Sin tickets registrados</div>
+          ) : (
+            <ResponsiveContainer width="100%" height={220}>
+              <BarChart data={ticketsByStatus} barSize={32} margin={{ top: 5, right: 10, left: -20, bottom: 5 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+                <XAxis dataKey="name" tick={{ fontSize: 10 }} />
+                <YAxis tick={{ fontSize: 10 }} allowDecimals={false} />
+                <Tooltip content={<CustomTooltip />} />
+                <Bar dataKey="value" radius={[4, 4, 0, 0]}>
+                  {ticketsByStatus.map((entry, i) => <Cell key={i} fill={entry.color} />)}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          )}
+        </div>
+      </div>
+
+      {/* ─── Territorios ──────────────────────────────────────────────────────── */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {territorySummary.map(({ territorio, colegios, projects: tProjects, checklists: tCheck, maintenance: tMaint }) => (
-          <div key={territorio} className="bg-card rounded-xl border border-border p-5">
-            <div className="flex items-center gap-2 mb-4">
-              <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center">
-                <MapPin className="w-4 h-4 text-primary" />
+        {territorySummary.map(({ territorio, colegios, tProjects, tCheck, tMaint, sinAlertas, pct }) => (
+          <div key={territorio} className="bg-white rounded-xl border border-slate-200 p-5">
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-lg bg-slate-100 flex items-center justify-center">
+                  <MapPin className="w-4 h-4 text-slate-600" />
+                </div>
+                <div>
+                  <h2 className="font-bold text-slate-900">Territorio {territorio}</h2>
+                  <p className="text-xs text-slate-400">{colegios.length} colegios</p>
+                </div>
               </div>
-              <div>
-                <h2 className="font-semibold text-foreground">Territorio {territorio}</h2>
-                <p className="text-xs text-muted-foreground">{colegios.length} colegios</p>
+              <span className={`text-sm font-black px-3 py-1 rounded-full ${
+                pct >= 80 ? 'bg-emerald-100 text-emerald-700' :
+                pct >= 50 ? 'bg-amber-100 text-amber-700' :
+                            'bg-red-100 text-red-700'}`}>
+                {pct}% OK
+              </span>
+            </div>
+            <div className="mb-4">
+              <div className="flex justify-between text-xs text-slate-500 mb-1">
+                <span>{sinAlertas} de {colegios.length} colegios sin alertas</span>
+              </div>
+              <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
+                <div className={`h-full rounded-full transition-all duration-500 ${
+                  pct >= 80 ? 'bg-emerald-500' : pct >= 50 ? 'bg-amber-500' : 'bg-red-500'}`}
+                  style={{ width: `${pct}%` }} />
               </div>
             </div>
-
-            <div className="grid grid-cols-3 gap-3 mb-4">
-              <div className="text-center p-2 bg-muted/50 rounded-lg">
-                <p className="text-xl font-bold text-foreground">{tProjects.length}</p>
-                <p className="text-[10px] text-muted-foreground">Proyectos</p>
-              </div>
-              <div className="text-center p-2 bg-muted/50 rounded-lg">
-                <p className="text-xl font-bold text-foreground">{tCheck.length}</p>
-                <p className="text-[10px] text-muted-foreground">Inspecciones</p>
-              </div>
-              <div className="text-center p-2 bg-muted/50 rounded-lg">
-                <p className="text-xl font-bold text-foreground">
-                  {tMaint.filter(m => m.status !== 'completado').length}
-                </p>
-                <p className="text-[10px] text-muted-foreground">Mtto. Pend.</p>
-              </div>
+            <div className="grid grid-cols-3 gap-2 mb-4">
+              {[
+                { label: 'Proyectos',    value: tProjects.length },
+                { label: 'Inspecciones', value: tCheck.length },
+                { label: 'Mtto. Pend.',  value: tMaint.filter(m => m.status !== 'completado').length },
+              ].map(s => (
+                <div key={s.label} className="text-center p-2 bg-slate-50 rounded-lg border border-slate-100">
+                  <p className="text-xl font-black text-slate-900">{s.value}</p>
+                  <p className="text-[10px] text-slate-500">{s.label}</p>
+                </div>
+              ))}
             </div>
-
             <div className="flex flex-wrap gap-1">
               {colegios.map(c => (
-                <span
-                  key={c.colegio}
-                  className={`text-xs px-2 py-0.5 rounded-md font-medium border ${
+                <span key={c.colegio}
+                  className={`text-xs px-2 py-0.5 rounded-md font-semibold border ${
                     urgentColegios.has(c.colegio)
                       ? 'bg-red-100 text-red-700 border-red-200'
-                      : 'bg-muted text-muted-foreground border-border'
-                  }`}
-                >
+                      : 'bg-slate-100 text-slate-500 border-slate-200'}`}>
                   {c.colegio}
                 </span>
               ))}
             </div>
-            <p className="text-[10px] text-muted-foreground mt-2">Rojo = requiere atención</p>
+            <p className="text-[10px] text-slate-400 mt-2">🔴 Con alertas activas</p>
           </div>
         ))}
       </div>
 
-      {/* Recent sections */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Recent Projects */}
-        <div className="bg-card rounded-xl border border-border">
-          <div className="flex items-center justify-between p-5 border-b border-border">
-            <h2 className="font-semibold text-foreground">Proyectos Recientes</h2>
-            <Link to="/proyectos" className="text-xs text-primary font-medium flex items-center gap-1 hover:underline">
+      {/* ─── Proyectos recientes + Actividad ──────────────────────────────────── */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <div className="bg-white rounded-xl border border-slate-200">
+          <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100">
+            <h2 className="text-sm font-bold text-slate-800 uppercase tracking-tight flex items-center gap-2">
+              <FolderKanban className="w-4 h-4 text-blue-600" /> Proyectos Recientes
+            </h2>
+            <Link to="/proyectos" className="text-xs text-blue-600 font-semibold flex items-center gap-1 hover:underline">
               Ver todos <ArrowRight className="w-3 h-3" />
             </Link>
           </div>
-          <div className="divide-y divide-border">
+          <div className="divide-y divide-slate-50">
             {recentProjects.length === 0 && (
-              <p className="p-5 text-sm text-muted-foreground text-center">No hay proyectos registrados</p>
+              <p className="p-5 text-sm text-slate-400 text-center">No hay proyectos registrados</p>
             )}
             {recentProjects.map(project => (
-              <Link
-                key={project.id}
-                to={`/proyectos/${project.id}`}
-                className="flex items-center justify-between p-4 hover:bg-muted/50 transition-colors"
-              >
-                <div className="min-w-0">
-                  <p className="text-sm font-medium text-foreground truncate">{project.name}</p>
-                  <p className="text-xs text-muted-foreground">{project.location || 'Sin ubicación'}</p>
+              <Link key={project.id} to={`/proyectos/${project.id}`}
+                className="flex items-center justify-between px-5 py-3 hover:bg-slate-50 transition-colors group">
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-semibold text-slate-800 truncate">{project.name}</p>
+                  <p className="text-xs text-slate-400">{project.colegio ?? project.location ?? 'Sin ubicación'}</p>
+                  {typeof project.progress === 'number' && (
+                    <div className="mt-1.5 h-1.5 bg-slate-100 rounded-full w-32">
+                      <div className="h-full bg-blue-500 rounded-full" style={{ width: `${project.progress}%` }} />
+                    </div>
+                  )}
                 </div>
                 <div className="flex items-center gap-2 ml-3">
                   <StatusBadge status={project.status} />
+                  <ChevronRight className="w-3 h-3 text-slate-300 opacity-0 group-hover:opacity-100" />
                 </div>
               </Link>
             ))}
           </div>
         </div>
 
-        {/* Recent Pendientes */}
-        <div className="bg-card rounded-xl border border-border">
-          <div className="flex items-center justify-between p-5 border-b border-border">
-            <h2 className="font-semibold text-foreground">Pendientes Recientes</h2>
-            <Link to="/pendientes" className="text-xs text-primary font-medium flex items-center gap-1 hover:underline">
-              Ver todos <ArrowRight className="w-3 h-3" />
-            </Link>
+        <div className="bg-white rounded-xl border border-slate-200">
+          <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100">
+            <h2 className="text-sm font-bold text-slate-800 uppercase tracking-tight flex items-center gap-2">
+              <Activity className="w-4 h-4 text-purple-600" /> Actividad Reciente
+            </h2>
           </div>
-          <div className="divide-y divide-border">
-            {recentPendientes.length === 0 && (
-              <p className="p-5 text-sm text-muted-foreground text-center">No hay pendientes registrados</p>
+          <div className="divide-y divide-slate-50">
+            {recentActivity.length === 0 && (
+              <p className="p-5 text-sm text-slate-400 text-center">Sin actividad reciente</p>
             )}
-            {recentPendientes.map((p: any) => (
-              <div key={p.id} className="flex items-center justify-between p-4">
-                <div className="min-w-0">
-                  <p className="text-sm font-medium text-foreground truncate">{p.nombre_proyecto}</p>
-                  <p className="text-xs text-muted-foreground">{p.colegio || 'Sin colegio'}</p>
-                </div>
-                <div className="ml-3">
-                  <StatusBadge status={p.estatus} />
-                </div>
-              </div>
-            ))}
+            {recentActivity.map(item => {
+              const Icon = typeIcon[item.type] ?? Activity;
+              const col  = typeColor[item.type] ?? 'bg-slate-100 text-slate-500';
+              return (
+                <Link key={item.id} to={item.to ?? '#'}
+                  className="flex items-center gap-3 px-5 py-3 hover:bg-slate-50 transition-colors group">
+                  <div className={`w-7 h-7 rounded-lg ${col} flex items-center justify-center shrink-0`}>
+                    <Icon className="w-3.5 h-3.5" />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-semibold text-slate-800 truncate">{item.label}</p>
+                    <p className="text-xs text-slate-400">{item.sub || item.type}</p>
+                  </div>
+                  <ChevronRight className="w-3 h-3 text-slate-300 opacity-0 group-hover:opacity-100 shrink-0" />
+                </Link>
+              );
+            })}
           </div>
         </div>
       </div>
 
-      {/* Accesos Rápidos */}
+      {/* ─── Accesos Rápidos ──────────────────────────────────────────────────── */}
       <div>
-        <h2 className="font-semibold text-foreground mb-4">Accesos Rápidos</h2>
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
-          {[
-            { label: 'Tickets',       path: '/tickets',       icon: TicketCheck,    color: 'bg-red-50 text-red-600 border-red-200',         count: tickets.length },
-            { label: 'Proyectos',     path: '/proyectos',     icon: FolderKanban,   color: 'bg-blue-50 text-blue-600 border-blue-200',       count: projects.filter(p => p.status !== 'completado' && p.status !== 'cancelado').length },
-            { label: 'Anteproyectos', path: '/anteproyectos', icon: FolderOpen,     color: 'bg-indigo-50 text-indigo-600 border-indigo-200', count: null },
-            { label: 'Checklists',    path: '/checklists',    icon: ClipboardCheck, color: 'bg-green-50 text-green-600 border-green-200',    count: checklists.length },
-            { label: 'Pendientes',    path: '/pendientes',    icon: ClockAlert,     color: 'bg-amber-50 text-amber-600 border-amber-200',    count: pendientes.filter((p: any) => p.estatus !== 'completado').length },
-            { label: 'Calendario',    path: '/calendario',    icon: CalendarDays,   color: 'bg-purple-50 text-purple-600 border-purple-200', count: null },
-          ].map(({ label, path, icon: Icon, color, count }) => (
-            <Link key={path} to={path}
-              className={`flex flex-col items-center gap-2 p-4 rounded-xl border ${color} hover:shadow-md transition-all duration-200 group`}>
-              <div className="relative">
-                <Icon className="w-6 h-6" />
-                {count !== null && count > 0 && (
-                  <span className="absolute -top-2 -right-2 text-[10px] font-black bg-white border rounded-full w-4 h-4 flex items-center justify-center shadow-sm">
-                    {count > 99 ? '99+' : count}
-                  </span>
-                )}
-              </div>
-              <span className="text-xs font-bold text-center leading-tight">{label}</span>
-              <ChevronRight className="w-3 h-3 opacity-0 group-hover:opacity-100 transition-opacity" />
-            </Link>
-          ))}
+        <h2 className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-3">Accesos Rápidos</h2>
+        <div className="grid grid-cols-3 sm:grid-cols-6 gap-3">
+          {([
+            { label: 'Tickets',       path: '/tickets',       icon: TicketCheck,    color: 'bg-red-50 text-red-600 border-red-100',             count: stats.openTickets },
+            { label: 'Proyectos',     path: '/proyectos',     icon: FolderKanban,   color: 'bg-blue-50 text-blue-600 border-blue-100',           count: stats.activeProjects },
+            { label: 'Anteproyectos', path: '/anteproyectos', icon: FolderOpen,     color: 'bg-indigo-50 text-indigo-600 border-indigo-100',     count: null },
+            { label: 'Checklists',    path: '/checklists',    icon: ClipboardCheck, color: 'bg-emerald-50 text-emerald-600 border-emerald-100',  count: checklists.length },
+            { label: 'Pendientes',    path: '/pendientes',    icon: ClockAlert,     color: 'bg-amber-50 text-amber-600 border-amber-100',        count: stats.pendingMaintenance },
+            { label: 'Calendario',    path: '/calendario',    icon: CalendarDays,   color: 'bg-purple-50 text-purple-600 border-purple-100',     count: null },
+          ] as { label: string; path: string; icon: LucideIcon; color: string; count: number | null }[]).map(
+            ({ label, path, icon: Icon, color, count }) => (
+              <Link key={path} to={path}
+                className={`flex flex-col items-center gap-2 p-4 rounded-xl border ${color} hover:shadow-md transition-all duration-200 group relative`}>
+                <div className="relative">
+                  <Icon className="w-6 h-6" />
+                  {count !== null && count > 0 && (
+                    <span className="absolute -top-2 -right-2 text-[10px] font-black bg-white border border-current rounded-full w-4 h-4 flex items-center justify-center shadow-sm">
+                      {count > 99 ? '99+' : count}
+                    </span>
+                  )}
+                </div>
+                <span className="text-xs font-bold text-center leading-tight">{label}</span>
+                <ChevronRight className="w-3 h-3 opacity-0 group-hover:opacity-100 transition-opacity" />
+              </Link>
+            )
+          )}
         </div>
       </div>
     </div>
