@@ -16,7 +16,6 @@ import {
   TicketCheck,
   ClipboardEdit,
   Inbox,
-  Briefcase,
 } from 'lucide-react';
 import { useAuth } from '@/lib/AuthContext';
 import { cn } from '@/lib/utils';
@@ -138,14 +137,6 @@ export default function Sidebar({ isOpen, onToggle }) {
             </Link>
           )}
 
-
-          {/* Agenda */}
-          {(isAdmin || can('ver_calendario')) && (
-            <Link to="/agenda" onClick={handleNavClick} className={navLinkClass('/agenda')}>
-              <Briefcase className="w-[18px] h-[18px]" />
-              Agenda
-            </Link>
-          )}
           {/* Pendientes */}
           {can('ver_pendientes') && (
             <Link to="/pendientes" onClick={handleNavClick} className={navLinkClass('/pendientes')}>
@@ -204,4 +195,3 @@ export default function Sidebar({ isOpen, onToggle }) {
     </>
   );
 }
-

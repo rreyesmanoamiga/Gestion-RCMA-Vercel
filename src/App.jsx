@@ -43,7 +43,6 @@ import UserManagement from '@/pages/UserManagement';
 import Accesos from '@/pages/Accesos';
 import Pendientes from '@/pages/Pendientes';
 import CalendarioMantenimiento from '@/pages/CalendarioMantenimiento';
-import AgendaVisitas from '@/pages/AgendaVisitas';
 
 const inputClass = "w-full px-3 py-2 border border-slate-300 rounded-md text-sm focus:ring-2 focus:ring-slate-900 focus:outline-none bg-white";
 
@@ -281,7 +280,6 @@ function AuthenticatedApp() {
           <Route path="/accesos"           element={<Accesos />} />
           <Route path="/pendientes"        element={<Pendientes />} />
           <Route path="/calendario"        element={<CalendarioMantenimiento />} />
-          <Route path="/agenda"            element={<AgendaVisitas />} />
           <Route path="/login"             element={<Navigate to="/" replace />} />
           <Route path="*"                  element={<PageNotFound />} />
         </Route>
