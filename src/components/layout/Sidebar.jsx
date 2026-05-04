@@ -1,8 +1,6 @@
 import React from 'react';
+import { Link, useLocation } from 'react-router-dom';
 import {
-  Briefcase, Link, useLocation } from 'react-router-dom';
-import {
-  Briefcase,
   LayoutDashboard,
   FolderKanban,
   ClipboardCheck,
@@ -15,21 +13,16 @@ import {
   Lock,
   ClockAlert,
   CalendarDays,
-  Briefcase,
   TicketCheck,
   ClipboardEdit,
   Inbox,
+  Briefcase,
 } from 'lucide-react';
-import {
-  Briefcase, useAuth } from '@/lib/AuthContext';
-import {
-  Briefcase, cn } from '@/lib/utils';
-import {
-  Briefcase, useIsMobile } from '@/hooks/use-mobile';
-import {
-  Briefcase, supabase } from '@/lib/supabaseClient';
-import {
-  Briefcase, usePermissions } from '@/hooks/usePermissions';
+import { useAuth } from '@/lib/AuthContext';
+import { cn } from '@/lib/utils';
+import { useIsMobile } from '@/hooks/use-mobile';
+import { supabase } from '@/lib/supabaseClient';
+import { usePermissions } from '@/hooks/usePermissions';
 
 export default function Sidebar({ isOpen, onToggle }) {
   const location    = useLocation();
