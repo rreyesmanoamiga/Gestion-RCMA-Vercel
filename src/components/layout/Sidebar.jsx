@@ -1,6 +1,8 @@
 import React from 'react';
-import { Link, useLocation } from 'react-router-dom';
 import {
+  Briefcase, Link, useLocation } from 'react-router-dom';
+import {
+  Briefcase,
   LayoutDashboard,
   FolderKanban,
   ClipboardCheck,
@@ -13,15 +15,21 @@ import {
   Lock,
   ClockAlert,
   CalendarDays,
+  Briefcase,
   TicketCheck,
   ClipboardEdit,
   Inbox,
 } from 'lucide-react';
-import { useAuth } from '@/lib/AuthContext';
-import { cn } from '@/lib/utils';
-import { useIsMobile } from '@/hooks/use-mobile';
-import { supabase } from '@/lib/supabaseClient';
-import { usePermissions } from '@/hooks/usePermissions';
+import {
+  Briefcase, useAuth } from '@/lib/AuthContext';
+import {
+  Briefcase, cn } from '@/lib/utils';
+import {
+  Briefcase, useIsMobile } from '@/hooks/use-mobile';
+import {
+  Briefcase, supabase } from '@/lib/supabaseClient';
+import {
+  Briefcase, usePermissions } from '@/hooks/usePermissions';
 
 export default function Sidebar({ isOpen, onToggle }) {
   const location    = useLocation();
@@ -137,6 +145,14 @@ export default function Sidebar({ isOpen, onToggle }) {
             </Link>
           )}
 
+
+          {/* Agenda */}
+          {(isAdmin || can('ver_calendario')) && (
+            <Link to="/agenda" onClick={handleNavClick} className={navLinkClass('/agenda')}>
+              <Briefcase className="w-[18px] h-[18px]" />
+              Agenda
+            </Link>
+          )}
           {/* Pendientes */}
           {can('ver_pendientes') && (
             <Link to="/pendientes" onClick={handleNavClick} className={navLinkClass('/pendientes')}>
@@ -195,3 +211,4 @@ export default function Sidebar({ isOpen, onToggle }) {
     </>
   );
 }
+
