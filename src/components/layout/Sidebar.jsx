@@ -16,6 +16,7 @@ import {
   TicketCheck,
   ClipboardEdit,
   Inbox,
+  BarChart3,
 } from 'lucide-react';
 import { useAuth } from '@/lib/AuthContext';
 import { cn } from '@/lib/utils';
@@ -169,6 +170,14 @@ export default function Sidebar({ isOpen, onToggle }) {
             </Link>
           )}
 
+
+          {/* Presupuesto vs Real */}
+          {(isAdmin || can('ver_reportes')) && (
+            <Link to="/presupuestos" onClick={handleNavClick} className={navLinkClass('/presupuestos')}>
+              <BarChart3 className="w-[18px] h-[18px]" />
+              Presupuesto vs Real
+            </Link>
+          )}
           {/* Accesos — solo admin */}
           {isAdmin && (
             <Link to="/accesos" onClick={handleNavClick} className={navLinkClass('/accesos')}>
@@ -195,3 +204,4 @@ export default function Sidebar({ isOpen, onToggle }) {
     </>
   );
 }
+
