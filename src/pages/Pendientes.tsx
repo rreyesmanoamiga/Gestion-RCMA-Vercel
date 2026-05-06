@@ -467,11 +467,11 @@ export default function Pendientes() {
           <div className="hidden md:grid grid-cols-24 gap-x-3 px-5 py-3 bg-slate-50 border-b border-slate-100 text-[10px] font-black text-slate-400 uppercase tracking-widest">
             <div className="col-span-1">Colegio</div>
             <div className="col-span-4">Pendiente</div>
-            <div className="col-span-1">Prior.</div>
+            <div className="col-span-2">Prior.</div>
             <div className="col-span-2">Asignación</div>
             <div className="col-span-2">Estatus</div>
             <div className="col-span-3">Proyect. Vinc.</div>
-            <div className="col-span-10">Notas</div>
+            <div className="col-span-9">Notas</div>
             <div className="col-span-1 text-right">Acc.</div>
           </div>
 
@@ -490,11 +490,11 @@ export default function Pendientes() {
                     </p>
                   )}
                 </div>
-                <div className="col-span-1">
+                <div className="col-span-2 min-w-0">
                   <PriorityBadge priority={p.prioridad} />
                 </div>
                 <div className="col-span-2">
-                  <span className="text-xs text-slate-600">{p.asignacion || '—'}</span>
+                  <span className="text-xs text-slate-600 break-words leading-tight">{p.asignacion || '—'}</span>
                 </div>
                 <div className="col-span-2">
                   <StatusBadge status={p.estatus} />
@@ -520,7 +520,7 @@ export default function Pendientes() {
                     </span>
                   )}
                 </div>
-                <div className="col-span-10">
+                <div className="col-span-9">
                   <p className="text-xs text-slate-700 line-clamp-4 leading-relaxed">{p.notas || '—'}</p>
                 </div>
                 <div className="col-span-1 flex gap-1.5 justify-end">
