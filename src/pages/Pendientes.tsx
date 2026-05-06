@@ -47,9 +47,11 @@ interface Pendiente {
 }
 
 interface Project {
-  id:     string;
-  name?:  string;
-  folio?: string;
+  id:      string;
+  name?:   string;
+  folio?:  string;
+  colegio?: string;
+  status?:  string;
 }
 
 interface FormData {
@@ -201,9 +203,28 @@ function PendienteForm({
             <select className={inputClass} value={formData.proyecto_id}
               onChange={e => setFormData(p => ({ ...p, proyecto_id: e.target.value }))}>
               <option value="">Sin vincular</option>
-              {projects.map(p => (
-                <option key={p.id} value={p.id}>{p.folio ? `${p.folio} — ` : ''}{p.name}</option>
-              ))}
+              {[...projects]
+                .sort((a, b) => {
+                  const inactivo = (p: Project) =>
+                    p.status === 'cancelado' || p.status === 'completado' ? 1 : 0;
+                  return inactivo(a) - inactivo(b);
+                })
+                .map(p => {
+                  const inactivo = p.status === 'cancelado' || p.status === 'completado';
+                  const label = [
+                    p.folio  ? p.folio          : null,
+                    p.name   ? p.name           : null,
+                    p.colegio ? `· ${p.colegio}` : null,
+                    inactivo  ? `(${p.status})`  : null,
+                  ].filter(Boolean).join(' — ');
+                  return (
+                    <option key={p.id} value={p.id} disabled={false}
+                      style={inactivo ? { color: '#94a3b8' } : undefined}>
+                      {label}
+                    </option>
+                  );
+                })
+              }
             </select>
           </div>
 
