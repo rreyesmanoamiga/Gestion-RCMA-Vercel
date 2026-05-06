@@ -146,7 +146,7 @@ serve(async (req) => {
                 <table cellpadding="0" cellspacing="0" style="margin:0 auto 24px;">
                   <tr>
                     <td style="background:#0f172a;border-radius:8px;padding:14px 32px;">
-                      <a href="${siteUrl}/solicitudes-recibidas" style="color:#ffffff;font-size:15px;font-weight:600;text-decoration:none;">
+                      <a href="${siteUrl}/solicitudes" style="color:#ffffff;font-size:15px;font-weight:600;text-decoration:none;">
                         Ver solicitud en el sistema →
                       </a>
                     </td>
