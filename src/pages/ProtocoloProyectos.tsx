@@ -17,7 +17,7 @@ import {
 // ─── Archivos en Supabase Storage (bucket privado: documentos-rcma) ────────────
 const BUCKET = 'documentos-rcma';
 const FILE_TICKET      = 'TICKET_MAS_V2.xlsx';
-const FILE_TABLA       = 'TABLA_COMPARATIVA_MAS_V2.xlsx';
+const FILE_TABLA       = 'TABLA COMPARATIVA_MAS_V2.xlsx';
 const SIGNED_URL_TTL   = 60; // segundos de validez del enlace de descarga
 
 // ─── Datos de las fases del protocolo ────────────────────────────────────────
