@@ -470,9 +470,9 @@ export default function Pendientes() {
             <div className="col-span-1">Prior.</div>
             <div className="col-span-2">Asignación</div>
             <div className="col-span-2">Estatus</div>
-            <div className="col-span-4">Proyecto vinculado</div>
-            <div className="col-span-8">Notas</div>
-            <div className="col-span-2">Acc.</div>
+            <div className="col-span-3">Proyect. Vinc.</div>
+            <div className="col-span-10">Notas</div>
+            <div className="col-span-1 text-right">Acc.</div>
           </div>
 
           <div className="divide-y divide-slate-100">
@@ -499,7 +499,7 @@ export default function Pendientes() {
                 <div className="col-span-2">
                   <StatusBadge status={p.estatus} />
                 </div>
-                <div className="col-span-4">
+                <div className="col-span-3">
                   {p.proyecto_id && projectMap[p.proyecto_id] ? (
                     <button
                       onClick={() => navigate(`/proyectos/${p.proyecto_id}`)}
@@ -520,10 +520,10 @@ export default function Pendientes() {
                     </span>
                   )}
                 </div>
-                <div className="col-span-8">
-                  <p className="text-xs text-slate-600 line-clamp-4 leading-relaxed">{p.notas || '—'}</p>
+                <div className="col-span-10">
+                  <p className="text-xs text-slate-700 line-clamp-4 leading-relaxed">{p.notas || '—'}</p>
                 </div>
-                <div className="col-span-2 flex gap-2">
+                <div className="col-span-1 flex gap-1.5 justify-end">
                   <button onClick={() => setEditingPendiente(p)}
                     className="p-1.5 rounded-md border border-slate-200 text-slate-500 hover:bg-slate-100 transition-colors">
                     <Pencil className="w-3.5 h-3.5" />
