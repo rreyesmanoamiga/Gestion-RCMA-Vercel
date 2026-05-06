@@ -155,13 +155,11 @@ export default function Sidebar({ isOpen, onToggle }) {
             </Link>
           )}
 
-          {/* Protocolo de Recepción de Proyectos */}
-          {can('ver_solicitud_proyecto') && (
-            <Link to="/protocolo" onClick={handleNavClick} className={navLinkClass('/protocolo')}>
-              <BookOpen className="w-[18px] h-[18px]" />
-              Protocolo de Proyectos
-            </Link>
-          )}
+          {/* Protocolo de Recepción de Proyectos — visible para todos los usuarios */}
+          <Link to="/protocolo" onClick={handleNavClick} className={navLinkClass('/protocolo')}>
+            <BookOpen className="w-[18px] h-[18px]" />
+            Protocolo de Proyectos
+          </Link>
 
           {/* Solicitudes Recibidas — solo admin */}
           {isAdmin && (
