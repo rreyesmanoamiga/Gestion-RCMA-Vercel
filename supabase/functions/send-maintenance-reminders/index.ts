@@ -105,7 +105,6 @@ function generarICS(actividades: Actividad[], fecha: Date, adminEmail: string): 
 // ─── Enviar email con iCal adjunto y múltiples destinatarios ─────────────────
 async function sendEmailWithICS(
   recipients: string[],
-  ccEmail: string,
   subject: string,
   html: string,
   icsContent: string,
@@ -157,9 +156,7 @@ async function sendEmailWithICS(
   await tlsWrite(`MAIL FROM:<${smtpUser}>`);
   await tlsRead();
 
-  // Agregar todos los destinatarios + CC
-  const allRecipients = [...new Set([...recipients, ccEmail])];
-  for (const r of allRecipients) {
+  for (const r of recipients) {
     await tlsWrite(`RCPT TO:<${r}>`);
     await tlsRead();
   }
@@ -174,7 +171,6 @@ async function sendEmailWithICS(
   const message = [
     `From: Sistema RCMA <${smtpUser}>`,
     `To: ${toHeader}`,
-    `Cc: ${ccEmail}`,
     `Subject: ${subject}`,
     'MIME-Version: 1.0',
     `Content-Type: multipart/mixed; boundary="${boundary}"`,
@@ -359,8 +355,8 @@ serve(async (req) => {
 
     const recipients: string[] = (recipientsRaw || []).map((r: any) => r.email);
 
-    // Si no hay destinatarios configurados, solo mandar al admin
-    const destinatarios = recipients.length > 0 ? recipients : [adminEmail];
+    // Admin SIEMPRE recibe el correo; destinatarios adicionales se agregan sin duplicar
+    const destinatarios = [...new Set([adminEmail, ...recipients])];
 
     // Generar ICS y HTML
     const icsContent = generarICS(actividadesMañana, mañana, adminEmail);
@@ -371,9 +367,9 @@ serve(async (req) => {
     const icsFilename = `mantenimiento-${mañana.toISOString().split('T')[0]}.ics`;
 
     // Enviar correo con ICS adjunto
+    // Admin ya está incluido en destinatarios; se envía a todos de una vez
     await sendEmailWithICS(
       destinatarios,
-      adminEmail, // siempre con copia al admin
       subject,
       htmlContent,
       icsContent,

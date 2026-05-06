@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { ChevronLeft, ChevronRight, Calendar, CheckCircle2, Clock, AlertTriangle, Wrench, X, Plus, Trash2, Bell, Mail, UserPlus } from 'lucide-react';
 import { supabase } from '@/lib/supabaseClient';
 import { useAuth } from '@/lib/AuthContext';
+import { usePermissions } from '@/hooks/usePermissions';
 import { toast } from 'sonner';
 
 interface Actividad {
@@ -101,6 +102,7 @@ const inputClass = "w-full px-3 py-2 border border-slate-300 rounded-md text-sm 
 export default function CalendarioMantenimiento() {
   const hoy = new Date();
   const { user } = useAuth();
+  const { isAdmin } = usePermissions();
   const qc = useQueryClient();
 
   const [año, setAño] = useState(hoy.getFullYear());
@@ -119,7 +121,6 @@ export default function CalendarioMantenimiento() {
   });
 
   const [formRecipient, setFormRecipient] = useState({ email: '', nombre: '' });
-  const isAdmin = useMemo(() => !!user, [user]);
 
   const { data: customRaw = [] } = useQuery({
     queryKey: ['customMaintenance'],
