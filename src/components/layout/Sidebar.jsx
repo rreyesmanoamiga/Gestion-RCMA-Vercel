@@ -16,6 +16,7 @@ import {
   TicketCheck,
   ClipboardEdit,
   Inbox,
+  BookOpen,
   BarChart3,
 } from 'lucide-react';
 import { useAuth } from '@/lib/AuthContext';
@@ -151,6 +152,14 @@ export default function Sidebar({ isOpen, onToggle }) {
             <Link to="/solicitud" onClick={handleNavClick} className={navLinkClass('/solicitud')}>
               <ClipboardEdit className="w-[18px] h-[18px]" />
               Solicitud de Proyecto
+            </Link>
+          )}
+
+          {/* Protocolo de Recepción de Proyectos */}
+          {can('ver_solicitud_proyecto') && (
+            <Link to="/protocolo" onClick={handleNavClick} className={navLinkClass('/protocolo')}>
+              <BookOpen className="w-[18px] h-[18px]" />
+              Protocolo de Proyectos
             </Link>
           )}
 

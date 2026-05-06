@@ -16,6 +16,7 @@ const PERM_ROUTES = [
   { perm: 'ver_calendario',         route: '/calendario'    },
   { perm: 'ver_pendientes',         route: '/pendientes'    },
   { perm: 'ver_solicitud_proyecto', route: '/solicitud'     },
+  { perm: 'ver_solicitud_proyecto', route: '/protocolo'    },
   { perm: 'ver_reportes',           route: '/reportes'      },
 ];
 
@@ -37,6 +38,7 @@ import ChecklistDetail from '@/pages/ChecklistDetail';
 import Anteproyectos from '@/pages/Anteproyectos';
 import Tickets from '@/pages/Tickets';
 import SolicitudProyecto from '@/pages/SolicitudProyecto';
+import ProtocoloProyectos from '@/pages/ProtocoloProyectos';
 import SolicitudesRecibidas from '@/pages/SolicitudesRecibidas';
 import Reports from '@/pages/Reports';
 import UserManagement from '@/pages/UserManagement';
@@ -275,6 +277,7 @@ function AuthenticatedApp() {
           <Route path="/checklists"        element={<Checklists />} />
           <Route path="/checklists/:id"    element={<ChecklistDetail />} />
           <Route path="/solicitud"           element={<SolicitudProyecto />} />
+          <Route path="/protocolo"          element={<ProtocoloProyectos />} />
           <Route path="/solicitudes"         element={<SolicitudesRecibidas />} />
           <Route path="/reportes"            element={<Reports />} />
           <Route path="/usuarios"          element={<UserManagement />} />
