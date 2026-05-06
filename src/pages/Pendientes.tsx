@@ -464,29 +464,29 @@ export default function Pendientes() {
         </div>
       ) : (
         <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-          <div className="hidden md:grid grid-cols-12 gap-2 px-5 py-3 bg-slate-50 border-b border-slate-100 text-[10px] font-black text-slate-400 uppercase tracking-widest">
-            <div className="col-span-1">Territorio</div>
-            <div className="col-span-1">Colegio</div>
-            <div className="col-span-2">Proyecto</div>
-            <div className="col-span-1">Tipo</div>
-            <div className="col-span-1">Prioridad</div>
-            <div className="col-span-1">Asignación</div>
-            <div className="col-span-1">Estatus</div>
-            <div className="col-span-1">Proyecto</div>
-            <div className="col-span-2">Notas</div>
-            <div className="col-span-1">Acciones</div>
+          <div className="hidden md:grid grid-cols-24 gap-x-2 px-5 py-3 bg-slate-50 border-b border-slate-100 text-[10px] font-black text-slate-400 uppercase tracking-widest">
+            <div className="col-span-2">Territorio</div>
+            <div className="col-span-2">Colegio</div>
+            <div className="col-span-4">Pendiente</div>
+            <div className="col-span-2">Tipo</div>
+            <div className="col-span-2">Prioridad</div>
+            <div className="col-span-2">Asignación</div>
+            <div className="col-span-2">Estatus</div>
+            <div className="col-span-4">Proyecto vinculado</div>
+            <div className="col-span-3">Notas</div>
+            <div className="col-span-1">Acc.</div>
           </div>
 
           <div className="divide-y divide-slate-100">
             {visible.map(p => (
-              <div key={p.id} className="px-5 py-4 hover:bg-slate-50/50 transition-colors grid grid-cols-1 md:grid-cols-12 gap-2 items-start">
-                <div className="col-span-1">
+              <div key={p.id} className="px-5 py-4 hover:bg-slate-50/50 transition-colors grid grid-cols-1 md:grid-cols-24 gap-x-2 items-start">
+                <div className="col-span-2">
                   <span className="text-xs font-bold text-slate-500">{p.territorio || '—'}</span>
                 </div>
-                <div className="col-span-1">
+                <div className="col-span-2">
                   <span className="text-xs font-semibold text-slate-800">{p.colegio || '—'}</span>
                 </div>
-                <div className="col-span-2">
+                <div className="col-span-4">
                   <p className="text-sm font-bold text-slate-900 leading-tight">{p.nombre_proyecto || '—'}</p>
                   {p.fecha_actualizacion && (
                     <p className="text-[10px] text-slate-400 mt-0.5 flex items-center gap-1">
@@ -495,35 +495,40 @@ export default function Pendientes() {
                     </p>
                   )}
                 </div>
-                <div className="col-span-1">
+                <div className="col-span-2">
                   <span className="text-xs text-slate-600">{p.tipo_proyecto || '—'}</span>
                 </div>
-                <div className="col-span-1">
+                <div className="col-span-2">
                   <PriorityBadge priority={p.prioridad} />
                 </div>
-                <div className="col-span-1">
+                <div className="col-span-2">
                   <span className="text-xs text-slate-600">{p.asignacion || '—'}</span>
                 </div>
-                <div className="col-span-1">
+                <div className="col-span-2">
                   <StatusBadge status={p.estatus} />
                 </div>
-                <div className="col-span-1">
+                <div className="col-span-4">
                   {p.proyecto_id && projectMap[p.proyecto_id] ? (
                     <button
                       onClick={() => navigate(`/proyectos/${p.proyecto_id}`)}
-                      className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 flex items-center gap-1 w-fit hover:bg-blue-100 transition-colors cursor-pointer"
+                      className="text-[10px] font-bold px-2 py-1 rounded-md bg-blue-50 text-blue-700 flex items-start gap-1.5 w-full text-left hover:bg-blue-100 transition-colors cursor-pointer"
                       title="Ver proyecto"
                     >
-                      <Link2 className="w-3 h-3 flex-shrink-0" />
-                      {projectMap[p.proyecto_id].folio || projectMap[p.proyecto_id].name}
+                      <Link2 className="w-3 h-3 flex-shrink-0 mt-0.5" />
+                      <span className="line-clamp-2 leading-tight">
+                        {projectMap[p.proyecto_id].name || projectMap[p.proyecto_id].folio}
+                        {projectMap[p.proyecto_id].folio && (
+                          <span className="block text-blue-400 font-normal">{projectMap[p.proyecto_id].folio}</span>
+                        )}
+                      </span>
                     </button>
                   ) : (
-                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-slate-100 text-slate-400 font-medium">
+                    <span className="text-[10px] px-2 py-0.5 rounded-md bg-slate-100 text-slate-400 font-medium">
                       Sin vinculación
                     </span>
                   )}
                 </div>
-                <div className="col-span-2">
+                <div className="col-span-3">
                   <p className="text-xs text-slate-600 line-clamp-3 leading-relaxed">{p.notas || '—'}</p>
                 </div>
                 <div className="col-span-1 flex gap-2">

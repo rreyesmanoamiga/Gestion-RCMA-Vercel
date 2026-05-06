@@ -2,8 +2,15 @@
 module.exports = {
   darkMode: ["class"],
   content: ["./index.html", "./src/**/*.{ts,tsx,js,jsx}"],
+  safelist: [
+    'grid-cols-24',
+    { pattern: /col-span-(1[0-9]|2[0-4]|[1-9])/ },
+  ],
   theme: {
     extend: {
+      gridTemplateColumns: {
+        '24': 'repeat(24, minmax(0, 1fr))',
+      },
       fontFamily: {
         sans:    ['var(--font-sans)'],
         display: ['var(--font-display)'],
