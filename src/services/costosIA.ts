@@ -146,17 +146,38 @@ Responde ÚNICAMENTE con JSON válido (sin markdown, sin texto adicional):
     );
   }
 
-  const rawText: string = res.candidates[0].content.parts[0].text;
-  const cleanJson = rawText
+  // gemini-2.5-flash usa "thinking" y puede incluir texto antes del JSON
+  const parts = res.candidates[0].content.parts;
+  // Buscamos la parte que contiene el JSON (no el "thought")
+  const rawText: string = parts
+    .filter((p: any) => !p.thought)
+    .map((p: any) => p.text || '')
+    .join('');
+
+  // Limpieza robusta: eliminamos markdown y extraemos solo el JSON
+  const cleaned = rawText
     .replace(/```json\s*/gi, '')
     .replace(/```\s*/g, '')
     .trim();
 
+  // Intentamos parsear directamente, luego buscamos el bloque JSON
   try {
-    return JSON.parse(cleanJson) as ResultadoAnalisis;
+    return JSON.parse(cleaned) as ResultadoAnalisis;
   } catch {
-    const match = cleanJson.match(/\{[\s\S]*\}/);
-    if (match) return JSON.parse(match[0]) as ResultadoAnalisis;
+    // Extraemos el primer objeto JSON completo del texto
+    const match = cleaned.match(/\{[\s\S]*\}/);
+    if (match) {
+      try {
+        return JSON.parse(match[0]) as ResultadoAnalisis;
+      } catch {
+        // Último intento: buscamos desde la primera llave hasta la última
+        const start = cleaned.indexOf('{');
+        const end = cleaned.lastIndexOf('}');
+        if (start !== -1 && end !== -1) {
+          return JSON.parse(cleaned.slice(start, end + 1)) as ResultadoAnalisis;
+        }
+      }
+    }
     throw new Error('La IA devolvió una respuesta en formato incorrecto. Intenta de nuevo.');
   }
 };
