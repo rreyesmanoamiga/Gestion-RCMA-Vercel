@@ -154,32 +154,51 @@ Responde ÚNICAMENTE con JSON válido (sin markdown, sin texto adicional):
     .map((p: any) => p.text)
     .join('');
 
+  // Log para depuración — ver en consola del navegador
+  console.log('[Gemini] candidates:', JSON.stringify(res.candidates[0]?.content, null, 2));
+
   if (!rawText) {
-    throw new Error('La IA no devolvió texto. Intenta de nuevo.');
+    // Puede que todas las partes sean "thought" — intentamos con cualquier text
+    const anyText = parts.map((p: any) => p.text || '').join('').trim();
+    if (!anyText) {
+      throw new Error(`La IA no devolvió texto. Estructura: ${JSON.stringify(res.candidates[0]?.content?.parts?.map((p:any) => Object.keys(p)))}`);
+    }
+    // Si solo hay thoughts, usamos ese texto
+    const fallbackCleaned = anyText.replace(/```json\s*/gi,'').replace(/```\s*/g,'').trim();
+    const fm = fallbackCleaned.match(/\{[\s\S]*\}/);
+    if (fm) return JSON.parse(fm[0]) as ResultadoAnalisis;
+    throw new Error('No se encontró JSON en la respuesta de la IA.');
   }
 
   // Con responseMimeType=application/json el texto ya es JSON puro
-  // pero hacemos limpieza por si acaso
   const cleaned = rawText
     .replace(/```json\s*/gi, '')
     .replace(/```\s*/g, '')
     .trim();
 
+  console.log('[Gemini] rawText primeros 500 chars:', cleaned.substring(0, 500));
+
   try {
     return JSON.parse(cleaned) as ResultadoAnalisis;
-  } catch {
+  } catch (e1) {
+    console.error('[Gemini] Error parse 1:', e1);
     const match = cleaned.match(/\{[\s\S]*\}/);
     if (match) {
       try {
         return JSON.parse(match[0]) as ResultadoAnalisis;
-      } catch {
+      } catch (e2) {
+        console.error('[Gemini] Error parse 2:', e2);
         const start = cleaned.indexOf('{');
         const end = cleaned.lastIndexOf('}');
         if (start !== -1 && end !== -1) {
-          return JSON.parse(cleaned.slice(start, end + 1)) as ResultadoAnalisis;
+          try {
+            return JSON.parse(cleaned.slice(start, end + 1)) as ResultadoAnalisis;
+          } catch(e3) {
+            console.error('[Gemini] Error parse 3:', e3, 'texto:', cleaned.substring(0,300));
+          }
         }
       }
     }
-    throw new Error('La IA devolvió una respuesta en formato incorrecto. Intenta de nuevo.');
+    throw new Error(`JSON inválido. Primeros 200 chars: ${cleaned.substring(0,200)}`);
   }
 };
