@@ -125,7 +125,8 @@ Responde ÚNICAMENTE con JSON válido (sin markdown, sin texto adicional):
       contents: [{ parts: [{ text: prompt }] }],
       generationConfig: {
         temperature: 0.1,
-        maxOutputTokens: 4096,
+        maxOutputTokens: 8192,
+        responseMimeType: 'application/json',  // fuerza respuesta JSON puro
       }
     })
   });
@@ -146,31 +147,32 @@ Responde ÚNICAMENTE con JSON válido (sin markdown, sin texto adicional):
     );
   }
 
-  // gemini-2.5-flash usa "thinking" y puede incluir texto antes del JSON
-  const parts = res.candidates[0].content.parts;
-  // Buscamos la parte que contiene el JSON (no el "thought")
+  // Extraemos todo el texto de la respuesta (filtrando partes "thought" del thinking mode)
+  const parts = res.candidates[0].content?.parts ?? [];
   const rawText: string = parts
-    .filter((p: any) => !p.thought)
-    .map((p: any) => p.text || '')
+    .filter((p: any) => !p.thought && p.text)
+    .map((p: any) => p.text)
     .join('');
 
-  // Limpieza robusta: eliminamos markdown y extraemos solo el JSON
+  if (!rawText) {
+    throw new Error('La IA no devolvió texto. Intenta de nuevo.');
+  }
+
+  // Con responseMimeType=application/json el texto ya es JSON puro
+  // pero hacemos limpieza por si acaso
   const cleaned = rawText
     .replace(/```json\s*/gi, '')
     .replace(/```\s*/g, '')
     .trim();
 
-  // Intentamos parsear directamente, luego buscamos el bloque JSON
   try {
     return JSON.parse(cleaned) as ResultadoAnalisis;
   } catch {
-    // Extraemos el primer objeto JSON completo del texto
     const match = cleaned.match(/\{[\s\S]*\}/);
     if (match) {
       try {
         return JSON.parse(match[0]) as ResultadoAnalisis;
       } catch {
-        // Último intento: buscamos desde la primera llave hasta la última
         const start = cleaned.indexOf('{');
         const end = cleaned.lastIndexOf('}');
         if (start !== -1 && end !== -1) {
