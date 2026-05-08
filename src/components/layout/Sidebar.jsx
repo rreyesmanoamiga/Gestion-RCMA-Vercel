@@ -17,6 +17,7 @@ import {
   ClipboardEdit,
   Inbox,
   BookOpen,
+  Calculator,
   BarChart3,
 } from 'lucide-react';
 import { useAuth } from '@/lib/AuthContext';
@@ -160,6 +161,14 @@ export default function Sidebar({ isOpen, onToggle }) {
             <BookOpen className="w-[18px] h-[18px]" />
             Protocolo de Proyectos
           </Link>
+
+          {/* Analizador de Cotizaciones — solo admin */}
+          {can('ver_solicitud_proyecto') && isAdmin && (
+            <Link to="/cotizaciones" onClick={handleNavClick} className={navLinkClass('/cotizaciones')}>
+              <Calculator className="w-[18px] h-[18px]" />
+              Cotizaciones
+            </Link>
+          )}
 
           {/* Solicitudes Recibidas — solo admin */}
           {isAdmin && (
