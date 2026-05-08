@@ -65,7 +65,7 @@ export const analizarCotizacion = async (
   }
 
   const ciudad = getCiudadDeColegio(colegio);
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-04-17:generateContent?key=${API_KEY}`;
+  const url = `https://generativelanguage.googleapis.com/v1/models/gemini-2.5-flash:generateContent?key=${API_KEY}`;
 
   const prompt = `Eres un Ingeniero de Costos y Presupuestos experto en construcción, instalaciones y servicios en México, especializado en el mercado de ${ciudad}.
 
