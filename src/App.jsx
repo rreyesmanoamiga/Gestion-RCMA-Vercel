@@ -27,6 +27,7 @@ function getFirstRoute(permissions, isAdmin) {
   }
   return '/solicitud'; // fallback
 }
+
 import { supabase } from '@/lib/supabaseClient';
 import PageNotFound from './lib/PageNotFound';
 import AppLayout from '@/components/layout/AppLayout';
@@ -39,7 +40,11 @@ import Anteproyectos from '@/pages/Anteproyectos';
 import Tickets from '@/pages/Tickets';
 import SolicitudProyecto from '@/pages/SolicitudProyecto';
 import ProtocoloProyectos from '@/pages/ProtocoloProyectos';
-import Cotizaciones from '@/pages/Cotizaciones';
+
+// --- CAMBIO CRÍTICO AQUÍ ---
+// Agregamos llaves { } porque en Cotizaciones.tsx usamos "export const Cotizaciones"
+import { Cotizaciones } from '@/pages/Cotizaciones'; 
+
 import SolicitudesRecibidas from '@/pages/SolicitudesRecibidas';
 import Reports from '@/pages/Reports';
 import UserManagement from '@/pages/UserManagement';
@@ -164,7 +169,6 @@ function SetPasswordPage() {
   );
 }
 
-// ─── Botón que redirige al primer módulo disponible ─────────────────────────
 function SmartRedirectButton() {
   const { can, isAdmin, permsRecord } = usePermissions();
   const target = getFirstRoute(permsRecord, isAdmin);
@@ -175,7 +179,6 @@ function SmartRedirectButton() {
   );
 }
 
-// ─── Página de login ──────────────────────────────────────────────────────────
 function LoginPage() {
   const [email, setEmail]       = useState('');
   const [password, setPassword] = useState('');
@@ -220,7 +223,6 @@ function LoginPage() {
   );
 }
 
-// ─── Interceptor de tokens en el hash ────────────────────────────────────────
 function AuthHashHandler() {
   const navigate = useNavigate();
 
@@ -243,7 +245,6 @@ function AuthHashHandler() {
   return null;
 }
 
-// ─── Dashboard protegido ─────────────────────────────────────────────────────
 function ProtectedDashboard() {
   const { can, isAdmin, permsRecord } = usePermissions();
   if (isAdmin || can('ver_dashboard')) return <Dashboard />;
@@ -251,7 +252,6 @@ function ProtectedDashboard() {
   return <Navigate to={target} replace />;
 }
 
-// ─── App autenticada ──────────────────────────────────────────────────────────
 function AuthenticatedApp() {
   const { user, loading } = useAuth();
 
@@ -270,32 +270,31 @@ function AuthenticatedApp() {
         <Route path="*" element={<LoginPage />} />
       ) : (
         <Route element={<AppLayout />}>
-          <Route path="/"                  element={<ProtectedDashboard />} />
-          <Route path="/tickets"           element={<Tickets />} />
-          <Route path="/proyectos"         element={<Projects />} />
-          <Route path="/proyectos/:id"     element={<ProjectDetail />} />
-          <Route path="/anteproyectos"     element={<Anteproyectos />} />
-          <Route path="/checklists"        element={<Checklists />} />
-          <Route path="/checklists/:id"    element={<ChecklistDetail />} />
+          <Route path="/"                   element={<ProtectedDashboard />} />
+          <Route path="/tickets"            element={<Tickets />} />
+          <Route path="/proyectos"          element={<Projects />} />
+          <Route path="/proyectos/:id"      element={<ProjectDetail />} />
+          <Route path="/anteproyectos"      element={<Anteproyectos />} />
+          <Route path="/checklists"         element={<Checklists />} />
+          <Route path="/checklists/:id"     element={<ChecklistDetail />} />
           <Route path="/solicitud"           element={<SolicitudProyecto />} />
-          <Route path="/protocolo"          element={<ProtocoloProyectos />} />
+          <Route path="/protocolo"           element={<ProtocoloProyectos />} />
           <Route path="/cotizaciones"        element={<Cotizaciones />} />
           <Route path="/solicitudes"         element={<SolicitudesRecibidas />} />
           <Route path="/reportes"            element={<Reports />} />
-          <Route path="/usuarios"          element={<UserManagement />} />
-          <Route path="/accesos"           element={<Accesos />} />
-          <Route path="/pendientes"        element={<Pendientes />} />
-          <Route path="/calendario"        element={<CalendarioMantenimiento />} />
-          <Route path="/presupuestos"      element={<Presupuestos />} />
-          <Route path="/login"             element={<Navigate to="/" replace />} />
-          <Route path="*"                  element={<PageNotFound />} />
+          <Route path="/usuarios"           element={<UserManagement />} />
+          <Route path="/accesos"            element={<Accesos />} />
+          <Route path="/pendientes"         element={<Pendientes />} />
+          <Route path="/calendario"         element={<CalendarioMantenimiento />} />
+          <Route path="/presupuestos"       element={<Presupuestos />} />
+          <Route path="/login"              element={<Navigate to="/" replace />} />
+          <Route path="*"                   element={<PageNotFound />} />
         </Route>
       )}
     </Routes>
   );
 }
 
-// ─── Raíz ─────────────────────────────────────────────────────────────────────
 export default function App() {
   return (
     <QueryClientProvider client={queryClientInstance}>
@@ -309,4 +308,3 @@ export default function App() {
     </QueryClientProvider>
   );
 }
-
