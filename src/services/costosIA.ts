@@ -85,7 +85,7 @@ CRITERIOS DE EVALUACIÓN (mercado ${ciudad}, 2024-2025):
 
 TEXTO DE LA COTIZACIÓN:
 """
-${texto.substring(0, 8000)}
+${texto.substring(0, 3500)}
 """
 
 INSTRUCCIONES:
