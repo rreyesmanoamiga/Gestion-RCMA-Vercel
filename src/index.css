@@ -88,3 +88,21 @@
     @apply bg-background text-foreground font-sans;
   }
 }
+/* ─── Scrollbar sutil para el sidebar ────────────────────────────────────────── */
+.scrollbar-sidebar {
+  scrollbar-width: thin;
+  scrollbar-color: hsl(220 15% 22%) transparent;
+}
+.scrollbar-sidebar::-webkit-scrollbar {
+  width: 3px;
+}
+.scrollbar-sidebar::-webkit-scrollbar-track {
+  background: transparent;
+}
+.scrollbar-sidebar::-webkit-scrollbar-thumb {
+  background: hsl(220 15% 22%);
+  border-radius: 999px;
+}
+.scrollbar-sidebar::-webkit-scrollbar-thumb:hover {
+  background: hsl(210 70% 55%);
+}

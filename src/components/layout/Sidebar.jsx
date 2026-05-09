@@ -90,7 +90,7 @@ export default function Sidebar({ isOpen, onToggle }) {
         </div>
 
         {/* Navegación */}
-        <nav className="flex-1 p-4 space-y-1 overflow-y-auto" aria-label="Menú principal">
+        <nav className="flex-1 p-4 space-y-1 overflow-y-auto scrollbar-sidebar" aria-label="Menú principal">
 
           {/* Dashboard */}
           {(isAdmin || can('ver_dashboard')) && (
