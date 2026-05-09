@@ -54,6 +54,7 @@
     "html2canvas": "^1.4.1",
     "idb": "^8.0.3",
     "input-otp": "^1.4.2",
+    "jsonrepair": "^3.14.0",
     "jspdf": "^2.5.2",
     "lodash": "^4.17.21",
     "lucide-react": "^0.475.0",
