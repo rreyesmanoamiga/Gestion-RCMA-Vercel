@@ -54,6 +54,38 @@ export interface ResultadoAnalisis {
   resumen_ejecutivo: string;
 }
 
+// ─── Schema para forzar JSON estructurado válido ──────────────────────────────
+const RESPONSE_SCHEMA = {
+  type: 'object',
+  properties: {
+    folio:                { type: 'string' },
+    proveedor:            { type: 'string' },
+    total:                { type: 'number' },
+    decision:             { type: 'string', enum: ['Aprobada', 'Revisión', 'Rechazada'] },
+    notas:                { type: 'string' },
+    ahorro:               { type: 'number' },
+    porcentaje_sobrecosto:{ type: 'number' },
+    resumen_ejecutivo:    { type: 'string' },
+    conceptos: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          descripcion:          { type: 'string' },
+          unidad:               { type: 'string' },
+          cantidad:             { type: 'number' },
+          precio_unitario:      { type: 'number' },
+          total:                { type: 'number' },
+          estado_mercado:       { type: 'string', enum: ['Precio normal', 'Sobrecosto', 'Precio bajo', 'No verificado'] },
+          porcentaje_variacion: { type: 'number' },
+        },
+        required: ['descripcion','unidad','cantidad','precio_unitario','total','estado_mercado','porcentaje_variacion'],
+      },
+    },
+  },
+  required: ['folio','proveedor','total','decision','notas','ahorro','porcentaje_sobrecosto','resumen_ejecutivo','conceptos'],
+};
+
 export const analizarCotizacion = async (
   texto: string,
   colegio: string = 'GENERAL'
@@ -93,30 +125,7 @@ INSTRUCCIONES:
 2. Evalúa cada concepto contra precios de mercado en ${ciudad}
 3. Calcula el porcentaje de variación de cada concepto vs mercado local
 4. Da una decisión global basada en el análisis
-5. Calcula el ahorro potencial si los precios estuvieran en precio de mercado local
-
-Responde ÚNICAMENTE con JSON válido (sin markdown, sin texto adicional):
-{
-  "folio": "número o código de la cotización, o 'Sin folio' si no aparece",
-  "proveedor": "nombre del proveedor o empresa cotizante",
-  "total": número total de la cotización,
-  "decision": "Aprobada" | "Revisión" | "Rechazada",
-  "notas": "explicación clara de la decisión considerando el mercado de ${ciudad}",
-  "ahorro": número (ahorro potencial en MXN si se negocian precios al mercado local, 0 si está aprobada),
-  "porcentaje_sobrecosto": número (% promedio de sobrecosto vs mercado local, 0 si es normal),
-  "resumen_ejecutivo": "resumen de 1-2 oraciones para el coordinador/director",
-  "conceptos": [
-    {
-      "descripcion": "descripción del concepto",
-      "unidad": "m2, ml, pza, hr, etc.",
-      "cantidad": número,
-      "precio_unitario": número,
-      "total": número,
-      "estado_mercado": "Precio normal" | "Sobrecosto" | "Precio bajo" | "No verificado",
-      "porcentaje_variacion": número (ej: 25 = 25% arriba del mercado local, -10 = 10% abajo)
-    }
-  ]
-}`;
+5. Calcula el ahorro potencial si los precios estuvieran en precio de mercado local`;
 
   const response = await fetch(url, {
     method: 'POST',
@@ -126,7 +135,9 @@ Responde ÚNICAMENTE con JSON válido (sin markdown, sin texto adicional):
       generationConfig: {
         temperature: 0.1,
         maxOutputTokens: 8192,
-
+        // ✅ Esto fuerza a Gemini a devolver siempre JSON válido
+        response_mime_type: 'application/json',
+        response_schema: RESPONSE_SCHEMA,
       }
     })
   });
@@ -147,58 +158,28 @@ Responde ÚNICAMENTE con JSON válido (sin markdown, sin texto adicional):
     );
   }
 
-  // Extraemos todo el texto de la respuesta (filtrando partes "thought" del thinking mode)
+  // Con response_mime_type: 'application/json', Gemini siempre devuelve JSON limpio
   const parts = res.candidates[0].content?.parts ?? [];
   const rawText: string = parts
     .filter((p: any) => !p.thought && p.text)
     .map((p: any) => p.text)
     .join('');
 
-  // Log para depuración — ver en consola del navegador
-  console.log('[Gemini] candidates:', JSON.stringify(res.candidates[0]?.content, null, 2));
-
-  if (!rawText) {
-    // Puede que todas las partes sean "thought" — intentamos con cualquier text
-    const anyText = parts.map((p: any) => p.text || '').join('').trim();
-    if (!anyText) {
-      throw new Error(`La IA no devolvió texto. Estructura: ${JSON.stringify(res.candidates[0]?.content?.parts?.map((p:any) => Object.keys(p)))}`);
-    }
-    // Si solo hay thoughts, usamos ese texto
-    const fallbackCleaned = anyText.replace(/```json\s*/gi,'').replace(/```\s*/g,'').trim();
-    const fm = fallbackCleaned.match(/\{[\s\S]*\}/);
-    if (fm) return JSON.parse(fm[0]) as ResultadoAnalisis;
-    throw new Error('No se encontró JSON en la respuesta de la IA.');
+  if (!rawText.trim()) {
+    throw new Error('La IA no devolvió texto. Verifica tu API Key de Gemini.');
   }
 
-  // Limpieza y parseo del texto recibido
-  const cleaned = rawText
-    .replace(/```json\s*/gi, '')
-    .replace(/```\s*/g, '')
-    .trim();
-
-  console.log('[Gemini] rawText primeros 500 chars:', cleaned.substring(0, 500));
-
   try {
-    return JSON.parse(cleaned) as ResultadoAnalisis;
-  } catch (e1) {
-    console.error('[Gemini] Error parse 1:', e1);
-    const match = cleaned.match(/\{[\s\S]*\}/);
+    return JSON.parse(rawText) as ResultadoAnalisis;
+  } catch (e) {
+    // Fallback: extraer el bloque JSON si por alguna razón trae texto extra
+    const match = rawText.match(/\{[\s\S]*\}/);
     if (match) {
       try {
         return JSON.parse(match[0]) as ResultadoAnalisis;
-      } catch (e2) {
-        console.error('[Gemini] Error parse 2:', e2);
-        const start = cleaned.indexOf('{');
-        const end = cleaned.lastIndexOf('}');
-        if (start !== -1 && end !== -1) {
-          try {
-            return JSON.parse(cleaned.slice(start, end + 1)) as ResultadoAnalisis;
-          } catch(e3) {
-            console.error('[Gemini] Error parse 3:', e3, 'texto:', cleaned.substring(0,300));
-          }
-        }
-      }
+      } catch (_) {}
     }
-    throw new Error(`JSON inválido. Primeros 200 chars: ${cleaned.substring(0,200)}`);
+    console.error('[Gemini] rawText:', rawText.substring(0, 300));
+    throw new Error(`No se pudo parsear la respuesta de la IA. Inicio: ${rawText.substring(0, 150)}`);
   }
 };
