@@ -11,7 +11,7 @@ import {
   Upload, FileText, CheckCircle, AlertTriangle, XCircle,
   Brain, TrendingDown, TrendingUp, RefreshCw, ChevronDown,
   ChevronUp, DollarSign, Building2, Clock, Minus, Eye,
-  ClipboardList, Loader2, MapPin, Filter, Printer, Trash2,
+  ClipboardList, Loader2, MapPin, Filter,
 } from 'lucide-react';
 
 // ─── Tipos ─────────────────────────────────────────────────────────────────────
@@ -36,180 +36,6 @@ const fmtMXN = (n: number) =>
 
 const fmtDate = (iso: string) =>
   new Date(iso).toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: 'numeric' });
-
-// ─── Función de impresión / exportar PDF ──────────────────────────────────────
-const imprimirDictamen = (analisis: ResultadoAnalisis | AnalisisCotizacion, colegio: string) => {
-  // Normalizar campos entre ResultadoAnalisis y AnalisisCotizacion
-  const proveedor   = analisis.proveedor;
-  const total       = 'total' in analisis ? analisis.total : (analisis as AnalisisCotizacion).total_proveedor;
-  const decision    = 'decision' in analisis ? analisis.decision : (analisis as AnalisisCotizacion).estado_aprobacion;
-  const notas       = 'notas' in analisis ? analisis.notas : (analisis as AnalisisCotizacion).notas_ia;
-  const resumen     = analisis.resumen_ejecutivo ?? notas;
-  const ahorro      = 'ahorro' in analisis ? analisis.ahorro : (analisis as AnalisisCotizacion).ahorro_detectado;
-  const sobrecosto  = analisis.porcentaje_sobrecosto ?? 0;
-  const folio       = analisis.folio;
-  const conceptos   = 'conceptos' in analisis ? analisis.conceptos : (analisis as AnalisisCotizacion).desglose_conceptos;
-  const ciudad      = getCiudadDeColegio(colegio);
-  const fecha       = 'created_at' in analisis ? fmtDate((analisis as AnalisisCotizacion).created_at) : new Date().toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: 'numeric' });
-
-  const colorDecision =
-    decision === 'Aprobada'  ? '#059669' :
-    decision === 'Revisión' || decision === 'Revision' ? '#d97706' :
-    '#dc2626';
-
-  const bgDecision =
-    decision === 'Aprobada'  ? '#ecfdf5' :
-    decision === 'Revisión' || decision === 'Revision' ? '#fffbeb' :
-    '#fef2f2';
-
-  const filasConceptos = (conceptos ?? []).map(c => {
-    const colorVar =
-      c.estado_mercado === 'Sobrecosto'    ? '#dc2626' :
-      c.estado_mercado === 'Precio bajo'   ? '#2563eb' :
-      c.estado_mercado === 'Precio normal' ? '#059669' : '#94a3b8';
-
-    const bgVar =
-      c.estado_mercado === 'Sobrecosto'    ? '#fef2f2' :
-      c.estado_mercado === 'Precio bajo'   ? '#eff6ff' :
-      c.estado_mercado === 'Precio normal' ? '#f0fdf4' : '#f8fafc';
-
-    return `
-      <tr>
-        <td style="padding:7px 10px;font-size:11px;color:#1e293b;border-bottom:1px solid #f1f5f9;">${c.descripcion}</td>
-        <td style="padding:7px 10px;font-size:11px;color:#64748b;text-align:center;border-bottom:1px solid #f1f5f9;">${c.unidad}</td>
-        <td style="padding:7px 10px;font-size:11px;text-align:right;border-bottom:1px solid #f1f5f9;">${c.cantidad}</td>
-        <td style="padding:7px 10px;font-size:11px;text-align:right;border-bottom:1px solid #f1f5f9;">${fmtMXN(c.precio_unitario)}</td>
-        <td style="padding:7px 10px;font-size:11px;font-weight:700;text-align:right;border-bottom:1px solid #f1f5f9;">${fmtMXN(c.total)}</td>
-        <td style="padding:7px 10px;text-align:center;border-bottom:1px solid #f1f5f9;">
-          <span style="background:${bgVar};color:${colorVar};font-size:10px;font-weight:700;padding:2px 7px;border-radius:4px;">${c.estado_mercado}</span>
-        </td>
-        <td style="padding:7px 10px;font-size:11px;font-weight:700;text-align:right;color:${c.porcentaje_variacion > 0 ? '#dc2626' : c.porcentaje_variacion < 0 ? '#059669' : '#94a3b8'};border-bottom:1px solid #f1f5f9;">
-          ${c.porcentaje_variacion > 0 ? '+' : ''}${c.porcentaje_variacion}%
-        </td>
-      </tr>`;
-  }).join('');
-
-  const html = `<!DOCTYPE html>
-<html lang="es">
-<head>
-  <meta charset="UTF-8"/>
-  <title>Dictamen — ${proveedor}</title>
-  <style>
-    @page { margin: 18mm 15mm; }
-    * { box-sizing: border-box; margin: 0; padding: 0; }
-    body { font-family: 'Segoe UI', Arial, sans-serif; color: #1e293b; background: #fff; font-size: 12px; }
-    .header { display: flex; justify-content: space-between; align-items: flex-start; padding-bottom: 14px; border-bottom: 3px solid #0f172a; margin-bottom: 18px; }
-    .logo-area h1 { font-size: 20px; font-weight: 900; color: #0f172a; text-transform: uppercase; letter-spacing: -0.5px; }
-    .logo-area p  { font-size: 11px; color: #64748b; margin-top: 2px; }
-    .meta { text-align: right; font-size: 11px; color: #64748b; line-height: 1.6; }
-    .meta strong { color: #1e293b; }
-    .decision-box { background: ${bgDecision}; border: 2px solid ${colorDecision}; border-radius: 10px; padding: 14px 18px; margin-bottom: 18px; display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; }
-    .decision-label { font-size: 18px; font-weight: 900; color: ${colorDecision}; text-transform: uppercase; letter-spacing: -0.5px; }
-    .decision-sub { font-size: 11px; color: #475569; margin-top: 4px; line-height: 1.5; }
-    .decision-total { text-align: right; }
-    .decision-total .lbl { font-size: 10px; font-weight: 700; color: #94a3b8; text-transform: uppercase; }
-    .decision-total .val { font-size: 22px; font-weight: 900; color: #0f172a; }
-    .decision-total .ahorro { font-size: 11px; font-weight: 700; color: #059669; margin-top: 2px; }
-    .kpis { display: grid; grid-template-columns: repeat(3,1fr); gap: 10px; margin-bottom: 18px; }
-    .kpi { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 10px 12px; }
-    .kpi .lbl { font-size: 9px; font-weight: 700; color: #94a3b8; text-transform: uppercase; margin-bottom: 3px; }
-    .kpi .val { font-size: 15px; font-weight: 900; color: #1e293b; }
-    .section-title { font-size: 10px; font-weight: 900; color: #64748b; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 8px; }
-    .notas-box { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 12px 14px; margin-bottom: 18px; font-size: 11px; color: #475569; line-height: 1.6; }
-    table { width: 100%; border-collapse: collapse; margin-bottom: 18px; }
-    thead tr { background: #0f172a; }
-    thead th { padding: 8px 10px; font-size: 9px; font-weight: 700; color: #fff; text-transform: uppercase; letter-spacing: 0.8px; text-align: left; }
-    thead th:nth-child(n+3) { text-align: right; }
-    thead th:nth-child(6) { text-align: center; }
-    tbody tr:nth-child(even) { background: #f8fafc; }
-    .total-row td { padding: 9px 10px; font-size: 12px; font-weight: 900; border-top: 2px solid #0f172a; }
-    .footer { border-top: 1px solid #e2e8f0; padding-top: 10px; display: flex; justify-content: space-between; font-size: 10px; color: #94a3b8; }
-  </style>
-</head>
-<body>
-  <div class="header">
-    <div class="logo-area">
-      <h1>Sistema RCMA</h1>
-      <p>Coordinación de Obras · Dictamen de Cotización</p>
-    </div>
-    <div class="meta">
-      <div><strong>Fecha:</strong> ${fecha}</div>
-      <div><strong>Colegio:</strong> ${colegio}</div>
-      <div><strong>Mercado ref.:</strong> ${ciudad}</div>
-      ${folio !== 'Sin folio' ? `<div><strong>Folio:</strong> ${folio}</div>` : ''}
-    </div>
-  </div>
-
-  <div class="decision-box">
-    <div>
-      <div class="decision-label">${decision === 'Revision' ? 'Revisión' : decision} — ${proveedor}</div>
-      <div class="decision-sub">${resumen}</div>
-    </div>
-    <div class="decision-total">
-      <div class="lbl">Total cotización</div>
-      <div class="val">${fmtMXN(total)}</div>
-      ${ahorro > 0 ? `<div class="ahorro">▼ Ahorro potencial ${fmtMXN(ahorro)}</div>` : ''}
-    </div>
-  </div>
-
-  <div class="kpis">
-    <div class="kpi">
-      <div class="lbl">Proveedor</div>
-      <div class="val" style="font-size:13px;">${proveedor}</div>
-    </div>
-    <div class="kpi">
-      <div class="lbl">Sobrecosto promedio</div>
-      <div class="val" style="color:${sobrecosto > 0 ? '#dc2626' : '#059669'}">${sobrecosto > 0 ? '+' : ''}${sobrecosto}%</div>
-    </div>
-    <div class="kpi">
-      <div class="lbl">Ahorro potencial</div>
-      <div class="val" style="color:#059669;">${fmtMXN(ahorro)}</div>
-    </div>
-  </div>
-
-  <div class="section-title">Notas del análisis</div>
-  <div class="notas-box">${notas}</div>
-
-  ${conceptos && conceptos.length > 0 ? `
-  <div class="section-title">Desglose de conceptos (${conceptos.length})</div>
-  <table>
-    <thead>
-      <tr>
-        <th style="width:32%">Descripción</th>
-        <th style="width:7%;text-align:center">Unidad</th>
-        <th style="width:7%;text-align:right">Cant.</th>
-        <th style="width:12%;text-align:right">P. Unitario</th>
-        <th style="width:12%;text-align:right">Total</th>
-        <th style="width:14%;text-align:center">Mercado local</th>
-        <th style="width:8%;text-align:right">Var.</th>
-      </tr>
-    </thead>
-    <tbody>
-      ${filasConceptos}
-    </tbody>
-    <tfoot>
-      <tr class="total-row">
-        <td colspan="4">TOTAL COTIZACIÓN</td>
-        <td style="text-align:right">${fmtMXN(total)}</td>
-        <td colspan="2"></td>
-      </tr>
-    </tfoot>
-  </table>` : ''}
-
-  <div class="footer">
-    <span>Sistema RCMA © ${new Date().getFullYear()} · Coordinación de Obras</span>
-    <span>Generado el ${new Date().toLocaleDateString('es-MX', { day:'2-digit', month:'long', year:'numeric' })}</span>
-  </div>
-</body>
-</html>`;
-
-  const win = window.open('', '_blank', 'width=900,height=700');
-  if (!win) { toast.error('Permite las ventanas emergentes para imprimir'); return; }
-  win.document.write(html);
-  win.document.close();
-  win.focus();
-  setTimeout(() => { win.print(); }, 400);
-};
 
 // ─── Badges ────────────────────────────────────────────────────────────────────
 const EstadoBadge = ({ estado }: { estado: string }) => {
@@ -267,24 +93,14 @@ const ResultadoPanel = ({ analisis, colegio }: { analisis: ResultadoAnalisis; co
             </p>
           </div>
         </div>
-        <div className="text-right shrink-0 space-y-2">
-          <div>
-            <p className="text-xs text-slate-400 uppercase font-bold">Total cotización</p>
-            <p className="text-xl font-black text-slate-900">{fmtMXN(analisis.total)}</p>
-            {analisis.ahorro > 0 && (
-              <p className="text-xs text-emerald-600 font-bold flex items-center gap-1 justify-end">
-                <TrendingDown className="w-3 h-3" />Ahorro potencial {fmtMXN(analisis.ahorro)}
-              </p>
-            )}
-          </div>
-          {/* Botón imprimir */}
-          <button
-            onClick={() => imprimirDictamen(analisis, colegio)}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-900 text-white text-xs font-bold hover:bg-slate-700 transition-colors"
-            title="Imprimir / Exportar PDF"
-          >
-            <Printer className="w-3.5 h-3.5" />Imprimir / PDF
-          </button>
+        <div className="text-right shrink-0">
+          <p className="text-xs text-slate-400 uppercase font-bold">Total cotización</p>
+          <p className="text-xl font-black text-slate-900">{fmtMXN(analisis.total)}</p>
+          {analisis.ahorro > 0 && (
+            <p className="text-xs text-emerald-600 font-bold flex items-center gap-1 justify-end">
+              <TrendingDown className="w-3 h-3" />Ahorro potencial {fmtMXN(analisis.ahorro)}
+            </p>
+          )}
         </div>
       </div>
 
@@ -360,19 +176,9 @@ const DetalleModal = ({ registro, onClose }: { registro: AnalisisCotizacion; onC
           </p>
           <h3 className="text-lg font-black text-slate-900 uppercase">{registro.proveedor}</h3>
         </div>
-        <div className="flex items-center gap-2">
-          {/* Botón imprimir en modal */}
-          <button
-            onClick={() => imprimirDictamen(registro, registro.colegio_ubicacion)}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-900 text-white text-xs font-bold hover:bg-slate-700 transition-colors"
-            title="Imprimir / Exportar PDF"
-          >
-            <Printer className="w-3.5 h-3.5" />Imprimir / PDF
-          </button>
-          <button onClick={onClose} className="p-2 hover:bg-slate-100 rounded-lg transition-colors">
-            <XCircle className="w-5 h-5 text-slate-400" />
-          </button>
-        </div>
+        <button onClick={onClose} className="p-2 hover:bg-slate-100 rounded-lg transition-colors">
+          <XCircle className="w-5 h-5 text-slate-400" />
+        </button>
       </div>
       <div className="p-6 space-y-4">
         <div className="grid grid-cols-3 gap-3">
@@ -435,7 +241,6 @@ export const Cotizaciones = () => {
   const [resultado, setResultado]   = useState<ResultadoAnalisis | null>(null);
   const [detalle, setDetalle]       = useState<AnalisisCotizacion | null>(null);
   const [arrastrando, setArrastrando] = useState(false);
-  const [eliminando, setEliminando] = useState<string | null>(null);
 
   // Selector de colegio
   const [territorio, setTerritorio] = useState('');
@@ -474,7 +279,7 @@ export const Cotizaciones = () => {
   const kpis = {
     total:      historial.length,
     aprobadas:  historial.filter(h => h.estado_aprobacion === 'Aprobada').length,
-    revision:   historial.filter(h => h.estado_aprobacion === 'Revisión' || h.estado_aprobacion === 'Revision').length,
+    revision:   historial.filter(h => h.estado_aprobacion === 'Revision').length,
     rechazadas: historial.filter(h => h.estado_aprobacion === 'Rechazada').length,
     ahorro:     historial.reduce((s, h) => s + (h.ahorro_detectado ?? 0), 0),
   };
@@ -491,30 +296,6 @@ export const Cotizaciones = () => {
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const f = e.target.files?.[0];
     if (f) { setArchivo(f); setResultado(null); }
-  };
-
-  // ─── Eliminar cotización ──────────────────────────────────────────────────
-  const eliminarCotizacion = async (id: string, proveedor: string) => {
-    const confirmado = window.confirm(`¿Eliminar el análisis de "${proveedor}"? Esta acción no se puede deshacer.`);
-    if (!confirmado) return;
-
-    setEliminando(id);
-    try {
-      const { error } = await supabase
-        .from('analisis_cotizaciones')
-        .delete()
-        .eq('id', id);
-
-      if (error) throw error;
-
-      toast.success('Cotización eliminada');
-      queryClient.invalidateQueries({ queryKey: ['analisis_cotizaciones'] });
-      if (detalle?.id === id) setDetalle(null);
-    } catch (err: any) {
-      toast.error(err.message || 'Error al eliminar');
-    } finally {
-      setEliminando(null);
-    }
   };
 
   // ─── Proceso principal ────────────────────────────────────────────────────
@@ -607,7 +388,7 @@ export const Cotizaciones = () => {
             <h2 className="text-sm font-black text-slate-700 uppercase tracking-wide">Cargar cotización PDF</h2>
           </div>
 
-          {/* Selector de colegio */}
+          {/* ── Selector de colegio ── */}
           <div className="bg-slate-50 rounded-lg p-4 border border-slate-200 space-y-3">
             <p className="text-xs font-black text-slate-500 uppercase flex items-center gap-1">
               <MapPin className="w-3.5 h-3.5" />¿Para qué colegio es esta cotización? *
@@ -776,36 +557,13 @@ export const Cotizaciones = () => {
                     </td>
                     <td className="px-4 py-3"><EstadoBadge estado={h.estado_aprobacion} /></td>
                     <td className="px-4 py-3">
-                      <div className="flex items-center gap-1">
-                        {/* Ver detalle */}
-                        <button
-                          onClick={() => setDetalle(h)}
-                          className="p-1.5 hover:bg-slate-100 rounded-lg text-slate-400 hover:text-slate-700 transition-colors"
-                          title="Ver detalle"
-                        >
-                          <Eye className="w-4 h-4" />
-                        </button>
-                        {/* Imprimir */}
-                        <button
-                          onClick={() => imprimirDictamen(h, h.colegio_ubicacion)}
-                          className="p-1.5 hover:bg-slate-100 rounded-lg text-slate-400 hover:text-slate-700 transition-colors"
-                          title="Imprimir / PDF"
-                        >
-                          <Printer className="w-4 h-4" />
-                        </button>
-                        {/* Eliminar */}
-                        <button
-                          onClick={() => eliminarCotizacion(h.id, h.proveedor)}
-                          disabled={eliminando === h.id}
-                          className="p-1.5 hover:bg-red-50 rounded-lg text-slate-400 hover:text-red-500 transition-colors disabled:opacity-40"
-                          title="Eliminar"
-                        >
-                          {eliminando === h.id
-                            ? <Loader2 className="w-4 h-4 animate-spin" />
-                            : <Trash2 className="w-4 h-4" />
-                          }
-                        </button>
-                      </div>
+                      <button
+                        onClick={() => setDetalle(h)}
+                        className="p-1.5 hover:bg-slate-100 rounded-lg text-slate-400 hover:text-slate-700 transition-colors"
+                        title="Ver detalle"
+                      >
+                        <Eye className="w-4 h-4" />
+                      </button>
                     </td>
                   </tr>
                 ))}
