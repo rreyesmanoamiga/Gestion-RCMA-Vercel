@@ -58,14 +58,14 @@ export interface ResultadoAnalisis {
 const RESPONSE_SCHEMA = {
   type: 'OBJECT',
   properties: {
-    folio:                { type: 'STRING' },
-    proveedor:            { type: 'STRING' },
-    total:                { type: 'NUMBER' },
-    decision:             { type: 'STRING', enum: ['Aprobada', 'Revisión', 'Rechazada'] },
-    notas:                { type: 'STRING' },
-    ahorro:               { type: 'NUMBER' },
-    porcentaje_sobrecosto:{ type: 'NUMBER' },
-    resumen_ejecutivo:    { type: 'STRING' },
+    folio:                 { type: 'STRING' },
+    proveedor:             { type: 'STRING' },
+    total:                 { type: 'NUMBER' },
+    decision:              { type: 'STRING', enum: ['Aprobada', 'Revisión', 'Rechazada'] },
+    notas:                 { type: 'STRING' },
+    ahorro:                { type: 'NUMBER' },
+    porcentaje_sobrecosto: { type: 'NUMBER' },
+    resumen_ejecutivo:     { type: 'STRING' },
     conceptos: {
       type: 'ARRAY',
       items: {
@@ -79,13 +79,65 @@ const RESPONSE_SCHEMA = {
           estado_mercado:       { type: 'STRING', enum: ['Precio normal', 'Sobrecosto', 'Precio bajo', 'No verificado'] },
           porcentaje_variacion: { type: 'NUMBER' },
         },
-        required: ['descripcion','unidad','cantidad','precio_unitario','total','estado_mercado','porcentaje_variacion'],
+        required: ['descripcion', 'unidad', 'cantidad', 'precio_unitario', 'total', 'estado_mercado', 'porcentaje_variacion'],
       },
     },
   },
-  required: ['folio','proveedor','total','decision','notas','ahorro','porcentaje_sobrecosto','resumen_ejecutivo','conceptos'],
+  required: ['folio', 'proveedor', 'total', 'decision', 'notas', 'ahorro', 'porcentaje_sobrecosto', 'resumen_ejecutivo', 'conceptos'],
 };
 
+// ─── Sanitizador robusto de JSON (sin dependencias externas) ─────────────────
+// Recorre el texto carácter por carácter y escapa los caracteres de control
+// (saltos de línea, tabuladores, etc.) que Gemini deja sin escapar dentro
+// de los valores de texto, lo cual rompe JSON.parse.
+function sanitizeJSON(raw: string): string {
+  // 1. Quitar bloques markdown si los hubiera
+  let text = raw
+    .replace(/^```json\s*/i, '')
+    .replace(/^```\s*/i, '')
+    .replace(/```\s*$/g, '')
+    .trim();
+
+  // 2. Recorrer carácter a carácter para escapar control chars dentro de strings
+  let result = '';
+  let inString = false;
+  let escaped = false;
+
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
+
+    if (escaped) {
+      result += ch;
+      escaped = false;
+      continue;
+    }
+
+    if (ch === '\\' && inString) {
+      result += ch;
+      escaped = true;
+      continue;
+    }
+
+    if (ch === '"') {
+      inString = !inString;
+      result += ch;
+      continue;
+    }
+
+    if (inString) {
+      // Caracteres ilegales dentro de un string JSON sin escapar
+      if (ch === '\n') { result += '\\n'; continue; }
+      if (ch === '\r') { result += '\\r'; continue; }
+      if (ch === '\t') { result += '\\t'; continue; }
+    }
+
+    result += ch;
+  }
+
+  return result;
+}
+
+// ─── Función principal de análisis ───────────────────────────────────────────
 export const analizarCotizacion = async (
   texto: string,
   colegio: string = 'GENERAL'
@@ -135,11 +187,10 @@ INSTRUCCIONES:
       generationConfig: {
         temperature: 0.1,
         maxOutputTokens: 8192,
-        // ✅ Esto fuerza a Gemini a devolver siempre JSON válido
         response_mime_type: 'application/json',
         response_schema: RESPONSE_SCHEMA,
-      }
-    })
+      },
+    }),
   });
 
   if (!response.ok) {
@@ -158,28 +209,36 @@ INSTRUCCIONES:
     );
   }
 
-  // Con response_mime_type: 'application/json', Gemini siempre devuelve JSON limpio
+  // Extraer texto (ignorar partes "thought" del thinking mode)
   const parts = res.candidates[0].content?.parts ?? [];
   const rawText: string = parts
     .filter((p: any) => !p.thought && p.text)
-    .map((p: any) => p.text)
+    .map((p: any) => p.text as string)
     .join('');
 
   if (!rawText.trim()) {
     throw new Error('La IA no devolvió texto. Verifica tu API Key de Gemini.');
   }
 
+  // Intento 1: parseo directo
   try {
     return JSON.parse(rawText) as ResultadoAnalisis;
-  } catch (e) {
-    // Fallback: extraer el bloque JSON si por alguna razón trae texto extra
-    const match = rawText.match(/\{[\s\S]*\}/);
-    if (match) {
-      try {
-        return JSON.parse(match[0]) as ResultadoAnalisis;
-      } catch (_) {}
-    }
-    console.error('[Gemini] rawText:', rawText.substring(0, 300));
-    throw new Error(`No se pudo parsear la respuesta de la IA. Inicio: ${rawText.substring(0, 150)}`);
+  } catch (_) { /* continúa */ }
+
+  // Intento 2: sanitizar caracteres de control y volver a parsear
+  try {
+    return JSON.parse(sanitizeJSON(rawText)) as ResultadoAnalisis;
+  } catch (_) { /* continúa */ }
+
+  // Intento 3: extraer bloque { ... }, sanitizar y parsear
+  const match = rawText.match(/\{[\s\S]*\}/);
+  if (match) {
+    try {
+      return JSON.parse(sanitizeJSON(match[0])) as ResultadoAnalisis;
+    } catch (_) { /* continúa */ }
   }
+
+  // Sin opciones: error con contexto para depurar
+  console.error('[Gemini] rawText completo:', rawText);
+  throw new Error(`No se pudo parsear la respuesta de la IA. Inicio: ${rawText.substring(0, 200)}`);
 };
