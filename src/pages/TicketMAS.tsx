@@ -44,7 +44,7 @@ const COLEGIOS_TICKET = [
   { nombre:'Mano Amiga ZOM',                codigo:'ZOM', razon:'Mano Amiga S.C.',                                                  sociedad:'1005', centro_gestor:'MXI011', territorio:'MEXICO', director:'Edgar Omar Díaz Marías',          admin:'Ana María Barrón Montaño',      contador:'EDITH IBARRA',      correo_contador:'edibarra@admmx.org'},
   { nombre:'OF. MTY', codigo:'MTY-OF',  razon:'Federación Mano Amiga A.C.',                                          sociedad:'1238', centro_gestor:'MXM010', territorio:'FMA', director:'Ángel Eduardo Rodriguez Martinez', admin:'Félix Guerra Herrera', contador:'YAZMIN CRUZ', correo_contador:'ycruz@admmx.org' },
   { nombre:'OF. CDMX',      codigo:'CDMX-OF', razon:'Federación Mano Amiga A.C.',                                          sociedad:'1238', centro_gestor:'MXM010', territorio:'FMA', director:'Ángel Eduardo Rodriguez Martinez', admin:'Félix Guerra Herrera', contador:'YAZMIN CRUZ', correo_contador:'ycruz@admmx.org' },
-  { nombre:'GENERAL',            codigo:'FIA',     razon:'Fundación Interamericana Anáhuac para el Desarrollo Social, I.A.P.', sociedad:'1192', centro_gestor:'MXI051', territorio:'FMA', director:'Ángel Eduardo Rodriguez Martinez', admin:'Félix Guerra Herrera', contador:'YAZMIN CRUZ', correo_contador:'ycruz@admmx.org' },
+  { nombre:'GENERAL', codigo:'FMA-GEN', razon:'Federación Mano Amiga A.C.', sociedad:'1238', centro_gestor:'MXM010', territorio:'FMA', director:'Ángel Eduardo Rodriguez Martinez', admin:'Félix Guerra Herrera', contador:'YAZMIN CRUZ', correo_contador:'ycruz@admmx.org' },
 ];
 
 const CAR_CORREOS: Record<string, string> = {
@@ -421,7 +421,7 @@ export default function TicketMAS() {
     if (!confirm) return;
     try {
       const now = new Date().toISOString();
-      const { error } = await supabase.from('tickets_mas')
+      const { data: updatedRow, error } = await supabase.from('tickets_mas')
         .update({
           estatus:               'autorizado',
           fecha_recepcion:        adminForm.fecha_recepcion,
@@ -430,8 +430,11 @@ export default function TicketMAS() {
           areas_participantes:    adminForm.areas_participantes,
           fecha_autorizacion:     now,
         })
-        .eq('id', viewing.id);
+        .eq('id', viewing.id)
+        .select()
+        .single();
       if (error) throw error;
+      if (!updatedRow || updatedRow.estatus !== 'autorizado') throw new Error('No se pudo actualizar el estatus en la base de datos');
 
       // Correo CAR según territorio
       const correoCAR = CAR_CORREOS[viewing.territorio ?? ''] ?? '';

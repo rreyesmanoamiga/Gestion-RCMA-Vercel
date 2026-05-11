@@ -76,7 +76,7 @@ serve(async (req) => {
             </tr>
             <tr>
               <td style="background:#15803d;padding:16px 40px;">
-                <p style="margin:0;color:#ffffff;font-size:14px;font-weight:600;">&#10003; Ticket MAS Autorizado &#8212; ${folio ?? ''}</p>
+                <p style="margin:0;color:#ffffff;font-size:14px;font-weight:600;">Ticket MAS Autorizado - ${folio ?? ''}</p>
               </td>
             </tr>
             <tr>
@@ -107,7 +107,7 @@ serve(async (req) => {
     </body>
     </html>`;
 
-    await sendEmail(correo_solicitante, `&#10003; Ticket Autorizado: ${folio ?? ''} &#8212; ${colegio ?? ''}`, html);
+    await sendEmail(correo_solicitante, `Ticket MAS Autorizado - ${folio ?? ''} - ${colegio ?? ''}`, html);
 
     return new Response(JSON.stringify({ success: true }), { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
   } catch (err) {
