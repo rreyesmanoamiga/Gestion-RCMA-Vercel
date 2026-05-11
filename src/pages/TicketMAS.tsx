@@ -469,7 +469,13 @@ export default function TicketMAS() {
   };
 
   // ── Abrir para revisión ───────────────────────────────────────────────────────
-  const handleVerTicket = (t: TicketMAS) => {
+  const handleVerTicket = async (t: TicketMAS) => {
+    // Auto-cambiar a 'en_revision' al abrir el ticket (solo si está pendiente)
+    if (t.estatus === 'pendiente') {
+      await supabase.from('tickets_mas').update({ estatus: 'en_revision' }).eq('id', t.id);
+      qc.invalidateQueries({ queryKey: ['tickets_mas'] });
+      t = { ...t, estatus: 'en_revision' };
+    }
     setViewing(t);
     setAdminForm({
       fecha_recepcion:       t.fecha_recepcion ?? '',
@@ -806,11 +812,7 @@ export default function TicketMAS() {
                           className="p-1.5 rounded hover:bg-slate-100 text-slate-500 transition">
                           <Printer className="w-4 h-4" />
                         </button>
-                        {/* Cambiar estatus */}
-                        <button onClick={() => setChangingStatus(t.id)} title="Cambiar estatus"
-                          className="p-1.5 rounded hover:bg-amber-50 text-amber-600 transition">
-                          <RefreshCw className="w-4 h-4" />
-                        </button>
+
                         {/* Cancelar */}
                         {t.estatus !== 'cancelado' && (
                           <button onClick={() => { setCancelModal(t); setMotivoCancel(''); }} title="Cancelar"
