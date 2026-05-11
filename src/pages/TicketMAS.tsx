@@ -42,9 +42,9 @@ const COLEGIOS_TICKET = [
   { nombre:'Mano Amiga Torreón',            codigo:'TOR', razon:'Instituto Mano Amiga de Torreón S.C',                              sociedad:'1134', centro_gestor:'MXI002', territorio:'NORTE',  director:'Ma. Teresa Robles Limones',       admin:'Maria Alicia Vilchis Esquivel', contador:'EDITH IBARRA',      correo_contador:'edibarra@admmx.org'},
   { nombre:'Mano Amiga Villas de San Juan', codigo:'VSJ', razon:'Mano Amiga de León A.C.',                                          sociedad:'1145', centro_gestor:'MXI012', territorio:'NORTE',  director:'Gonzalo Heredia Camacho',         admin:'Ivonne Coss Sanchez',           contador:'VALERIA GAMEZ',     correo_contador:'vgamez@admmx.org'  },
   { nombre:'Mano Amiga ZOM',                codigo:'ZOM', razon:'Mano Amiga S.C.',                                                  sociedad:'1005', centro_gestor:'MXI011', territorio:'MEXICO', director:'Edgar Omar Díaz Marías',          admin:'Ana María Barrón Montaño',      contador:'EDITH IBARRA',      correo_contador:'edibarra@admmx.org'},
-  { nombre:'Of. Monterrey', codigo:'MTY-OF',  razon:'Federación Mano Amiga A.C.',                                          sociedad:'1238', centro_gestor:'MXM010', territorio:'FMA', director:'Ángel Eduardo Rodriguez Martinez', admin:'Félix Guerra Herrera', contador:'YAZMIN CRUZ', correo_contador:'ycruz@admmx.org' },
-  { nombre:'Of. CDMX',      codigo:'CDMX-OF', razon:'Federación Mano Amiga A.C.',                                          sociedad:'1238', centro_gestor:'MXM010', territorio:'FMA', director:'Ángel Eduardo Rodriguez Martinez', admin:'Félix Guerra Herrera', contador:'YAZMIN CRUZ', correo_contador:'ycruz@admmx.org' },
-  { nombre:'FIA',            codigo:'FIA',     razon:'Fundación Interamericana Anáhuac para el Desarrollo Social, I.A.P.', sociedad:'1192', centro_gestor:'MXI051', territorio:'FMA', director:'Ángel Eduardo Rodriguez Martinez', admin:'Félix Guerra Herrera', contador:'YAZMIN CRUZ', correo_contador:'ycruz@admmx.org' },
+  { nombre:'OF. MTY', codigo:'MTY-OF',  razon:'Federación Mano Amiga A.C.',                                          sociedad:'1238', centro_gestor:'MXM010', territorio:'FMA', director:'Ángel Eduardo Rodriguez Martinez', admin:'Félix Guerra Herrera', contador:'YAZMIN CRUZ', correo_contador:'ycruz@admmx.org' },
+  { nombre:'OF. CDMX',      codigo:'CDMX-OF', razon:'Federación Mano Amiga A.C.',                                          sociedad:'1238', centro_gestor:'MXM010', territorio:'FMA', director:'Ángel Eduardo Rodriguez Martinez', admin:'Félix Guerra Herrera', contador:'YAZMIN CRUZ', correo_contador:'ycruz@admmx.org' },
+  { nombre:'GENERAL (FIA)',            codigo:'FIA',     razon:'Fundación Interamericana Anáhuac para el Desarrollo Social, I.A.P.', sociedad:'1192', centro_gestor:'MXI051', territorio:'FMA', director:'Ángel Eduardo Rodriguez Martinez', admin:'Félix Guerra Herrera', contador:'YAZMIN CRUZ', correo_contador:'ycruz@admmx.org' },
   { nombre:'FMA',            codigo:'FMA',     razon:'Federación Mano Amiga A.C.',                                          sociedad:'1238', centro_gestor:'MXM010', territorio:'FMA', director:'Ángel Eduardo Rodriguez Martinez', admin:'Félix Guerra Herrera', contador:'YAZMIN CRUZ', correo_contador:'ycruz@admmx.org' },
 ];
 
@@ -493,6 +493,9 @@ export default function TicketMAS() {
       const { error } = await supabase.from('tickets_mas').delete().eq('id', t.id);
       if (error) throw error;
       toast.success('Ticket eliminado');
+      qc.setQueryData(['tickets_mas'], (old: TicketMAS[] | undefined) =>
+        (old ?? []).filter(tk => tk.id !== t.id)
+      );
       qc.invalidateQueries({ queryKey: ['tickets_mas'] });
     } catch (e: any) { toast.error(e.message ?? 'Error al eliminar'); }
   };
@@ -504,6 +507,9 @@ export default function TicketMAS() {
       if (error) throw error;
       toast.success('Estatus actualizado');
       setChangingStatus(null);
+      qc.setQueryData(['tickets_mas'], (old: TicketMAS[] | undefined) =>
+        (old ?? []).map(t => t.id === id ? { ...t, estatus: newStatus } : t)
+      );
       qc.invalidateQueries({ queryKey: ['tickets_mas'] });
     } catch (e: any) { toast.error(e.message ?? 'Error'); }
   };
@@ -526,7 +532,15 @@ export default function TicketMAS() {
         },
       });
       toast.success(`Ticket ${cancelModal.folio} cancelado`);
-      setCancelModal(null); setMotivoCancel('');
+      setCancelModal(null);
+      setMotivoCancel('');
+      // Actualizar cache local inmediatamente sin esperar refetch
+      qc.setQueryData(['tickets_mas'], (old: TicketMAS[] | undefined) =>
+        (old ?? []).map(t => t.id === cancelModal.id
+          ? { ...t, estatus: 'cancelado', motivo_cancelacion: motivoCancel }
+          : t
+        )
+      );
       qc.invalidateQueries({ queryKey: ['tickets_mas'] });
     } catch (e: any) { toast.error(e.message ?? 'Error'); }
     finally { setCancelLoading(false); }
