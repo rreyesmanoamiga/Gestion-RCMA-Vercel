@@ -7,7 +7,7 @@ import { es } from 'date-fns/locale';
 import { useAuth } from '@/lib/AuthContext';
 import {
   Send, CheckCircle, Eye, X, Printer, ClipboardList,
-  Building2, User, Mail, Calendar, ChevronDown, FileCheck, Clock
+  ChevronDown, FileCheck, Clock, Trash2, Ban, RefreshCw, AlertCircle
 } from 'lucide-react';
 import PageHeader from '@/components/shared/PageHeader';
 
@@ -42,6 +42,10 @@ const COLEGIOS_TICKET = [
   { nombre:'Mano Amiga Torreón',            codigo:'TOR', razon:'Instituto Mano Amiga de Torreón S.C',                              sociedad:'1134', centro_gestor:'MXI002', territorio:'NORTE',  director:'Ma. Teresa Robles Limones',       admin:'Maria Alicia Vilchis Esquivel', contador:'EDITH IBARRA',      correo_contador:'edibarra@admmx.org'},
   { nombre:'Mano Amiga Villas de San Juan', codigo:'VSJ', razon:'Mano Amiga de León A.C.',                                          sociedad:'1145', centro_gestor:'MXI012', territorio:'NORTE',  director:'Gonzalo Heredia Camacho',         admin:'Ivonne Coss Sanchez',           contador:'VALERIA GAMEZ',     correo_contador:'vgamez@admmx.org'  },
   { nombre:'Mano Amiga ZOM',                codigo:'ZOM', razon:'Mano Amiga S.C.',                                                  sociedad:'1005', centro_gestor:'MXI011', territorio:'MEXICO', director:'Edgar Omar Díaz Marías',          admin:'Ana María Barrón Montaño',      contador:'EDITH IBARRA',      correo_contador:'edibarra@admmx.org'},
+  { nombre:'Of. Monterrey', codigo:'MTY-OF',  razon:'Federación Mano Amiga A.C.',                                          sociedad:'1238', centro_gestor:'MXM010', territorio:'FMA', director:'Ángel Eduardo Rodriguez Martinez', admin:'Félix Guerra Herrera', contador:'YAZMIN CRUZ', correo_contador:'ycruz@admmx.org' },
+  { nombre:'Of. CDMX',      codigo:'CDMX-OF', razon:'Federación Mano Amiga A.C.',                                          sociedad:'1238', centro_gestor:'MXM010', territorio:'FMA', director:'Ángel Eduardo Rodriguez Martinez', admin:'Félix Guerra Herrera', contador:'YAZMIN CRUZ', correo_contador:'ycruz@admmx.org' },
+  { nombre:'FIA',            codigo:'FIA',     razon:'Fundación Interamericana Anáhuac para el Desarrollo Social, I.A.P.', sociedad:'1192', centro_gestor:'MXI051', territorio:'FMA', director:'Ángel Eduardo Rodriguez Martinez', admin:'Félix Guerra Herrera', contador:'YAZMIN CRUZ', correo_contador:'ycruz@admmx.org' },
+  { nombre:'FMA',            codigo:'FMA',     razon:'Federación Mano Amiga A.C.',                                          sociedad:'1238', centro_gestor:'MXM010', territorio:'FMA', director:'Ángel Eduardo Rodriguez Martinez', admin:'Félix Guerra Herrera', contador:'YAZMIN CRUZ', correo_contador:'ycruz@admmx.org' },
 ];
 
 const CAR_CORREOS: Record<string, string> = {
@@ -476,6 +480,52 @@ export default function TicketMAS() {
     setVista('detalle');
   };
 
+  // ── Eliminar ─────────────────────────────────────────────────────────────────
+  const handleEliminar = async (t: TicketMAS) => {
+    if (!window.confirm(`¿Eliminar el ticket ${t.folio}? Esta acción no se puede deshacer.`)) return;
+    try {
+      const { error } = await supabase.from('tickets_mas').delete().eq('id', t.id);
+      if (error) throw error;
+      toast.success('Ticket eliminado');
+      qc.invalidateQueries({ queryKey: ['tickets_mas'] });
+    } catch (e: any) { toast.error(e.message ?? 'Error al eliminar'); }
+  };
+
+  // ── Cambiar estatus ───────────────────────────────────────────────────────────
+  const handleChangeStatus = async (id: string, newStatus: string) => {
+    try {
+      const { error } = await supabase.from('tickets_mas').update({ estatus: newStatus }).eq('id', id);
+      if (error) throw error;
+      toast.success('Estatus actualizado');
+      setChangingStatus(null);
+      qc.invalidateQueries({ queryKey: ['tickets_mas'] });
+    } catch (e: any) { toast.error(e.message ?? 'Error'); }
+  };
+
+  // ── Cancelar con motivo ───────────────────────────────────────────────────────
+  const handleCancelar = async () => {
+    if (!cancelModal || !motivoCancel.trim()) { toast.error('Escribe el motivo'); return; }
+    setCancelLoading(true);
+    try {
+      const { error } = await supabase.from('tickets_mas')
+        .update({ estatus: 'cancelado', motivo_cancelacion: motivoCancel })
+        .eq('id', cancelModal.id);
+      if (error) throw error;
+      await supabase.functions.invoke('notify-ticket-mas-cancelado', {
+        body: {
+          folio: cancelModal.folio, colegio: cancelModal.colegio,
+          solicitante: cancelModal.nombre_solicitante,
+          correo_solicitante: cancelModal.correo_solicitante,
+          motivo: motivoCancel,
+        },
+      });
+      toast.success(`Ticket ${cancelModal.folio} cancelado`);
+      setCancelModal(null); setMotivoCancel('');
+      qc.invalidateQueries({ queryKey: ['tickets_mas'] });
+    } catch (e: any) { toast.error(e.message ?? 'Error'); }
+    finally { setCancelLoading(false); }
+  };
+
   // ─────────────────────────────────────────────────────────────────────────────
   // RENDER: Formulario (usuarios y admin)
   // ─────────────────────────────────────────────────────────────────────────────
@@ -701,7 +751,7 @@ export default function TicketMAS() {
         </div>
 
         <div className="flex items-center gap-3 flex-wrap">
-          {['todos','pendiente','en_revision','autorizado','rechazado'].map(s => (
+          {['todos','pendiente','en_revision','autorizado','cancelado'].map(s => (
             <button key={s} onClick={() => setFilter(s)}
               className={`px-3 py-1.5 rounded-full text-xs font-semibold border transition ${filterStatus === s ? 'bg-slate-900 text-white border-slate-900' : 'bg-white text-slate-600 border-slate-300 hover:border-slate-500'}`}>
               {s === 'todos' ? 'Todos' : ESTATUS_STYLE[s]?.label}
@@ -731,32 +781,111 @@ export default function TicketMAS() {
                 </tr>
               </thead>
               <tbody>
-                {ticketsFiltrados.map((t, i) => (
-                  <tr key={t.id} className={i % 2 === 0 ? 'bg-white' : 'bg-slate-50'}>
-                    <td className="px-4 py-3 font-mono text-xs font-bold text-slate-700">{t.folio}</td>
-                    <td className="px-4 py-3 text-slate-800">{t.colegio}</td>
-                    <td className="px-4 py-3 text-slate-600 text-xs">{t.nombre_solicitante}</td>
-                    <td className="px-4 py-3 text-slate-600 text-xs">{t.clasificacion}</td>
-                    <td className="px-4 py-3 text-slate-500 text-xs">
-                      {t.created_at ? format(new Date(t.created_at), 'dd/MM/yyyy', { locale: es }) : '—'}
+                {ticketsFiltrados.map((t, i) => {
+                  const vencido = isVencido(t);
+                  return (
+                  <tr key={t.id} className={`${i % 2 === 0 ? 'bg-white' : 'bg-slate-50'} ${vencido ? 'border-l-4 border-l-red-400' : ''}`}>
+                    <td className="px-3 py-2.5 font-mono text-xs font-bold text-slate-700">{t.folio}</td>
+                    <td className="px-3 py-2.5 text-slate-800 text-xs">{t.colegio}</td>
+                    <td className="px-3 py-2.5 text-slate-600 text-xs">{t.nombre_solicitante}</td>
+                    <td className="px-3 py-2.5 text-slate-600 text-xs">{t.clasificacion}</td>
+                    <td className="px-3 py-2.5 text-slate-500 text-xs">
+                      {t.created_at ? format(new Date(t.created_at), 'dd/MM/yyyy HH:mm', { locale: es }) : '—'}
+                      {vencido && <span className="block text-[10px] text-red-500 font-bold">⚠ +12h sin revisión</span>}
                     </td>
-                    <td className="px-4 py-3"><EstatusBadge estatus={t.estatus} /></td>
-                    <td className="px-4 py-3">
-                      <div className="flex items-center justify-center gap-2">
+                    <td className="px-3 py-2.5"><EstatusBadge estatus={t.estatus} /></td>
+                    <td className="px-3 py-2.5">
+                      <div className="flex items-center justify-center gap-1 flex-wrap">
+                        {/* Ver */}
                         <button onClick={() => handleVerTicket(t)} title="Revisar"
                           className="p-1.5 rounded hover:bg-blue-50 text-blue-600 transition">
                           <Eye className="w-4 h-4" />
                         </button>
+                        {/* Imprimir */}
                         <button onClick={() => handlePrint(t)} title="Imprimir"
-                          className="p-1.5 rounded hover:bg-slate-100 text-slate-600 transition">
+                          className="p-1.5 rounded hover:bg-slate-100 text-slate-500 transition">
                           <Printer className="w-4 h-4" />
+                        </button>
+                        {/* Cambiar estatus */}
+                        <button onClick={() => setChangingStatus(t.id)} title="Cambiar estatus"
+                          className="p-1.5 rounded hover:bg-amber-50 text-amber-600 transition">
+                          <RefreshCw className="w-4 h-4" />
+                        </button>
+                        {/* Cancelar */}
+                        {t.estatus !== 'cancelado' && (
+                          <button onClick={() => { setCancelModal(t); setMotivoCancel(''); }} title="Cancelar"
+                            className="p-1.5 rounded hover:bg-red-50 text-red-500 transition">
+                            <Ban className="w-4 h-4" />
+                          </button>
+                        )}
+                        {/* Eliminar */}
+                        <button onClick={() => handleEliminar(t)} title="Eliminar"
+                          className="p-1.5 rounded hover:bg-red-50 text-red-600 transition">
+                          <Trash2 className="w-4 h-4" />
                         </button>
                       </div>
                     </td>
                   </tr>
-                ))}
+                  );
+                })}
               </tbody>
             </table>
+          </div>
+        )}
+
+        {/* Modal: Cambiar estatus */}
+        {changingStatus && (
+          <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+            <div className="bg-white rounded-xl shadow-xl w-full max-w-xs">
+              <div className="flex items-center justify-between p-4 border-b">
+                <h3 className="font-bold text-slate-800 flex items-center gap-2">
+                  <RefreshCw className="w-4 h-4 text-amber-500"/> Cambiar Estatus
+                </h3>
+                <button onClick={() => setChangingStatus(null)}><X className="w-5 h-5 text-slate-400"/></button>
+              </div>
+              <div className="p-3 space-y-2">
+                {ESTATUSES_ADMIN.map(s => (
+                  <button key={s} onClick={() => handleChangeStatus(changingStatus, s)}
+                    className="w-full flex items-center gap-3 px-4 py-2.5 rounded-lg border border-slate-200 hover:bg-slate-50 text-left transition">
+                    <span className={`w-2.5 h-2.5 rounded-full ${ESTATUS_STYLE[s]?.dot ?? 'bg-slate-400'}`}/>
+                    <span className="text-sm font-medium text-slate-700">{ESTATUS_STYLE[s]?.label ?? s}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Modal: Cancelar con motivo */}
+        {cancelModal && (
+          <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+            <div className="bg-white rounded-xl shadow-xl w-full max-w-md">
+              <div className="flex items-center justify-between p-4 border-b">
+                <h3 className="font-bold text-slate-800 flex items-center gap-2">
+                  <Ban className="w-4 h-4 text-red-500"/> Cancelar Ticket {cancelModal.folio}
+                </h3>
+                <button onClick={() => setCancelModal(null)}><X className="w-5 h-5 text-slate-400"/></button>
+              </div>
+              <div className="p-4 space-y-3">
+                <p className="text-sm text-slate-600">Se enviará un correo de cancelación al solicitante con el motivo indicado.</p>
+                <div>
+                  <label className="text-[11px] font-bold text-slate-600 uppercase tracking-wide">Motivo de cancelación *</label>
+                  <textarea className="w-full mt-1 px-2 py-1.5 border border-slate-400 text-sm rounded focus:ring-1 focus:ring-slate-700 focus:outline-none min-h-[80px] resize-none"
+                    value={motivoCancel} onChange={e => setMotivoCancel(e.target.value)}
+                    placeholder="Describe el motivo de la cancelación..."/>
+                </div>
+              </div>
+              <div className="flex gap-3 p-4 border-t">
+                <button onClick={() => setCancelModal(null)}
+                  className="flex-1 py-2 border border-slate-300 rounded-lg text-sm font-semibold text-slate-700 hover:bg-slate-50">
+                  Volver
+                </button>
+                <button onClick={handleCancelar} disabled={cancelLoading || !motivoCancel.trim()}
+                  className="flex-1 py-2 bg-red-600 text-white rounded-lg text-sm font-semibold hover:bg-red-700 disabled:opacity-50 transition">
+                  {cancelLoading ? 'Cancelando...' : 'Confirmar Cancelación'}
+                </button>
+              </div>
+            </div>
           </div>
         )}
       </div>
