@@ -536,11 +536,7 @@ export default function TicketMAS() {
         },
       });
       toast.success(`Ticket ${cancelModal.folio} cancelado`);
-      // Refrescar datos directamente del servidor para garantizar consistencia
-      const { data: freshData } = await supabase.from('tickets_mas').select('*').order('created_at', { ascending: false });
-      if (freshData) qc.setQueryData(['tickets_mas'], freshData);
-      setCancelModal(null);
-      setMotivoCancel('');
+      setTimeout(() => { window.location.reload(); }, 800);
     } catch (e: any) { toast.error(e.message ?? 'Error'); }
     finally { setCancelLoading(false); }
   };
