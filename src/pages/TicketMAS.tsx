@@ -439,20 +439,28 @@ export default function TicketMAS() {
   };
 
   // ─────────────────────────────────────────────────────────────────────────────
-  // RENDER: Formulario (usuarios)
+  // RENDER: Formulario (usuarios y admin)
   // ─────────────────────────────────────────────────────────────────────────────
-  if (!isAdmin) {
+  if (!isAdmin || vista === 'form') {
     if (enviado) {
       return (
         <div className="min-h-screen flex flex-col items-center justify-center gap-4 p-8">
           <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-10 max-w-md text-center shadow">
             <CheckCircle className="w-14 h-14 text-emerald-500 mx-auto mb-4" />
             <h2 className="text-xl font-black text-slate-800 mb-2">¡Ticket Enviado!</h2>
-            <p className="text-sm text-slate-600 mb-6">Tu ticket ha sido registrado. El Coordinador de Obras revisará la información y recibirás una notificación al ser autorizado.</p>
-            <button onClick={() => { setEnviado(false); setForm({ ...FORM_INIT }); }}
-              className="px-6 py-2 bg-slate-900 text-white text-sm font-semibold rounded-lg hover:bg-slate-700 transition">
-              Enviar otro ticket
-            </button>
+            <p className="text-sm text-slate-600 mb-6">El ticket ha sido registrado y se envió notificación al Coordinador de Obras.</p>
+            <div className="flex gap-3 justify-center">
+              <button onClick={() => { setEnviado(false); setForm({ ...FORM_INIT }); }}
+                className="px-5 py-2 border border-slate-300 text-slate-700 text-sm font-semibold rounded-lg hover:bg-slate-50 transition">
+                Nuevo ticket
+              </button>
+              {isAdmin && (
+                <button onClick={() => { setEnviado(false); setForm({ ...FORM_INIT }); setVista('lista'); qc.invalidateQueries({ queryKey: ['tickets_mas'] }); }}
+                  className="px-5 py-2 bg-slate-900 text-white text-sm font-semibold rounded-lg hover:bg-slate-700 transition">
+                  Ver lista de tickets
+                </button>
+              )}
+            </div>
           </div>
         </div>
       );
@@ -460,7 +468,15 @@ export default function TicketMAS() {
 
     return (
       <div className="max-w-4xl mx-auto p-4 space-y-6">
-        <PageHeader title="Ticket MAS" subtitle="Construcciones, Mejoras y Mantenimiento" icon={<ClipboardList className="w-5 h-5"/>} />
+        <div className="flex items-center gap-3">
+          {isAdmin && (
+            <button onClick={() => setVista('lista')}
+              className="flex items-center gap-1 text-sm text-slate-500 hover:text-slate-800 transition">
+              ← Volver a la lista
+            </button>
+          )}
+          <PageHeader title="Ticket MAS" subtitle="Construcciones, Mejoras y Mantenimiento" icon={<ClipboardList className="w-5 h-5"/>} />
+        </div>
 
         {/* ── Datos del solicitante ── */}
         <section className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
@@ -622,7 +638,15 @@ export default function TicketMAS() {
   if (vista === 'lista') {
     return (
       <div className="max-w-6xl mx-auto p-4 space-y-4">
-        <PageHeader title="Ticket MAS" subtitle="Revisión y autorización de tickets" icon={<ClipboardList className="w-5 h-5"/>} />
+        <div className="flex items-center justify-between mb-2">
+          <PageHeader title="Ticket MAS" subtitle="Revisión y autorización de tickets" icon={<ClipboardList className="w-5 h-5"/>} />
+          <button
+            onClick={() => { setForm({ ...FORM_INIT }); setVista('form'); }}
+            className="flex items-center gap-2 px-4 py-2 bg-slate-900 text-white text-sm font-semibold rounded-lg hover:bg-slate-700 transition"
+          >
+            <Send className="w-4 h-4" /> Nuevo Ticket
+          </button>
+        </div>
 
         <div className="flex items-center gap-3 flex-wrap">
           {['todos','pendiente','en_revision','autorizado','rechazado'].map(s => (
