@@ -7,7 +7,7 @@ import { es } from 'date-fns/locale';
 import { useAuth } from '@/lib/AuthContext';
 import {
   Send, CheckCircle, Eye, X, Printer, ClipboardList,
-  ChevronDown, FileCheck, Clock, Trash2, Ban, RefreshCw, AlertCircle
+  Building2, User, Mail, Calendar, ChevronDown, FileCheck, Clock
 } from 'lucide-react';
 import PageHeader from '@/components/shared/PageHeader';
 
@@ -42,9 +42,6 @@ const COLEGIOS_TICKET = [
   { nombre:'Mano Amiga Torreón',            codigo:'TOR', razon:'Instituto Mano Amiga de Torreón S.C',                              sociedad:'1134', centro_gestor:'MXI002', territorio:'NORTE',  director:'Ma. Teresa Robles Limones',       admin:'Maria Alicia Vilchis Esquivel', contador:'EDITH IBARRA',      correo_contador:'edibarra@admmx.org'},
   { nombre:'Mano Amiga Villas de San Juan', codigo:'VSJ', razon:'Mano Amiga de León A.C.',                                          sociedad:'1145', centro_gestor:'MXI012', territorio:'NORTE',  director:'Gonzalo Heredia Camacho',         admin:'Ivonne Coss Sanchez',           contador:'VALERIA GAMEZ',     correo_contador:'vgamez@admmx.org'  },
   { nombre:'Mano Amiga ZOM',                codigo:'ZOM', razon:'Mano Amiga S.C.',                                                  sociedad:'1005', centro_gestor:'MXI011', territorio:'MEXICO', director:'Edgar Omar Díaz Marías',          admin:'Ana María Barrón Montaño',      contador:'EDITH IBARRA',      correo_contador:'edibarra@admmx.org'},
-  { nombre:'OF. MTY', codigo:'MTY-OF',  razon:'Federación Mano Amiga A.C.',                                          sociedad:'1238', centro_gestor:'MXM010', territorio:'FMA', director:'Ángel Eduardo Rodriguez Martinez', admin:'Félix Guerra Herrera', contador:'YAZMIN CRUZ', correo_contador:'ycruz@admmx.org' },
-  { nombre:'OF. CDMX',      codigo:'CDMX-OF', razon:'Federación Mano Amiga A.C.',                                          sociedad:'1238', centro_gestor:'MXM010', territorio:'FMA', director:'Ángel Eduardo Rodriguez Martinez', admin:'Félix Guerra Herrera', contador:'YAZMIN CRUZ', correo_contador:'ycruz@admmx.org' },
-  { nombre:'GENERAL', codigo:'FMA-GEN', razon:'Federación Mano Amiga A.C.', sociedad:'1238', centro_gestor:'MXM010', territorio:'FMA', director:'Ángel Eduardo Rodriguez Martinez', admin:'Félix Guerra Herrera', contador:'YAZMIN CRUZ', correo_contador:'ycruz@admmx.org' },
 ];
 
 const CAR_CORREOS: Record<string, string> = {
@@ -52,13 +49,10 @@ const CAR_CORREOS: Record<string, string> = {
   MEXICO: 'gromero@manoamiga.edu.mx',
 };
 
-const TERRITORIOS          = ['NORTE', 'MEXICO', 'FMA'];
-const CLASIFICACIONES      = ['CONSTRUCCION NUEVA','REMODELACION','AMPLIACION','ADECUACION','MEJORA','MANTENIMIENTO ORDINARIO','MANTENIMIENTO EXTRAORDINARIO','PORTAFOLIO','GARANTIAS','REVISION'];
-const CLASES_MANTENIMIENTO = ['MANTENIMIENTO ORDINARIO','MANTENIMIENTO EXTRAORDINARIO'];
-const PERIODICIDADES       = ['URGENTE','NORMAL'];
-const TIPOS_MANT           = ['PREVENTIVO','CORRECTIVO'];
-const SI_NO                = ['SI','NO'];
-const ESTATUSES_ADMIN      = ['pendiente','en_revision','autorizado','cancelado'];
+const CLASIFICACIONES = ['CONSTRUCCION NUEVA','REMODELACION','AMPLIACION','ADECUACION','MEJORA','MANTENIMIENTO ORDINARIO','MANTENIMIENTO EXTRAORDINARIO','PORTAFOLIO','GARANTIAS','REVISION'];
+const PERIODICIDADES   = ['URGENTE','NORMAL'];
+const TIPOS_MANT       = ['PREVENTIVO','CORRECTIVO','N/A'];
+const SI_NO            = ['SI','NO'];
 
 // ─── Tipos ────────────────────────────────────────────────────────────────────
 interface TicketMAS {
@@ -98,7 +92,6 @@ interface TicketMAS {
   fecha_fin_estimada?:    string;
   areas_participantes?:   string;
   fecha_autorizacion?:    string;
-  motivo_cancelacion?:    string;
   created_at?:            string;
 }
 
@@ -123,20 +116,12 @@ const ESTATUS_STYLE: Record<string, { bg: string; dot: string; label: string }> 
   rechazado:    { bg: 'bg-red-50 border border-red-200 text-red-700',         dot: 'bg-red-500',     label: 'Rechazado' },
 };
 
-const isVencido = (t: TicketMAS) => {
-  if (t.estatus !== 'pendiente') return false;
-  const created = t.created_at ? new Date(t.created_at) : null;
-  if (!created) return false;
-  return (Date.now() - created.getTime()) > 12 * 60 * 60 * 1000;
-};
-
-function EstatusBadge({ estatus, vencido }: { estatus?: string; vencido?: boolean }) {
+function EstatusBadge({ estatus }: { estatus?: string }) {
   const s = ESTATUS_STYLE[estatus ?? 'pendiente'] ?? ESTATUS_STYLE.pendiente;
   return (
     <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-semibold ${s.bg}`}>
       <span className={`w-1.5 h-1.5 rounded-full ${s.dot}`} />
       {s.label}
-      {vencido && <span className="ml-1 text-[10px] font-bold text-red-600">⚠ +12h</span>}
     </span>
   );
 }
@@ -230,11 +215,10 @@ function generarHTMLTicket(t: TicketMAS, firma: string): string {
 
   <div class="firma-section">
     <div class="firma-box">
-      <div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:4px 0;gap:4px;">
-        <span style="font-size:10px;font-weight:600;color:#1e293b;">${t.nombre_solicitante ?? '—'}</span>
-        <span style="font-size:8.5px;color:#64748b;">Enviado: ${t.created_at ? format(new Date(t.created_at), "dd/MM/yyyy HH:mm", { locale: es }) : '—'}</span>
+      <div style="flex:1;display:flex;align-items:center;justify-content:center;padding:4px 0;">
+        <span style="color:#94a3b8;font-size:9px;">_________________________</span>
       </div>
-      <div class="firma-name">${t.puesto_solicitante ?? 'Director / Administrador'}<br/><span class="firma-title">${t.colegio ?? ''}</span></div>
+      <div class="firma-name">Director / Administrador<br/><span class="firma-title">${t.colegio ?? 'Colegio'}</span></div>
     </div>
     <div class="firma-box">
       <img src="data:image/png;base64,${firma}" alt="Firma RCMA" style="max-height:60px;max-width:180px;object-fit:contain;"/>
@@ -264,7 +248,7 @@ export default function TicketMAS() {
 
   // ── Form state (llenado por colegio) ────────────────────────────────────────
   const FORM_INIT = {
-    territorio:'', colegio:'', razon_social:'', sociedad:'', centro_gestor:'',
+    colegio:'', razon_social:'', sociedad:'', centro_gestor:'', territorio:'',
     director:'', admin_colegio:'', contador:'',
     nombre_solicitante:'', puesto_solicitante:'', correo_solicitante:'',
     fecha_elaboracion: format(new Date(), 'yyyy-MM-dd'),
@@ -284,31 +268,6 @@ export default function TicketMAS() {
   const ADMIN_INIT = { fecha_recepcion:'', fecha_inicio_estimada:'', fecha_fin_estimada:'', areas_participantes:'' };
   const [adminForm, setAdminForm] = useState({ ...ADMIN_INIT });
   const setA = (k: string, v: string) => setAdminForm(p => ({ ...p, [k]: v }));
-
-  const [showCot2, setShowCot2] = useState(false);
-  const [showCot3, setShowCot3] = useState(false);
-
-  // Cancelación modal
-  const [cancelModal, setCancelModal]     = useState<TicketMAS | null>(null);
-  const [motivoCancel, setMotivoCancel]   = useState('');
-  const [cancelLoading, setCancelLoading] = useState(false);
-  const [changingStatus, setChangingStatus] = useState<string | null>(null);
-
-  const colegiosFiltrados = useMemo(() =>
-    form.territorio ? COLEGIOS_TICKET.filter(c => c.territorio === form.territorio) : [],
-    [form.territorio]
-  );
-
-  const onTerritorioChange = (t: string) => {
-    setForm(p => ({ ...p, territorio: t, colegio:'', razon_social:'', sociedad:'', centro_gestor:'', director:'', admin_colegio:'', contador:'' }));
-  };
-
-  const esMant = CLASES_MANTENIMIENTO.includes(form.clasificacion);
-
-  const onClasificacionChange = (v: string) => {
-    const m = CLASES_MANTENIMIENTO.includes(v);
-    setForm(p => ({ ...p, clasificacion: v, tipo_mantenimiento: m ? '' : 'N/A' }));
-  };
 
   // Al seleccionar colegio, auto-rellenar datos
   const onColegioChange = (nombre: string) => {
@@ -421,7 +380,7 @@ export default function TicketMAS() {
     if (!confirm) return;
     try {
       const now = new Date().toISOString();
-      const { data: updatedRow, error } = await supabase.from('tickets_mas')
+      const { error } = await supabase.from('tickets_mas')
         .update({
           estatus:               'autorizado',
           fecha_recepcion:        adminForm.fecha_recepcion,
@@ -430,11 +389,8 @@ export default function TicketMAS() {
           areas_participantes:    adminForm.areas_participantes,
           fecha_autorizacion:     now,
         })
-        .eq('id', viewing.id)
-        .select()
-        .single();
+        .eq('id', viewing.id);
       if (error) throw error;
-      if (!updatedRow || updatedRow.estatus !== 'autorizado') throw new Error('No se pudo actualizar el estatus en la base de datos');
 
       // Correo CAR según territorio
       const correoCAR = CAR_CORREOS[viewing.territorio ?? ''] ?? '';
@@ -455,17 +411,15 @@ export default function TicketMAS() {
         },
       });
 
-      // Refetch inmediato desde el servidor
-      await qc.refetchQueries({ queryKey: ['tickets_mas'] });
+      toast.success(`Ticket ${viewing.folio} autorizado y notificación enviada`);
       setViewing(null);
-      setVista('lista');
-      toast.success(`Ticket ${viewing.folio} autorizado`);
+      qc.invalidateQueries({ queryKey: ['tickets_mas'] });
     } catch (e: any) {
       toast.error(e.message ?? 'Error al autorizar');
     }
   };
 
-    // ── Imprimir ticket ────────────────────────────────────────────────────────────
+  // ── Imprimir ticket ────────────────────────────────────────────────────────────
   const handlePrint = (t: TicketMAS) => {
     const html = generarHTMLTicket(t, FIRMA_RCMA);
     const win  = window.open('', '_blank');
@@ -473,13 +427,7 @@ export default function TicketMAS() {
   };
 
   // ── Abrir para revisión ───────────────────────────────────────────────────────
-  const handleVerTicket = async (t: TicketMAS) => {
-    // Auto-cambiar a 'en_revision' al abrir el ticket (solo si está pendiente)
-    if (t.estatus === 'pendiente') {
-      await supabase.from('tickets_mas').update({ estatus: 'en_revision' }).eq('id', t.id);
-      qc.invalidateQueries({ queryKey: ['tickets_mas'] });
-      t = { ...t, estatus: 'en_revision' };
-    }
+  const handleVerTicket = (t: TicketMAS) => {
     setViewing(t);
     setAdminForm({
       fecha_recepcion:       t.fecha_recepcion ?? '',
@@ -490,83 +438,21 @@ export default function TicketMAS() {
     setVista('detalle');
   };
 
-  // ── Eliminar ─────────────────────────────────────────────────────────────────
-  const handleEliminar = async (t: TicketMAS) => {
-    if (!window.confirm(`¿Eliminar el ticket ${t.folio}? Esta acción no se puede deshacer.`)) return;
-    try {
-      const { error } = await supabase.from('tickets_mas').delete().eq('id', t.id);
-      if (error) throw error;
-      toast.success('Ticket eliminado');
-      qc.setQueryData(['tickets_mas'], (old: TicketMAS[] | undefined) =>
-        (old ?? []).filter(tk => tk.id !== t.id)
-      );
-      qc.invalidateQueries({ queryKey: ['tickets_mas'] });
-    } catch (e: any) { toast.error(e.message ?? 'Error al eliminar'); }
-  };
-
-  // ── Cambiar estatus ───────────────────────────────────────────────────────────
-  const handleChangeStatus = async (id: string, newStatus: string) => {
-    try {
-      const { error } = await supabase.from('tickets_mas').update({ estatus: newStatus }).eq('id', id);
-      if (error) throw error;
-      toast.success('Estatus actualizado');
-      setChangingStatus(null);
-      qc.setQueryData(['tickets_mas'], (old: TicketMAS[] | undefined) =>
-        (old ?? []).map(t => t.id === id ? { ...t, estatus: newStatus } : t)
-      );
-      qc.invalidateQueries({ queryKey: ['tickets_mas'] });
-    } catch (e: any) { toast.error(e.message ?? 'Error'); }
-  };
-
-  // ── Cancelar con motivo ───────────────────────────────────────────────────────
-  const handleCancelar = async () => {
-    if (!cancelModal || !motivoCancel.trim()) { toast.error('Escribe el motivo'); return; }
-    setCancelLoading(true);
-    try {
-      const { error } = await supabase.from('tickets_mas')
-        .update({ estatus: 'cancelado', motivo_cancelacion: motivoCancel })
-        .eq('id', cancelModal.id);
-      if (error) throw error;
-      await supabase.functions.invoke('notify-ticket-mas-cancelado', {
-        body: {
-          folio: cancelModal.folio, colegio: cancelModal.colegio,
-          solicitante: cancelModal.nombre_solicitante,
-          correo_solicitante: cancelModal.correo_solicitante,
-          motivo: motivoCancel,
-        },
-      });
-      // Forzar refetch inmediato y esperar datos frescos
-      await qc.refetchQueries({ queryKey: ['tickets_mas'] });
-      setCancelModal(null);
-      setMotivoCancel('');
-      toast.success(`Ticket ${cancelModal.folio} cancelado`);
-    } catch (e: any) { toast.error(e.message ?? 'Error'); }
-    finally { setCancelLoading(false); }
-  };
-
   // ─────────────────────────────────────────────────────────────────────────────
-  // RENDER: Formulario (usuarios y admin)
+  // RENDER: Formulario (usuarios)
   // ─────────────────────────────────────────────────────────────────────────────
-  if (!isAdmin || vista === 'form') {
+  if (!isAdmin) {
     if (enviado) {
       return (
         <div className="min-h-screen flex flex-col items-center justify-center gap-4 p-8">
           <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-10 max-w-md text-center shadow">
             <CheckCircle className="w-14 h-14 text-emerald-500 mx-auto mb-4" />
             <h2 className="text-xl font-black text-slate-800 mb-2">¡Ticket Enviado!</h2>
-            <p className="text-sm text-slate-600 mb-6">El ticket ha sido registrado y se envió notificación al Coordinador de Obras.</p>
-            <div className="flex gap-3 justify-center">
-              <button onClick={() => { setEnviado(false); setForm({ ...FORM_INIT }); }}
-                className="px-5 py-2 border border-slate-300 text-slate-700 text-sm font-semibold rounded-lg hover:bg-slate-50 transition">
-                Nuevo ticket
-              </button>
-              {isAdmin && (
-                <button onClick={() => { setEnviado(false); setForm({ ...FORM_INIT }); setVista('lista'); qc.invalidateQueries({ queryKey: ['tickets_mas'] }); }}
-                  className="px-5 py-2 bg-slate-900 text-white text-sm font-semibold rounded-lg hover:bg-slate-700 transition">
-                  Ver lista de tickets
-                </button>
-              )}
-            </div>
+            <p className="text-sm text-slate-600 mb-6">Tu ticket ha sido registrado. El Coordinador de Obras revisará la información y recibirás una notificación al ser autorizado.</p>
+            <button onClick={() => { setEnviado(false); setForm({ ...FORM_INIT }); }}
+              className="px-6 py-2 bg-slate-900 text-white text-sm font-semibold rounded-lg hover:bg-slate-700 transition">
+              Enviar otro ticket
+            </button>
           </div>
         </div>
       );
@@ -574,15 +460,7 @@ export default function TicketMAS() {
 
     return (
       <div className="max-w-4xl mx-auto p-4 space-y-6">
-        <div className="flex items-center gap-3">
-          {isAdmin && (
-            <button onClick={() => setVista('lista')}
-              className="flex items-center gap-1 text-sm text-slate-500 hover:text-slate-800 transition">
-              ← Volver a la lista
-            </button>
-          )}
-          <PageHeader title="Ticket MAS" subtitle="Construcciones, Mejoras y Mantenimiento" icon={<ClipboardList className="w-5 h-5"/>} />
-        </div>
+        <PageHeader title="Ticket MAS" subtitle="Construcciones, Mejoras y Mantenimiento" icon={<ClipboardList className="w-5 h-5"/>} />
 
         {/* ── Datos del solicitante ── */}
         <section className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
@@ -613,17 +491,10 @@ export default function TicketMAS() {
           <div className="p-4 space-y-4">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <label className={labelClass}>Territorio *</label>
-                <select className={selectClass} value={form.territorio} onChange={e => onTerritorioChange(e.target.value)}>
-                  <option value="">— Seleccionar territorio —</option>
-                  {TERRITORIOS.map(t => <option key={t} value={t}>{t}</option>)}
-                </select>
-              </div>
-              <div>
                 <label className={labelClass}>Colegio *</label>
-                <select className={selectClass} value={form.colegio} onChange={e => onColegioChange(e.target.value)} disabled={!form.territorio}>
+                <select className={selectClass} value={form.colegio} onChange={e => onColegioChange(e.target.value)}>
                   <option value="">— Seleccionar colegio —</option>
-                  {colegiosFiltrados.map(c => <option key={c.codigo} value={c.nombre}>{c.nombre}</option>)}
+                  {COLEGIOS_TICKET.map(c => <option key={c.codigo} value={c.nombre}>{c.nombre}</option>)}
                 </select>
               </div>
               <div>
@@ -639,18 +510,18 @@ export default function TicketMAS() {
                 <input className={readOnlyClass} value={form.sociedad} readOnly />
               </div>
               <div>
-                <label className={labelClass}>Contador</label>
-                <input className={readOnlyClass} value={form.contador} readOnly />
-              </div>
-              <div>
                 <label className={labelClass}>Fecha de Elaboración</label>
                 <input className={inputClass} type="date" value={form.fecha_elaboracion} onChange={e => set('fecha_elaboracion', e.target.value)} />
+              </div>
+              <div>
+                <label className={labelClass}>Contador</label>
+                <input className={readOnlyClass} value={form.contador} readOnly />
               </div>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div>
                 <label className={labelClass}>Clasificación *</label>
-                <select className={selectClass} value={form.clasificacion} onChange={e => onClasificacionChange(e.target.value)}>
+                <select className={selectClass} value={form.clasificacion} onChange={e => set('clasificacion', e.target.value)}>
                   <option value="">— Seleccionar —</option>
                   {CLASIFICACIONES.map(c => <option key={c} value={c}>{c}</option>)}
                 </select>
@@ -662,20 +533,13 @@ export default function TicketMAS() {
                 </select>
               </div>
               <div>
-                <label className={labelClass}>
-                  Tipo de Mantenimiento {esMant && <span className="text-red-500">*</span>}
-                </label>
-                {esMant ? (
-                  <select className={selectClass} value={form.tipo_mantenimiento} onChange={e => set('tipo_mantenimiento', e.target.value)}>
-                    <option value="">— Seleccionar —</option>
-                    {TIPOS_MANT.map(t => <option key={t} value={t}>{t}</option>)}
-                  </select>
-                ) : (
-                  <input className={readOnlyClass} value="N/A" readOnly />
-                )}
+                <label className={labelClass}>Tipo de Mantenimiento</label>
+                <select className={selectClass} value={form.tipo_mantenimiento} onChange={e => set('tipo_mantenimiento', e.target.value)}>
+                  {TIPOS_MANT.map(t => <option key={t} value={t}>{t}</option>)}
+                </select>
               </div>
               <div>
-                <label className={labelClass}>Número de Activo <span className="text-slate-400 font-normal normal-case">(opcional)</span></label>
+                <label className={labelClass}>Número de Activo</label>
                 <input className={inputClass} value={form.numero_activo} onChange={e => set('numero_activo', e.target.value)} />
               </div>
               <div>
@@ -758,18 +622,10 @@ export default function TicketMAS() {
   if (vista === 'lista') {
     return (
       <div className="max-w-6xl mx-auto p-4 space-y-4">
-        <div className="flex items-center justify-between mb-2">
-          <PageHeader title="Ticket MAS" subtitle="Revisión y autorización de tickets" icon={<ClipboardList className="w-5 h-5"/>} />
-          <button
-            onClick={() => { setForm({ ...FORM_INIT }); setVista('form'); }}
-            className="flex items-center gap-2 px-4 py-2 bg-slate-900 text-white text-sm font-semibold rounded-lg hover:bg-slate-700 transition"
-          >
-            <Send className="w-4 h-4" /> Nuevo Ticket
-          </button>
-        </div>
+        <PageHeader title="Ticket MAS" subtitle="Revisión y autorización de tickets" icon={<ClipboardList className="w-5 h-5"/>} />
 
         <div className="flex items-center gap-3 flex-wrap">
-          {['todos','pendiente','en_revision','autorizado','cancelado'].map(s => (
+          {['todos','pendiente','en_revision','autorizado','rechazado'].map(s => (
             <button key={s} onClick={() => setFilter(s)}
               className={`px-3 py-1.5 rounded-full text-xs font-semibold border transition ${filterStatus === s ? 'bg-slate-900 text-white border-slate-900' : 'bg-white text-slate-600 border-slate-300 hover:border-slate-500'}`}>
               {s === 'todos' ? 'Todos' : ESTATUS_STYLE[s]?.label}
@@ -799,107 +655,32 @@ export default function TicketMAS() {
                 </tr>
               </thead>
               <tbody>
-                {ticketsFiltrados.map((t, i) => {
-                  const vencido = isVencido(t);
-                  return (
-                  <tr key={t.id} className={`${i % 2 === 0 ? 'bg-white' : 'bg-slate-50'} ${vencido ? 'border-l-4 border-l-red-400' : ''}`}>
-                    <td className="px-3 py-2.5 font-mono text-xs font-bold text-slate-700">{t.folio}</td>
-                    <td className="px-3 py-2.5 text-slate-800 text-xs">{t.colegio}</td>
-                    <td className="px-3 py-2.5 text-slate-600 text-xs">{t.nombre_solicitante}</td>
-                    <td className="px-3 py-2.5 text-slate-600 text-xs">{t.clasificacion}</td>
-                    <td className="px-3 py-2.5 text-slate-500 text-xs">
-                      {t.created_at ? format(new Date(t.created_at), 'dd/MM/yyyy HH:mm', { locale: es }) : '—'}
-                      {vencido && <span className="block text-[10px] text-red-500 font-bold">⚠ +12h sin revisión</span>}
+                {ticketsFiltrados.map((t, i) => (
+                  <tr key={t.id} className={i % 2 === 0 ? 'bg-white' : 'bg-slate-50'}>
+                    <td className="px-4 py-3 font-mono text-xs font-bold text-slate-700">{t.folio}</td>
+                    <td className="px-4 py-3 text-slate-800">{t.colegio}</td>
+                    <td className="px-4 py-3 text-slate-600 text-xs">{t.nombre_solicitante}</td>
+                    <td className="px-4 py-3 text-slate-600 text-xs">{t.clasificacion}</td>
+                    <td className="px-4 py-3 text-slate-500 text-xs">
+                      {t.created_at ? format(new Date(t.created_at), 'dd/MM/yyyy', { locale: es }) : '—'}
                     </td>
-                    <td className="px-3 py-2.5"><EstatusBadge estatus={t.estatus} /></td>
-                    <td className="px-3 py-2.5">
-                      <div className="flex items-center justify-center gap-1 flex-wrap">
-                        {/* Ver */}
+                    <td className="px-4 py-3"><EstatusBadge estatus={t.estatus} /></td>
+                    <td className="px-4 py-3">
+                      <div className="flex items-center justify-center gap-2">
                         <button onClick={() => handleVerTicket(t)} title="Revisar"
                           className="p-1.5 rounded hover:bg-blue-50 text-blue-600 transition">
                           <Eye className="w-4 h-4" />
                         </button>
-                        {/* Imprimir */}
                         <button onClick={() => handlePrint(t)} title="Imprimir"
-                          className="p-1.5 rounded hover:bg-slate-100 text-slate-500 transition">
+                          className="p-1.5 rounded hover:bg-slate-100 text-slate-600 transition">
                           <Printer className="w-4 h-4" />
-                        </button>
-
-                        {/* Cancelar */}
-                        {t.estatus !== 'cancelado' && (
-                          <button onClick={() => { setCancelModal(t); setMotivoCancel(''); }} title="Cancelar"
-                            className="p-1.5 rounded hover:bg-red-50 text-red-500 transition">
-                            <Ban className="w-4 h-4" />
-                          </button>
-                        )}
-                        {/* Eliminar */}
-                        <button onClick={() => handleEliminar(t)} title="Eliminar"
-                          className="p-1.5 rounded hover:bg-red-50 text-red-600 transition">
-                          <Trash2 className="w-4 h-4" />
                         </button>
                       </div>
                     </td>
                   </tr>
-                  );
-                })}
+                ))}
               </tbody>
             </table>
-          </div>
-        )}
-
-        {/* Modal: Cambiar estatus */}
-        {changingStatus && (
-          <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-            <div className="bg-white rounded-xl shadow-xl w-full max-w-xs">
-              <div className="flex items-center justify-between p-4 border-b">
-                <h3 className="font-bold text-slate-800 flex items-center gap-2">
-                  <RefreshCw className="w-4 h-4 text-amber-500"/> Cambiar Estatus
-                </h3>
-                <button onClick={() => setChangingStatus(null)}><X className="w-5 h-5 text-slate-400"/></button>
-              </div>
-              <div className="p-3 space-y-2">
-                {ESTATUSES_ADMIN.map(s => (
-                  <button key={s} onClick={() => handleChangeStatus(changingStatus, s)}
-                    className="w-full flex items-center gap-3 px-4 py-2.5 rounded-lg border border-slate-200 hover:bg-slate-50 text-left transition">
-                    <span className={`w-2.5 h-2.5 rounded-full ${ESTATUS_STYLE[s]?.dot ?? 'bg-slate-400'}`}/>
-                    <span className="text-sm font-medium text-slate-700">{ESTATUS_STYLE[s]?.label ?? s}</span>
-                  </button>
-                ))}
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Modal: Cancelar con motivo */}
-        {cancelModal && (
-          <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-            <div className="bg-white rounded-xl shadow-xl w-full max-w-md">
-              <div className="flex items-center justify-between p-4 border-b">
-                <h3 className="font-bold text-slate-800 flex items-center gap-2">
-                  <Ban className="w-4 h-4 text-red-500"/> Cancelar Ticket {cancelModal.folio}
-                </h3>
-                <button onClick={() => setCancelModal(null)}><X className="w-5 h-5 text-slate-400"/></button>
-              </div>
-              <div className="p-4 space-y-3">
-                <p className="text-sm text-slate-600">Se enviará un correo de cancelación al solicitante con el motivo indicado.</p>
-                <div>
-                  <label className="text-[11px] font-bold text-slate-600 uppercase tracking-wide">Motivo de cancelación *</label>
-                  <textarea className="w-full mt-1 px-2 py-1.5 border border-slate-400 text-sm rounded focus:ring-1 focus:ring-slate-700 focus:outline-none min-h-[80px] resize-none"
-                    value={motivoCancel} onChange={e => setMotivoCancel(e.target.value)}
-                    placeholder="Describe el motivo de la cancelación..."/>
-                </div>
-              </div>
-              <div className="flex gap-3 p-4 border-t">
-                <button onClick={() => setCancelModal(null)}
-                  className="flex-1 py-2 border border-slate-300 rounded-lg text-sm font-semibold text-slate-700 hover:bg-slate-50">
-                  Volver
-                </button>
-                <button onClick={handleCancelar} disabled={cancelLoading || !motivoCancel.trim()}
-                  className="flex-1 py-2 bg-red-600 text-white rounded-lg text-sm font-semibold hover:bg-red-700 disabled:opacity-50 transition">
-                  {cancelLoading ? 'Cancelando...' : 'Confirmar Cancelación'}
-                </button>
-              </div>
-            </div>
           </div>
         )}
       </div>
@@ -974,7 +755,7 @@ export default function TicketMAS() {
         </section>
 
         {/* Campos del coordinador */}
-        {viewing.estatus !== 'autorizado' && viewing.estatus !== 'cancelado' && (
+        {viewing.estatus !== 'autorizado' && (
           <section className="bg-white rounded-xl border border-blue-200 shadow-sm overflow-hidden">
             <div className="bg-blue-700 text-white px-4 py-2.5 text-xs font-bold uppercase tracking-wider flex items-center gap-2">
               <FileCheck className="w-4 h-4" /> Campos del Coordinador (Ventanilla Única)
