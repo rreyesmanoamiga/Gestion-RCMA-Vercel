@@ -455,20 +455,17 @@ export default function TicketMAS() {
         },
       });
 
-      toast.success(`Ticket ${viewing.folio} autorizado y notificación enviada`);
-      // Actualizar cache local inmediatamente
-      const updated = { ...viewing, estatus: 'autorizado', fecha_recepcion: adminForm.fecha_recepcion, fecha_inicio_estimada: adminForm.fecha_inicio_estimada, fecha_fin_estimada: adminForm.fecha_fin_estimada, fecha_autorizacion: new Date().toISOString() };
-      qc.setQueryData(['tickets_mas'], (old: TicketMAS[] | undefined) =>
-        (old ?? []).map(t => t.id === viewing.id ? updated : t)
-      );
+      // Refetch inmediato desde el servidor
+      await qc.refetchQueries({ queryKey: ['tickets_mas'] });
       setViewing(null);
       setVista('lista');
+      toast.success(`Ticket ${viewing.folio} autorizado`);
     } catch (e: any) {
       toast.error(e.message ?? 'Error al autorizar');
     }
   };
 
-  // ── Imprimir ticket ────────────────────────────────────────────────────────────
+    // ── Imprimir ticket ────────────────────────────────────────────────────────────
   const handlePrint = (t: TicketMAS) => {
     const html = generarHTMLTicket(t, FIRMA_RCMA);
     const win  = window.open('', '_blank');
@@ -538,8 +535,11 @@ export default function TicketMAS() {
           motivo: motivoCancel,
         },
       });
+      // Forzar refetch inmediato y esperar datos frescos
+      await qc.refetchQueries({ queryKey: ['tickets_mas'] });
+      setCancelModal(null);
+      setMotivoCancel('');
       toast.success(`Ticket ${cancelModal.folio} cancelado`);
-      setTimeout(() => { window.location.reload(); }, 800);
     } catch (e: any) { toast.error(e.message ?? 'Error'); }
     finally { setCancelLoading(false); }
   };
