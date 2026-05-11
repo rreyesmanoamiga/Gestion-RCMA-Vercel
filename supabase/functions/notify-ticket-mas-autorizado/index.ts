@@ -59,7 +59,6 @@ serve(async (req) => {
   try {
     const { folio, colegio, solicitante, correo_solicitante, fecha_recepcion, fecha_inicio, fecha_fin, descripcion, clasificacion } = await req.json();
     const smtpUser = Deno.env.get('SMTP_USER') ?? '';
-    const siteUrl  = Deno.env.get('SITE_URL')  ?? '';
 
     const html = `
     <!DOCTYPE html>
@@ -77,7 +76,7 @@ serve(async (req) => {
             </tr>
             <tr>
               <td style="background:#15803d;padding:16px 40px;">
-                <p style="margin:0;color:#ffffff;font-size:14px;font-weight:600;">✅ Ticket MAS Autorizado — ${folio ?? ''}</p>
+                <p style="margin:0;color:#ffffff;font-size:14px;font-weight:600;">&#10003; Ticket MAS Autorizado &#8212; ${folio ?? ''}</p>
               </td>
             </tr>
             <tr>
@@ -86,28 +85,20 @@ serve(async (req) => {
                 <p style="color:#475569;font-size:15px;line-height:1.6;margin:0 0 24px;">Su Ticket ha sido <strong style="color:#15803d;">revisado y autorizado</strong> por la Coordinación de Obras RCMA.</p>
                 <table width="100%" cellpadding="0" cellspacing="0" style="border:1px solid #e2e8f0;border-radius:8px;overflow:hidden;margin-bottom:24px;">
                   <tr style="background:#f0fdf4;"><td colspan="2" style="padding:10px 16px;font-size:12px;font-weight:700;color:#15803d;border-bottom:1px solid #dcfce7;">Datos del Ticket Autorizado</td></tr>
-                  <tr style="background:#f8fafc;"><td style="padding:12px 16px;font-size:12px;font-weight:700;color:#64748b;text-transform:uppercase;width:40%;border-bottom:1px solid #e2e8f0;">Folio</td><td style="padding:12px 16px;font-size:14px;font-weight:700;color:#1d4ed8;border-bottom:1px solid #e2e8f0;">${folio ?? '—'}</td></tr>
-                  <tr><td style="padding:12px 16px;font-size:12px;font-weight:700;color:#64748b;text-transform:uppercase;border-bottom:1px solid #e2e8f0;">Colegio</td><td style="padding:12px 16px;font-size:14px;color:#0f172a;border-bottom:1px solid #e2e8f0;">${colegio ?? '—'}</td></tr>
-                  <tr style="background:#f8fafc;"><td style="padding:12px 16px;font-size:12px;font-weight:700;color:#64748b;text-transform:uppercase;border-bottom:1px solid #e2e8f0;">Clasificación</td><td style="padding:12px 16px;font-size:14px;color:#0f172a;border-bottom:1px solid #e2e8f0;">${clasificacion ?? '—'}</td></tr>
-                  <tr><td style="padding:12px 16px;font-size:12px;font-weight:700;color:#64748b;text-transform:uppercase;border-bottom:1px solid #e2e8f0;">Descripción</td><td style="padding:12px 16px;font-size:13px;color:#475569;border-bottom:1px solid #e2e8f0;">${descripcion ?? '—'}</td></tr>
-                  <tr style="background:#f8fafc;"><td style="padding:12px 16px;font-size:12px;font-weight:700;color:#64748b;text-transform:uppercase;border-bottom:1px solid #e2e8f0;">Fecha de Recepción</td><td style="padding:12px 16px;font-size:14px;color:#0f172a;border-bottom:1px solid #e2e8f0;">${fecha_recepcion ?? '—'}</td></tr>
-                  <tr><td style="padding:12px 16px;font-size:12px;font-weight:700;color:#64748b;text-transform:uppercase;border-bottom:1px solid #e2e8f0;">Inicio Estimado</td><td style="padding:12px 16px;font-size:14px;color:#0f172a;border-bottom:1px solid #e2e8f0;">${fecha_inicio ?? '—'}</td></tr>
-                  <tr style="background:#f8fafc;"><td style="padding:12px 16px;font-size:12px;font-weight:700;color:#64748b;text-transform:uppercase;">Conclusión Estimada</td><td style="padding:12px 16px;font-size:14px;color:#0f172a;">${fecha_fin ?? '—'}</td></tr>
+                  <tr style="background:#f8fafc;"><td style="padding:12px 16px;font-size:12px;font-weight:700;color:#64748b;text-transform:uppercase;width:40%;border-bottom:1px solid #e2e8f0;">Folio</td><td style="padding:12px 16px;font-size:14px;font-weight:700;color:#1d4ed8;border-bottom:1px solid #e2e8f0;">${folio ?? '&#8212;'}</td></tr>
+                  <tr><td style="padding:12px 16px;font-size:12px;font-weight:700;color:#64748b;text-transform:uppercase;border-bottom:1px solid #e2e8f0;">Colegio</td><td style="padding:12px 16px;font-size:14px;color:#0f172a;border-bottom:1px solid #e2e8f0;">${colegio ?? '&#8212;'}</td></tr>
+                  <tr style="background:#f8fafc;"><td style="padding:12px 16px;font-size:12px;font-weight:700;color:#64748b;text-transform:uppercase;border-bottom:1px solid #e2e8f0;">Clasificación</td><td style="padding:12px 16px;font-size:14px;color:#0f172a;border-bottom:1px solid #e2e8f0;">${clasificacion ?? '&#8212;'}</td></tr>
+                  <tr><td style="padding:12px 16px;font-size:12px;font-weight:700;color:#64748b;text-transform:uppercase;border-bottom:1px solid #e2e8f0;">Descripción</td><td style="padding:12px 16px;font-size:13px;color:#475569;border-bottom:1px solid #e2e8f0;">${descripcion ?? '&#8212;'}</td></tr>
+                  <tr style="background:#f8fafc;"><td style="padding:12px 16px;font-size:12px;font-weight:700;color:#64748b;text-transform:uppercase;border-bottom:1px solid #e2e8f0;">Fecha de Recepción</td><td style="padding:12px 16px;font-size:14px;color:#0f172a;border-bottom:1px solid #e2e8f0;">${fecha_recepcion ?? '&#8212;'}</td></tr>
+                  <tr><td style="padding:12px 16px;font-size:12px;font-weight:700;color:#64748b;text-transform:uppercase;border-bottom:1px solid #e2e8f0;">Inicio Estimado</td><td style="padding:12px 16px;font-size:14px;color:#0f172a;border-bottom:1px solid #e2e8f0;">${fecha_inicio ?? '&#8212;'}</td></tr>
+                  <tr style="background:#f8fafc;"><td style="padding:12px 16px;font-size:12px;font-weight:700;color:#64748b;text-transform:uppercase;">Conclusión Estimada</td><td style="padding:12px 16px;font-size:14px;color:#0f172a;">${fecha_fin ?? '&#8212;'}</td></tr>
                 </table>
-                <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:16px 20px;margin-bottom:28px;">
-                  <p style="margin:0 0 4px;font-size:13px;color:#15803d;font-weight:700;">📎 Nota importante</p>
-                  <p style="margin:0;font-size:13px;color:#166534;line-height:1.5;">Puede descargar e imprimir el ticket con firma de autorización directamente desde el Sistema RCMA. Este documento debe ser anexado a su expediente del proyecto.</p>
-                </div>
-                <table cellpadding="0" cellspacing="0" style="margin:0 auto;">
-                  <tr><td style="background:#0f172a;border-radius:8px;padding:14px 32px;">
-                    <a href="${siteUrl}/ticket-mas" style="color:#ffffff;font-size:15px;font-weight:600;text-decoration:none;">Ver ticket autorizado →</a>
-                  </td></tr>
-                </table>
+                <p style="color:#475569;font-size:14px;line-height:1.6;margin:0;">El Coordinador de Obras le hará llegar los documentos de inscripción del proyecto (Solicitud de Proyecto y Ticket MAS) para que los anexe a su expediente.</p>
               </td>
             </tr>
             <tr>
               <td style="background:#f8fafc;padding:24px 40px;border-top:1px solid #e2e8f0;">
-                <p style="margin:0;color:#94a3b8;font-size:12px;text-align:center;">Autorizado por: <strong>Ricardo Joanathan Reyes Medina</strong> · Coordinador de Obras RCMA<br/>Sistema RCMA © ${new Date().getFullYear()}</p>
+                <p style="margin:0;color:#94a3b8;font-size:12px;text-align:center;">Autorizado por: <strong>Ricardo Joanathan Reyes Medina</strong> · Coordinador de Obras RCMA<br/>Sistema RCMA &#169; ${new Date().getFullYear()}</p>
               </td>
             </tr>
           </table>
@@ -116,7 +107,7 @@ serve(async (req) => {
     </body>
     </html>`;
 
-    await sendEmail(correo_solicitante, `✅ Ticket Autorizado: ${folio ?? ''} — ${colegio ?? ''}`, html);
+    await sendEmail(correo_solicitante, `&#10003; Ticket Autorizado: ${folio ?? ''} &#8212; ${colegio ?? ''}`, html);
 
     return new Response(JSON.stringify({ success: true }), { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
   } catch (err) {
