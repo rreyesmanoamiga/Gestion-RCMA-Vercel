@@ -42,8 +42,7 @@ import SolicitudProyecto from '@/pages/SolicitudProyecto';
 import ProtocoloProyectos from '@/pages/ProtocoloProyectos';
 
 // --- CAMBIO CRÍTICO AQUÍ ---
-// Agregamos llaves { } porque en Cotizaciones.tsx usamos "export const Cotizaciones"
-import { Cotizaciones } from '@/pages/Cotizaciones'; 
+import TicketMAS from '@/pages/TicketMAS';
 
 import SolicitudesRecibidas from '@/pages/SolicitudesRecibidas';
 import Reports from '@/pages/Reports';
@@ -279,7 +278,7 @@ function AuthenticatedApp() {
           <Route path="/checklists/:id"     element={<ChecklistDetail />} />
           <Route path="/solicitud"           element={<SolicitudProyecto />} />
           <Route path="/protocolo"           element={<ProtocoloProyectos />} />
-          <Route path="/cotizaciones"        element={<Cotizaciones />} />
+          <Route path="/ticket-mas"          element={<TicketMAS />} />
           <Route path="/solicitudes"         element={<SolicitudesRecibidas />} />
           <Route path="/reportes"            element={<Reports />} />
           <Route path="/usuarios"           element={<UserManagement />} />
