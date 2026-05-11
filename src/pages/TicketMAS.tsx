@@ -45,7 +45,6 @@ const COLEGIOS_TICKET = [
   { nombre:'OF. MTY', codigo:'MTY-OF',  razon:'Federación Mano Amiga A.C.',                                          sociedad:'1238', centro_gestor:'MXM010', territorio:'FMA', director:'Ángel Eduardo Rodriguez Martinez', admin:'Félix Guerra Herrera', contador:'YAZMIN CRUZ', correo_contador:'ycruz@admmx.org' },
   { nombre:'OF. CDMX',      codigo:'CDMX-OF', razon:'Federación Mano Amiga A.C.',                                          sociedad:'1238', centro_gestor:'MXM010', territorio:'FMA', director:'Ángel Eduardo Rodriguez Martinez', admin:'Félix Guerra Herrera', contador:'YAZMIN CRUZ', correo_contador:'ycruz@admmx.org' },
   { nombre:'GENERAL',            codigo:'FIA',     razon:'Fundación Interamericana Anáhuac para el Desarrollo Social, I.A.P.', sociedad:'1192', centro_gestor:'MXI051', territorio:'FMA', director:'Ángel Eduardo Rodriguez Martinez', admin:'Félix Guerra Herrera', contador:'YAZMIN CRUZ', correo_contador:'ycruz@admmx.org' },
-  { nombre:'FMA',            codigo:'FMA',     razon:'Federación Mano Amiga A.C.',                                          sociedad:'1238', centro_gestor:'MXM010', territorio:'FMA', director:'Ángel Eduardo Rodriguez Martinez', admin:'Félix Guerra Herrera', contador:'YAZMIN CRUZ', correo_contador:'ycruz@admmx.org' },
 ];
 
 const CAR_CORREOS: Record<string, string> = {
@@ -537,13 +536,9 @@ export default function TicketMAS() {
         },
       });
       toast.success(`Ticket ${cancelModal.folio} cancelado`);
-      // Actualizar cache local inmediatamente (sin invalidateQueries para evitar race condition)
-      qc.setQueryData(['tickets_mas'], (old: TicketMAS[] | undefined) =>
-        (old ?? []).map(t => t.id === cancelModal.id
-          ? { ...t, estatus: 'cancelado', motivo_cancelacion: motivoCancel }
-          : t
-        )
-      );
+      // Refrescar datos directamente del servidor para garantizar consistencia
+      const { data: freshData } = await supabase.from('tickets_mas').select('*').order('created_at', { ascending: false });
+      if (freshData) qc.setQueryData(['tickets_mas'], freshData);
       setCancelModal(null);
       setMotivoCancel('');
     } catch (e: any) { toast.error(e.message ?? 'Error'); }
@@ -980,7 +975,7 @@ export default function TicketMAS() {
         </section>
 
         {/* Campos del coordinador */}
-        {viewing.estatus !== 'autorizado' && (
+        {viewing.estatus !== 'autorizado' && viewing.estatus !== 'cancelado' && (
           <section className="bg-white rounded-xl border border-blue-200 shadow-sm overflow-hidden">
             <div className="bg-blue-700 text-white px-4 py-2.5 text-xs font-bold uppercase tracking-wider flex items-center gap-2">
               <FileCheck className="w-4 h-4" /> Campos del Coordinador (Ventanilla Única)
