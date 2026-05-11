@@ -99,6 +99,7 @@ interface TicketMAS {
   areas_participantes?:   string;
   fecha_autorizacion?:    string;
   motivo_cancelacion?:    string;
+  fecha_cancelacion?:     string;
   created_at?:            string;
 }
 
@@ -524,19 +525,20 @@ export default function TicketMAS() {
     if (!cancelModal || !motivoCancel.trim()) { toast.error('Escribe el motivo'); return; }
     setCancelLoading(true);
     try {
+      const fechaCancelacion = new Date().toISOString();
       const { error } = await supabase.from('tickets_mas')
-        .update({ estatus: 'cancelado', motivo_cancelacion: motivoCancel })
+        .update({ estatus: 'cancelado', motivo_cancelacion: motivoCancel, fecha_cancelacion: fechaCancelacion })
         .eq('id', cancelModal.id);
       if (error) throw error;
       // Actualizar caché inmediatamente para que el badge cambie al instante
       qc.setQueryData(['tickets_mas'], (old: TicketMAS[] | undefined) =>
         (old ?? []).map(t =>
           t.id === cancelModal.id
-            ? { ...t, estatus: 'cancelado', motivo_cancelacion: motivoCancel }
+            ? { ...t, estatus: 'cancelado', motivo_cancelacion: motivoCancel, fecha_cancelacion: fechaCancelacion }
             : t
         )
       );
-      await supabase.functions.invoke('notify-ticket-mas-cancelado', {
+      const { error: emailError } = await supabase.functions.invoke('notify-ticket-mas-cancelado', {
         body: {
           folio: cancelModal.folio, colegio: cancelModal.colegio,
           solicitante: cancelModal.nombre_solicitante,
@@ -544,6 +546,7 @@ export default function TicketMAS() {
           motivo: motivoCancel,
         },
       });
+      if (emailError) toast.error('Ticket cancelado pero falló el correo: ' + emailError.message);
       // Forzar refetch inmediato y esperar datos frescos
       await qc.refetchQueries({ queryKey: ['tickets_mas'] });
       setCancelModal(null);
@@ -1030,6 +1033,23 @@ export default function TicketMAS() {
             <p className="text-xs text-emerald-600 mt-1">
               Recepción: {viewing.fecha_recepcion ?? '—'} · Inicio: {viewing.fecha_inicio_estimada ?? '—'} · Conclusión: {viewing.fecha_fin_estimada ?? '—'}
             </p>
+          </div>
+        )}
+
+        {viewing.estatus === 'cancelado' && (
+          <div className="bg-red-50 border border-red-200 rounded-xl p-3 text-center">
+            <Ban className="w-6 h-6 text-red-500 mx-auto mb-1" />
+            <p className="text-sm font-bold text-red-700">Este ticket fue cancelado</p>
+            {viewing.fecha_cancelacion && (
+              <p className="text-xs text-red-500 mt-0.5">
+                {new Date(viewing.fecha_cancelacion).toLocaleDateString('es-MX', { day:'2-digit', month:'long', year:'numeric' })}
+              </p>
+            )}
+            {viewing.motivo_cancelacion && (
+              <p className="text-xs text-red-600 mt-1 bg-red-100 rounded-lg px-3 py-1.5 inline-block">
+                Motivo: {viewing.motivo_cancelacion}
+              </p>
+            )}
           </div>
         )}
       </div>
