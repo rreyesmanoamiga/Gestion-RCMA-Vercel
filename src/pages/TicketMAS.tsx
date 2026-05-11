@@ -49,10 +49,13 @@ const CAR_CORREOS: Record<string, string> = {
   MEXICO: 'gromero@manoamiga.edu.mx',
 };
 
-const CLASIFICACIONES = ['CONSTRUCCION NUEVA','REMODELACION','AMPLIACION','ADECUACION','MEJORA','MANTENIMIENTO ORDINARIO','MANTENIMIENTO EXTRAORDINARIO','PORTAFOLIO','GARANTIAS','REVISION'];
-const PERIODICIDADES   = ['URGENTE','NORMAL'];
-const TIPOS_MANT       = ['PREVENTIVO','CORRECTIVO','N/A'];
-const SI_NO            = ['SI','NO'];
+const TERRITORIOS          = ['NORTE', 'MEXICO', 'FMA'];
+const CLASIFICACIONES      = ['CONSTRUCCION NUEVA','REMODELACION','AMPLIACION','ADECUACION','MEJORA','MANTENIMIENTO ORDINARIO','MANTENIMIENTO EXTRAORDINARIO','PORTAFOLIO','GARANTIAS','REVISION'];
+const CLASES_MANTENIMIENTO = ['MANTENIMIENTO ORDINARIO','MANTENIMIENTO EXTRAORDINARIO'];
+const PERIODICIDADES       = ['URGENTE','NORMAL'];
+const TIPOS_MANT           = ['PREVENTIVO','CORRECTIVO'];
+const SI_NO                = ['SI','NO'];
+const ESTATUSES_ADMIN      = ['pendiente','en_revision','autorizado','cancelado'];
 
 // ─── Tipos ────────────────────────────────────────────────────────────────────
 interface TicketMAS {
@@ -92,6 +95,7 @@ interface TicketMAS {
   fecha_fin_estimada?:    string;
   areas_participantes?:   string;
   fecha_autorizacion?:    string;
+  motivo_cancelacion?:    string;
   created_at?:            string;
 }
 
@@ -116,12 +120,20 @@ const ESTATUS_STYLE: Record<string, { bg: string; dot: string; label: string }> 
   rechazado:    { bg: 'bg-red-50 border border-red-200 text-red-700',         dot: 'bg-red-500',     label: 'Rechazado' },
 };
 
-function EstatusBadge({ estatus }: { estatus?: string }) {
+const isVencido = (t: TicketMAS) => {
+  if (t.estatus !== 'pendiente') return false;
+  const created = t.created_at ? new Date(t.created_at) : null;
+  if (!created) return false;
+  return (Date.now() - created.getTime()) > 12 * 60 * 60 * 1000;
+};
+
+function EstatusBadge({ estatus, vencido }: { estatus?: string; vencido?: boolean }) {
   const s = ESTATUS_STYLE[estatus ?? 'pendiente'] ?? ESTATUS_STYLE.pendiente;
   return (
     <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-semibold ${s.bg}`}>
       <span className={`w-1.5 h-1.5 rounded-full ${s.dot}`} />
       {s.label}
+      {vencido && <span className="ml-1 text-[10px] font-bold text-red-600">⚠ +12h</span>}
     </span>
   );
 }
@@ -215,10 +227,11 @@ function generarHTMLTicket(t: TicketMAS, firma: string): string {
 
   <div class="firma-section">
     <div class="firma-box">
-      <div style="flex:1;display:flex;align-items:center;justify-content:center;padding:4px 0;">
-        <span style="color:#94a3b8;font-size:9px;">_________________________</span>
+      <div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:4px 0;gap:4px;">
+        <span style="font-size:10px;font-weight:600;color:#1e293b;">${t.nombre_solicitante ?? '—'}</span>
+        <span style="font-size:8.5px;color:#64748b;">Enviado: ${t.created_at ? format(new Date(t.created_at), "dd/MM/yyyy HH:mm", { locale: es }) : '—'}</span>
       </div>
-      <div class="firma-name">Director / Administrador<br/><span class="firma-title">${t.colegio ?? 'Colegio'}</span></div>
+      <div class="firma-name">${t.puesto_solicitante ?? 'Director / Administrador'}<br/><span class="firma-title">${t.colegio ?? ''}</span></div>
     </div>
     <div class="firma-box">
       <img src="data:image/png;base64,${firma}" alt="Firma RCMA" style="max-height:60px;max-width:180px;object-fit:contain;"/>
@@ -248,7 +261,7 @@ export default function TicketMAS() {
 
   // ── Form state (llenado por colegio) ────────────────────────────────────────
   const FORM_INIT = {
-    colegio:'', razon_social:'', sociedad:'', centro_gestor:'', territorio:'',
+    territorio:'', colegio:'', razon_social:'', sociedad:'', centro_gestor:'',
     director:'', admin_colegio:'', contador:'',
     nombre_solicitante:'', puesto_solicitante:'', correo_solicitante:'',
     fecha_elaboracion: format(new Date(), 'yyyy-MM-dd'),
@@ -268,6 +281,31 @@ export default function TicketMAS() {
   const ADMIN_INIT = { fecha_recepcion:'', fecha_inicio_estimada:'', fecha_fin_estimada:'', areas_participantes:'' };
   const [adminForm, setAdminForm] = useState({ ...ADMIN_INIT });
   const setA = (k: string, v: string) => setAdminForm(p => ({ ...p, [k]: v }));
+
+  const [showCot2, setShowCot2] = useState(false);
+  const [showCot3, setShowCot3] = useState(false);
+
+  // Cancelación modal
+  const [cancelModal, setCancelModal]     = useState<TicketMAS | null>(null);
+  const [motivoCancel, setMotivoCancel]   = useState('');
+  const [cancelLoading, setCancelLoading] = useState(false);
+  const [changingStatus, setChangingStatus] = useState<string | null>(null);
+
+  const colegiosFiltrados = useMemo(() =>
+    form.territorio ? COLEGIOS_TICKET.filter(c => c.territorio === form.territorio) : [],
+    [form.territorio]
+  );
+
+  const onTerritorioChange = (t: string) => {
+    setForm(p => ({ ...p, territorio: t, colegio:'', razon_social:'', sociedad:'', centro_gestor:'', director:'', admin_colegio:'', contador:'' }));
+  };
+
+  const esMant = CLASES_MANTENIMIENTO.includes(form.clasificacion);
+
+  const onClasificacionChange = (v: string) => {
+    const m = CLASES_MANTENIMIENTO.includes(v);
+    setForm(p => ({ ...p, clasificacion: v, tipo_mantenimiento: m ? '' : 'N/A' }));
+  };
 
   // Al seleccionar colegio, auto-rellenar datos
   const onColegioChange = (nombre: string) => {
@@ -507,10 +545,17 @@ export default function TicketMAS() {
           <div className="p-4 space-y-4">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
+                <label className={labelClass}>Territorio *</label>
+                <select className={selectClass} value={form.territorio} onChange={e => onTerritorioChange(e.target.value)}>
+                  <option value="">— Seleccionar territorio —</option>
+                  {TERRITORIOS.map(t => <option key={t} value={t}>{t}</option>)}
+                </select>
+              </div>
+              <div>
                 <label className={labelClass}>Colegio *</label>
-                <select className={selectClass} value={form.colegio} onChange={e => onColegioChange(e.target.value)}>
+                <select className={selectClass} value={form.colegio} onChange={e => onColegioChange(e.target.value)} disabled={!form.territorio}>
                   <option value="">— Seleccionar colegio —</option>
-                  {COLEGIOS_TICKET.map(c => <option key={c.codigo} value={c.nombre}>{c.nombre}</option>)}
+                  {colegiosFiltrados.map(c => <option key={c.codigo} value={c.nombre}>{c.nombre}</option>)}
                 </select>
               </div>
               <div>
@@ -526,18 +571,18 @@ export default function TicketMAS() {
                 <input className={readOnlyClass} value={form.sociedad} readOnly />
               </div>
               <div>
-                <label className={labelClass}>Fecha de Elaboración</label>
-                <input className={inputClass} type="date" value={form.fecha_elaboracion} onChange={e => set('fecha_elaboracion', e.target.value)} />
-              </div>
-              <div>
                 <label className={labelClass}>Contador</label>
                 <input className={readOnlyClass} value={form.contador} readOnly />
+              </div>
+              <div>
+                <label className={labelClass}>Fecha de Elaboración</label>
+                <input className={inputClass} type="date" value={form.fecha_elaboracion} onChange={e => set('fecha_elaboracion', e.target.value)} />
               </div>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div>
                 <label className={labelClass}>Clasificación *</label>
-                <select className={selectClass} value={form.clasificacion} onChange={e => set('clasificacion', e.target.value)}>
+                <select className={selectClass} value={form.clasificacion} onChange={e => onClasificacionChange(e.target.value)}>
                   <option value="">— Seleccionar —</option>
                   {CLASIFICACIONES.map(c => <option key={c} value={c}>{c}</option>)}
                 </select>
@@ -549,13 +594,20 @@ export default function TicketMAS() {
                 </select>
               </div>
               <div>
-                <label className={labelClass}>Tipo de Mantenimiento</label>
-                <select className={selectClass} value={form.tipo_mantenimiento} onChange={e => set('tipo_mantenimiento', e.target.value)}>
-                  {TIPOS_MANT.map(t => <option key={t} value={t}>{t}</option>)}
-                </select>
+                <label className={labelClass}>
+                  Tipo de Mantenimiento {esMant && <span className="text-red-500">*</span>}
+                </label>
+                {esMant ? (
+                  <select className={selectClass} value={form.tipo_mantenimiento} onChange={e => set('tipo_mantenimiento', e.target.value)}>
+                    <option value="">— Seleccionar —</option>
+                    {TIPOS_MANT.map(t => <option key={t} value={t}>{t}</option>)}
+                  </select>
+                ) : (
+                  <input className={readOnlyClass} value="N/A" readOnly />
+                )}
               </div>
               <div>
-                <label className={labelClass}>Número de Activo</label>
+                <label className={labelClass}>Número de Activo <span className="text-slate-400 font-normal normal-case">(opcional)</span></label>
                 <input className={inputClass} value={form.numero_activo} onChange={e => set('numero_activo', e.target.value)} />
               </div>
               <div>

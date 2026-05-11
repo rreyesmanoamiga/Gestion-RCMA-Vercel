@@ -77,11 +77,8 @@ serve(async (req) => {
     const smtpPass   = Deno.env.get('SMTP_PASS') ?? '';
     const siteUrl    = Deno.env.get('SITE_URL')  ?? '';
 
-    // Correos fijos en copia siempre
-    const ccFijos = ['arodriguez@manoamiga.edu.mx', 'ecastaneda@manoamiga.edu.mx'];
-    // CAR variable según territorio
-    const ccCAR   = correo_car ? [correo_car] : [];
-    const ccTotal = [...ccFijos, ...ccCAR];
+    // Solo CAR variable por territorio (modo prueba - sin CC fijos)
+    const ccTotal: string[] = [];
 
     const hoy = new Date().toLocaleDateString('es-MX', { day:'2-digit', month:'long', year:'numeric' });
 
