@@ -269,7 +269,7 @@ function AnteproyectoForm({
                 <option key={p.id} value={p.id}>{p.folio ? `${p.folio} — ` : ''}{p.name}</option>
               ))}
             </select>
-            <p className="text-[10px] text-slate-400 mt-1">Solo se muestran proyectos con folio TCMM asignado.</p>
+            <p className="text-[10px] text-slate-400 mt-1">Solo se muestran proyectos con folio TCMM asignado (formato TCMM-YYYY-NNN).</p>
           </div>
 
           {/* Ruta OneDrive */}
