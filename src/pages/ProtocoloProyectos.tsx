@@ -12,13 +12,13 @@ import {
   Mail,
   ChevronRight,
   AlertCircle,
+  BarChart2,
 } from 'lucide-react';
 
 // ─── Archivos en Supabase Storage (bucket privado: documentos-rcma) ────────────
-const BUCKET = 'documentos-rcma';
-const FILE_TICKET      = 'TICKET_MAS_V2.xlsx';
+const BUCKET           = 'documentos-rcma';
 const FILE_TABLA       = 'TABLA COMPARATIVA_MAS_V2.xlsx';
-const SIGNED_URL_TTL   = 60; // segundos de validez del enlace de descarga
+const SIGNED_URL_TTL   = 60;
 
 // ─── Datos de las fases del protocolo ────────────────────────────────────────
 const FASES = [
@@ -28,8 +28,9 @@ const FASES = [
     titulo: 'Solicitud de Proyecto',
     color: 'blue',
     pasos: [
-      'Ingresar al Sistema RCMA y completar el formulario de Solicitud de Proyecto con toda la información requerida del proyecto.',
-      'Una vez enviada, la Coordinación de Obras y Mantenimiento RCMA revisará la solicitud y notificará el resultado vía correo electrónico.',
+      'Ingresar al Sistema RCMA y completar el formulario de Solicitud de Proyecto con toda la información requerida: descripción del proyecto, clasificación, colegio solicitante, datos del responsable y cualquier información técnica pertinente.',
+      'Una vez enviada la solicitud, el sistema generará una notificación automática por correo electrónico al solicitante, confirmando la recepción del registro.',
+      'La Coordinación de Obras y Mantenimiento RCMA revisará la solicitud en un plazo no mayor a 5 días hábiles y determinará los pasos a seguir.',
     ],
   },
   {
@@ -38,30 +39,41 @@ const FASES = [
     titulo: 'Reunión de Entendimiento',
     color: 'indigo',
     pasos: [
-      'De ser necesario, se convocará a una reunión de entendimiento con la participación de: Gerencia Administrativa, Coordinación Administrativa Regional (CAR) y Coordinación de Obras y Mantenimiento RCMA.',
-      'En dicha reunión se definen alcances: permisos requeridos, disponibilidad de financiamiento, necesidad de anteproyecto o estudios preliminares, entre otros.',
-      'Si el colegio ya cuenta con cotizaciones de proveedores, deberán enviarse por correo electrónico para su revisión y validación técnica.',
+      'En caso de que la complejidad o alcance del proyecto lo requiera, se programará una Reunión de Entendimiento con los siguientes participantes: Gerencia Administrativa del Colegio, Coordinación Administrativa Regional (CAR) y Coordinación de Obras y Mantenimiento RCMA.',
+      'El propósito de esta reunión es analizar y validar: verificación de permisos o autorizaciones requeridas, disponibilidad y suficiencia del financiamiento, necesidad de anteproyecto arquitectónico o de ingeniería, requerimiento de estudios preliminares (topográficos, de suelo, estructurales, etc.) y definición del alcance, cronograma estimado y áreas involucradas.',
     ],
   },
   {
     num: '03',
-    icon: CheckCircle2,
-    titulo: 'Solicitud al Equipo ECO',
-    color: 'violet',
+    icon: BarChart2,
+    titulo: 'Cotizaciones y Tabla Comparativa',
+    color: 'teal',
     pasos: [
-      'La Coordinación de Obras y Mantenimiento RCMA elaborará y remitirá una solicitud formal al equipo ECO, describiendo el proyecto y el tipo de apoyo requerido.',
-      'Para proyectos de mantenimiento, ECO realizará el análisis comparativo de costos cotizados por los distintos proveedores.',
+      'El colegio solicitante deberá recabar un mínimo de tres (3) cotizaciones de proveedores distintos. Cada cotización debe contener: datos del proveedor (razón social, RFC, experiencia), alcance y descripción detallada del trabajo, monto total desglosado en MXN con IVA, tiempo de ejecución, garantía ofrecida y vigencia de la cotización.',
+      'Con base en las cotizaciones recabadas, se deberá elaborar la Tabla Comparativa en el formato Excel proporcionado por la Coordinación de Obras (disponible para descarga en esta página), evaluando: monto total, tiempo de ejecución, garantía, experiencia del proveedor y justificación de la selección considerando la relación costo-beneficio.',
+      'La Tabla Comparativa junto con las tres cotizaciones en formato PDF deberán ser enviadas a la Coordinación de Obras y Mantenimiento RCMA para su validación antes de continuar con el proceso.',
     ],
   },
   {
     num: '04',
+    icon: CheckCircle2,
+    titulo: 'Solicitud al Equipo ECO',
+    color: 'violet',
+    pasos: [
+      'La Coordinación de Obras y Mantenimiento RCMA elaborará y remitirá una solicitud formal al equipo ECO, con una descripción técnica del proyecto y la justificación de su participación.',
+      'En caso de requerirse, se programará una Reunión de Entendimiento entre la Coordinación de Obras y Mantenimiento RCMA y el equipo ECO para alinear criterios técnicos y metodológicos.',
+      'Para proyectos de mantenimiento, ECO realizará la asesoría técnica para el análisis comparativo de costos de las cotizaciones presentadas por los proveedores, validando su pertinencia y razonabilidad de precios.',
+    ],
+  },
+  {
+    num: '05',
     icon: Ticket,
     titulo: 'Ticket MAS y Documentación',
     color: 'orange',
-    esTicket: true,
     pasos: [
-      'El MA Colegio deberá completar y enviar los siguientes documentos: Ticket MAS (con firmas digitales), tres cotizaciones de proveedores y la Tabla Comparativa.',
-      'Todos los archivos deben entregarse en formato Excel debidamente llenado y convertidos a PDF. Solo el Ticket MAS requiere firmas digitales.',
+      'La habilitación del módulo Ticket MAS en el Sistema RCMA será liberada por el Coordinador de Obras y Mantenimiento, previa validación de los pasos anteriores. No se otorgará acceso al registro sin esta autorización.',
+      'Una vez habilitado el acceso, el solicitante deberá ingresar al Sistema RCMA y completar el formulario del Ticket MAS con la información técnica, financiera y de clasificación requerida, incluyendo las cotizaciones de los proveedores.',
+      'El sistema notificará automáticamente a la Coordinación de Obras y Mantenimiento RCMA al recibir el nuevo Ticket MAS para su revisión y proceso de autorización.',
     ],
     correo: {
       para: 'rreyes@manoamiga.edu.mx',
@@ -74,24 +86,26 @@ const FASES = [
     },
   },
   {
-    num: '05',
+    num: '06',
     icon: ShieldCheck,
     titulo: 'Autorización del Proyecto',
     color: 'green',
     pasos: [
-      'La Coordinación de Obras y Mantenimiento RCMA responderá el correo del Ticket MAS con la autorización formal del proyecto.',
-      'La respuesta incluirá: Número de Proyecto, Folio de Ticket, Fecha de autorización, Proveedor autorizado, Costo autorizado y tiempos estimados de inicio y conclusión.',
-      'Se adjuntará el Ticket MAS con firma autorizada y una copia de la Solicitud de Proyecto ingresada al sistema.',
+      'La Coordinación de Obras y Mantenimiento RCMA revisará la información registrada en el Ticket MAS y, de estar completa y correcta, procederá con la autorización formal en el sistema.',
+      'El Sistema RCMA notificará de manera automática por correo electrónico a todos los involucrados (solicitante, Gerencia Administrativa, CAR de zona y Coordinación de Obras), indicando las fechas estimadas de recepción, inicio y conclusión del proyecto.',
+      'El Coordinador de Obras y Mantenimiento hará llegar al colegio los documentos oficiales (Solicitud de Proyecto y Ticket MAS autorizados) para su integración al expediente del proyecto.',
+      'A partir de la autorización, el proyecto quedará registrado en el sistema para su seguimiento, control y supervisión por parte de la Coordinación de Obras y Mantenimiento RCMA.',
     ],
   },
 ];
 
 const colorMap: Record<string, { bg: string; border: string; badge: string; icon: string; pill: string }> = {
-  blue:   { bg: 'bg-blue-50',   border: 'border-blue-200',  badge: 'bg-blue-100 text-blue-700',   icon: 'text-blue-600',   pill: 'bg-blue-600'   },
-  indigo: { bg: 'bg-indigo-50', border: 'border-indigo-200',badge: 'bg-indigo-100 text-indigo-700',icon: 'text-indigo-600', pill: 'bg-indigo-600' },
-  violet: { bg: 'bg-violet-50', border: 'border-violet-200',badge: 'bg-violet-100 text-violet-700',icon: 'text-violet-600', pill: 'bg-violet-600' },
-  orange: { bg: 'bg-orange-50', border: 'border-orange-200',badge: 'bg-orange-100 text-orange-700',icon: 'text-orange-600', pill: 'bg-orange-600' },
-  green:  { bg: 'bg-emerald-50',border: 'border-emerald-200',badge:'bg-emerald-100 text-emerald-700',icon:'text-emerald-600',pill:'bg-emerald-600'},
+  blue:   { bg: 'bg-blue-50',   border: 'border-blue-200',   badge: 'bg-blue-100 text-blue-700',    icon: 'text-blue-600',   pill: 'bg-blue-600'   },
+  indigo: { bg: 'bg-indigo-50', border: 'border-indigo-200', badge: 'bg-indigo-100 text-indigo-700', icon: 'text-indigo-600', pill: 'bg-indigo-600' },
+  teal:   { bg: 'bg-teal-50',   border: 'border-teal-200',   badge: 'bg-teal-100 text-teal-700',    icon: 'text-teal-600',   pill: 'bg-teal-600'   },
+  violet: { bg: 'bg-violet-50', border: 'border-violet-200', badge: 'bg-violet-100 text-violet-700', icon: 'text-violet-600', pill: 'bg-violet-600' },
+  orange: { bg: 'bg-orange-50', border: 'border-orange-200', badge: 'bg-orange-100 text-orange-700', icon: 'text-orange-600', pill: 'bg-orange-600' },
+  green:  { bg: 'bg-emerald-50',border: 'border-emerald-200',badge: 'bg-emerald-100 text-emerald-700',icon:'text-emerald-600',pill:'bg-emerald-600' },
 };
 
 export default function ProtocoloProyectos() {
@@ -155,49 +169,29 @@ export default function ProtocoloProyectos() {
         </div>
 
         {/* ── Descargables ─────────────────────────────────────────────── */}
-        <div className="bg-white rounded-2xl border border-amber-200 shadow-sm overflow-hidden">
-          <div className="px-6 py-4 border-b border-amber-100 flex items-center gap-2.5 bg-amber-50">
-            <AlertCircle className="w-4 h-4 text-amber-600 flex-shrink-0" />
-            <p className="text-sm font-bold text-amber-800">
-              Documentos requeridos para la Fase 04 — Ticket MAS
+        <div className="bg-white rounded-2xl border border-teal-200 shadow-sm overflow-hidden">
+          <div className="px-6 py-4 border-b border-teal-100 flex items-center gap-2.5 bg-teal-50">
+            <AlertCircle className="w-4 h-4 text-teal-600 flex-shrink-0" />
+            <p className="text-sm font-bold text-teal-800">
+              Documento requerido para la Fase 03 — Cotizaciones y Tabla Comparativa
             </p>
           </div>
-          <div className="p-6 grid grid-cols-1 sm:grid-cols-2 gap-4">
-
-            {/* Ticket MAS */}
-            <button
-              onClick={() => handleDownload(FILE_TICKET)}
-              disabled={loadingFile === FILE_TICKET}
-              className="group flex items-center gap-4 p-4 rounded-xl border-2 border-slate-200 hover:border-blue-400 hover:bg-blue-50 transition-all duration-200 text-left"
-            >
-              <div className="w-11 h-11 rounded-lg bg-blue-100 group-hover:bg-blue-200 flex items-center justify-center flex-shrink-0 transition-colors">
-                <FileSpreadsheet className="w-5 h-5 text-blue-600" />
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-bold text-slate-800 leading-tight">Ticket MAS</p>
-                <p className="text-xs text-slate-500 mt-0.5">Archivo Excel · Requiere firmas digitales</p>
-              </div>
-              {loadingFile === FILE_TICKET
-                ? <span className="w-4 h-4 border-2 border-blue-400 border-t-transparent rounded-full animate-spin flex-shrink-0" />
-                : <Download className="w-4 h-4 text-slate-400 group-hover:text-blue-600 flex-shrink-0 transition-colors" />}
-            </button>
-
-            {/* Tabla Comparativa */}
+          <div className="p-6">
             <button
               onClick={() => handleDownload(FILE_TABLA)}
               disabled={loadingFile === FILE_TABLA}
-              className="group flex items-center gap-4 p-4 rounded-xl border-2 border-slate-200 hover:border-emerald-400 hover:bg-emerald-50 transition-all duration-200 text-left"
+              className="group flex items-center gap-4 p-4 rounded-xl border-2 border-slate-200 hover:border-teal-400 hover:bg-teal-50 transition-all duration-200 text-left w-full sm:w-auto"
             >
-              <div className="w-11 h-11 rounded-lg bg-emerald-100 group-hover:bg-emerald-200 flex items-center justify-center flex-shrink-0 transition-colors">
-                <FileSpreadsheet className="w-5 h-5 text-emerald-600" />
+              <div className="w-11 h-11 rounded-lg bg-teal-100 group-hover:bg-teal-200 flex items-center justify-center flex-shrink-0 transition-colors">
+                <FileSpreadsheet className="w-5 h-5 text-teal-600" />
               </div>
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-bold text-slate-800 leading-tight">Tabla Comparativa</p>
-                <p className="text-xs text-slate-500 mt-0.5">Archivo Excel · Análisis de cotizaciones</p>
+                <p className="text-xs text-slate-500 mt-0.5">Archivo Excel · Análisis de cotizaciones de proveedores</p>
               </div>
               {loadingFile === FILE_TABLA
-                ? <span className="w-4 h-4 border-2 border-emerald-400 border-t-transparent rounded-full animate-spin flex-shrink-0" />
-                : <Download className="w-4 h-4 text-slate-400 group-hover:text-emerald-600 flex-shrink-0 transition-colors" />}
+                ? <span className="w-4 h-4 border-2 border-teal-400 border-t-transparent rounded-full animate-spin flex-shrink-0" />
+                : <Download className="w-4 h-4 text-slate-400 group-hover:text-teal-600 flex-shrink-0 transition-colors" />}
             </button>
           </div>
         </div>
@@ -229,7 +223,7 @@ export default function ProtocoloProyectos() {
                     </div>
                   ))}
 
-                  {/* Bloque especial de correo (solo fase 04) */}
+                  {/* Bloque especial de correo (solo fase 05) */}
                   {fase.correo && (
                     <div className="mt-4 rounded-xl bg-slate-50 border border-slate-200 overflow-hidden">
                       <div className="px-4 py-2.5 bg-slate-100 border-b border-slate-200 flex items-center gap-2">
@@ -256,7 +250,6 @@ export default function ProtocoloProyectos() {
                   )}
                 </div>
 
-                {/* Conector visual entre fases */}
                 {idx < FASES.length - 1 && (
                   <div className="h-px bg-slate-100 mx-6" />
                 )}
