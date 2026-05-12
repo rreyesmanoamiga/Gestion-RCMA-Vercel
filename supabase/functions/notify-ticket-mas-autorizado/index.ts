@@ -5,7 +5,7 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-async function sendEmail(to: string, subject: string, html: string) {
+async function sendEmail(to: string, cc: string[], subject: string, html: string) {
   const smtpHost = Deno.env.get('SMTP_HOST') ?? 'smtp.office365.com';
   const smtpPort = parseInt(Deno.env.get('SMTP_PORT') ?? '587');
   const smtpUser = Deno.env.get('SMTP_USER') ?? '';
@@ -29,13 +29,25 @@ async function sendEmail(to: string, subject: string, html: string) {
   await tlsWrite(btoa(smtpUser));     await tlsRead();
   await tlsWrite(btoa(smtpPass));     await tlsRead();
   await tlsWrite(`MAIL FROM:<${smtpUser}>`); await tlsRead();
-  await tlsWrite(`RCPT TO:<${to}>`);        await tlsRead();
-  await tlsWrite('DATA');                    await tlsRead();
+
+  // Destinatario principal
+  await tlsWrite(`RCPT TO:<${to}>`); await tlsRead();
+
+  // CC recipients
+  for (const ccAddr of cc) {
+    if (ccAddr) {
+      await tlsWrite(`RCPT TO:<${ccAddr}>`); await tlsRead();
+    }
+  }
+
+  await tlsWrite('DATA'); await tlsRead();
 
   const boundary = 'boundary_' + Date.now();
+  const ccHeader = cc.filter(Boolean).join(', ');
   const message = [
     `From: Sistema RCMA <${smtpUser}>`,
     `To: ${to}`,
+    ...(ccHeader ? [`Cc: ${ccHeader}`] : []),
     `Subject: ${subject}`,
     'MIME-Version: 1.0',
     `Content-Type: multipart/alternative; boundary="${boundary}"`,
@@ -57,8 +69,16 @@ async function sendEmail(to: string, subject: string, html: string) {
 serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
   try {
-    const { folio, colegio, solicitante, correo_solicitante, fecha_recepcion, fecha_inicio, fecha_fin, descripcion, clasificacion } = await req.json();
+    const { folio, colegio, solicitante, correo_solicitante, territorio, correo_car,
+            fecha_recepcion, fecha_inicio, fecha_fin, descripcion, clasificacion } = await req.json();
     const smtpUser = Deno.env.get('SMTP_USER') ?? '';
+
+    // CC fijos + CAR de zona
+    const ccList = [
+      'arodriguez@manoamiga.edu.mx',
+      'ecastaneda@manoamiga.edu.mx',
+      correo_car ?? '',
+    ].filter(Boolean);
 
     const html = `
     <!DOCTYPE html>
@@ -87,11 +107,12 @@ serve(async (req) => {
                   <tr style="background:#f0fdf4;"><td colspan="2" style="padding:10px 16px;font-size:12px;font-weight:700;color:#15803d;border-bottom:1px solid #dcfce7;">Datos del Ticket Autorizado</td></tr>
                   <tr style="background:#f8fafc;"><td style="padding:12px 16px;font-size:12px;font-weight:700;color:#64748b;text-transform:uppercase;width:40%;border-bottom:1px solid #e2e8f0;">Folio</td><td style="padding:12px 16px;font-size:14px;font-weight:700;color:#1d4ed8;border-bottom:1px solid #e2e8f0;">${folio ?? '&#8212;'}</td></tr>
                   <tr><td style="padding:12px 16px;font-size:12px;font-weight:700;color:#64748b;text-transform:uppercase;border-bottom:1px solid #e2e8f0;">Colegio</td><td style="padding:12px 16px;font-size:14px;color:#0f172a;border-bottom:1px solid #e2e8f0;">${colegio ?? '&#8212;'}</td></tr>
-                  <tr style="background:#f8fafc;"><td style="padding:12px 16px;font-size:12px;font-weight:700;color:#64748b;text-transform:uppercase;border-bottom:1px solid #e2e8f0;">Clasificación</td><td style="padding:12px 16px;font-size:14px;color:#0f172a;border-bottom:1px solid #e2e8f0;">${clasificacion ?? '&#8212;'}</td></tr>
-                  <tr><td style="padding:12px 16px;font-size:12px;font-weight:700;color:#64748b;text-transform:uppercase;border-bottom:1px solid #e2e8f0;">Descripción</td><td style="padding:12px 16px;font-size:13px;color:#475569;border-bottom:1px solid #e2e8f0;">${descripcion ?? '&#8212;'}</td></tr>
-                  <tr style="background:#f8fafc;"><td style="padding:12px 16px;font-size:12px;font-weight:700;color:#64748b;text-transform:uppercase;border-bottom:1px solid #e2e8f0;">Fecha de Recepción</td><td style="padding:12px 16px;font-size:14px;color:#0f172a;border-bottom:1px solid #e2e8f0;">${fecha_recepcion ?? '&#8212;'}</td></tr>
-                  <tr><td style="padding:12px 16px;font-size:12px;font-weight:700;color:#64748b;text-transform:uppercase;border-bottom:1px solid #e2e8f0;">Inicio Estimado</td><td style="padding:12px 16px;font-size:14px;color:#0f172a;border-bottom:1px solid #e2e8f0;">${fecha_inicio ?? '&#8212;'}</td></tr>
-                  <tr style="background:#f8fafc;"><td style="padding:12px 16px;font-size:12px;font-weight:700;color:#64748b;text-transform:uppercase;">Conclusión Estimada</td><td style="padding:12px 16px;font-size:14px;color:#0f172a;">${fecha_fin ?? '&#8212;'}</td></tr>
+                  <tr style="background:#f8fafc;"><td style="padding:12px 16px;font-size:12px;font-weight:700;color:#64748b;text-transform:uppercase;border-bottom:1px solid #e2e8f0;">Territorio</td><td style="padding:12px 16px;font-size:14px;color:#0f172a;border-bottom:1px solid #e2e8f0;">${territorio ?? '&#8212;'}</td></tr>
+                  <tr><td style="padding:12px 16px;font-size:12px;font-weight:700;color:#64748b;text-transform:uppercase;border-bottom:1px solid #e2e8f0;">Clasificación</td><td style="padding:12px 16px;font-size:14px;color:#0f172a;border-bottom:1px solid #e2e8f0;">${clasificacion ?? '&#8212;'}</td></tr>
+                  <tr style="background:#f8fafc;"><td style="padding:12px 16px;font-size:12px;font-weight:700;color:#64748b;text-transform:uppercase;border-bottom:1px solid #e2e8f0;">Descripción</td><td style="padding:12px 16px;font-size:13px;color:#475569;border-bottom:1px solid #e2e8f0;">${descripcion ?? '&#8212;'}</td></tr>
+                  <tr><td style="padding:12px 16px;font-size:12px;font-weight:700;color:#64748b;text-transform:uppercase;border-bottom:1px solid #e2e8f0;">Fecha de Recepción</td><td style="padding:12px 16px;font-size:14px;color:#0f172a;border-bottom:1px solid #e2e8f0;">${fecha_recepcion ?? '&#8212;'}</td></tr>
+                  <tr style="background:#f8fafc;"><td style="padding:12px 16px;font-size:12px;font-weight:700;color:#64748b;text-transform:uppercase;border-bottom:1px solid #e2e8f0;">Inicio Estimado</td><td style="padding:12px 16px;font-size:14px;color:#0f172a;border-bottom:1px solid #e2e8f0;">${fecha_inicio ?? '&#8212;'}</td></tr>
+                  <tr><td style="padding:12px 16px;font-size:12px;font-weight:700;color:#64748b;text-transform:uppercase;">Conclusión Estimada</td><td style="padding:12px 16px;font-size:14px;color:#0f172a;">${fecha_fin ?? '&#8212;'}</td></tr>
                 </table>
                 <p style="color:#475569;font-size:14px;line-height:1.6;margin:0;">El Coordinador de Obras le hará llegar los documentos de inscripción del proyecto (Solicitud de Proyecto y Ticket MAS) para que los anexe a su expediente.</p>
               </td>
@@ -107,7 +128,12 @@ serve(async (req) => {
     </body>
     </html>`;
 
-    await sendEmail(correo_solicitante, `Ticket MAS Autorizado - ${folio ?? ''} - ${colegio ?? ''}`, html);
+    await sendEmail(
+      correo_solicitante,
+      ccList,
+      `Ticket MAS Autorizado - ${folio ?? ''} - ${colegio ?? ''}`,
+      html
+    );
 
     return new Response(JSON.stringify({ success: true }), { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
   } catch (err) {
