@@ -51,7 +51,7 @@ const FASES = [
     pasos: [
       'El colegio solicitante deberá recabar un mínimo de tres (3) cotizaciones de proveedores distintos. Cada cotización debe contener: datos del proveedor (razón social, RFC, experiencia), alcance y descripción detallada del trabajo, monto total desglosado en MXN con IVA, tiempo de ejecución, garantía ofrecida y vigencia de la cotización.',
       'Con base en las cotizaciones recabadas, se deberá elaborar la Tabla Comparativa en el formato Excel proporcionado por la Coordinación de Obras (disponible para descarga en esta página), evaluando: monto total, tiempo de ejecución, garantía, experiencia del proveedor y justificación de la selección considerando la relación costo-beneficio.',
-      'La Tabla Comparativa junto con las tres cotizaciones en formato PDF deberán ser enviadas a la Coordinación de Obras y Mantenimiento RCMA para su validación antes de continuar con el proceso.',
+      'La Tabla Comparativa junto con las tres cotizaciones en formato PDF deberán enviarse contestando el correo de notificación de revisión de la Solicitud de Proyecto, con copia a: arodriguez@manoamiga.edu.mx, CAR de Zona correspondiente y Líder de Proyecto ECO de Zona.',
     ],
   },
   {
@@ -68,22 +68,14 @@ const FASES = [
   {
     num: '05',
     icon: Ticket,
-    titulo: 'Ticket MAS y Documentación',
+    titulo: 'Ticket MAS',
     color: 'orange',
     pasos: [
       'La habilitación del módulo Ticket MAS en el Sistema RCMA será liberada por el Coordinador de Obras y Mantenimiento, previa validación de los pasos anteriores. No se otorgará acceso al registro sin esta autorización.',
       'Una vez habilitado el acceso, el solicitante deberá ingresar al Sistema RCMA y completar el formulario del Ticket MAS con la información técnica, financiera y de clasificación requerida, incluyendo las cotizaciones de los proveedores.',
       'El sistema notificará automáticamente a la Coordinación de Obras y Mantenimiento RCMA al recibir el nuevo Ticket MAS para su revisión y proceso de autorización.',
     ],
-    correo: {
-      para: 'rreyes@manoamiga.edu.mx',
-      cc: [
-        'arodriguez@manoamiga.edu.mx',
-        'ecastaneda@manoamiga.edu.mx',
-        'CAR de zona correspondiente',
-      ],
-      asunto: 'MA [Colegio] | Ticket MAS | [Nombre del Proyecto]',
-    },
+
   },
   {
     num: '06',
