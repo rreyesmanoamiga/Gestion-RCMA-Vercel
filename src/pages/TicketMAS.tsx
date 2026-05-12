@@ -1027,31 +1027,40 @@ export default function TicketMAS() {
         )}
 
         {viewing.estatus === 'autorizado' && (
-          <div className="bg-slate-50 border border-slate-200 rounded-lg px-4 py-2.5 flex items-center gap-3">
-            <CheckCircle className="w-4 h-4 text-slate-400 shrink-0" />
-            <div>
-              <p className="text-xs font-semibold text-slate-500">Ticket autorizado</p>
-              <p className="text-xs text-slate-400 mt-0.5">
-                Recepción: {viewing.fecha_recepcion ?? '—'} · Inicio: {viewing.fecha_inicio_estimada ?? '—'} · Conclusión: {viewing.fecha_fin_estimada ?? '—'}
-              </p>
-            </div>
+          <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-4 text-center">
+            <CheckCircle className="w-8 h-8 text-emerald-500 mx-auto mb-2" />
+            <p className="text-sm font-bold text-emerald-700">Este ticket fue autorizado</p>
+            <p className="text-xs text-emerald-600 mt-1">
+              Recepción: {viewing.fecha_recepcion ?? '—'} · Inicio: {viewing.fecha_inicio_estimada ?? '—'} · Conclusión: {viewing.fecha_fin_estimada ?? '—'}
+            </p>
           </div>
         )}
 
         {viewing.estatus === 'cancelado' && (
-          <div className="bg-red-50 border border-red-200 rounded-xl p-3 text-center">
-            <Ban className="w-6 h-6 text-red-500 mx-auto mb-1" />
-            <p className="text-sm font-bold text-red-700">Este ticket fue cancelado</p>
-            {viewing.fecha_cancelacion && (
-              <p className="text-xs text-red-500 mt-0.5">
-                {new Date(viewing.fecha_cancelacion).toLocaleDateString('es-MX', { day:'2-digit', month:'long', year:'numeric' })}
-              </p>
-            )}
-            {viewing.motivo_cancelacion && (
-              <p className="text-xs text-red-600 mt-1 bg-red-100 rounded-lg px-3 py-1.5 inline-block">
-                Motivo: {viewing.motivo_cancelacion}
-              </p>
-            )}
+          <div className="space-y-3">
+            <div className="bg-slate-50 border border-slate-200 rounded-lg px-4 py-2.5 flex items-center gap-3">
+              <CheckCircle className="w-4 h-4 text-slate-400 shrink-0" />
+              <div>
+                <p className="text-xs font-semibold text-slate-500">Ticket autorizado previamente</p>
+                <p className="text-xs text-slate-400 mt-0.5">
+                  Recepción: {viewing.fecha_recepcion ?? '—'} · Inicio: {viewing.fecha_inicio_estimada ?? '—'} · Conclusión: {viewing.fecha_fin_estimada ?? '—'}
+                </p>
+              </div>
+            </div>
+            <div className="bg-red-50 border border-red-200 rounded-xl p-3 text-center">
+              <Ban className="w-6 h-6 text-red-500 mx-auto mb-1" />
+              <p className="text-sm font-bold text-red-700">Este ticket fue cancelado</p>
+              {viewing.fecha_cancelacion && (
+                <p className="text-xs text-red-500 mt-0.5">
+                  {new Date(viewing.fecha_cancelacion).toLocaleDateString('es-MX', { day:'2-digit', month:'long', year:'numeric' })}
+                </p>
+              )}
+              {viewing.motivo_cancelacion && (
+                <p className="text-xs text-red-600 mt-1 bg-red-100 rounded-lg px-3 py-1.5 inline-block">
+                  Motivo: {viewing.motivo_cancelacion}
+                </p>
+              )}
+            </div>
           </div>
         )}
       </div>
