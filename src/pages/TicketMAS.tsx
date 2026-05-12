@@ -1027,12 +1027,14 @@ export default function TicketMAS() {
         )}
 
         {viewing.estatus === 'autorizado' && (
-          <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-4 text-center">
-            <CheckCircle className="w-8 h-8 text-emerald-500 mx-auto mb-2" />
-            <p className="text-sm font-bold text-emerald-700">Este ticket fue autorizado</p>
-            <p className="text-xs text-emerald-600 mt-1">
-              Recepción: {viewing.fecha_recepcion ?? '—'} · Inicio: {viewing.fecha_inicio_estimada ?? '—'} · Conclusión: {viewing.fecha_fin_estimada ?? '—'}
-            </p>
+          <div className="bg-slate-50 border border-slate-200 rounded-lg px-4 py-2.5 flex items-center gap-3">
+            <CheckCircle className="w-4 h-4 text-slate-400 shrink-0" />
+            <div>
+              <p className="text-xs font-semibold text-slate-500">Ticket autorizado</p>
+              <p className="text-xs text-slate-400 mt-0.5">
+                Recepción: {viewing.fecha_recepcion ?? '—'} · Inicio: {viewing.fecha_inicio_estimada ?? '—'} · Conclusión: {viewing.fecha_fin_estimada ?? '—'}
+              </p>
+            </div>
           </div>
         )}
 
