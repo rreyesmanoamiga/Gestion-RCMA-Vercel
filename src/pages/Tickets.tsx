@@ -111,7 +111,7 @@ function TicketForm({
 
   React.useEffect(() => {
     if (ticket) {
-      const folioNum = ticket.folio?.replace('TCMM', '') ?? '';
+      const folioNum = ticket.folio ?? '';
       setFormData({
         folio_num:           folioNum,
         tipo_proyecto:       ticket.tipo_proyecto       ?? '',
@@ -139,9 +139,7 @@ function TicketForm({
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    const folio = formData.folio_num
-      ? `TCMM${String(formData.folio_num).padStart(3, '0')}`
-      : null;
+    const folio = formData.folio_num.trim() || null;
     onSubmit({
       folio,
       tipo_proyecto:       formData.tipo_proyecto       || null,
@@ -180,18 +178,10 @@ function TicketForm({
           {/* Folio */}
           <div>
             <label className={labelClass}>Folio de Ticket</label>
-            <div className="relative">
-              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-black text-red-500 pointer-events-none">TCMM</span>
-              <input type="number" min="1" className="w-full pl-14 pr-3 py-2 border border-slate-300 rounded-md text-sm focus:ring-2 focus:ring-slate-900 focus:outline-none bg-white text-slate-900"
-                value={formData.folio_num}
-                onChange={e => setFormData(p => ({ ...p, folio_num: e.target.value }))}
-                placeholder="Ej. 10 → TCMM010" />
-            </div>
-            {formData.folio_num && (
-              <p className="text-xs font-black text-red-500 mt-1">
-                Folio: TCMM{String(formData.folio_num).padStart(3, '0')}
-              </p>
-            )}
+            <input type="text" className="w-full px-3 py-2 border border-slate-300 rounded-md text-sm focus:ring-2 focus:ring-slate-900 focus:outline-none bg-white text-slate-900"
+              value={formData.folio_num}
+              onChange={e => setFormData(p => ({ ...p, folio_num: e.target.value }))}
+              placeholder="Ej. TCMM-2026-001" />
           </div>
 
           {/* Tipo + Estatus */}
@@ -443,7 +433,7 @@ export default function Tickets() {
       // Si se pidió crear proyecto automáticamente
       if (crearProyecto && nombreProyecto) {
         const folio = ticketData.folio as string | null;
-        const folioNum = folio ? parseInt(folio.replace('TCMM', '')) : null;
+        const folioNum = null;
 
         const { data: proyecto, error: projError } = await supabase
           .from('projects')

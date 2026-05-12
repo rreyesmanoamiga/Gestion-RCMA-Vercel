@@ -91,9 +91,7 @@ export default function ProjectForm({ open, onClose, onSubmit, project = null }:
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    const folio = formData.ticket_number
-      ? `TCMM${String(formData.ticket_number).padStart(3, '0')}`
-      : null;
+    const folio = (formData.ticket_number as string)?.trim() || null;
     onSubmit({
       name:          formData.name,
       description:   formData.description,
@@ -108,7 +106,7 @@ export default function ProjectForm({ open, onClose, onSubmit, project = null }:
       progress:      formData.progress   || 0,
       notes:         formData.notes,
       budget:        formData.budget ? parseFloat(formData.budget) : null,
-      ticket_number: formData.ticket_number ? parseInt(formData.ticket_number) : null,
+      ticket_number: null,
       folio,
       type:          DEFAULT_PROJECT_TYPE,
     });
@@ -133,23 +131,14 @@ export default function ProjectForm({ open, onClose, onSubmit, project = null }:
 
           {/* Folio de Ticket */}
           <div>
-            <label className={labelClass}>Número de Folio (opcional)</label>
-            <div className="relative">
-              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-black text-red-500 pointer-events-none">TCMM</span>
-              <input
-                type="number"
-                min="1"
-                className="w-full pl-14 pr-3 py-2 border border-slate-300 rounded-md text-sm focus:ring-2 focus:ring-slate-900 focus:outline-none bg-white text-slate-900"
-                value={formData.ticket_number}
-                onChange={e => setFormData(prev => ({ ...prev, ticket_number: e.target.value }))}
-                placeholder="Ej. 10 → TCMM010"
-              />
-            </div>
-            {formData.ticket_number && (
-              <p className="text-xs font-bold text-red-500 mt-1">
-                Folio: TCMM{String(formData.ticket_number).padStart(3, '0')}
-              </p>
-            )}
+            <label className={labelClass}>Folio de Ticket (opcional)</label>
+            <input
+              type="text"
+              className="w-full px-3 py-2 border border-slate-300 rounded-md text-sm focus:ring-2 focus:ring-slate-900 focus:outline-none bg-white text-slate-900"
+              value={formData.ticket_number}
+              onChange={e => setFormData(prev => ({ ...prev, ticket_number: e.target.value }))}
+              placeholder="Ej. TCMM-2026-001"
+            />
           </div>
 
           {/* Nombre */}
