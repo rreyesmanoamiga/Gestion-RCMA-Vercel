@@ -92,7 +92,7 @@ export default function Sidebar({ isOpen, onToggle }) {
         {/* Navegación */}
         <nav className="flex-1 p-4 space-y-1 overflow-y-auto scrollbar-sidebar" aria-label="Menú principal">
 
-          {/* Dashboard */}
+          {/* 1 — Dashboard */}
           {(isAdmin || can('ver_dashboard')) && (
             <Link to="/" onClick={handleNavClick} className={navLinkClass('/')}>
               <LayoutDashboard className="w-[18px] h-[18px]" />
@@ -100,55 +100,7 @@ export default function Sidebar({ isOpen, onToggle }) {
             </Link>
           )}
 
-          {/* Tickets */}
-          {can('ver_tickets') && (
-            <Link to="/tickets" onClick={handleNavClick} className={navLinkClass('/tickets')}>
-              <TicketCheck className="w-[18px] h-[18px]" />
-              Tickets Registrados
-            </Link>
-          )}
-
-          {/* Proyectos */}
-          {can('ver_proyectos') && (
-            <Link to="/proyectos" onClick={handleNavClick} className={navLinkClass('/proyectos')}>
-              <FolderKanban className="w-[18px] h-[18px]" />
-              Proyectos
-            </Link>
-          )}
-
-          {/* Anteproyectos */}
-          {can('ver_anteproyectos') && (
-            <Link to="/anteproyectos" onClick={handleNavClick} className={navLinkClass('/anteproyectos')}>
-              <FolderOpen className="w-[18px] h-[18px]" />
-              Anteproyectos
-            </Link>
-          )}
-
-          {/* Checklists */}
-          {can('ver_checklists') && (
-            <Link to="/checklists" onClick={handleNavClick} className={navLinkClass('/checklists')}>
-              <ClipboardCheck className="w-[18px] h-[18px]" />
-              Checklists
-            </Link>
-          )}
-
-          {/* Calendario */}
-          {can('ver_calendario') && (
-            <Link to="/calendario" onClick={handleNavClick} className={navLinkClass('/calendario')}>
-              <CalendarDays className="w-[18px] h-[18px]" />
-              Calendario
-            </Link>
-          )}
-
-          {/* Pendientes */}
-          {can('ver_pendientes') && (
-            <Link to="/pendientes" onClick={handleNavClick} className={navLinkClass('/pendientes')}>
-              <ClockAlert className="w-[18px] h-[18px]" />
-              Pendientes
-            </Link>
-          )}
-
-          {/* Solicitud de Proyecto */}
+          {/* 2 — Solicitud de Proyecto */}
           {can('ver_solicitud_proyecto') && (
             <Link to="/solicitud" onClick={handleNavClick} className={navLinkClass('/solicitud')}>
               <ClipboardEdit className="w-[18px] h-[18px]" />
@@ -156,21 +108,7 @@ export default function Sidebar({ isOpen, onToggle }) {
             </Link>
           )}
 
-          {/* Protocolo de Recepción de Proyectos — visible para todos los usuarios */}
-          <Link to="/protocolo" onClick={handleNavClick} className={navLinkClass('/protocolo')}>
-            <BookOpen className="w-[18px] h-[18px]" />
-            Protocolo de Proyectos
-          </Link>
-
-          {/* Ticket MAS */}
-          {(isAdmin || can('ver_ticket_mas')) && (
-            <Link to="/ticket-mas" onClick={handleNavClick} className={navLinkClass('/ticket-mas')}>
-              <FileSignature className="w-[18px] h-[18px]" />
-              Ticket MAS
-            </Link>
-          )}
-
-          {/* Solicitudes Recibidas — solo admin */}
+          {/* 3 — Solicitudes Recibidas */}
           {isAdmin && (
             <Link to="/solicitudes" onClick={handleNavClick} className={navLinkClass('/solicitudes')}>
               <Inbox className="w-[18px] h-[18px]" />
@@ -178,7 +116,77 @@ export default function Sidebar({ isOpen, onToggle }) {
             </Link>
           )}
 
-          {/* Reportes */}
+          {/* 4 — Ticket MAS */}
+          {(isAdmin || can('ver_ticket_mas')) && (
+            <Link to="/ticket-mas" onClick={handleNavClick} className={navLinkClass('/ticket-mas')}>
+              <FileSignature className="w-[18px] h-[18px]" />
+              Ticket MAS
+            </Link>
+          )}
+
+          {/* 5 — Protocolo de Proyectos */}
+          <Link to="/protocolo" onClick={handleNavClick} className={navLinkClass('/protocolo')}>
+            <BookOpen className="w-[18px] h-[18px]" />
+            Protocolo de Proyectos
+          </Link>
+
+          {/* 6 — Tickets Registrados */}
+          {can('ver_tickets') && (
+            <Link to="/tickets" onClick={handleNavClick} className={navLinkClass('/tickets')}>
+              <TicketCheck className="w-[18px] h-[18px]" />
+              Tickets Registrados
+            </Link>
+          )}
+
+          {/* 7 — Proyectos */}
+          {can('ver_proyectos') && (
+            <Link to="/proyectos" onClick={handleNavClick} className={navLinkClass('/proyectos')}>
+              <FolderKanban className="w-[18px] h-[18px]" />
+              Proyectos
+            </Link>
+          )}
+
+          {/* 8 — Anteproyectos */}
+          {can('ver_anteproyectos') && (
+            <Link to="/anteproyectos" onClick={handleNavClick} className={navLinkClass('/anteproyectos')}>
+              <FolderOpen className="w-[18px] h-[18px]" />
+              Anteproyectos
+            </Link>
+          )}
+
+          {/* 9 — Presupuesto vs Real */}
+          {(isAdmin || can('ver_reportes')) && (
+            <Link to="/presupuestos" onClick={handleNavClick} className={navLinkClass('/presupuestos')}>
+              <BarChart3 className="w-[18px] h-[18px]" />
+              Presupuesto vs Real
+            </Link>
+          )}
+
+          {/* 10 — Pendientes */}
+          {can('ver_pendientes') && (
+            <Link to="/pendientes" onClick={handleNavClick} className={navLinkClass('/pendientes')}>
+              <ClockAlert className="w-[18px] h-[18px]" />
+              Pendientes
+            </Link>
+          )}
+
+          {/* 11 — Checklists */}
+          {can('ver_checklists') && (
+            <Link to="/checklists" onClick={handleNavClick} className={navLinkClass('/checklists')}>
+              <ClipboardCheck className="w-[18px] h-[18px]" />
+              Checklists
+            </Link>
+          )}
+
+          {/* 12 — Calendario */}
+          {can('ver_calendario') && (
+            <Link to="/calendario" onClick={handleNavClick} className={navLinkClass('/calendario')}>
+              <CalendarDays className="w-[18px] h-[18px]" />
+              Calendario
+            </Link>
+          )}
+
+          {/* 13 — Reportes */}
           {can('ver_reportes') && (
             <Link to="/reportes" onClick={handleNavClick} className={navLinkClass('/reportes')}>
               <FileText className="w-[18px] h-[18px]" />
@@ -186,21 +194,14 @@ export default function Sidebar({ isOpen, onToggle }) {
             </Link>
           )}
 
-
-          {/* Presupuesto vs Real */}
-          {(isAdmin || can('ver_reportes')) && (
-            <Link to="/presupuestos" onClick={handleNavClick} className={navLinkClass('/presupuestos')}>
-              <BarChart3 className="w-[18px] h-[18px]" />
-              Presupuesto vs Real
-            </Link>
-          )}
-          {/* Accesos — solo admin */}
+          {/* 14 — Accesos */}
           {isAdmin && (
             <Link to="/accesos" onClick={handleNavClick} className={navLinkClass('/accesos')}>
               <Lock className="w-[18px] h-[18px]" />
               Accesos
             </Link>
           )}
+
         </nav>
 
         {/* Footer */}
@@ -220,4 +221,3 @@ export default function Sidebar({ isOpen, onToggle }) {
     </>
   );
 }
-

@@ -354,10 +354,13 @@ export default function TicketMAS() {
     }
     setLoading(true);
     try {
-      // Generar folio
-      const { count } = await supabase.from('tickets_mas').select('*', { count: 'exact', head: true });
+      // Generar folio con consecutivo anual (se reinicia cada año)
+      const currentYear = new Date().getFullYear();
+      const { count } = await supabase.from('tickets_mas')
+        .select('*', { count: 'exact', head: true })
+        .like('folio', `TMAS-${currentYear}-%`);
       const num = (count ?? 0) + 1;
-      const folio = `TMAS-${new Date().getFullYear()}-${String(num).padStart(3, '0')}`;
+      const folio = `TMAS-${currentYear}-${String(num).padStart(3, '0')}`;
 
       const { error } = await supabase.from('tickets_mas').insert([{
         folio,
@@ -538,11 +541,14 @@ export default function TicketMAS() {
             : t
         )
       );
+      const correoCAR_cancel = cancelModal.territorio === 'NORTE' ? 'jalvarado@manoamiga.edu.mx' : cancelModal.territorio === 'MEXICO' ? 'gromero@manoamiga.edu.mx' : '';
       const { error: emailError } = await supabase.functions.invoke('notify-ticket-mas-cancelado', {
         body: {
           folio: cancelModal.folio, colegio: cancelModal.colegio,
           solicitante: cancelModal.nombre_solicitante,
           correo_solicitante: cancelModal.correo_solicitante,
+          territorio: cancelModal.territorio,
+          correo_car: correoCAR_cancel,
           motivo: motivoCancel,
         },
       });

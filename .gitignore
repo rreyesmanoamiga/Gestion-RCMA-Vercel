@@ -46,3 +46,4 @@ coverage/
 
 # Archivos locales de Vite
 *.local
+.vercel

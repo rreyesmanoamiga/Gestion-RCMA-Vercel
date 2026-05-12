@@ -5,7 +5,7 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-async function sendEmail(to: string, subject: string, html: string) {
+async function sendEmail(to: string, cc: string[], subject: string, html: string) {
   const smtpHost = Deno.env.get('SMTP_HOST') ?? 'smtp.office365.com';
   const smtpPort = parseInt(Deno.env.get('SMTP_PORT') ?? '587');
   const smtpUser = Deno.env.get('SMTP_USER') ?? '';
@@ -30,12 +30,17 @@ async function sendEmail(to: string, subject: string, html: string) {
   await tlsWrite(btoa(smtpPass));     await tlsRead();
   await tlsWrite(`MAIL FROM:<${smtpUser}>`); await tlsRead();
   await tlsWrite(`RCPT TO:<${to}>`);        await tlsRead();
-  await tlsWrite('DATA');                    await tlsRead();
+  for (const ccAddr of cc) {
+    if (ccAddr) { await tlsWrite(`RCPT TO:<${ccAddr}>`); await tlsRead(); }
+  }
+  await tlsWrite('DATA'); await tlsRead();
 
   const boundary = 'boundary_' + Date.now();
+  const ccHeader = cc.filter(Boolean).join(', ');
   const message = [
     `From: Sistema RCMA <${smtpUser}>`,
     `To: ${to}`,
+    ...(ccHeader ? [`Cc: ${ccHeader}`] : []),
     `Subject: ${subject}`,
     'MIME-Version: 1.0',
     `Content-Type: multipart/alternative; boundary="${boundary}"`,
@@ -57,8 +62,14 @@ async function sendEmail(to: string, subject: string, html: string) {
 serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
   try {
-    const { folio, colegio, solicitante, correo_solicitante, motivo } = await req.json();
+    const { folio, colegio, solicitante, correo_solicitante, territorio, correo_car, motivo } = await req.json();
     const smtpUser = Deno.env.get('SMTP_USER') ?? '';
+
+    const ccList = [
+      'arodriguez@manoamiga.edu.mx',
+      'ecastaneda@manoamiga.edu.mx',
+      correo_car ?? '',
+    ].filter(Boolean);
 
     const html = `
     <!DOCTYPE html>
@@ -87,6 +98,7 @@ serve(async (req) => {
                   <tr style="background:#fef2f2;"><td colspan="2" style="padding:10px 16px;font-size:12px;font-weight:700;color:#dc2626;border-bottom:1px solid #fecaca;">Detalles de la Cancelación</td></tr>
                   <tr style="background:#f8fafc;"><td style="padding:12px 16px;font-size:12px;font-weight:700;color:#64748b;text-transform:uppercase;width:40%;border-bottom:1px solid #e2e8f0;">Folio</td><td style="padding:12px 16px;font-size:14px;font-weight:700;color:#dc2626;border-bottom:1px solid #e2e8f0;">${folio ?? '—'}</td></tr>
                   <tr><td style="padding:12px 16px;font-size:12px;font-weight:700;color:#64748b;text-transform:uppercase;border-bottom:1px solid #e2e8f0;">Colegio</td><td style="padding:12px 16px;font-size:14px;color:#0f172a;border-bottom:1px solid #e2e8f0;">${colegio ?? '—'}</td></tr>
+                  <tr style="background:#f8fafc;"><td style="padding:12px 16px;font-size:12px;font-weight:700;color:#64748b;text-transform:uppercase;border-bottom:1px solid #e2e8f0;">Territorio</td><td style="padding:12px 16px;font-size:14px;color:#0f172a;border-bottom:1px solid #e2e8f0;">${territorio ?? '—'}</td></tr>
                   <tr style="background:#fef2f2;"><td style="padding:12px 16px;font-size:12px;font-weight:700;color:#64748b;text-transform:uppercase;">Motivo de Cancelación</td><td style="padding:12px 16px;font-size:14px;color:#dc2626;font-weight:600;">${motivo ?? '—'}</td></tr>
                 </table>
                 <p style="color:#64748b;font-size:14px;margin:0 0 0;">Si tiene alguna duda, comuníquese con la Coordinación de Obras RCMA.</p>
@@ -103,7 +115,7 @@ serve(async (req) => {
     </body>
     </html>`;
 
-    await sendEmail(correo_solicitante, `🚫 Ticket Cancelado: ${folio ?? ''} — ${colegio ?? ''}`, html);
+    await sendEmail(correo_solicitante, ccList, `🚫 Ticket Cancelado: ${folio ?? ''} — ${colegio ?? ''}`, html);
 
     return new Response(JSON.stringify({ success: true }), { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
   } catch (err) {
