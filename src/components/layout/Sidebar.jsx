@@ -19,6 +19,8 @@ import {
   BookOpen,
   FileSignature,
   BarChart3,
+  // --- ICONO AGREGADO ---
+  BookUser,
 } from 'lucide-react';
 import { useAuth } from '@/lib/AuthContext';
 import { cn } from '@/lib/utils';
@@ -193,6 +195,12 @@ export default function Sidebar({ isOpen, onToggle }) {
               Reportes
             </Link>
           )}
+
+          {/* --- DIRECTORIO: ENTRE REPORTES Y ACCESOS --- */}
+          <Link to="/directorio" onClick={handleNavClick} className={navLinkClass('/directorio')}>
+            <BookUser className="w-[18px] h-[18px]" />
+            Directorio
+          </Link>
 
           {/* 14 — Accesos */}
           {isAdmin && (

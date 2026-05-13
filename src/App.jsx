@@ -16,7 +16,7 @@ const PERM_ROUTES = [
   { perm: 'ver_calendario',         route: '/calendario'    },
   { perm: 'ver_pendientes',         route: '/pendientes'    },
   { perm: 'ver_solicitud_proyecto', route: '/solicitud'     },
-  { perm: 'ver_solicitud_proyecto', route: '/protocolo'    },
+  { perm: 'ver_solicitud_proyecto', route: '/protocolo'     },
   { perm: 'ver_reportes',           route: '/reportes'      },
 ];
 
@@ -40,10 +40,7 @@ import Anteproyectos from '@/pages/Anteproyectos';
 import Tickets from '@/pages/Tickets';
 import SolicitudProyecto from '@/pages/SolicitudProyecto';
 import ProtocoloProyectos from '@/pages/ProtocoloProyectos';
-
-// --- CAMBIO CRÍTICO AQUÍ ---
 import TicketMAS from '@/pages/TicketMAS';
-
 import SolicitudesRecibidas from '@/pages/SolicitudesRecibidas';
 import Reports from '@/pages/Reports';
 import UserManagement from '@/pages/UserManagement';
@@ -51,6 +48,9 @@ import Accesos from '@/pages/Accesos';
 import Pendientes from '@/pages/Pendientes';
 import CalendarioMantenimiento from '@/pages/CalendarioMantenimiento';
 import Presupuestos from '@/pages/Presupuestos';
+
+// --- NUEVO IMPORT ---
+import Directorio from '@/pages/Directorio';
 
 const inputClass = "w-full px-3 py-2 border border-slate-300 rounded-md text-sm focus:ring-2 focus:ring-slate-900 focus:outline-none bg-white";
 
@@ -286,7 +286,11 @@ function AuthenticatedApp() {
           <Route path="/pendientes"         element={<Pendientes />} />
           <Route path="/calendario"         element={<CalendarioMantenimiento />} />
           <Route path="/presupuestos"       element={<Presupuestos />} />
-          <Route path="/login"              element={<Navigate to="/" replace />} />
+          
+          {/* --- RUTA DE DIRECTORIO AGREGADA --- */}
+          <Route path="/directorio"         element={<Directorio />} />
+
+          <Route path="/login"               element={<Navigate to="/" replace />} />
           <Route path="*"                   element={<PageNotFound />} />
         </Route>
       )}
