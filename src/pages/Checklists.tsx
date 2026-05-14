@@ -341,10 +341,9 @@ async function generarReporteGeneral(evaluaciones: EvalMinimos[]) {
   doc.setFillColor(13, 138, 126); doc.rect(0, 0, 6, 297, 'F');
   doc.setFillColor(26, 75, 140); doc.rect(W - 6, 0, 6, 297, 'F');
 
-  // Decorative rectangles
-  doc.setFillColor(255, 255, 255); doc.setGState(doc.GState({ opacity: 0.04 }));
-  doc.rect(30, 30, 150, 150, 'F');
-  doc.setGState(doc.GState({ opacity: 1 }));
+  // Decorative subtle rectangle — sin GState para evitar corrupcion de estado
+  doc.setFillColor(30, 45, 80);
+  doc.rect(30, 30, 150, 110, 'F');
 
   try {
     const logoImg = await new Promise<string>((res, rej) => {
