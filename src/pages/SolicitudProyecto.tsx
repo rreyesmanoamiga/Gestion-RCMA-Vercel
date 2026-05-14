@@ -103,6 +103,9 @@ export default function SolicitudProyecto() {
     if (!form.correo_solicitante)  { toast.error('El correo es requerido'); return; }
     if (!form.nombre_proyecto)     { toast.error('El nombre del proyecto es requerido'); return; }
     if (!form.tipo_iniciativa)     { toast.error('Selecciona el tipo de iniciativa'); return; }
+    if (form.tipo_iniciativa !== 'GARANTÍAS' && (!costo || costo <= 0)) {
+      toast.error('Ingresa el costo aproximado del proyecto'); return;
+    }
 
     setLoading(true);
     try {
@@ -332,12 +335,15 @@ export default function SolicitudProyecto() {
               <tbody>
                 {/* Costo total */}
                 <tr className="bg-slate-50">
-                  <td className="border border-slate-400 px-3 py-1.5 text-[11px] font-black text-slate-800 uppercase">Costo Aproximado Total *</td>
+                  <td className="border border-slate-400 px-3 py-1.5 text-[11px] font-black text-slate-800 uppercase">
+                    Costo Aproximado Total {form.tipo_iniciativa !== 'GARANTÍAS' ? '*' : '(no requerido para Garantías)'}
+                  </td>
                   <td className={tdInput}>
-                    <input type="text" className={inputClass + " text-right font-mono"} required
+                    <input type="text" className={inputClass + " text-right font-mono"}
+                      required={form.tipo_iniciativa !== 'GARANTÍAS'}
                       value={formatMXN(form.costo_aproximado)}
                       onChange={e => set('costo_aproximado', parseMXN(e.target.value))}
-                      placeholder="$0.00" />
+                      placeholder={form.tipo_iniciativa === 'GARANTÍAS' ? '$0.00 (sin costo)' : '$0.00'} />
                   </td>
                   <td className={tdNum + " bg-slate-100 font-bold"}>100%</td>
                 </tr>
