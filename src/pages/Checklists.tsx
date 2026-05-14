@@ -303,6 +303,327 @@ async function generarPDFMinimos(ev: EvalMinimos) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// PDF REPORTE GENERAL
+// ─────────────────────────────────────────────────────────────────────────────
+async function generarReporteGeneral(evaluaciones: EvalMinimos[]) {
+  if (!evaluaciones.length) { alert('No hay evaluaciones para generar el reporte.'); return; }
+
+  const JsPDF = await loadJsPDF();
+  const doc   = new JsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+  const W = 210, mL = 18, mR = 18, cW = W - mL - mR;
+  const now = format(new Date(), "d 'de' MMMM 'de' yyyy", { locale: es });
+  let y = 0;
+
+  const addFooters = () => {
+    const pages = doc.getNumberOfPages();
+    for (let i = 1; i <= pages; i++) {
+      doc.setPage(i);
+      doc.setFillColor(15, 23, 42); doc.rect(0, 285, W, 12, 'F');
+      doc.setFontSize(7); doc.setFont('helvetica', 'normal'); doc.setTextColor(160, 170, 190);
+      doc.text('Sistema RCMA  ·  Reporte General de Mínimos Indispensables  ·  Colegios Mano Amiga', mL, 291);
+      doc.text('Pág. ' + i + ' / ' + pages, W - mR, 291, { align: 'right' });
+    }
+  };
+
+  // ── PORTADA ───────────────────────────────────────────────────────────────
+  doc.setFillColor(15, 23, 42); doc.rect(0, 0, W, 297, 'F');
+  doc.setFillColor(13, 138, 126); doc.rect(0, 0, 6, 297, 'F');
+  doc.setFillColor(26, 75, 140); doc.rect(W - 6, 0, 6, 297, 'F');
+
+  // Decorative rectangles
+  doc.setFillColor(255, 255, 255); doc.setGState(doc.GState({ opacity: 0.04 }));
+  doc.rect(30, 30, 150, 150, 'F');
+  doc.setGState(doc.GState({ opacity: 1 }));
+
+  try {
+    const logoImg = await new Promise<string>((res, rej) => {
+      const img = new Image(); img.crossOrigin = 'anonymous';
+      img.onload = () => { const cv = document.createElement('canvas'); cv.width = img.width; cv.height = img.height; cv.getContext('2d')!.drawImage(img, 0, 0); res(cv.toDataURL('image/png')); };
+      img.onerror = rej; img.src = '/logo.png';
+    });
+    doc.addImage(logoImg, 'PNG', W / 2 - 20, 40, 40, 32);
+  } catch { /* sin logo */ }
+
+  doc.setFontSize(11); doc.setFont('helvetica', 'normal'); doc.setTextColor(13, 138, 126);
+  doc.text('COLEGIOS MANO AMIGA', W / 2, 88, { align: 'center' });
+
+  doc.setFontSize(26); doc.setFont('helvetica', 'bold'); doc.setTextColor(255, 255, 255);
+  doc.text('REPORTE GENERAL', W / 2, 110, { align: 'center' });
+  doc.setFontSize(18); doc.setFont('helvetica', 'normal');
+  doc.text('Mínimos Indispensables por Plantel', W / 2, 122, { align: 'center' });
+
+  doc.setFillColor(13, 138, 126); doc.rect(mL + 20, 132, cW - 40, 0.5, 'F');
+
+  // KPIs portada
+  const kpiData = [
+    { label: 'Planteles\nevaluados', val: evaluaciones.length,                                          color: [255,255,255] as [number,number,number] },
+    { label: 'Completos',           val: evaluaciones.filter(e => e.resultado==='completo').length,     color: [22,163,74]   as [number,number,number] },
+    { label: 'En Proceso',          val: evaluaciones.filter(e => e.resultado==='en_proceso').length,   color: [202,138,4]   as [number,number,number] },
+    { label: 'Incompletos',         val: evaluaciones.filter(e => e.resultado==='incompleto').length,   color: [220,38,38]   as [number,number,number] },
+  ];
+  const kW = (cW - 12) / 4;
+  kpiData.forEach((k, i) => {
+    const x = mL + i * (kW + 4);
+    doc.setFillColor(255, 255, 255); doc.setGState(doc.GState({ opacity: 0.08 }));
+    doc.roundedRect(x, 145, kW, 32, 2, 2, 'F');
+    doc.setGState(doc.GState({ opacity: 1 }));
+    doc.setFontSize(22); doc.setFont('helvetica', 'bold'); doc.setTextColor(...k.color);
+    doc.text(String(k.val), x + kW / 2, 162, { align: 'center' });
+    doc.setFontSize(7.5); doc.setFont('helvetica', 'normal'); doc.setTextColor(180, 190, 210);
+    k.label.split('\n').forEach((line, li) => doc.text(line, x + kW / 2, 169 + li * 5, { align: 'center' }));
+  });
+
+  doc.setFontSize(9); doc.setFont('helvetica', 'normal'); doc.setTextColor(100, 120, 160);
+  doc.text('Generado el ' + now, W / 2, 198, { align: 'center' });
+  doc.text('Coordinación de Obras  ·  Sistema RCMA', W / 2, 205, { align: 'center' });
+
+  // ── PÁGINA 2: RESUMEN EJECUTIVO ───────────────────────────────────────────
+  doc.addPage(); y = 20;
+
+  doc.setFillColor(15, 23, 42); doc.rect(0, 0, W, 14, 'F');
+  doc.setFillColor(13, 138, 126); doc.rect(0, 0, 4, 14, 'F');
+  doc.setFontSize(11); doc.setFont('helvetica', 'bold'); doc.setTextColor(255, 255, 255);
+  doc.text('Resumen Ejecutivo', mL, 10);
+  doc.setFontSize(8); doc.setFont('helvetica', 'normal'); doc.setTextColor(160, 170, 190);
+  doc.text(now, W - mR, 10, { align: 'right' });
+  y = 24;
+
+  // Cumplimiento global
+  const totalItems   = evaluaciones.reduce((s, e) => s + (e.items?.length ?? 0), 0);
+  const totalCumple  = evaluaciones.reduce((s, e) => s + (e.items?.filter(i => i.estado === 'cumple').length ?? 0), 0);
+  const pctGlobal    = totalItems > 0 ? Math.round((totalCumple / totalItems) * 100) : 0;
+
+  doc.setFontSize(11); doc.setFont('helvetica', 'bold'); doc.setTextColor(15, 23, 42);
+  doc.text('Cumplimiento Global de la Red', mL, y); y += 4;
+  doc.setDrawColor(220, 220, 220); doc.line(mL, y, W - mR, y); y += 6;
+
+  // Barra de progreso grande
+  doc.setFillColor(226, 232, 240); doc.roundedRect(mL, y, cW, 10, 2, 2, 'F');
+  const pctW = (pctGlobal / 100) * cW;
+  const barColor: [number,number,number] = pctGlobal >= 80 ? [22,163,74] : pctGlobal >= 50 ? [202,138,4] : [220,38,38];
+  doc.setFillColor(...barColor); doc.roundedRect(mL, y, Math.max(pctW, 4), 10, 2, 2, 'F');
+  doc.setFontSize(8); doc.setFont('helvetica', 'bold'); doc.setTextColor(255, 255, 255);
+  if (pctGlobal > 10) doc.text(pctGlobal + '% Cumplimiento', mL + 4, y + 7);
+  y += 16;
+
+  // Conteo global por estado
+  const estados: EstadoItem[] = ['cumple', 'no_cumple', 'en_proceso', 'na'];
+  const kW2 = (cW - 9) / 4;
+  estados.forEach((e, i) => {
+    const cnt = evaluaciones.reduce((s, ev) => s + (ev.items?.filter(it => it.estado === e).length ?? 0), 0);
+    const cfg = ESTADO_CFG[e];
+    const x = mL + i * (kW2 + 3);
+    doc.setFillColor(248, 250, 252); doc.setDrawColor(220, 220, 220);
+    doc.roundedRect(x, y, kW2, 22, 2, 2, 'FD');
+    const [cr, cg, cb] = cfg.pdf;
+    doc.setFontSize(16); doc.setFont('helvetica', 'bold'); doc.setTextColor(cr, cg, cb);
+    doc.text(String(cnt), x + kW2 / 2, y + 13, { align: 'center' });
+    doc.setFontSize(7); doc.setTextColor(100, 116, 139);
+    doc.text(cfg.label.toUpperCase(), x + kW2 / 2, y + 19, { align: 'center' });
+  });
+  y += 30;
+
+  // Cumplimiento por sección (barras horizontales)
+  doc.setFontSize(11); doc.setFont('helvetica', 'bold'); doc.setTextColor(15, 23, 42);
+  doc.text('Cumplimiento por Categoría (todos los planteles)', mL, y); y += 4;
+  doc.setDrawColor(220, 220, 220); doc.line(mL, y, W - mR, y); y += 6;
+
+  SECCIONES_MINIMOS.forEach(sec => {
+    const secTotal  = evaluaciones.reduce((s, ev) => s + (ev.items?.filter(i => i.seccion === sec.id).length ?? 0), 0);
+    const secCumple = evaluaciones.reduce((s, ev) => s + (ev.items?.filter(i => i.seccion === sec.id && i.estado === 'cumple').length ?? 0), 0);
+    const pct = secTotal > 0 ? Math.round((secCumple / secTotal) * 100) : 0;
+    const hex = sec.colorHex.replace('#', '');
+    const [hr, hg, hb] = [parseInt(hex.substring(0,2),16), parseInt(hex.substring(2,4),16), parseInt(hex.substring(4,6),16)];
+
+    doc.setFontSize(8.5); doc.setFont('helvetica', 'bold'); doc.setTextColor(15, 23, 42);
+    doc.text(sec.titulo, mL, y + 4);
+    doc.setFontSize(8); doc.setFont('helvetica', 'normal'); doc.setTextColor(100, 116, 139);
+    doc.text(pct + '%', W - mR, y + 4, { align: 'right' });
+
+    doc.setFillColor(226, 232, 240); doc.roundedRect(mL, y + 6, cW, 5, 1, 1, 'F');
+    doc.setFillColor(hr, hg, hb); doc.roundedRect(mL, y + 6, Math.max((pct / 100) * cW, 2), 5, 1, 1, 'F');
+    y += 16;
+  });
+  y += 4;
+
+  // ── PÁGINA 3: TABLA COMPARATIVA ───────────────────────────────────────────
+  doc.addPage(); y = 20;
+
+  doc.setFillColor(15, 23, 42); doc.rect(0, 0, W, 14, 'F');
+  doc.setFillColor(26, 75, 140); doc.rect(0, 0, 4, 14, 'F');
+  doc.setFontSize(11); doc.setFont('helvetica', 'bold'); doc.setTextColor(255, 255, 255);
+  doc.text('Tabla Comparativa por Plantel', mL, 10);
+  y = 22;
+
+  // Encabezado tabla
+  const cols = [
+    { label: 'Plantel',      w: 52 },
+    { label: 'Territorio',   w: 32 },
+    { label: 'Inspector',    w: 30 },
+    { label: 'Fecha',        w: 22 },
+    { label: 'Resultado',    w: 26 },
+    { label: '% Cumple',     w: 12 },
+  ];
+  let cx = mL;
+  doc.setFillColor(15, 23, 42);
+  doc.rect(mL, y, cW, 8, 'F');
+  cols.forEach(c => {
+    doc.setFontSize(7.5); doc.setFont('helvetica', 'bold'); doc.setTextColor(255, 255, 255);
+    doc.text(c.label, cx + 2, y + 5.5);
+    cx += c.w;
+  });
+  y += 9;
+
+  const resColors2: Record<string, [number,number,number]> = { completo: [22,163,74], en_proceso: [202,138,4], incompleto: [220,38,38] };
+  const resLabels2: Record<string, string> = { completo: 'Completo', en_proceso: 'En Proceso', incompleto: 'Incompleto' };
+
+  evaluaciones.forEach((ev, idx) => {
+    if (y > 270) { doc.addPage(); y = 20; }
+    const rowH = 9;
+    doc.setFillColor(idx % 2 === 0 ? 248 : 255, idx % 2 === 0 ? 250 : 255, idx % 2 === 0 ? 252 : 255);
+    doc.rect(mL, y, cW, rowH, 'F');
+    doc.setDrawColor(220, 220, 220); doc.rect(mL, y, cW, rowH, 'D');
+
+    const cumplePct = ev.items?.length > 0
+      ? Math.round((ev.items.filter(i => i.estado === 'cumple').length / ev.items.length) * 100) : 0;
+
+    const rowData = [
+      ev.colegio ?? '—',
+      ev.territorio ?? '—',
+      ev.inspector || '—',
+      ev.fecha ? format(new Date(ev.fecha + 'T12:00:00'), 'd MMM yy', { locale: es }) : '—',
+      '',
+      cumplePct + '%',
+    ];
+
+    cx = mL;
+    rowData.forEach((val, ci) => {
+      if (ci === 4) {
+        // Resultado badge
+        const [rr2, rg2, rb2] = resColors2[ev.resultado] ?? resColors2.incompleto;
+        doc.setFillColor(rr2, rg2, rb2); doc.roundedRect(cx + 1, y + 1.5, cols[ci].w - 2, 6, 1, 1, 'F');
+        doc.setFontSize(6.5); doc.setFont('helvetica', 'bold'); doc.setTextColor(255, 255, 255);
+        doc.text((resLabels2[ev.resultado] ?? ev.resultado).toUpperCase(), cx + cols[ci].w / 2, y + 6, { align: 'center' });
+      } else {
+        doc.setFontSize(8); doc.setFont('helvetica', ci === 0 ? 'bold' : 'normal'); doc.setTextColor(15, 23, 42);
+        const txt = doc.splitTextToSize(val, cols[ci].w - 3);
+        doc.text(txt[0] ?? '', cx + 2, y + 6);
+      }
+      cx += cols[ci].w;
+    });
+    y += rowH;
+  });
+
+  // ── PÁGINAS SIGUIENTES: DETALLE POR PLANTEL (condensado) ──────────────────
+  evaluaciones.forEach(ev => {
+    doc.addPage(); y = 20;
+
+    // Mini header por plantel
+    doc.setFillColor(15, 23, 42); doc.rect(0, 0, W, 14, 'F');
+    const [rr3, rg3, rb3] = resColors2[ev.resultado] ?? resColors2.incompleto;
+    doc.setFillColor(rr3, rg3, rb3); doc.rect(0, 0, 4, 14, 'F');
+    doc.setFontSize(11); doc.setFont('helvetica', 'bold'); doc.setTextColor(255, 255, 255);
+    doc.text(ev.colegio ?? '—', mL, 10);
+    doc.setFontSize(8); doc.setFont('helvetica', 'normal'); doc.setTextColor(160, 170, 190);
+    doc.text((ev.territorio ?? '') + '  ·  ' + (ev.inspector || 'Sin inspector') + '  ·  ' + (ev.fecha ? format(new Date(ev.fecha + 'T12:00:00'), "d MMM yyyy", { locale: es }) : '—'), W - mR, 10, { align: 'right' });
+
+    y = 22;
+
+    // Barra de cumplimiento del plantel
+    const pctPl = ev.items?.length > 0 ? Math.round((ev.items.filter(i => i.estado === 'cumple').length / ev.items.length) * 100) : 0;
+    doc.setFillColor(226, 232, 240); doc.roundedRect(mL, y, cW, 7, 1.5, 1.5, 'F');
+    const barC2: [number,number,number] = pctPl >= 80 ? [22,163,74] : pctPl >= 50 ? [202,138,4] : [220,38,38];
+    doc.setFillColor(...barC2); doc.roundedRect(mL, y, Math.max((pctPl / 100) * cW, 3), 7, 1.5, 1.5, 'F');
+    doc.setFontSize(7); doc.setFont('helvetica', 'bold'); doc.setTextColor(255, 255, 255);
+    if (pctPl > 8) doc.text(pctPl + '% Cumplimiento general', mL + 3, y + 5.2);
+    y += 13;
+
+    // Mini KPIs
+    const miniKpis: Array<[EstadoItem, string]> = [['cumple','Cumple'],['no_cumple','No Cumple'],['en_proceso','En Proceso'],['na','N/A']];
+    const mkW = (cW - 9) / 4;
+    miniKpis.forEach(([estado, label], mi) => {
+      const cnt = ev.items?.filter(i => i.estado === estado).length ?? 0;
+      const x = mL + mi * (mkW + 3);
+      const [cr2, cg2, cb2] = ESTADO_CFG[estado].pdf;
+      doc.setFillColor(248, 250, 252); doc.setDrawColor(220, 220, 220);
+      doc.roundedRect(x, y, mkW, 14, 1.5, 1.5, 'FD');
+      doc.setFontSize(12); doc.setFont('helvetica', 'bold'); doc.setTextColor(cr2, cg2, cb2);
+      doc.text(String(cnt), x + mkW / 2, y + 9, { align: 'center' });
+      doc.setFontSize(6.5); doc.setTextColor(100, 116, 139);
+      doc.text(label.toUpperCase(), x + mkW / 2, y + 13, { align: 'center' });
+    });
+    y += 21;
+
+    if (ev.notas) {
+      doc.setFillColor(255, 251, 235); doc.setDrawColor(252, 211, 77);
+      doc.roundedRect(mL, y, cW, 10, 1.5, 1.5, 'FD');
+      doc.setFontSize(8); doc.setFont('helvetica', 'italic'); doc.setTextColor(120, 80, 0);
+      const nL = doc.splitTextToSize('Notas: ' + ev.notas, cW - 6);
+      doc.text(nL[0], mL + 3, y + 7);
+      y += 14;
+    }
+
+    // Items con NO CUMPLE y EN PROCESO solamente (condensado — solo los que requieren atención)
+    const itemsAtencion = ev.items?.filter(i => i.estado === 'no_cumple' || i.estado === 'en_proceso') ?? [];
+
+    if (itemsAtencion.length > 0) {
+      doc.setFontSize(9); doc.setFont('helvetica', 'bold'); doc.setTextColor(15, 23, 42);
+      doc.text('Ítems que requieren atención', mL, y); y += 4;
+      doc.setDrawColor(220, 220, 220); doc.line(mL, y, W - mR, y); y += 5;
+
+      itemsAtencion.forEach((item, i) => {
+        if (y > 270) { doc.addPage(); y = 20; }
+        const rowH = item.observacion ? 14 : 9;
+        if (i % 2 === 0) { doc.setFillColor(254, 242, 242); doc.rect(mL - 1, y - 2, cW + 2, rowH + 1, 'F'); }
+        const [er2, eg2, eb2] = ESTADO_CFG[item.estado].pdf;
+        doc.setFillColor(Math.min(er2+200,255), Math.min(eg2+200,255), Math.min(eb2+200,255));
+        doc.roundedRect(mL, y - 1.5, 24, 5.5, 1, 1, 'F');
+        doc.setFontSize(6.5); doc.setFont('helvetica', 'bold'); doc.setTextColor(er2, eg2, eb2);
+        doc.text(ESTADO_CFG[item.estado].label.toUpperCase(), mL + 12, y + 2.5, { align: 'center' });
+        doc.setFontSize(8.5); doc.setFont('helvetica', 'bold'); doc.setTextColor(15, 23, 42);
+        const nombre = doc.splitTextToSize(item.nombre, cW - 28);
+        doc.text(nombre[0], mL + 27, y + 2.5);
+        if (item.observacion) {
+          doc.setFontSize(7.5); doc.setFont('helvetica', 'normal'); doc.setTextColor(100, 116, 139);
+          doc.text('↳ ' + item.observacion, mL + 27, y + 9);
+        }
+        y += rowH + 2;
+      });
+    } else {
+      doc.setFillColor(240, 253, 244); doc.setDrawColor(134, 239, 172);
+      doc.roundedRect(mL, y, cW, 12, 2, 2, 'FD');
+      doc.setFontSize(10); doc.setFont('helvetica', 'bold'); doc.setTextColor(22, 101, 52);
+      doc.text('✓  Este plantel cumple con todos los mínimos indispensables', W / 2, y + 8, { align: 'center' });
+      y += 18;
+    }
+
+    // Items cumplidos (compacto — solo lista)
+    const itemsCumple2 = ev.items?.filter(i => i.estado === 'cumple') ?? [];
+    if (itemsCumple2.length > 0) {
+      if (y > 250) { doc.addPage(); y = 20; }
+      doc.setFontSize(9); doc.setFont('helvetica', 'bold'); doc.setTextColor(15, 23, 42);
+      doc.text('Ítems cumplidos (' + itemsCumple2.length + ')', mL, y); y += 4;
+      doc.setDrawColor(220, 220, 220); doc.line(mL, y, W - mR, y); y += 4;
+      const colC = Math.floor(cW / 85);
+      let cx2 = mL; let rowStart = y;
+      itemsCumple2.forEach((item, i) => {
+        if (y > 272) { doc.addPage(); y = 20; rowStart = y; cx2 = mL; }
+        doc.setFontSize(7); doc.setFont('helvetica', 'normal'); doc.setTextColor(22, 163, 74);
+        doc.text('✓', cx2, y + 3);
+        doc.setTextColor(50, 70, 50);
+        const txt = doc.splitTextToSize(item.nombre, 80);
+        doc.text(txt[0], cx2 + 5, y + 3);
+        y += 6;
+        if ((i + 1) % colC === 0) { cx2 = mL; }
+      });
+    }
+  });
+
+  addFooters();
+  doc.save(`reporte-general-minimos-${format(new Date(), 'yyyy-MM-dd')}.pdf`);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // COMPONENTE PRINCIPAL
 // ─────────────────────────────────────────────────────────────────────────────
 export default function Checklists() {
@@ -518,19 +839,28 @@ export default function Checklists() {
       ════════════════════════════════════════════════════════════════════ */}
       {activeTab === 'minimos' && (
         <>
-          {/* Stats */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-5">
-            {[
-              { label: 'Total',       val: minimosRaw.length,                                          cls: 'bg-slate-900 text-white' },
-              { label: 'Completos',   val: minimosRaw.filter(e => e.resultado === 'completo').length,   cls: 'bg-green-50 text-green-700 border border-green-200' },
-              { label: 'En Proceso',  val: minimosRaw.filter(e => e.resultado === 'en_proceso').length, cls: 'bg-amber-50 text-amber-700 border border-amber-200' },
-              { label: 'Incompletos', val: minimosRaw.filter(e => e.resultado === 'incompleto').length, cls: 'bg-red-50 text-red-700 border border-red-200' },
-            ].map(s => (
-              <div key={s.label} className={`rounded-xl p-4 ${s.cls}`}>
-                <p className="text-xs font-bold uppercase tracking-wide opacity-70 mb-1">{s.label}</p>
-                <p className="text-3xl font-black">{s.val}</p>
-              </div>
-            ))}
+          {/* Stats + botón reporte general */}
+          <div className="flex flex-col sm:flex-row sm:items-center gap-3 mb-5">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 flex-1">
+              {[
+                { label: 'Total',       val: minimosRaw.length,                                          cls: 'bg-slate-900 text-white' },
+                { label: 'Completos',   val: minimosRaw.filter(e => e.resultado === 'completo').length,   cls: 'bg-green-50 text-green-700 border border-green-200' },
+                { label: 'En Proceso',  val: minimosRaw.filter(e => e.resultado === 'en_proceso').length, cls: 'bg-amber-50 text-amber-700 border border-amber-200' },
+                { label: 'Incompletos', val: minimosRaw.filter(e => e.resultado === 'incompleto').length, cls: 'bg-red-50 text-red-700 border border-red-200' },
+              ].map(s => (
+                <div key={s.label} className={`rounded-xl p-4 ${s.cls}`}>
+                  <p className="text-xs font-bold uppercase tracking-wide opacity-70 mb-1">{s.label}</p>
+                  <p className="text-3xl font-black">{s.val}</p>
+                </div>
+              ))}
+            </div>
+            <button
+              onClick={() => generarReporteGeneral(minimosRaw)}
+              disabled={minimosRaw.length === 0}
+              className="flex items-center gap-2 px-4 py-3 bg-slate-900 text-white rounded-xl text-sm font-semibold hover:bg-slate-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors shrink-0 shadow-sm">
+              <FileDown className="w-4 h-4" />
+              <span>Elaborar<br/>Reporte General</span>
+            </button>
           </div>
 
           {/* Filtros */}
