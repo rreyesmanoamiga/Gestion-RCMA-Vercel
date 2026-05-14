@@ -352,6 +352,13 @@ export default function TicketMAS() {
       toast.error('Completa los campos obligatorios marcados con *');
       return;
     }
+    if (form.clasificacion !== 'GARANTIAS') {
+      const tieneCotizacion = form.cot1_importe && parseFloat(parseMXN(form.cot1_importe)) > 0;
+      if (!tieneCotizacion) {
+        toast.error('Debes capturar al menos la Cotización No. 1 con importe');
+        return;
+      }
+    }
     setLoading(true);
     try {
       // Generar folio con consecutivo anual (se reinicia cada año)
@@ -725,10 +732,10 @@ export default function TicketMAS() {
                   <input className={inputClass} value={(form as any)[`cot${n}_proveedor`]} onChange={e => set(`cot${n}_proveedor`, e.target.value)} placeholder="Nombre del proveedor" />
                 </div>
                 <div>
-                  <label className={labelClass}>Importe</label>
+                  <label className={labelClass}>Importe{n === 1 && form.clasificacion !== 'GARANTIAS' ? ' *' : ''}</label>
                   <input className={inputClass} value={(form as any)[`cot${n}_importe`]}
                     onChange={e => set(`cot${n}_importe`, formatMXN(e.target.value))}
-                    placeholder="$0.00" />
+                    placeholder={form.clasificacion === 'GARANTIAS' ? '$0.00 (no requerido)' : '$0.00'} />
                 </div>
               </div>
             ))}
