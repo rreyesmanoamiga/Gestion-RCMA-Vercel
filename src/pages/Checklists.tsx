@@ -62,8 +62,8 @@ const SECCIONES_MINIMOS = [
     colorHex: '#1A4B8C', norma: 'NMX-R-021-SCFI-2013 · LGE Art. 98-101',
     items: [
       { id: 'aulas_m2',        nombre: 'Aulas con superficie mínima reglamentaria (24–48 m² según alumnos)' },
-      { id: 'puertas_ancho',   nombre: 'Puertas de aula ≥ 0.90 m y salidas de emergencia ≥ 1.20 m' },
-      { id: 'pasillos',        nombre: 'Pasillos comunes entre aulas ≥ 1.20 m de ancho' },
+      { id: 'puertas_ancho',   nombre: 'Puertas de aula >= 0.90 m y salidas de emergencia >= 1.20 m' },
+      { id: 'pasillos',        nombre: 'Pasillos comunes entre aulas >= 1.20 m de ancho' },
       { id: 'direccion',       nombre: 'Dirección, subdirección y área administrativa' },
       { id: 'bodega',          nombre: 'Bodega, archivo y caseta de vigilancia' },
       { id: 'sanitarios',      nombre: 'Sanitarios separados por género (1 WC + 1 lavabo c/30 alumnos)' },
@@ -90,9 +90,9 @@ const SECCIONES_MINIMOS = [
     id: 'accesibilidad', titulo: '03 · Accesibilidad e Inclusión',
     colorHex: '#0D8A7E', norma: 'NMX-R-090-SCFI-2016',
     items: [
-      { id: 'rampa_acceso',    nombre: 'Rampa en acceso principal con pendiente ≤ 8%' },
+      { id: 'rampa_acceso',    nombre: 'Rampa en acceso principal con pendiente <= 8%' },
       { id: 'sia',             nombre: 'Señalización internacional de accesibilidad (SIA)' },
-      { id: 'pasillos_libres', nombre: 'Pasillos internos libres de obstáculos ≥ 1.20 m' },
+      { id: 'pasillos_libres', nombre: 'Pasillos internos libres de obstáculos >= 1.20 m' },
       { id: 'sanitario_adapt', nombre: 'Al menos un baño adaptado por género con barras de apoyo' },
       { id: 'senaletica',      nombre: 'Señalética en braille en puertas y avisos en pictogramas' },
       { id: 'escalones',       nombre: 'Contraste visual en bordes de escalones y pasamanos en rampas' },
@@ -585,7 +585,7 @@ async function generarReporteGeneral(evaluaciones: EvalMinimos[]) {
         doc.text(nombre[0], mL + 27, y + 2.5);
         if (item.observacion) {
           doc.setFontSize(7.5); doc.setFont('helvetica', 'normal'); doc.setTextColor(100, 116, 139);
-          doc.text('↳ ' + item.observacion, mL + 27, y + 9);
+          doc.text('Obs: ' + item.observacion, mL + 27, y + 9);
         }
         y += rowH + 2;
       });
@@ -593,7 +593,7 @@ async function generarReporteGeneral(evaluaciones: EvalMinimos[]) {
       doc.setFillColor(240, 253, 244); doc.setDrawColor(134, 239, 172);
       doc.roundedRect(mL, y, cW, 12, 2, 2, 'FD');
       doc.setFontSize(10); doc.setFont('helvetica', 'bold'); doc.setTextColor(22, 101, 52);
-      doc.text('✓  Este plantel cumple con todos los mínimos indispensables', W / 2, y + 8, { align: 'center' });
+      doc.text('[OK]  Este plantel cumple con todos los minimos indispensables', W / 2, y + 8, { align: 'center' });
       y += 18;
     }
 
@@ -609,7 +609,7 @@ async function generarReporteGeneral(evaluaciones: EvalMinimos[]) {
       itemsCumple2.forEach((item, i) => {
         if (y > 272) { doc.addPage(); y = 20; rowStart = y; cx2 = mL; }
         doc.setFontSize(7); doc.setFont('helvetica', 'normal'); doc.setTextColor(22, 163, 74);
-        doc.text('✓', cx2, y + 3);
+        doc.text('OK', cx2, y + 3);
         doc.setTextColor(50, 70, 50);
         const txt = doc.splitTextToSize(item.nombre, 80);
         doc.text(txt[0], cx2 + 5, y + 3);
