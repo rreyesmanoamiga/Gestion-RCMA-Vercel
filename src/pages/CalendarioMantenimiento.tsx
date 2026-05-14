@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { ChevronLeft, ChevronRight, Calendar, CheckCircle2, Clock, AlertTriangle, Wrench, X, Plus, Trash2, Bell, Mail, UserPlus, Pencil, Lock } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Calendar, CheckCircle2, Clock, AlertTriangle, Wrench, X, Plus, Trash2, Bell, Mail, UserPlus, Pencil, Lock, Search } from 'lucide-react';
 import { supabase } from '@/lib/supabaseClient';
 import { useAuth } from '@/lib/AuthContext';
 import { usePermissions } from '@/hooks/usePermissions';
@@ -114,6 +114,18 @@ function calcularFechasEnMes(act: Actividad, año: number, mes: number): Date[] 
   return fechas;
 }
 
+function calcularProximasFechas(act: Actividad, cantidad: number = 8): Date[] {
+  const resultado: Date[] = [];
+  const hoy = new Date(); hoy.setHours(0, 0, 0, 0);
+  let fecha = new Date(FECHA_BASE);
+  const limite = new Date(hoy.getFullYear() + 6, 0, 1);
+  while (resultado.length < cantidad && fecha < limite) {
+    if (fecha >= hoy) resultado.push(new Date(fecha));
+    fecha = new Date(fecha.getTime() + act.frecuenciaDias * 86400000);
+  }
+  return resultado;
+}
+
 function isValidEmail(email: string): boolean {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 }
@@ -135,6 +147,9 @@ export default function CalendarioMantenimiento() {
   const [showGestion, setShowGestion] = useState(false);
   const [showNotificaciones, setShowNotificaciones] = useState(false);
   const [editingItem, setEditingItem] = useState<Actividad | null>(null);
+  const [showConsulta, setShowConsulta] = useState(false);
+  const [consultaActividadId, setConsultaActividadId] = useState<string>('');
+  const [consultaCategoriaFiltro, setConsultaCategoriaFiltro] = useState<string>('');
 
   const [form, setForm] = useState({
     categoria: '', categoriaCustom: '', actividad: '',
@@ -303,6 +318,11 @@ export default function CalendarioMantenimiento() {
           <button onClick={() => setVistaActiva('lista')}
             className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${vistaActiva === 'lista' ? 'bg-slate-900 text-white' : 'border border-slate-300 text-slate-700 hover:bg-slate-50'}`}>
             Lista
+          </button>
+          <button
+            onClick={() => { setShowConsulta(true); setConsultaActividadId(''); setConsultaCategoriaFiltro(''); }}
+            className="px-4 py-2 rounded-md text-sm font-medium border border-slate-300 text-slate-700 hover:bg-slate-50 transition-colors flex items-center gap-2">
+            <Search className="w-4 h-4" /> ¿Cuándo me toca?
           </button>
           {isAdmin && (
             <>
@@ -726,6 +746,159 @@ export default function CalendarioMantenimiento() {
           </div>
         </div>
       )}
+      {/* Modal ¿Cuándo me toca? */}
+      {showConsulta && (() => {
+        const hoy = new Date(); hoy.setHours(0, 0, 0, 0);
+        const actFiltradas = consultaCategoriaFiltro
+          ? todasActividades.filter(a => a.categoria === consultaCategoriaFiltro)
+          : todasActividades;
+        const actSeleccionada = todasActividades.find(a => String(a.id) === consultaActividadId) ?? null;
+        const proximasFechas = actSeleccionada ? calcularProximasFechas(actSeleccionada) : [];
+
+        const etiquetaDias = (fecha: Date) => {
+          const diff = Math.round((fecha.getTime() - hoy.getTime()) / 86400000);
+          if (diff === 0) return { texto: 'HOY', color: 'bg-red-100 text-red-700' };
+          if (diff === 1) return { texto: 'MAÑANA', color: 'bg-orange-100 text-orange-700' };
+          if (diff <= 7) return { texto: `en ${diff} días`, color: 'bg-amber-100 text-amber-700' };
+          if (diff <= 30) return { texto: `en ${diff} días`, color: 'bg-blue-100 text-blue-700' };
+          return { texto: `en ${diff} días`, color: 'bg-slate-100 text-slate-600' };
+        };
+
+        const DIAS_NOMBRE = ['Domingo','Lunes','Martes','Miércoles','Jueves','Viernes','Sábado'];
+
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4">
+            <div className="bg-white rounded-xl shadow-2xl max-w-lg w-full max-h-[90vh] overflow-hidden flex flex-col border border-slate-200">
+
+              {/* Header */}
+              <div className="p-5 border-b border-slate-100 bg-slate-50 flex justify-between items-center">
+                <div className="flex items-center gap-2">
+                  <Search className="w-5 h-5 text-slate-700" />
+                  <div>
+                    <h3 className="font-bold text-slate-900">¿Cuándo me toca?</h3>
+                    <p className="text-xs text-slate-500 mt-0.5">Consulta las próximas fechas de cualquier mantenimiento</p>
+                  </div>
+                </div>
+                <button onClick={() => setShowConsulta(false)} className="text-slate-400 hover:text-slate-600"><X className="w-5 h-5" /></button>
+              </div>
+
+              {/* Filtros */}
+              <div className="px-5 pt-4 pb-3 space-y-3 border-b border-slate-100">
+                <div>
+                  <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Categoría</label>
+                  <select
+                    className={inputClass}
+                    value={consultaCategoriaFiltro}
+                    onChange={e => { setConsultaCategoriaFiltro(e.target.value); setConsultaActividadId(''); }}>
+                    <option value="">Todas las categorías</option>
+                    {todasCategorias.map(c => <option key={c} value={c}>{c}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Actividad</label>
+                  <select
+                    className={inputClass}
+                    value={consultaActividadId}
+                    onChange={e => setConsultaActividadId(e.target.value)}>
+                    <option value="">Seleccionar actividad...</option>
+                    {actFiltradas.map(a => (
+                      <option key={a.id} value={String(a.id)}>{a.actividad}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              {/* Resultados */}
+              <div className="overflow-y-auto flex-1">
+                {!actSeleccionada ? (
+                  <div className="py-14 text-center px-6">
+                    <Calendar className="w-12 h-12 text-slate-200 mx-auto mb-3" />
+                    <p className="text-sm font-semibold text-slate-400">Selecciona una actividad</p>
+                    <p className="text-xs text-slate-400 mt-1">Te mostraremos las próximas fechas programadas</p>
+                  </div>
+                ) : (
+                  <div>
+                    {/* Info de la actividad */}
+                    <div className="px-5 py-3 border-b border-slate-100 flex items-center gap-3">
+                      <div className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: colorCat(actSeleccionada.categoria) }} />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-bold text-slate-900">{actSeleccionada.actividad}</p>
+                        <p className="text-xs text-slate-500">{actSeleccionada.descripcion}</p>
+                      </div>
+                      <span className="text-[10px] font-bold px-2 py-1 rounded-full bg-slate-100 text-slate-600 shrink-0">
+                        Cada {actSeleccionada.frecuencia}
+                      </span>
+                    </div>
+
+                    {/* Próximas fechas */}
+                    <div className="px-5 pt-3 pb-1">
+                      <p className="text-xs font-bold text-slate-400 uppercase mb-2">Próximas fechas programadas</p>
+                    </div>
+                    <div className="divide-y divide-slate-50">
+                      {proximasFechas.map((fecha, idx) => {
+                        const etiq = etiquetaDias(fecha);
+                        const esPrimera = idx === 0;
+                        return (
+                          <div key={idx} className={`px-5 py-3 flex items-center gap-4 ${esPrimera ? 'bg-slate-50' : ''}`}>
+                            {/* Número de día */}
+                            <div className="shrink-0 w-12 h-12 rounded-xl flex flex-col items-center justify-center border-2"
+                              style={esPrimera
+                                ? { backgroundColor: colorCat(actSeleccionada.categoria), borderColor: colorCat(actSeleccionada.categoria) }
+                                : { borderColor: colorCat(actSeleccionada.categoria) + '55' }}>
+                              <span className={`text-lg font-black leading-none ${esPrimera ? 'text-white' : 'text-slate-700'}`}>
+                                {fecha.getDate()}
+                              </span>
+                              <span className={`text-[9px] font-bold uppercase ${esPrimera ? 'text-white/80' : 'text-slate-400'}`}>
+                                {MESES[fecha.getMonth()].slice(0, 3)}
+                              </span>
+                            </div>
+
+                            {/* Detalle */}
+                            <div className="flex-1 min-w-0">
+                              <p className="text-sm font-bold text-slate-800">
+                                {DIAS_NOMBRE[fecha.getDay()]}, {fecha.getDate()} de {MESES[fecha.getMonth()]} {fecha.getFullYear()}
+                              </p>
+                              {esPrimera && (
+                                <p className="text-xs text-slate-500 mt-0.5">Próxima fecha</p>
+                              )}
+                            </div>
+
+                            {/* Etiqueta días */}
+                            <span className={`text-[10px] font-bold px-2 py-1 rounded-full shrink-0 ${etiq.color}`}>
+                              {etiq.texto}
+                            </span>
+                          </div>
+                        );
+                      })}
+                      {proximasFechas.length === 0 && (
+                        <div className="py-8 text-center">
+                          <p className="text-sm text-slate-400">No hay fechas próximas calculadas.</p>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Footer */}
+              <div className="p-4 border-t border-slate-100 bg-slate-50 flex justify-between items-center">
+                {actSeleccionada && proximasFechas.length > 0 ? (
+                  <p className="text-xs text-slate-500">
+                    Próxima: <strong>{DIAS_SEMANA[proximasFechas[0].getDay()]} {proximasFechas[0].getDate()} de {MESES[proximasFechas[0].getMonth()]}</strong>
+                  </p>
+                ) : (
+                  <span />
+                )}
+                <button onClick={() => setShowConsulta(false)} className="px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-200 rounded-md transition-colors">
+                  Cerrar
+                </button>
+              </div>
+
+            </div>
+          </div>
+        );
+      })()}
+
     </div>
   );
 }
