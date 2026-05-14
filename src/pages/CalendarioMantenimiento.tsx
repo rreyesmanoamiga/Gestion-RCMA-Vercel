@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { ChevronLeft, ChevronRight, Calendar, CheckCircle2, Clock, AlertTriangle, Wrench, X, Plus, Trash2, Bell, Mail, UserPlus } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Calendar, CheckCircle2, Clock, AlertTriangle, Wrench, X, Plus, Trash2, Bell, Mail, UserPlus, Pencil, Lock } from 'lucide-react';
 import { supabase } from '@/lib/supabaseClient';
 import { useAuth } from '@/lib/AuthContext';
 import { usePermissions } from '@/hooks/usePermissions';
@@ -49,19 +49,40 @@ const ACTIVIDADES_BASE: Actividad[] = [
   { id: 22, categoria: 'Instalacion Electrica', actividad: 'Limpiar difusores lamparas',     tipo: 'Limpiar', frecuencia: '1 año',   frecuenciaDias: 365,  descripcion: 'Desmontaje y limpieza de difusores de lamparas fluorescentes.' },
   { id: 23, categoria: 'Barandillas y Rejas',   actividad: 'Limpiar rejas y barandillas',    tipo: 'Limpiar', frecuencia: '6 meses', frecuenciaDias: 180,  descripcion: 'Limpieza integral de las rejas, barandillas y persianas.' },
   { id: 24, categoria: 'Barandillas y Rejas',   actividad: 'Engrasar persianas enrollables', tipo: 'Renovar', frecuencia: '3 años',  frecuenciaDias: 1095, descripcion: 'Engrasado de las guias y del tambor de las persianas.' },
+  // --- Seguridad y Emergencias ---
+  { id: 25, categoria: 'Seguridad y Emergencias', actividad: 'Revisar extintores',                   tipo: 'Revisar', frecuencia: '6 meses', frecuenciaDias: 180,  descripcion: 'Inspeccion visual, peso y presion de todos los extintores del plantel.' },
+  { id: 26, categoria: 'Seguridad y Emergencias', actividad: 'Revisar señalamientos de emergencia',  tipo: 'Revisar', frecuencia: '1 año',   frecuenciaDias: 365,  descripcion: 'Verificacion de senales de evacuacion, salidas de emergencia y rutas.' },
+  { id: 27, categoria: 'Seguridad y Emergencias', actividad: 'Probar luces de emergencia',           tipo: 'Revisar', frecuencia: '1 mes',   frecuenciaDias: 30,   descripcion: 'Prueba funcional de luminarias de emergencia y verificacion de bateria.' },
+  { id: 28, categoria: 'Seguridad y Emergencias', actividad: 'Revisar botiquin de primeros auxilios', tipo: 'Revisar', frecuencia: '1 mes',   frecuenciaDias: 30,   descripcion: 'Revision y reposicion de materiales del botiquin segun inventario.' },
+  // --- Climatizacion ---
+  { id: 29, categoria: 'Climatizacion',            actividad: 'Limpiar filtros de aires acondicionados', tipo: 'Limpiar', frecuencia: '3 meses', frecuenciaDias: 90,  descripcion: 'Desmontaje, limpieza y reinstalacion de filtros de unidades de AC.' },
+  { id: 30, categoria: 'Climatizacion',            actividad: 'Revision general de equipos de AC',       tipo: 'Revisar', frecuencia: '1 año',   frecuenciaDias: 365, descripcion: 'Revision de carga de gas, compresor, drenajes y funcionamiento general.' },
+  // --- Areas Exteriores ---
+  { id: 31, categoria: 'Areas Exteriores',         actividad: 'Revisar juegos infantiles y equipo',  tipo: 'Revisar', frecuencia: '1 mes',   frecuenciaDias: 30,  descripcion: 'Inspeccion de seguridad de juegos, canastas, porterias y equipo exterior.' },
+  { id: 32, categoria: 'Areas Exteriores',         actividad: 'Limpiar patios y areas comunes',      tipo: 'Limpiar', frecuencia: '1 semana',frecuenciaDias: 7,   descripcion: 'Barrido, retiro de basura y limpieza general de patios y pasillos.' },
+  { id: 33, categoria: 'Areas Exteriores',         actividad: 'Revisar bardas y mallas perimetrales',tipo: 'Revisar', frecuencia: '6 meses', frecuenciaDias: 180, descripcion: 'Inspeccion de estado fisico de bardas, rejas y mallas de perimetro.' },
+  // --- Instalaciones Especiales ---
+  { id: 34, categoria: 'Instalaciones Especiales', actividad: 'Limpiar cisterna y tinaco',           tipo: 'Limpiar', frecuencia: '6 meses', frecuenciaDias: 180, descripcion: 'Vaciado, lavado y desinfeccion de cisterna y/o tinaco de almacenamiento.' },
+  { id: 35, categoria: 'Instalaciones Especiales', actividad: 'Fumigacion y control de plagas',      tipo: 'Limpiar', frecuencia: '3 meses', frecuenciaDias: 90,  descripcion: 'Aplicacion preventiva de fumigacion en todas las areas del plantel.' },
+  { id: 36, categoria: 'Instalaciones Especiales', actividad: 'Revisar camaras de seguridad',        tipo: 'Revisar', frecuencia: '1 mes',   frecuenciaDias: 30,  descripcion: 'Verificacion de funcionamiento, angulo y grabacion de camaras CCTV.' },
+  { id: 37, categoria: 'Instalaciones Especiales', actividad: 'Revisar planta de emergencia y UPS',  tipo: 'Revisar', frecuencia: '3 meses', frecuenciaDias: 90,  descripcion: 'Prueba de arranque, nivel de combustible y estado de baterias UPS.' },
 ];
 
 const COLORES_CATEGORIA: Record<string, string> = {
-  'Paredes y Acabados':   '#6366f1',
-  'Pisos':                '#f59e0b',
-  'Techo y Red Pluvial':  '#10b981',
-  'Puertas y Ventanas':   '#3b82f6',
-  'Red de Agua Potable':  '#06b6d4',
-  'Sanitarios':           '#ec4899',
-  'Red Sanitaria':        '#8b5cf6',
-  'Instalacion Electrica':'#f97316',
-  'Barandillas y Rejas':  '#14b8a6',
-  'Personalizado':        '#64748b',
+  'Paredes y Acabados':      '#6366f1',
+  'Pisos':                   '#f59e0b',
+  'Techo y Red Pluvial':     '#10b981',
+  'Puertas y Ventanas':      '#3b82f6',
+  'Red de Agua Potable':     '#06b6d4',
+  'Sanitarios':              '#ec4899',
+  'Red Sanitaria':           '#8b5cf6',
+  'Instalacion Electrica':   '#f97316',
+  'Barandillas y Rejas':     '#14b8a6',
+  'Seguridad y Emergencias': '#ef4444',
+  'Climatizacion':           '#0ea5e9',
+  'Areas Exteriores':        '#22c55e',
+  'Instalaciones Especiales':'#a855f7',
+  'Personalizado':           '#64748b',
 };
 
 const FRECUENCIAS_PRESET = [
@@ -113,6 +134,7 @@ export default function CalendarioMantenimiento() {
   const [showModal, setShowModal] = useState(false);
   const [showGestion, setShowGestion] = useState(false);
   const [showNotificaciones, setShowNotificaciones] = useState(false);
+  const [editingItem, setEditingItem] = useState<Actividad | null>(null);
 
   const [form, setForm] = useState({
     categoria: '', categoriaCustom: '', actividad: '',
@@ -167,6 +189,24 @@ export default function CalendarioMantenimiento() {
     },
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['customMaintenance'] }); toast.success('Eliminado'); },
     onError: () => toast.error('Error al eliminar'),
+  });
+
+  const updateMutation = useMutation({
+    mutationFn: async ({ id, data }: { id: string; data: typeof form }) => {
+      const categoria = data.categoria === '__custom__' ? data.categoriaCustom : data.categoria;
+      const { error } = await supabase.from('custom_maintenance').update({
+        categoria, actividad: data.actividad, tipo: data.tipo,
+        frecuencia: data.frecuencia, frecuencia_dias: data.frecuenciaDias, descripcion: data.descripcion,
+      }).eq('id', id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['customMaintenance'] });
+      toast.success('Mantenimiento actualizado');
+      setEditingItem(null);
+      setForm({ categoria: '', categoriaCustom: '', actividad: '', tipo: 'Limpiar', frecuencia: '1 mes', frecuenciaDias: 30, descripcion: '' });
+    },
+    onError: () => toast.error('Error al actualizar'),
   });
 
   const addRecipientMutation = useMutation({
@@ -407,6 +447,39 @@ export default function CalendarioMantenimiento() {
                     <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-600">Cada {act.frecuencia}</span>
                   </div>
                 </div>
+                {isAdmin && (
+                  <div className="flex items-center gap-1 shrink-0 mt-0.5">
+                    {act.esPersonalizada ? (
+                      <>
+                        <button
+                          onClick={() => {
+                            setEditingItem(act);
+                            setForm({
+                              categoria: act.categoria, categoriaCustom: '',
+                              actividad: act.actividad, tipo: act.tipo,
+                              frecuencia: act.frecuencia, frecuenciaDias: act.frecuenciaDias,
+                              descripcion: act.descripcion,
+                            });
+                          }}
+                          className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-md transition-colors"
+                          title="Editar">
+                          <Pencil className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          onClick={() => { if (confirm('¿Eliminar este mantenimiento?')) deleteMutation.mutate(String(act.id)); }}
+                          disabled={deleteMutation.isPending}
+                          className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-md transition-colors"
+                          title="Eliminar">
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </>
+                    ) : (
+                      <span title="Actividad base — no editable" className="p-1.5 text-slate-200">
+                        <Lock className="w-3.5 h-3.5" />
+                      </span>
+                    )}
+                  </div>
+                )}
               </div>
             ))}
           </div>
@@ -592,6 +665,62 @@ export default function CalendarioMantenimiento() {
               <button onClick={() => { setShowGestion(false); setShowModal(true); }}
                 className="px-4 py-2 bg-slate-900 text-white rounded-md text-sm font-medium hover:bg-slate-800 flex items-center gap-2">
                 <Plus className="w-4 h-4" /> Agregar nuevo
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* Modal Editar mantenimiento personalizado */}
+      {editingItem && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4">
+          <div className="bg-white rounded-xl shadow-2xl max-w-md w-full max-h-[90vh] overflow-hidden flex flex-col border border-slate-200">
+            <div className="p-5 border-b border-slate-100 bg-slate-50 flex justify-between items-center">
+              <h3 className="font-bold text-slate-900 flex items-center gap-2"><Pencil className="w-4 h-4" /> Editar Mantenimiento</h3>
+              <button onClick={() => setEditingItem(null)} className="text-slate-400 hover:text-slate-600"><X className="w-5 h-5" /></button>
+            </div>
+            <div className="p-6 overflow-y-auto space-y-4">
+              <div>
+                <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Categoria</label>
+                <select className={inputClass} value={form.categoria} onChange={e => setForm(f => ({ ...f, categoria: e.target.value }))}>
+                  <option value="">Seleccionar categoria...</option>
+                  {todasCategorias.map(c => <option key={c} value={c}>{c}</option>)}
+                  <option value="__custom__">+ Nueva categoria</option>
+                </select>
+              </div>
+              {form.categoria === '__custom__' && (
+                <div>
+                  <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Nueva categoria</label>
+                  <input className={inputClass} placeholder="Ej: Area Exterior" value={form.categoriaCustom} onChange={e => setForm(f => ({ ...f, categoriaCustom: e.target.value }))} />
+                </div>
+              )}
+              <div>
+                <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Actividad</label>
+                <input className={inputClass} placeholder="Ej: Revisar extintores" value={form.actividad} onChange={e => setForm(f => ({ ...f, actividad: e.target.value }))} />
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Tipo</label>
+                <select className={inputClass} value={form.tipo} onChange={e => setForm(f => ({ ...f, tipo: e.target.value as any }))}>
+                  <option value="Limpiar">Limpiar</option><option value="Renovar">Renovar</option><option value="Revisar">Revisar</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Frecuencia</label>
+                <select className={inputClass} value={form.frecuencia} onChange={e => handleFrecuencia(e.target.value)}>
+                  {FRECUENCIAS_PRESET.map(f => <option key={f.label} value={f.label}>{f.label}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Descripcion (opcional)</label>
+                <textarea className={inputClass} rows={3} placeholder="Describe la actividad..." value={form.descripcion} onChange={e => setForm(f => ({ ...f, descripcion: e.target.value }))} />
+              </div>
+            </div>
+            <div className="p-5 border-t border-slate-100 bg-slate-50 flex justify-end gap-3">
+              <button onClick={() => setEditingItem(null)} className="px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-200 rounded-md">Cancelar</button>
+              <button
+                disabled={updateMutation.isPending || !form.actividad || (!form.categoria || (form.categoria === '__custom__' && !form.categoriaCustom))}
+                onClick={() => updateMutation.mutate({ id: String(editingItem.id), data: form })}
+                className="px-4 py-2 bg-slate-900 text-white rounded-md text-sm font-medium hover:bg-slate-800 disabled:opacity-50 transition-colors">
+                {updateMutation.isPending ? 'Guardando...' : 'Guardar cambios'}
               </button>
             </div>
           </div>
