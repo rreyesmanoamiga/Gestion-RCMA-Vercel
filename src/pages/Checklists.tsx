@@ -164,6 +164,17 @@ function initItems(): ItemEval[] {
 }
 
 // ── PDF Mínimos ───────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+// PDF HELPERS
+// ─────────────────────────────────────────────────────────────────────────────
+function sanitize(text: string): string {
+  return (text ?? '')
+    .replace(/≥/g, '>=').replace(/≤/g, '<=')
+    .replace(/→/g, '->').replace(/↳/g, 'Obs:')
+    .replace(/✓/g, 'OK').replace(/✗/g, 'X')
+    .replace(/[^\x00-\xFF]/g, '?');
+}
+
 async function loadJsPDF() {
   const w = window as Window & { jspdf?: { jsPDF: any } };
   if (w.jspdf?.jsPDF) return w.jspdf.jsPDF;
@@ -280,10 +291,10 @@ async function generarPDFMinimos(ev: EvalMinimos) {
       doc.setFontSize(7); doc.setFont('helvetica', 'bold'); doc.setTextColor(er, eg, eb);
       doc.text(ESTADO_CFG[item.estado].label.toUpperCase(), mL + 15, y + 2.5, { align: 'center' });
       doc.setFontSize(9); doc.setFont('helvetica', 'bold'); doc.setTextColor(15, 23, 42);
-      doc.text(item.nombre, mL + 34, y + 2);
+      doc.text(sanitize(item.nombre), mL + 34, y + 2);
       if (item.observacion) {
         doc.setFontSize(8); doc.setFont('helvetica', 'normal'); doc.setTextColor(100, 116, 139);
-        const obs = doc.splitTextToSize('Obs: ' + item.observacion, cW - 34);
+        const obs = doc.splitTextToSize('Obs: ' + sanitize(item.observacion), cW - 34);
         doc.text(obs, mL + 34, y + 8);
       }
       y += rowH + 3;
@@ -354,28 +365,31 @@ async function generarReporteGeneral(evaluaciones: EvalMinimos[]) {
 
   doc.setFillColor(13, 138, 126); doc.rect(mL + 20, 132, cW - 40, 0.5, 'F');
 
-  // KPIs portada
+  // KPIs portada — 4 cuadros compactos centrados
   const kpiData = [
-    { label: 'Planteles\nevaluados', val: evaluaciones.length,                                          color: [255,255,255] as [number,number,number] },
-    { label: 'Completos',           val: evaluaciones.filter(e => e.resultado==='completo').length,     color: [22,163,74]   as [number,number,number] },
-    { label: 'En Proceso',          val: evaluaciones.filter(e => e.resultado==='en_proceso').length,   color: [202,138,4]   as [number,number,number] },
-    { label: 'Incompletos',         val: evaluaciones.filter(e => e.resultado==='incompleto').length,   color: [220,38,38]   as [number,number,number] },
+    { label: 'Planteles\nevaluados', val: evaluaciones.length,                                          color: [255,255,255] as [number,number,number], bg: [30,50,90]   as [number,number,number] },
+    { label: 'Completos',           val: evaluaciones.filter(e => e.resultado==='completo').length,     color: [22,163,74]   as [number,number,number], bg: [10,50,25]   as [number,number,number] },
+    { label: 'En Proceso',          val: evaluaciones.filter(e => e.resultado==='en_proceso').length,   color: [202,138,4]   as [number,number,number], bg: [50,40,5]    as [number,number,number] },
+    { label: 'Incompletos',         val: evaluaciones.filter(e => e.resultado==='incompleto').length,   color: [220,38,38]   as [number,number,number], bg: [50,10,10]   as [number,number,number] },
   ];
-  const kW = (cW - 12) / 4;
+  const kW = 36; const kGap = 4;
+  const kTotalW = kpiData.length * kW + (kpiData.length - 1) * kGap;
+  const kStartX = (W - kTotalW) / 2;
+  const kY = 148;
   kpiData.forEach((k, i) => {
-    const x = mL + i * (kW + 4);
-    doc.setFillColor(255, 255, 255); doc.setGState(doc.GState({ opacity: 0.08 }));
-    doc.roundedRect(x, 145, kW, 32, 2, 2, 'F');
-    doc.setGState(doc.GState({ opacity: 1 }));
-    doc.setFontSize(22); doc.setFont('helvetica', 'bold'); doc.setTextColor(...k.color);
-    doc.text(String(k.val), x + kW / 2, 162, { align: 'center' });
-    doc.setFontSize(7.5); doc.setFont('helvetica', 'normal'); doc.setTextColor(180, 190, 210);
-    k.label.split('\n').forEach((line, li) => doc.text(line, x + kW / 2, 169 + li * 5, { align: 'center' }));
+    const x = kStartX + i * (kW + kGap);
+    doc.setFillColor(...k.bg);
+    doc.setDrawColor(60, 80, 120);
+    doc.roundedRect(x, kY, kW, 28, 2, 2, 'FD');
+    doc.setFontSize(20); doc.setFont('helvetica', 'bold'); doc.setTextColor(...k.color);
+    doc.text(String(k.val), x + kW / 2, kY + 14, { align: 'center' });
+    doc.setFontSize(7); doc.setFont('helvetica', 'normal'); doc.setTextColor(170, 185, 210);
+    k.label.split('\n').forEach((line, li) => doc.text(line, x + kW / 2, kY + 20 + li * 4.5, { align: 'center' }));
   });
 
   doc.setFontSize(9); doc.setFont('helvetica', 'normal'); doc.setTextColor(100, 120, 160);
   doc.text('Generado el ' + now, W / 2, 198, { align: 'center' });
-  doc.text('Coordinación de Obras  ·  Sistema RCMA', W / 2, 205, { align: 'center' });
+  doc.text('Coordinacion de Obras  ·  Sistema RCMA', W / 2, 205, { align: 'center' });
 
   // ── PÁGINA 2: RESUMEN EJECUTIVO ───────────────────────────────────────────
   doc.addPage(); y = 20;
@@ -581,11 +595,11 @@ async function generarReporteGeneral(evaluaciones: EvalMinimos[]) {
         doc.setFontSize(6.5); doc.setFont('helvetica', 'bold'); doc.setTextColor(er2, eg2, eb2);
         doc.text(ESTADO_CFG[item.estado].label.toUpperCase(), mL + 12, y + 2.5, { align: 'center' });
         doc.setFontSize(8.5); doc.setFont('helvetica', 'bold'); doc.setTextColor(15, 23, 42);
-        const nombre = doc.splitTextToSize(item.nombre, cW - 28);
+        const nombre = doc.splitTextToSize(sanitize(item.nombre), cW - 28);
         doc.text(nombre[0], mL + 27, y + 2.5);
         if (item.observacion) {
           doc.setFontSize(7.5); doc.setFont('helvetica', 'normal'); doc.setTextColor(100, 116, 139);
-          doc.text('Obs: ' + item.observacion, mL + 27, y + 9);
+          doc.text('Obs: ' + sanitize(item.observacion), mL + 27, y + 9);
         }
         y += rowH + 2;
       });
@@ -611,7 +625,7 @@ async function generarReporteGeneral(evaluaciones: EvalMinimos[]) {
         doc.setFontSize(7); doc.setFont('helvetica', 'normal'); doc.setTextColor(22, 163, 74);
         doc.text('OK', cx2, y + 3);
         doc.setTextColor(50, 70, 50);
-        const txt = doc.splitTextToSize(item.nombre, 80);
+        const txt = doc.splitTextToSize(sanitize(item.nombre), 80);
         doc.text(txt[0], cx2 + 5, y + 3);
         y += 6;
         if ((i + 1) % colC === 0) { cx2 = mL; }
