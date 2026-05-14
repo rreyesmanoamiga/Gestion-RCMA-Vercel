@@ -67,32 +67,51 @@ function SetPasswordPage() {
   useEffect(() => {
     const hash = window.location.hash;
     const params = new URLSearchParams(hash.replace('#', ''));
-    const token = params.get('token') || params.get('access_token');
     const type  = params.get('type');
 
-    if (token && (type === 'invite' || type === 'recovery')) {
-      supabase.auth.verifyOtp({
-        token_hash: token,
-        type: type === 'invite' ? 'invite' : 'recovery',
-      })
-        .then(({ error }) => {
-          if (error) {
-            setError('El link de invitación es inválido o expiró. Pide uno nuevo.');
-          } else {
+    // Caso 1: Supabase ya procesó el enlace y redirigió con access_token en el hash
+    // supabase-js establece la sesión automáticamente — solo verificamos que exista
+    if (params.get('access_token') && (type === 'invite' || type === 'recovery')) {
+      // Pequeño delay para que supabase-js termine de establecer la sesión
+      setTimeout(() => {
+        supabase.auth.getSession().then(({ data: { session } }) => {
+          if (session) {
             setVerified(true);
+          } else {
+            setError('El link de invitación es inválido o expiró. Solicita uno nuevo al administrador.');
           }
           setVerifying(false);
         });
-    } else {
-      supabase.auth.getSession().then(({ data: { session } }) => {
-        if (session) {
-          setVerified(true);
+      }, 300);
+      return;
+    }
+
+    // Caso 2: Hash contiene token_hash (flujo PKCE) — verificar OTP directamente
+    const tokenHash = params.get('token_hash') || params.get('token');
+    if (tokenHash && (type === 'invite' || type === 'recovery')) {
+      supabase.auth.verifyOtp({
+        token_hash: tokenHash,
+        type: type === 'invite' ? 'invite' : 'recovery',
+      }).then(({ error }) => {
+        if (error) {
+          setError('El link de invitación es inválido o expiró. Solicita uno nuevo al administrador.');
         } else {
-          setError('No se encontró un link válido. Usa el enlace del correo de invitación.');
+          setVerified(true);
         }
         setVerifying(false);
       });
+      return;
     }
+
+    // Caso 3: Sin hash — verificar si ya hay sesión activa (ej: usuario vuelve a la página)
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session) {
+        setVerified(true);
+      } else {
+        setError('No se encontró un link válido. Usa el enlace del correo de invitación.');
+      }
+      setVerifying(false);
+    });
   }, []);
 
   const handleSubmit = async (e) => {
