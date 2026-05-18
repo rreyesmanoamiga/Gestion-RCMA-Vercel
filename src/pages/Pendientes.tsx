@@ -465,14 +465,14 @@ export default function Pendientes() {
       ) : (
         <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
           <div className="hidden md:grid grid-cols-24 gap-x-3 px-5 py-3 bg-slate-50 border-b border-slate-100 text-[10px] font-black text-slate-400 uppercase tracking-widest">
-            <div className="col-span-1">Colegio</div>
+            <div className="col-span-2">Colegio</div>
             <div className="col-span-4">Pendiente</div>
             <div className="col-span-2">Prior.</div>
             <div className="col-span-2">Asignación</div>
             <div className="col-span-2">Estatus</div>
             <div className="col-span-3">Proyect. Vinc.</div>
-            <div className="col-span-9">Notas</div>
-            <div className="col-span-1 text-right">Acc.</div>
+            <div className="col-span-7">Notas</div>
+            <div className="col-span-2 text-right">Acc.</div>
           </div>
 
           <div className="divide-y divide-slate-100">
@@ -505,7 +505,7 @@ export default function Pendientes() {
                 </div>
                 {/* Desktop grid */}
                 <div className="hidden md:grid grid-cols-24 gap-x-3 items-start">
-                <div className="col-span-1">
+                <div className="col-span-2">
                   <span className="text-xs font-semibold text-slate-800">{p.colegio || '—'}</span>
                 </div>
                 <div className="col-span-4">
@@ -547,10 +547,10 @@ export default function Pendientes() {
                     </span>
                   )}
                 </div>
-                <div className="col-span-9">
+                <div className="col-span-7">
                   <p className="text-xs text-slate-700 line-clamp-4 leading-relaxed">{p.notas || '—'}</p>
                 </div>
-                <div className="col-span-1 flex gap-1.5 justify-end">
+                <div className="col-span-2 flex gap-1.5 justify-end">
                   <button onClick={() => setEditingPendiente(p)}
                     className="p-1.5 rounded-md border border-slate-200 text-slate-500 hover:bg-slate-100 transition-colors">
                     <Pencil className="w-3.5 h-3.5" />
