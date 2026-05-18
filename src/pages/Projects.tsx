@@ -124,7 +124,7 @@ export default function Projects() {
   const kpis = useMemo(() => ({
     total:        projects.length,
     conTicket:    projects.filter(p => p.folio && p.folio.startsWith('TCMM')).length,
-    sinTicket:    projects.filter(p => !p.folio || !p.folio.startsWith('TCMM')).length,
+    sinTicket:    projects.filter(p => !p.folio || (!p.folio.startsWith('TCMM') && !p.folio.startsWith('TMAS'))).length,
     completados:  projects.filter(p => p.status === 'completado').length,
     presupuesto:  projects.reduce((sum, p) => sum + (p.budget ?? 0), 0),
   }), [projects]);

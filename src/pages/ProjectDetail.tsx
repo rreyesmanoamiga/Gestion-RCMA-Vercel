@@ -8,6 +8,7 @@ import {
   TrendingDown, Minus, Save, X,
 } from 'lucide-react';
 import ProjectForm from '@/components/projects/ProjectForm';
+import { supabase } from '@/lib/supabaseClient';
 import StatusBadge from '@/components/shared/StatusBadge';
 import PriorityBadge from '@/components/shared/PriorityBadge';
 import { toast } from 'sonner';
@@ -51,6 +52,22 @@ export default function ProjectDetail() {
   });
 
   const project = (data as unknown as Project[] | undefined)?.[0];
+
+  // Buscar ticket vinculado por proyecto_id para mostrar el folio TMAS
+  const { data: ticketVinculado } = useQuery({
+    queryKey: ['ticket-vinculado', id],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from('tickets')
+        .select('folio')
+        .eq('proyecto_id', id!)
+        .single();
+      return data;
+    },
+    enabled: !!id,
+  });
+
+  const folioDisplay = project?.folio || (ticketVinculado as any)?.folio || null;
 
   const updateMutation = useMutation({
     mutationFn: (formData: Record<string, unknown>) => db.Project.update(id!, formData),
@@ -133,9 +150,9 @@ export default function ProjectDetail() {
           <div className="flex flex-wrap gap-2 mb-4">
             <StatusBadge status={project.status} />
             <PriorityBadge priority={project.priority} />
-            {project.folio ? (
+            {folioDisplay ? (
               <span className="text-xs font-black text-red-500 bg-red-50 border border-red-200 px-2 py-0.5 rounded-full">
-                {project.folio}
+                {folioDisplay}
               </span>
             ) : (
               <span className="text-xs font-bold text-slate-300 bg-slate-50 border border-slate-200 px-2 py-0.5 rounded-full">
