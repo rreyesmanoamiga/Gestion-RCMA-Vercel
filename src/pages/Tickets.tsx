@@ -482,13 +482,50 @@ export default function Tickets() {
 
   const updateMutation = useMutation({
     mutationFn: async ({ id, data }: { id: string; data: Record<string, unknown> }) => {
-      const { data: result, error } = await supabase.from('tickets').update(data).eq('id', id).select().single();
+      const crearProyecto  = data._crear_proyecto  as boolean;
+      const nombreProyecto = data._nombre_proyecto as string | null;
+
+      // Limpiar campos internos antes de actualizar (igual que en createMutation)
+      const { _crear_proyecto, _nombre_proyecto, ...ticketData } = data;
+
+      let proyecto_id: string | null = ticketData.proyecto_id as string | null;
+
+      // Si se pidió crear proyecto automáticamente desde edición
+      if (crearProyecto && nombreProyecto) {
+        const { data: proyecto, error: projError } = await supabase
+          .from('projects')
+          .insert({
+            name:          nombreProyecto,
+            status:        'en_espera',
+            priority:      'media',
+            territorio:    ticketData.territorio    ?? null,
+            colegio:       ticketData.colegio       ?? null,
+            eco:           ticketData.eco           ?? null,
+            budget:        ticketData.presupuesto   ?? null,
+            tipo_proyecto: ticketData.tipo_proyecto ?? null,
+            notes:         ticketData.notas         ?? null,
+            folio:         ticketData.folio         ?? null,
+            type:          'Mantenimiento',
+            progress:      0,
+          })
+          .select()
+          .single();
+        if (projError) throw projError;
+        proyecto_id = proyecto.id;
+      }
+
+      const { data: result, error } = await supabase
+        .from('tickets')
+        .update({ ...ticketData, proyecto_id })
+        .eq('id', id)
+        .select()
+        .single();
       if (error) throw error;
 
       // Si se canceló el ticket y tiene proyecto vinculado, cancelar el proyecto también
-      if (data.estatus === 'cancelado') {
+      if (ticketData.estatus === 'cancelado') {
         const ticket = tickets.find(t => t.id === id);
-        const proyectoId = (data.proyecto_id as string) || ticket?.proyecto_id;
+        const proyectoId = proyecto_id || ticket?.proyecto_id;
         if (proyectoId) {
           await supabase.from('projects').update({ status: 'cancelado' }).eq('id', proyectoId);
         }
