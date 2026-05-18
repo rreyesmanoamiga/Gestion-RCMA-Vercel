@@ -467,11 +467,31 @@ export default function TicketMAS() {
         },
       });
 
+      // ── Auto-registrar en Tickets Registrados al autorizar ────────────────────
+      const { error: ticketRegError } = await supabase.from('tickets').insert({
+        folio:               updatedRow.folio             ?? null,
+        territorio:          updatedRow.territorio        ?? null,
+        colegio:             updatedRow.colegio           ?? null,
+        eco:                 updatedRow.centro_gestor     ?? null,
+        fecha:               adminForm.fecha_recepcion    ?? null,
+        estatus:             'aprobado',
+        tipo_proyecto:       updatedRow.clasificacion     ?? null,
+        notas:               updatedRow.descripcion       ?? null,
+        plan_financiamiento: updatedRow.forma_financiamiento ?? null,
+        presupuesto:         null,
+        nombre_proveedor:    null,
+        asignacion:          null,
+        ticket_fisico:       false,
+        proyecto_id:         null,
+      });
+      if (ticketRegError) throw new Error(`Ticket autorizado pero no se pudo registrar en Tickets Registrados: ${ticketRegError.message}`);
+
       // Refetch inmediato desde el servidor
       await qc.refetchQueries({ queryKey: ['tickets_mas'] });
+      await qc.refetchQueries({ queryKey: ['tickets'] });
       setViewing(null);
       setVista('lista');
-      toast.success(`Ticket ${viewing.folio} autorizado`);
+      toast.success(`Ticket ${viewing.folio} autorizado y registrado automáticamente`);
     } catch (e: any) {
       toast.error(e.message ?? 'Error al autorizar');
     }
