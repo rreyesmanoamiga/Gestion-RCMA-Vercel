@@ -269,6 +269,7 @@ export default function SolicitudProyecto() {
                 </tr>
               </tbody>
             </table>
+            </div>
           </div>
 
           {/* ── TIPO DE INICIATIVA ── */}
@@ -276,7 +277,7 @@ export default function SolicitudProyecto() {
             <div className="bg-slate-200 px-3 py-1.5 border-b border-slate-400">
               <span className="text-[11px] font-black uppercase tracking-widest text-slate-700">Tipo de Iniciativa *</span>
             </div>
-            <div className="p-3 grid grid-cols-3 gap-2">
+            <div className="p-3 grid grid-cols-2 sm:grid-cols-3 gap-2">
               {TIPOS_PROYECTO.map(tipo => (
                 <label key={tipo} className="flex items-center gap-2 cursor-pointer group">
                   <div className={`w-4 h-4 border-2 flex items-center justify-center flex-shrink-0 transition-colors ${
@@ -303,7 +304,7 @@ export default function SolicitudProyecto() {
                   onChange={e => set('resumen_proyecto', e.target.value)}
                   placeholder="Describe el proyecto: objetivo, área afectada, características técnicas, medidas, materiales, motivo de la solicitud..." />
               </div>
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className={labelClass + " block mb-1"}>Fecha Propuesta de Inicio</label>
                   <input type="date" className={inputClass} value={form.fecha_inicio_propuesta}
@@ -324,7 +325,8 @@ export default function SolicitudProyecto() {
             <div className="bg-slate-200 px-3 py-1.5 border-b border-slate-400">
               <span className="text-[11px] font-black uppercase tracking-widest text-slate-700">III. Plan de Financiamiento</span>
             </div>
-            <table className="w-full border-collapse">
+            <div className="overflow-x-auto">
+            <table className="w-full border-collapse min-w-[400px]">
               <thead>
                 <tr>
                   <th className={thStyle + " w-48"}>Fuente</th>

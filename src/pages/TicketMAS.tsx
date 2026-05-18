@@ -831,7 +831,8 @@ export default function TicketMAS() {
           </div>
         ) : (
           <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-            <table className="w-full text-sm">
+            <div className="overflow-x-auto">
+            <table className="w-full text-sm min-w-[700px]">
               <thead>
                 <tr className="bg-slate-800 text-white text-xs uppercase">
                   <th className="px-4 py-3 text-left">Folio</th>
@@ -889,6 +890,7 @@ export default function TicketMAS() {
                 })}
               </tbody>
             </table>
+            </div>
           </div>
         )}
 
