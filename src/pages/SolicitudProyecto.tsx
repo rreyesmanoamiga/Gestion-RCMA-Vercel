@@ -269,7 +269,6 @@ export default function SolicitudProyecto() {
                 </tr>
               </tbody>
             </table>
-            </div>
           </div>
 
           {/* ── TIPO DE INICIATIVA ── */}
@@ -414,6 +413,7 @@ export default function SolicitudProyecto() {
                 </p>
               </div>
             )}
+          </div>
           </div>
 
           {/* ── PIE DEL FORMATO ── */}
