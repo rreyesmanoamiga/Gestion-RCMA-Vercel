@@ -274,10 +274,9 @@ export default function Projects() {
                     )}
                   </div>
                   <div className="text-right shrink-0 ml-2">
-                    {project.folio && (
-                      <p className="text-xs font-black text-red-500">{project.folio}</p>
-                    )}
-                    {!project.folio && (
+                    {(project.folio || ticketByProject[project.id]?.folio) ? (
+                      <p className="text-xs font-black text-red-500">{project.folio || ticketByProject[project.id]?.folio}</p>
+                    ) : (
                       <p className="text-[10px] font-bold text-slate-300">Sin Ticket</p>
                     )}
                     {project.colegio    && <p className="text-xs font-bold text-slate-800">{project.colegio}</p>}
