@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { db } from '@/lib/db';
+import { supabase } from '@/lib/supabaseClient';
 import { Link } from 'react-router-dom';
 import {
   DollarSign, TrendingUp, TrendingDown, Minus,
@@ -29,6 +30,20 @@ export default function Presupuestos() {
   });
 
   const projects = (raw as unknown as Project[]).filter(p => p.budget != null && p.budget > 0);
+
+  // Mapa proyecto_id → folio del ticket vinculado (para proyectos TMAS sin folio en project.folio)
+  const { data: rawTickets = [] } = useQuery({
+    queryKey: ['tickets-vinculados-presupuesto'],
+    queryFn: async () => {
+      const { data } = await supabase.from('tickets').select('id, folio, proyecto_id').not('proyecto_id', 'is', null);
+      return data ?? [];
+    },
+  });
+  const ticketByProject = useMemo(() => {
+    const map: Record<string, string> = {};
+    (rawTickets as any[]).forEach((t: any) => { if (t.proyecto_id && t.folio) map[t.proyecto_id] = t.folio; });
+    return map;
+  }, [rawTickets]);
 
   const filtered = useMemo(() => projects.filter(p => {
     if (filtroTerritorio !== 'all' && p.territorio !== filtroTerritorio) return false;
@@ -159,8 +174,8 @@ export default function Presupuestos() {
                 return (
                   <tr key={p.id} className="hover:bg-slate-50 transition-colors">
                     <td className="px-4 py-3">
-                      <p className="font-semibold text-slate-800 truncate max-w-[200px]">{p.name}</p>
-                      {p.folio && <p className="text-[10px] font-bold text-red-500">{p.folio}</p>}
+                      <p className="font-semibold text-slate-800 truncate max-w-[280px]">{p.name}</p>
+                      {(p.folio || ticketByProject[p.id]) && <p className="text-[10px] font-bold text-red-500">{p.folio || ticketByProject[p.id]}</p>}
                     </td>
                     <td className="px-4 py-3 text-slate-600">{p.colegio ?? '—'}</td>
                     <td className="px-4 py-3 font-bold text-blue-600">{fmtMXN(p.budget!)}</td>
