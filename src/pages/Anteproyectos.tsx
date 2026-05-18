@@ -589,7 +589,7 @@ export default function Anteproyectos() {
                   {a.fecha_entrega && <p className="text-[10px] text-slate-400 flex items-center gap-1"><Calendar className="w-3 h-3"/>Ent: {format(new Date(a.fecha_entrega),'dd MMM yyyy',{locale:es})}</p>}
                 </div>
                 {/* Desktop grid */}
-                <div className="hidden md:grid md:grid-cols-12 gap-2 items-start">
+                <div className="hidden md:grid grid-cols-12 gap-2 items-start">
                 <div className="col-span-1">
                   <p className="text-xs font-bold text-slate-800">{a.colegio || '—'}</p>
                   <p className="text-[10px] text-slate-400">{a.territorio || ''}</p>

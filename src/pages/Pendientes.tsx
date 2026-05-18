@@ -504,7 +504,7 @@ export default function Pendientes() {
                   {p.notas && <p className="text-xs text-slate-600 line-clamp-2 leading-relaxed">{p.notas}</p>}
                 </div>
                 {/* Desktop grid */}
-                <div className="hidden md:grid md:grid-cols-24 gap-x-3 items-start">
+                <div className="hidden md:grid grid-cols-24 gap-x-3 items-start">
                 <div className="col-span-1">
                   <span className="text-xs font-semibold text-slate-800">{p.colegio || '—'}</span>
                 </div>
