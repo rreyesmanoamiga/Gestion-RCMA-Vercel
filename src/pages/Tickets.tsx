@@ -278,7 +278,7 @@ function TicketForm({
 
 
           {/* Toggle Crear Proyecto Automáticamente */}
-          {!ticket && (
+          {(!ticket || (ticket && !ticket.proyecto_id)) && (
             <div className="mt-4 p-4 bg-blue-50 border border-blue-200 rounded-xl">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
