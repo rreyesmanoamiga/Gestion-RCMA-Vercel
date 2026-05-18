@@ -203,6 +203,13 @@ function LoginPage() {
   const [loading, setLoading]   = useState(false);
   const [error, setError]       = useState('');
 
+  // ── Recuperar contraseña ───────────────────────────────────────────────────
+  const [showForgot, setShowForgot]         = useState(false);
+  const [forgotEmail, setForgotEmail]       = useState('');
+  const [forgotLoading, setForgotLoading]   = useState(false);
+  const [forgotSuccess, setForgotSuccess]   = useState(false);
+  const [forgotError, setForgotError]       = useState('');
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
@@ -212,30 +219,100 @@ function LoginPage() {
     setLoading(false);
   };
 
+  const handleForgotPassword = async (e) => {
+    e.preventDefault();
+    setForgotLoading(true);
+    setForgotError('');
+    const { error } = await supabase.auth.resetPasswordForEmail(forgotEmail, {
+      redirectTo: `${window.location.origin}/reset-password`,
+    });
+    if (error) {
+      setForgotError(error.message);
+    } else {
+      setForgotSuccess(true);
+    }
+    setForgotLoading(false);
+  };
+
   return (
     <div className="min-h-screen flex items-center justify-center bg-slate-50 p-4">
       <div className="bg-white rounded-xl shadow-sm border border-slate-200 w-full max-w-sm p-8">
+
+        {/* Logo + Título */}
         <div className="text-center mb-8">
+          <img
+            src="/logo.png"
+            alt="Mano Amiga"
+            className="mx-auto mb-4 h-16 w-auto object-contain"
+          />
           <h1 className="text-2xl font-black text-slate-900 uppercase tracking-tight">Sistema RCMA</h1>
           <p className="text-sm text-slate-500 mt-1">Coordinación de Obras</p>
         </div>
-        <form onSubmit={handleSubmit} className="space-y-4">
+
+        {/* ── Modal: Recuperar contraseña ── */}
+        {showForgot ? (
           <div>
-            <label htmlFor="email" className="block text-xs font-bold text-slate-500 uppercase mb-1">Correo electrónico</label>
-            <input id="email" type="email" required autoComplete="email" className={inputClass}
-              value={email} onChange={e => setEmail(e.target.value)} placeholder="tu@correo.com" />
+            {forgotSuccess ? (
+              <div className="text-center space-y-4">
+                <div className="w-12 h-12 rounded-full bg-emerald-100 flex items-center justify-center mx-auto">
+                  <svg className="w-6 h-6 text-emerald-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                  </svg>
+                </div>
+                <p className="text-sm font-semibold text-slate-800">¡Correo enviado!</p>
+                <p className="text-xs text-slate-500">Revisa tu bandeja de entrada en <span className="font-medium text-slate-700">{forgotEmail}</span> y sigue el enlace para restablecer tu contraseña.</p>
+                <button
+                  onClick={() => { setShowForgot(false); setForgotSuccess(false); setForgotEmail(''); }}
+                  className="w-full py-2 bg-slate-900 text-white rounded-md text-sm font-medium hover:bg-slate-800 transition-colors">
+                  Volver al inicio de sesión
+                </button>
+              </div>
+            ) : (
+              <form onSubmit={handleForgotPassword} className="space-y-4">
+                <div>
+                  <p className="text-sm text-slate-600 mb-4">Ingresa tu correo y te enviaremos un enlace para restablecer tu contraseña.</p>
+                  <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Correo electrónico</label>
+                  <input type="email" required autoComplete="email" className={inputClass}
+                    value={forgotEmail} onChange={e => setForgotEmail(e.target.value)} placeholder="tu@correo.com" />
+                </div>
+                {forgotError && <p className="text-xs text-red-600 bg-red-50 border border-red-200 rounded-md px-3 py-2">{forgotError}</p>}
+                <button type="submit" disabled={forgotLoading}
+                  className="w-full py-2 bg-slate-900 text-white rounded-md text-sm font-medium hover:bg-slate-800 disabled:opacity-50 transition-colors">
+                  {forgotLoading ? 'Enviando...' : 'Enviar enlace'}
+                </button>
+                <button type="button" onClick={() => { setShowForgot(false); setForgotError(''); }}
+                  className="w-full py-2 text-slate-500 text-sm hover:text-slate-700 transition-colors">
+                  Cancelar
+                </button>
+              </form>
+            )}
           </div>
-          <div>
-            <label htmlFor="password" className="block text-xs font-bold text-slate-500 uppercase mb-1">Contraseña</label>
-            <input id="password" type="password" required autoComplete="current-password" className={inputClass}
-              value={password} onChange={e => setPassword(e.target.value)} placeholder="••••••••" />
-          </div>
-          {error && <p className="text-xs text-red-600 bg-red-50 border border-red-200 rounded-md px-3 py-2">{error}</p>}
-          <button type="submit" disabled={loading}
-            className="w-full py-2 bg-slate-900 text-white rounded-md text-sm font-medium hover:bg-slate-800 disabled:opacity-50 transition-colors">
-            {loading ? 'Iniciando sesión...' : 'Iniciar sesión'}
-          </button>
-        </form>
+        ) : (
+          /* ── Formulario de Login ── */
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div>
+              <label htmlFor="email" className="block text-xs font-bold text-slate-500 uppercase mb-1">Correo electrónico</label>
+              <input id="email" type="email" required autoComplete="email" className={inputClass}
+                value={email} onChange={e => setEmail(e.target.value)} placeholder="tu@correo.com" />
+            </div>
+            <div>
+              <label htmlFor="password" className="block text-xs font-bold text-slate-500 uppercase mb-1">Contraseña</label>
+              <input id="password" type="password" required autoComplete="current-password" className={inputClass}
+                value={password} onChange={e => setPassword(e.target.value)} placeholder="••••••••" />
+            </div>
+            {error && <p className="text-xs text-red-600 bg-red-50 border border-red-200 rounded-md px-3 py-2">{error}</p>}
+            <button type="submit" disabled={loading}
+              className="w-full py-2 bg-slate-900 text-white rounded-md text-sm font-medium hover:bg-slate-800 disabled:opacity-50 transition-colors">
+              {loading ? 'Iniciando sesión...' : 'Iniciar sesión'}
+            </button>
+            <div className="text-center">
+              <button type="button" onClick={() => { setShowForgot(true); setForgotEmail(email); }}
+                className="text-xs text-slate-500 hover:text-slate-800 underline underline-offset-2 transition-colors">
+                ¿Olvidaste tu contraseña?
+              </button>
+            </div>
+          </form>
+        )}
       </div>
     </div>
   );
