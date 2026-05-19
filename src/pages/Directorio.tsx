@@ -4,8 +4,8 @@ import { supabase } from '@/lib/supabaseClient';
 import { toast } from 'sonner';
 import { useAuth } from '@/lib/AuthContext';
 import {
-  BookUser, Search, Pencil, X, Phone, Mail,
-  MapPin, Building2, User, Users, ChevronDown, ChevronUp,
+  BookUser, Search, Pencil, Trash2, X, Phone, Mail,
+  MapPin, Building2, User, Users, ChevronDown, ChevronUp, AlertTriangle,
 } from 'lucide-react';
 import PageHeader from '@/components/shared/PageHeader';
 
@@ -125,6 +125,8 @@ export default function Directorio() {
   const [editModal, setEditModal]   = useState<Colegio | null>(null);
   const [editForm, setEditForm]     = useState<Partial<Colegio>>({});
   const [saving, setSaving]         = useState(false);
+  const [deleteId, setDeleteId]     = useState<{ id: string; nombre: string } | null>(null);
+  const [deleting, setDeleting]     = useState(false);
 
   // ── Fetch ────────────────────────────────────────────────────────────────
   const { data: colegios = [], isLoading } = useQuery({
@@ -159,6 +161,24 @@ export default function Directorio() {
   }), [colegios]);
 
   // ── Edit handlers ────────────────────────────────────────────────────────
+  const handleDelete = async () => {
+    if (!deleteId) return;
+    setDeleting(true);
+    try {
+      const { error } = await supabase.from('directorio').delete().eq('id', deleteId.id);
+      if (error) throw error;
+      qc.setQueryData<Colegio[]>(['directorio'], prev =>
+        (prev ?? []).filter(c => c.id !== deleteId.id)
+      );
+      toast.success(`"${deleteId.nombre}" eliminado del directorio`);
+      setDeleteId(null);
+    } catch (e: any) {
+      toast.error(e.message ?? 'Error al eliminar');
+    } finally {
+      setDeleting(false);
+    }
+  };
+
   const handleEdit = (c: Colegio) => { setEditModal(c); setEditForm({ ...c }); };
   const set = (k: keyof Colegio, v: string) => setEditForm(p => ({ ...p, [k]: v }));
 
@@ -248,11 +268,18 @@ export default function Directorio() {
                     <span className="text-xs text-slate-500 font-mono">{c.codigo}</span>
                   </div>
                   {isAdmin && (
-                    <button onClick={() => handleEdit(c)}
-                      title="Editar"
-                      className="p-1.5 rounded hover:bg-white/70 transition text-slate-400 hover:text-slate-800">
-                      <Pencil className="w-3.5 h-3.5" />
-                    </button>
+                    <div className="flex items-center gap-1">
+                      <button onClick={() => handleEdit(c)}
+                        title="Editar"
+                        className="p-1.5 rounded hover:bg-white/70 transition text-slate-400 hover:text-slate-800">
+                        <Pencil className="w-3.5 h-3.5" />
+                      </button>
+                      <button onClick={() => setDeleteId({ id: c.id, nombre: c.nombre })}
+                        title="Eliminar"
+                        className="p-1.5 rounded hover:bg-red-100 transition text-slate-400 hover:text-red-600">
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
                   )}
                 </div>
 
@@ -486,6 +513,37 @@ export default function Directorio() {
               <button onClick={handleSave} disabled={saving}
                 className="flex-1 py-2 bg-slate-900 text-white rounded-lg text-sm font-semibold hover:bg-slate-800 disabled:opacity-50 transition">
                 {saving ? 'Guardando…' : 'Guardar Cambios'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Modal confirmar eliminar ────────────────────────────────────── */}
+      {deleteId && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 p-4">
+          <div className="bg-white rounded-xl shadow-2xl max-w-sm w-full p-6 border border-slate-200">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center shrink-0">
+                <AlertTriangle className="w-5 h-5 text-red-600" />
+              </div>
+              <div>
+                <h2 className="text-base font-bold text-slate-900">¿Eliminar registro?</h2>
+                <p className="text-xs text-slate-500 mt-0.5">Esta acción no se puede deshacer</p>
+              </div>
+            </div>
+            <p className="text-sm text-slate-600 mb-6">
+              Se eliminará permanentemente el registro de
+              <span className="font-bold text-slate-900"> {deleteId.nombre}</span> del directorio.
+            </p>
+            <div className="flex gap-3">
+              <button onClick={() => setDeleteId(null)}
+                className="flex-1 px-4 py-2 text-sm font-medium text-slate-600 border border-slate-200 hover:bg-slate-50 rounded-lg transition-colors">
+                Cancelar
+              </button>
+              <button onClick={handleDelete} disabled={deleting}
+                className="flex-1 px-4 py-2 text-sm font-medium bg-red-600 text-white hover:bg-red-700 rounded-lg disabled:opacity-50 transition-colors">
+                {deleting ? 'Eliminando...' : 'Sí, eliminar'}
               </button>
             </div>
           </div>
