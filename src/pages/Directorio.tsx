@@ -171,6 +171,10 @@ export default function Directorio() {
         .update({ ...editForm, updated_at: new Date().toISOString() })
         .eq('id', editModal.id);
       if (error) throw error;
+      // Actualizar cache local inmediatamente para reflejar cambios en las tarjetas
+      qc.setQueryData<Colegio[]>(['directorio'], prev =>
+        (prev ?? []).map(c => c.id === editModal.id ? { ...c, ...editForm } : c)
+      );
       await qc.invalidateQueries({ queryKey: ['directorio'] });
       setEditModal(null);
       toast.success('Directorio actualizado');
