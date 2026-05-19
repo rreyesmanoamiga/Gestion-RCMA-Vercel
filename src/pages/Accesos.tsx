@@ -217,7 +217,7 @@ export default function Accesos() {
 
       {/* ── Tabla de Usuarios ─────────────────────────────────────────────── */}
       <div className={cardClass}>
-        <div className="px-5 py-4 border-b border-slate-100 bg-slate-50/50 flex flex-col sm:flex-row sm:items-center gap-3">
+        <div className="px-4 sm:px-5 py-3 sm:py-4 border-b border-slate-100 bg-slate-50/50 flex flex-col sm:flex-row sm:items-center gap-3">
           <h2 className="flex items-center gap-2 text-sm font-bold text-slate-800 uppercase tracking-tight shrink-0">
             <Users className="w-4 h-4 text-slate-400" />
             Usuarios con Acceso ({nonAdminUsers.length})
@@ -270,7 +270,7 @@ export default function Accesos() {
                   const activePerms = Object.keys(PERMISSIONS).filter(k => u[k]);
                   const initials = (u.nombre ? String(u.nombre) : String(u.user_email)).slice(0, 2).toUpperCase();
                   return (
-                    <div key={u.id} className="px-5 py-4 hover:bg-slate-50/50 transition-colors">
+                    <div key={u.id} className="px-4 sm:px-5 py-3 sm:py-4 hover:bg-slate-50/50 transition-colors">
                       {/* Mobile card */}
                       <div className="md:hidden space-y-3">
                         <div className="flex items-center justify-between gap-2">
@@ -396,15 +396,15 @@ export default function Accesos() {
 
       {/* ── Modal — Invitar usuario ────────────────────────────────────────── */}
       {showInvite && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4">
-          <div className="bg-white rounded-xl shadow-2xl max-w-lg w-full max-h-[90vh] overflow-hidden flex flex-col border border-slate-200">
-            <div className="p-5 border-b border-slate-100 flex justify-between items-center bg-slate-50">
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-slate-900/60 backdrop-blur-sm p-0 sm:p-4">
+          <div className="bg-white rounded-t-2xl sm:rounded-xl shadow-2xl max-w-lg w-full max-h-[92vh] sm:max-h-[90vh] overflow-hidden flex flex-col border border-slate-200">
+            <div className="p-4 sm:p-5 border-b border-slate-100 flex justify-between items-center bg-slate-50">
               <h3 className="font-bold text-slate-900 flex items-center gap-2">
                 <UserPlus className="w-4 h-4" /> Invitar nuevo usuario
               </h3>
               <button onClick={closeModal} className="text-slate-400 hover:text-slate-600"><X className="w-5 h-5" /></button>
             </div>
-            <div className="p-6 overflow-y-auto space-y-5">
+            <div className="p-4 sm:p-6 overflow-y-auto space-y-4">
               <form id="invite-form" onSubmit={handleInvite}>
                 {/* Datos del usuario */}
                 <div className="space-y-4 mb-6">
@@ -437,7 +437,7 @@ export default function Accesos() {
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-2 gap-3">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <div>
                       <label className="block text-xs font-bold text-slate-500 uppercase mb-1.5 tracking-wide">Territorio</label>
                       <div className="relative">
@@ -470,11 +470,11 @@ export default function Accesos() {
                 </div>
               </form>
             </div>
-            <div className="p-5 border-t border-slate-100 bg-slate-50 flex justify-end gap-3">
-              <button onClick={closeModal} className="px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-200 rounded-md transition-colors">
+            <div className="p-4 sm:p-5 border-t border-slate-100 bg-slate-50 flex flex-col-reverse sm:flex-row sm:justify-end gap-2 sm:gap-3">
+              <button onClick={closeModal} className="w-full sm:w-auto px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-200 rounded-md transition-colors text-center">
                 Cancelar
               </button>
-              <button form="invite-form" type="submit" disabled={inviting} className={btnPrimary}>
+              <button form="invite-form" type="submit" disabled={inviting} className={`${btnPrimary} w-full sm:w-auto justify-center`}>
                 {inviting ? 'Enviando...' : 'Enviar Invitación'}
               </button>
             </div>
@@ -484,16 +484,17 @@ export default function Accesos() {
 
       {/* ── Modal — Editar usuario + permisos ─────────────────────────────── */}
       {editingUser && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4">
-          <div className="bg-white rounded-xl shadow-2xl max-w-lg w-full max-h-[90vh] overflow-hidden flex flex-col border border-slate-200">
-            <div className="p-5 border-b border-slate-100 flex justify-between items-center bg-slate-50">
-              <h3 className="font-bold text-slate-900 flex items-center gap-2">
-                <Pencil className="w-4 h-4" /> Editar: {editingUser.email}
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-slate-900/60 backdrop-blur-sm p-0 sm:p-4">
+          <div className="bg-white rounded-t-2xl sm:rounded-xl shadow-2xl max-w-lg w-full max-h-[92vh] sm:max-h-[90vh] overflow-hidden flex flex-col border border-slate-200">
+            <div className="p-4 sm:p-5 border-b border-slate-100 flex justify-between items-center bg-slate-50">
+              <h3 className="font-bold text-slate-900 flex items-center gap-2 min-w-0">
+                <Pencil className="w-4 h-4 shrink-0" />
+                <span className="truncate text-sm">Editar: {editingUser.email}</span>
               </h3>
               <button onClick={closeModal} className="text-slate-400 hover:text-slate-600"><X className="w-5 h-5" /></button>
             </div>
-            <div className="p-6 overflow-y-auto space-y-5">
-              {/* Datos editables */}
+            <div className="p-4 sm:p-6 overflow-y-auto space-y-4">
+              {/* Datos editables */
               <div className="space-y-4">
                 <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">Datos del usuario</p>
 
@@ -554,11 +555,11 @@ export default function Accesos() {
                 />
               </div>
             </div>
-            <div className="p-5 border-t border-slate-100 bg-slate-50 flex justify-end gap-3">
-              <button onClick={closeModal} className="px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-200 rounded-md transition-colors">
+            <div className="p-4 sm:p-5 border-t border-slate-100 bg-slate-50 flex flex-col-reverse sm:flex-row sm:justify-end gap-2 sm:gap-3">
+              <button onClick={closeModal} className="w-full sm:w-auto px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-200 rounded-md transition-colors text-center">
                 Cancelar
               </button>
-              <button onClick={handleSaveEdit} disabled={updatePermsMutation.isPending} className={btnPrimary}>
+              <button onClick={handleSaveEdit} disabled={updatePermsMutation.isPending} className={`${btnPrimary} w-full sm:w-auto justify-center`}>
                 {updatePermsMutation.isPending ? 'Guardando...' : 'Guardar cambios'}
               </button>
             </div>
