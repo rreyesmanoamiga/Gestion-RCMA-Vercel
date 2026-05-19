@@ -466,7 +466,7 @@ async function exportMatrizExcel(data: {
   const sDataRight  = (alt: boolean) => ({ ...sData(alt), alignment: { horizontal: 'right', vertical: 'center' }, numFmt: '"$"#,##0.00' });
   const sTotal    = { font: { bold: true, sz: 10, name: 'Calibri', color: { rgb: 'FF1E40AF' } }, fill: { patternType: 'solid', fgColor: { rgb: 'FFEFF6FF' } }, border: bdr };
 
-  function buildSheet(name: string, sheetTitle: string, headers: string[], rows: (string | number | null | undefined)[][], colWidths: number[], moneyCol?: number) {
+  function buildSheet(name: string, sheetTitle: string, headers: string[], rows: (string | number | null | undefined)[][], colWidths: number[], moneyCol?: number | number[]) {
     const ws: Record<string, unknown> = {};
     const nCols = headers.length; const nRows = rows.length;
     const splitCol = Math.floor(nCols * 0.6);
@@ -479,7 +479,7 @@ async function exportMatrizExcel(data: {
     rows.forEach((row, ri) => {
       const alt = ri % 2 === 1;
       row.forEach((val, ci) => {
-        const isMoney = moneyCol !== undefined && ci === moneyCol;
+        const isMoney = moneyCol !== undefined && (Array.isArray(moneyCol) ? moneyCol.includes(ci) : ci === moneyCol);
         const isNumber = typeof val === 'number';
         const cell: Record<string, unknown> = { v: val ?? '—', t: isNumber ? 'n' : 's', s: isMoney ? sDataRight(alt) : isNumber ? sDataCenter(alt) : sData(alt) };
         if (isMoney) cell.z = '"$"#,##0.00';
@@ -530,7 +530,7 @@ async function exportMatrizExcel(data: {
         num(budget), num(real), num(diff), pct,
       ] as (string | number | null | undefined)[];
     }),
-    [12, 36, 14, 16, 14, 20, 18, 18, 20], 5);
+    [12, 36, 14, 16, 14, 20, 18, 18, 20], [5, 6, 7]);
 
   buildSheet('✅ Inspecciones', 'Checklists de Inspección — Sistema RCMA', ['Título', 'Colegio', 'Territorio', 'Inspector', 'Material', 'Estado General', 'Núm. Ítems', 'Fecha'],
     (data.checklists as Record<string, unknown>[]).map(c => [c.titulo ?? '—', c.colegio ?? '—', c.territorio ?? '—', c.inspector ?? 'Sin asignar', c.material ?? '—', c.overall_status ?? '—', Array.isArray(c.items) ? (c.items as unknown[]).length : 0, fmt((c.fecha ?? c.created_at) as string)]),
