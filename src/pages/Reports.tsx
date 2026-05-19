@@ -133,28 +133,28 @@ function drawTable(
   maxRows = 40
 ): number {
   const pC = Object.fromEntries(headers.map(h => [h.label, h.x]));
-  doc.setFillColor(241, 245, 249); doc.rect(18, y - 4, W - 36, 8, 'F');
-  doc.setFontSize(8); doc.setFont('helvetica', 'bold'); doc.setTextColor(100, 116, 139);
+  doc.setFillColor(241, 245, 249); doc.rect(18, y - 4, W - 36, 9, 'F');
+  doc.setFontSize(9); doc.setFont('helvetica', 'bold'); doc.setTextColor(100, 116, 139);
   headers.forEach(h => doc.text(h.label, h.x, y, { align: h.align ?? 'left' }));
-  y += 6;
+  y += 7;
   doc.setDrawColor(220, 220, 220); doc.line(20, y, W - 20, y); y += 2;
   doc.setFont('helvetica', 'normal'); doc.setTextColor(30, 30, 30);
   rows.slice(0, maxRows).forEach((row, i) => {
     if (y > 272) { doc.addPage(); y = 20; }
-    if (i % 2 === 0) { doc.setFillColor(248, 250, 252); doc.rect(18, y - 4, W - 36, 7, 'F'); }
-    doc.setFontSize(8);
+    if (i % 2 === 0) { doc.setFillColor(248, 250, 252); doc.rect(18, y - 4, W - 36, 8, 'F'); }
+    doc.setFontSize(9);
     row.forEach((cell, ci) => {
       const h = headers[ci];
       const maxW = ci < headers.length - 1
         ? (headers[ci + 1].x - h.x - 2)
         : (W - 20 - h.x);
-      const txt = cell.length * 2.2 > maxW ? cell.slice(0, Math.floor(maxW / 2.2) - 1) + '…' : cell;
+      const txt = cell.length * 2.6 > maxW ? cell.slice(0, Math.floor(maxW / 2.6) - 1) + '…' : cell;
       doc.text(txt, h.x, y, { align: h.align ?? 'left' });
     });
-    y += 7;
+    y += 8;
   });
   if (rows.length > maxRows) {
-    y += 2; doc.setFontSize(8); doc.setTextColor(100, 116, 139);
+    y += 2; doc.setFontSize(9); doc.setTextColor(100, 116, 139);
     doc.text(`… y ${rows.length - maxRows} registros más.`, 20, y); y += 6;
   }
   return y;
@@ -321,10 +321,10 @@ async function exportResumenPDF({ stats, projects, checklists, solicitudes, tick
   y = drawTable(doc, y, W, [
     { label: 'Folio',      x: 20  },
     { label: 'Colegio',    x: 50  },
-    { label: 'Tipo',       x: 85  },
-    { label: 'Proveedor',  x: 115 },
-    { label: 'Monto',      x: 155 },
-    { label: 'Estatus',    x: 182 },
+    { label: 'Tipo',       x: 74  },
+    { label: 'Proveedor',  x: 114 },
+    { label: 'Monto',      x: 153 },
+    { label: 'Estatus',    x: 180 },
   ], ticketRows, 35);
   y += 2;
 
@@ -351,11 +351,11 @@ async function exportResumenPDF({ stats, projects, checklists, solicitudes, tick
   ]);
   y = drawTable(doc, y, W, [
     { label: 'Folio',    x: 20  },
-    { label: 'Proyecto', x: 45  },
-    { label: 'Colegio',  x: 115 },
-    { label: 'Estatus',  x: 145 },
-    { label: 'Avance',   x: 168 },
-    { label: 'Prioridad',x: 183 },
+    { label: 'Proyecto', x: 44  },
+    { label: 'Colegio',  x: 108 },
+    { label: 'Estatus',  x: 138 },
+    { label: 'Avance',   x: 162 },
+    { label: 'Prioridad',x: 178 },
   ], activeRows, 40);
   y += 2;
 
@@ -372,10 +372,10 @@ async function exportResumenPDF({ stats, projects, checklists, solicitudes, tick
     ]);
     y = drawTable(doc, y, W, [
       { label: 'Folio',    x: 20  },
-      { label: 'Proyecto', x: 45  },
-      { label: 'Colegio',  x: 120 },
-      { label: 'Tipo',     x: 155 },
-      { label: 'Presupuesto', x: 182, align: 'right' },
+      { label: 'Proyecto', x: 44  },
+      { label: 'Colegio',  x: 110 },
+      { label: 'Tipo',     x: 148 },
+      { label: 'Presupuesto', x: 185, align: 'right' },
     ], completedRows, 30);
     y += 2;
   }
@@ -516,6 +516,22 @@ async function exportMatrizExcel(data: {
     (data.anteproyectos as Record<string, unknown>[]).map(a => [a.territorio ?? '—', a.colegio ?? '—', a.nombre_proyecto ?? '—', a.eco ?? '—', a.tipo_proyecto ?? '—', a.prioridad ?? '—', a.estatus ?? '—', a.asignacion ?? '—', num(a.presupuesto as number), fmt(a.fecha_actualizacion as string)]),
     [12, 14, 34, 26, 18, 12, 14, 24, 16, 18], 8);
 
+  // Hoja: Presupuesto vs Real
+  buildSheet('💰 Presupuesto vs Real', 'Presupuesto vs Real — Sistema RCMA',
+    ['Folio', 'Proyecto', 'Territorio', 'Colegio', 'Estatus', 'Presupuesto Inicial', 'Costo Real', 'Diferencia', '% Ahorro/Sobrecosto'],
+    (data.projects as Record<string, unknown>[]).map(p => {
+      const budget = ((p.budget as number | null) ?? 0);
+      const real   = ((p.costo_real as number | null) ?? 0);
+      const diff   = budget - real;
+      const pct    = budget > 0 ? (((diff / budget) * 100).toFixed(1) + '%') : '—';
+      return [
+        String(p.folio ?? '—'), String(p.name ?? '—'), String(p.territorio ?? '—'),
+        String(p.colegio ?? '—'), String(p.status ?? '—'),
+        num(budget), num(real), num(diff), pct,
+      ] as (string | number | null | undefined)[];
+    }),
+    [12, 36, 14, 16, 14, 20, 18, 18, 20], 5);
+
   buildSheet('✅ Inspecciones', 'Checklists de Inspección — Sistema RCMA', ['Título', 'Colegio', 'Territorio', 'Inspector', 'Material', 'Estado General', 'Núm. Ítems', 'Fecha'],
     (data.checklists as Record<string, unknown>[]).map(c => [c.titulo ?? '—', c.colegio ?? '—', c.territorio ?? '—', c.inspector ?? 'Sin asignar', c.material ?? '—', c.overall_status ?? '—', Array.isArray(c.items) ? (c.items as unknown[]).length : 0, fmt((c.fecha ?? c.created_at) as string)]),
     [38, 14, 12, 24, 32, 16, 12, 14]);
@@ -528,6 +544,7 @@ async function exportMatrizExcel(data: {
   const ws7: Record<string, unknown> = {};
   const resRows = [
     { label: 'Proyectos', count: data.projects.length }, { label: 'Tickets TCMM', count: data.tickets.length },
+    { label: 'Presupuesto vs Real', count: (data.projects as Record<string, unknown>[]).filter(p => p.budget != null).length },
     { label: 'Pendientes', count: data.pendientes.length }, { label: 'Anteproyectos', count: data.anteproyectos.length },
     { label: 'Inspecciones', count: data.checklists.length }, { label: 'Solicitudes', count: data.solicitudes.length },
   ];
@@ -557,7 +574,7 @@ async function exportMatrizExcel(data: {
   ws7['!merges'] = [{ s: { r: 0, c: 0 }, e: { r: 0, c: 1 } }, { s: { r: 1, c: 0 }, e: { r: 1, c: 1 } }];
   XLSX.utils.book_append_sheet(wb, ws7 as import('xlsx').WorkSheet, '📊 Resumen Ejecutivo');
 
-  wb.SheetNames = ['📊 Resumen Ejecutivo', '📁 Proyectos', '🎫 Tickets TCMM', '⏳ Pendientes', '📐 Anteproyectos', '✅ Inspecciones', '📩 Solicitudes'];
+  wb.SheetNames = ['📊 Resumen Ejecutivo', '📁 Proyectos', '💰 Presupuesto vs Real', '🎫 Tickets TCMM', '⏳ Pendientes', '📐 Anteproyectos', '✅ Inspecciones', '📩 Solicitudes'];
   XLSX.writeFile(wb, `Matriz_Sistema_RCMA_${new Date().toISOString().slice(0, 10)}.xlsx`);
 }
 
