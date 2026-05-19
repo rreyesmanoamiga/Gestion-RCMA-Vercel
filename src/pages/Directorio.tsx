@@ -79,6 +79,41 @@ function SectionHeader({ emoji, title }: { emoji: string; title: string }) {
   );
 }
 
+// ─── EditSection fuera del componente para evitar re-mounts al escribir ────
+interface EditSectionProps {
+  title: string;
+  fields: { k: keyof Colegio; label: string; full?: boolean; area?: boolean }[];
+  editForm: Partial<Colegio>;
+  onSet: (k: keyof Colegio, v: string) => void;
+}
+function EditSection({ title, fields, editForm, onSet }: EditSectionProps) {
+  return (
+    <section>
+      <p className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-3 pb-1 border-b">{title}</p>
+      <div className="grid grid-cols-2 gap-3">
+        {fields.map(f => (
+          <div key={f.k as string} className={f.full || f.area ? 'col-span-2' : ''}>
+            <label className={labelCls}>{f.label}</label>
+            {f.area ? (
+              <textarea
+                className={inputCls + ' resize-none min-h-[52px]'}
+                value={(editForm as any)[f.k] ?? ''}
+                onChange={e => onSet(f.k, e.target.value)}
+              />
+            ) : (
+              <input
+                className={inputCls}
+                value={(editForm as any)[f.k] ?? ''}
+                onChange={e => onSet(f.k, e.target.value)}
+              />
+            )}
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
 export default function Directorio() {
   const { user } = useAuth();
   const isAdmin = user?.user_metadata?.role === 'admin';
@@ -145,36 +180,6 @@ export default function Directorio() {
       setSaving(false);
     }
   };
-
-  // ── Edit modal field groups ──────────────────────────────────────────────
-  const EditSection = ({ title, fields }: {
-    title: string;
-    fields: { k: keyof Colegio; label: string; full?: boolean; area?: boolean }[];
-  }) => (
-    <section>
-      <p className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-3 pb-1 border-b">{title}</p>
-      <div className="grid grid-cols-2 gap-3">
-        {fields.map(f => (
-          <div key={f.k as string} className={f.full || f.area ? 'col-span-2' : ''}>
-            <label className={labelCls}>{f.label}</label>
-            {f.area ? (
-              <textarea
-                className={inputCls + ' resize-none min-h-[52px]'}
-                value={(editForm as any)[f.k] ?? ''}
-                onChange={e => set(f.k, e.target.value)}
-              />
-            ) : (
-              <input
-                className={inputCls}
-                value={(editForm as any)[f.k] ?? ''}
-                onChange={e => set(f.k, e.target.value)}
-              />
-            )}
-          </div>
-        ))}
-      </div>
-    </section>
-  );
 
   // ════════════════════════════════════════════════════════════════════════════
   return (
@@ -414,7 +419,7 @@ export default function Directorio() {
 
             {/* Modal body */}
             <div className="p-5 space-y-5 overflow-y-auto max-h-[72vh]">
-              <EditSection title="📍 Datos del Colegio" fields={[
+              <EditSection title="📍 Datos del Colegio" editForm={editForm} onSet={set} fields={[
                 { k: 'nombre',         label: 'Nombre',           full: true },
                 { k: 'nombre_oficial', label: 'Nombre Oficial',   full: true },
                 { k: 'rfc',            label: 'RFC' },
@@ -423,33 +428,33 @@ export default function Directorio() {
                 { k: 'dir_fiscal',     label: 'Dirección Fiscal', full: true, area: true },
               ]} />
 
-              <EditSection title="👤 Director" fields={[
+              <EditSection title="👤 Director" editForm={editForm} onSet={set} fields={[
                 { k: 'dir_nombre',    label: 'Nombre',     full: true },
                 { k: 'dir_correo',    label: 'Correo',     full: true },
                 { k: 'dir_tel_movil', label: 'Tel. Móvil' },
                 { k: 'dir_tel_red',   label: 'Tel. Red'   },
               ]} />
 
-              <EditSection title="👥 Administrador" fields={[
+              <EditSection title="👥 Administrador" editForm={editForm} onSet={set} fields={[
                 { k: 'adm_nombre',    label: 'Nombre',     full: true },
                 { k: 'adm_correo',    label: 'Correo',     full: true },
                 { k: 'adm_tel_movil', label: 'Tel. Móvil' },
                 { k: 'adm_tel_red',   label: 'Tel. Red'   },
               ]} />
 
-              <EditSection title="🗂️ CAR" fields={[
+              <EditSection title="🗂️ CAR" editForm={editForm} onSet={set} fields={[
                 { k: 'car_nombre',    label: 'Nombre', full: true },
                 { k: 'car_correo',    label: 'Correo', full: true },
                 { k: 'car_tel_movil', label: 'Tel. Móvil' },
               ]} />
 
-              <EditSection title="🏗️ Gerente de Op. ECO" fields={[
+              <EditSection title="🏗️ Gerente de Op. ECO" editForm={editForm} onSet={set} fields={[
                 { k: 'geo_nombre',    label: 'Nombre', full: true },
                 { k: 'geo_correo',    label: 'Correo', full: true },
                 { k: 'geo_tel_movil', label: 'Tel. Móvil' },
               ]} />
 
-              <EditSection title="🏗️ Líder de Proyecto ECO" fields={[
+              <EditSection title="🏗️ Líder de Proyecto ECO" editForm={editForm} onSet={set} fields={[
                 { k: 'leo_nombre',    label: 'Nombre', full: true },
                 { k: 'leo_correo',    label: 'Correo', full: true },
                 { k: 'leo_tel_movil', label: 'Tel. Móvil' },
