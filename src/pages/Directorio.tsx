@@ -284,6 +284,12 @@ export default function Directorio() {
                             <Phone className="w-2.5 h-2.5" />{c.dir_tel_movil}
                           </a>
                         )}
+                        {c.dir_tel_red && (
+                          <a href={`tel:${c.dir_tel_red}`}
+                            className="text-[10px] text-slate-500 flex items-center gap-1 mt-0.5">
+                            <Phone className="w-2.5 h-2.5" />{c.dir_tel_red}
+                          </a>
+                        )}
                       </div>
                     )}
                     {c.adm_nombre && (
@@ -300,6 +306,12 @@ export default function Directorio() {
                           <a href={`tel:${c.adm_tel_movil}`}
                             className="text-[10px] text-slate-500 flex items-center gap-1 mt-0.5">
                             <Phone className="w-2.5 h-2.5" />{c.adm_tel_movil}
+                          </a>
+                        )}
+                        {c.adm_tel_red && (
+                          <a href={`tel:${c.adm_tel_red}`}
+                            className="text-[10px] text-slate-500 flex items-center gap-1 mt-0.5">
+                            <Phone className="w-2.5 h-2.5" />{c.adm_tel_red}
                           </a>
                         )}
                       </div>
