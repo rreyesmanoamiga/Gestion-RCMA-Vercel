@@ -474,7 +474,7 @@ export default function Accesos() {
               <button onClick={closeModal} className="w-full sm:w-auto px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-200 rounded-md transition-colors text-center">
                 Cancelar
               </button>
-              <button form="invite-form" type="submit" disabled={inviting} className={`${btnPrimary} w-full sm:w-auto justify-center`}>
+              <button form="invite-form" type="submit" disabled={inviting} className={btnPrimary + " w-full sm:w-auto"}>
                 {inviting ? 'Enviando...' : 'Enviar Invitación'}
               </button>
             </div>
@@ -559,7 +559,7 @@ export default function Accesos() {
               <button onClick={closeModal} className="w-full sm:w-auto px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-200 rounded-md transition-colors text-center">
                 Cancelar
               </button>
-              <button onClick={handleSaveEdit} disabled={updatePermsMutation.isPending} className={`${btnPrimary} w-full sm:w-auto justify-center`}>
+              <button onClick={handleSaveEdit} disabled={updatePermsMutation.isPending} className={btnPrimary + " w-full sm:w-auto"}>
                 {updatePermsMutation.isPending ? 'Guardando...' : 'Guardar cambios'}
               </button>
             </div>
