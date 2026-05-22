@@ -9,6 +9,38 @@ const labelClass = "text-[11px] font-bold text-slate-600 uppercase tracking-wide
 
 const TIPOS_PROYECTO = ['CONSTRUCCIÓN NUEVA','MEJORA','PORTAFOLIO','REMODELACIÓN','ADECUACIÓN DE ESPACIO','GARANTÍAS','AMPLIACIÓN','MANTENIMIENTO EXTRAORDINARIO','REVISIÓN'];
 
+// Territorios por colegio (nombre completo → territorio)
+const COLEGIO_TERRITORIO: Record<string, string> = {
+  'Mano Amiga Acapulco':          'MEXICO',
+  'Mano Amiga Aguascalientes':     'NORTE',
+  'Mano Amiga Cancún':             'MEXICO',
+  'Mano Amiga Chalco':             'MEXICO',
+  'Mano Amiga La Cima':            'NORTE',
+  'Mano Amiga Conkal':             'MEXICO',
+  'Mano Amiga Guadalajara':        'NORTE',
+  'Mano Amiga León':               'NORTE',
+  'Mano Amiga Lerma':              'MEXICO',
+  'Mano Amiga Morelia':            'MEXICO',
+  'Mano Amiga Monterrey':          'NORTE',
+  'Mano Amiga Piedras Negras':     'NORTE',
+  'Mano Amiga Puebla':             'MEXICO',
+  'Mano Amiga Querétaro':          'MEXICO',
+  'Mano Amiga Santa Catarina':     'NORTE',
+  'Mano Amiga Tapachula':          'MEXICO',
+  'Mano Amiga Tijuana':            'NORTE',
+  'Mano Amiga Torreón':            'NORTE',
+  'Mano Amiga Villas de San Juan': 'NORTE',
+  'ZOM':                           'MEXICO',
+  'FIA':                           'FMA',
+  'FMA':                           'FMA',
+  'AUN':                           'FMA',
+};
+
+const CAR_CORREOS: Record<string, string> = {
+  NORTE:  'jalvarado@manoamiga.edu.mx',
+  MEXICO: 'gromero@manoamiga.edu.mx',
+};
+
 const COLEGIOS_DATA = [
   { colegio: 'Mano Amiga Acapulco',         razon_social: 'Centro Educativo Cualcan Acapulco, S. C.',                          sociedad: '1214', centro_gestor: 'MXI008' },
   { colegio: 'Mano Amiga Aguascalientes',    razon_social: 'Mano Amiga Aguascalientes S.C.',                                   sociedad: '1250', centro_gestor: 'MXI016' },
@@ -131,14 +163,18 @@ export default function SolicitudProyecto() {
       });
       if (error) throw error;
 
-      // Notificar al admin que llegó una nueva solicitud
+      // Notificar al admin que llegó una nueva solicitud (con copia al CAR)
+      const territorioSolicitud = COLEGIO_TERRITORIO[form.nombre_centro] ?? '';
+      const correoCAR = CAR_CORREOS[territorioSolicitud] ?? '';
       await supabase.functions.invoke('notify-nueva-solicitud', {
         body: {
-          nombre:           form.nombre_solicitante,
-          puesto:           form.puesto_solicitante,
-          proyecto:         form.nombre_proyecto,
-          centro:           form.nombre_centro,
+          nombre:            form.nombre_solicitante,
+          puesto:            form.puesto_solicitante,
+          proyecto:          form.nombre_proyecto,
+          centro:            form.nombre_centro,
           correoSolicitante: form.correo_solicitante,
+          territorio:        territorioSolicitud,
+          correoCAR,
         },
       });
 

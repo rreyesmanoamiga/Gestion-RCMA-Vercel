@@ -84,7 +84,7 @@ serve(async (req) => {
   }
 
   try {
-    const { nombre, proyecto, centro, correoSolicitante, puesto } = await req.json();
+    const { nombre, proyecto, centro, correoSolicitante, puesto, territorio, correoCAR } = await req.json();
 
     const adminEmail = Deno.env.get('ADMIN_EMAIL') ?? '';
     const smtpUser   = Deno.env.get('SMTP_USER')   ?? '';
@@ -135,10 +135,14 @@ serve(async (req) => {
                     <td style="padding:12px 16px;font-size:14px;color:#0f172a;border-bottom:1px solid #e2e8f0;">${centro ?? '—'}</td>
                   </tr>
                   <tr>
+                    <td style="padding:12px 16px;font-size:12px;font-weight:700;color:#64748b;text-transform:uppercase;border-bottom:1px solid #e2e8f0;">Territorio</td>
+                    <td style="padding:12px 16px;font-size:14px;color:#0f172a;border-bottom:1px solid #e2e8f0;">${territorio ?? '—'}</td>
+                  </tr>
+                  <tr style="background:#f8fafc;">
                     <td style="padding:12px 16px;font-size:12px;font-weight:700;color:#64748b;text-transform:uppercase;border-bottom:1px solid #e2e8f0;">Proyecto</td>
                     <td style="padding:12px 16px;font-size:14px;font-weight:600;color:#1e40af;border-bottom:1px solid #e2e8f0;">${proyecto ?? '—'}</td>
                   </tr>
-                  <tr style="background:#f8fafc;">
+                  <tr>
                     <td style="padding:12px 16px;font-size:12px;font-weight:700;color:#64748b;text-transform:uppercase;">Correo solicitante</td>
                     <td style="padding:12px 16px;font-size:14px;color:#0f172a;">${correoSolicitante ?? '—'}</td>
                   </tr>
@@ -168,11 +172,15 @@ serve(async (req) => {
     </body>
     </html>`;
 
-    await sendEmail(
-      adminEmail,
-      `📋 Nueva Solicitud: ${proyecto ?? 'Sin nombre'} — ${centro ?? ''}`,
-      html
-    );
+    const subject = `📋 Nueva Solicitud: ${proyecto ?? 'Sin nombre'} — ${centro ?? ''}`;
+
+    // Enviar al administrador
+    await sendEmail(adminEmail, subject, html);
+
+    // Enviar copia al CAR del territorio correspondiente (si aplica)
+    if (correoCAR && correoCAR !== adminEmail) {
+      await sendEmail(correoCAR, `[COPIA CAR] ${subject}`, html);
+    }
 
     return new Response(
       JSON.stringify({ success: true }),

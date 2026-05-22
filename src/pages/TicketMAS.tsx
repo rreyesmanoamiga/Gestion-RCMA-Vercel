@@ -81,6 +81,7 @@ interface TicketMAS {
   tipo_mantenimiento?:    string;
   numero_activo?:         string;
   orden_interna?:         string;
+  numero_orden_interna?:  string;
   descripcion?:           string;
   cot1_importe?:          number | null;
   cot1_proveedor?:        string;
@@ -271,7 +272,7 @@ export default function TicketMAS() {
     nombre_solicitante:'', puesto_solicitante:'', correo_solicitante:'',
     fecha_elaboracion: format(new Date(), 'yyyy-MM-dd'),
     clasificacion:'', periodicidad:'NORMAL', tipo_mantenimiento:'N/A',
-    numero_activo:'', orden_interna:'NO',
+    numero_activo:'', orden_interna:'NO', numero_orden_interna:'N/A',
     descripcion:'',
     cot1_importe:'', cot1_proveedor:'',
     cot2_importe:'', cot2_proveedor:'',
@@ -352,6 +353,10 @@ export default function TicketMAS() {
       toast.error('Completa los campos obligatorios marcados con *');
       return;
     }
+    if (form.orden_interna === 'SI' && (!form.numero_orden_interna || form.numero_orden_interna === 'N/A')) {
+      toast.error('Debes ingresar el Número de Orden Interna');
+      return;
+    }
     if (form.clasificacion !== 'GARANTIAS') {
       const tieneCotizacion = form.cot1_importe && parseFloat(parseMXN(form.cot1_importe)) > 0;
       if (!tieneCotizacion) {
@@ -388,6 +393,7 @@ export default function TicketMAS() {
         tipo_mantenimiento:   form.tipo_mantenimiento,
         numero_activo:        form.numero_activo,
         orden_interna:        form.orden_interna,
+        numero_orden_interna: form.numero_orden_interna,
         descripcion:          form.descripcion,
         cot1_importe:         form.cot1_importe ? parseFloat(parseMXN(form.cot1_importe)) : null,
         cot1_proveedor:       form.cot1_proveedor,
@@ -725,9 +731,31 @@ export default function TicketMAS() {
               </div>
               <div>
                 <label className={labelClass}>Orden Interna</label>
-                <select className={selectClass} value={form.orden_interna} onChange={e => set('orden_interna', e.target.value)}>
+                <select className={selectClass} value={form.orden_interna} onChange={e => {
+                  const val = e.target.value;
+                  setForm(p => ({
+                    ...p,
+                    orden_interna: val,
+                    numero_orden_interna: val === 'NO' ? 'N/A' : '',
+                  }));
+                }}>
                   {SI_NO.map(v => <option key={v} value={v}>{v}</option>)}
                 </select>
+              </div>
+              <div>
+                <label className={labelClass}>
+                  Número de Orden Interna {form.orden_interna === 'SI' && <span className="text-red-500">*</span>}
+                </label>
+                {form.orden_interna === 'SI' ? (
+                  <input
+                    className={inputClass}
+                    value={form.numero_orden_interna}
+                    onChange={e => set('numero_orden_interna', e.target.value)}
+                    placeholder="Ingresa el número"
+                  />
+                ) : (
+                  <input className={readOnlyClass} value="N/A" readOnly />
+                )}
               </div>
             </div>
           </div>
@@ -771,15 +799,20 @@ export default function TicketMAS() {
               </div>
               <div>
                 <label className={labelClass}>Elaborar Suplemento</label>
-                <select className={selectClass} value={form.elaborar_suplemento} onChange={e => set('elaborar_suplemento', e.target.value)}>
+                <select className={selectClass} value={form.elaborar_suplemento} onChange={e => {
+                  const val = e.target.value;
+                  setForm(p => ({
+                    ...p,
+                    elaborar_suplemento: val,
+                    elaborar_traspaso: val === 'NO' ? 'SI' : 'NO',
+                  }));
+                }}>
                   {SI_NO.map(v => <option key={v} value={v}>{v}</option>)}
                 </select>
               </div>
               <div>
                 <label className={labelClass}>Elaborar Traspaso</label>
-                <select className={selectClass} value={form.elaborar_traspaso} onChange={e => set('elaborar_traspaso', e.target.value)}>
-                  {SI_NO.map(v => <option key={v} value={v}>{v}</option>)}
-                </select>
+                <input className={readOnlyClass} value={form.elaborar_traspaso} readOnly />
               </div>
             </div>
           </div>
