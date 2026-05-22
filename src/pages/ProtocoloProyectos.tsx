@@ -4,11 +4,13 @@ import {
   BookOpen,
   Download,
   FileSpreadsheet,
+  FileText,
   CheckCircle2,
   Users,
   ClipboardList,
   Ticket,
   ShieldCheck,
+  Scale,
   Mail,
   ChevronRight,
   AlertCircle,
@@ -18,6 +20,7 @@ import {
 // ─── Archivos en Supabase Storage (bucket privado: documentos-rcma) ────────────
 const BUCKET           = 'documentos-rcma';
 const FILE_TABLA       = 'TABLA COMPARATIVA_MAS_V2.xlsx';
+const FILE_CONTRATOS   = 'REQUISITOS_CONTRATO_PROVEEDOR.pdf';
 const SIGNED_URL_TTL   = 60;
 
 // ─── Datos de las fases del protocolo ────────────────────────────────────────
@@ -67,6 +70,22 @@ const FASES = [
   },
   {
     num: '05',
+    icon: Scale,
+    titulo: 'Solicitud de Contratos',
+    color: 'rose',
+    pasos: [
+      'Con base en la validación técnica del equipo ECO y la selección formal del proveedor, la Coordinación de Obras y Mantenimiento RCMA remitirá vía correo electrónico una solicitud de autorización a la Dirección correspondiente para gestionar ante OR - SER Jurídico la elaboración del instrumento contractual aplicable. El tipo de documento a elaborar será determinado según la naturaleza del proyecto: Contrato de Prestación de Servicios, Contrato de Donación o Acta de Garantía.',
+      'El colegio solicitante deberá recabar la documentación corporativa y fiscal del proveedor seleccionado con base en el listado de requisitos disponible para descarga en esta fase. Dicha documentación deberá adjuntarse directamente en el correo dirigido a OR - SER Jurídico solicitando la elaboración del contrato correspondiente, con copia a: arodriguez@manoamiga.edu.mx, CAR del territorio y Coordinador de Obras y Mantenimiento RCMA.',
+      'Una vez que OR - SER Jurídico concluya la elaboración del contrato y éste cuente con la firma del proveedor, la Coordinación de Obras y Mantenimiento RCMA procederá a habilitar el módulo Ticket MAS en el Sistema RCMA. Dicha habilitación constituye la autorización formal para que el colegio registre el proyecto y el proveedor pueda iniciar las actividades contratadas.',
+    ],
+    descarga: {
+      filename: FILE_CONTRATOS,
+      label: 'Requisitos para Elaboración de Contrato',
+      descripcion: 'Archivo PDF · Documentación requerida al proveedor para OR - SER Jurídico',
+    },
+  },
+  {
+    num: '06',
     icon: Ticket,
     titulo: 'Ticket MAS',
     color: 'orange',
@@ -75,10 +94,9 @@ const FASES = [
       'Una vez habilitado el acceso, el solicitante deberá ingresar al Sistema RCMA y completar el formulario del Ticket MAS con la información técnica, financiera y de clasificación requerida, incluyendo las cotizaciones de los proveedores.',
       'El sistema notificará automáticamente a la Coordinación de Obras y Mantenimiento RCMA al recibir el nuevo Ticket MAS para su revisión y proceso de autorización.',
     ],
-
   },
   {
-    num: '06',
+    num: '07',
     icon: ShieldCheck,
     titulo: 'Autorización del Proyecto',
     color: 'green',
@@ -96,6 +114,7 @@ const colorMap: Record<string, { bg: string; border: string; badge: string; icon
   indigo: { bg: 'bg-indigo-50', border: 'border-indigo-200', badge: 'bg-indigo-100 text-indigo-700', icon: 'text-indigo-600', pill: 'bg-indigo-600' },
   teal:   { bg: 'bg-teal-50',   border: 'border-teal-200',   badge: 'bg-teal-100 text-teal-700',    icon: 'text-teal-600',   pill: 'bg-teal-600'   },
   violet: { bg: 'bg-violet-50', border: 'border-violet-200', badge: 'bg-violet-100 text-violet-700', icon: 'text-violet-600', pill: 'bg-violet-600' },
+  rose:   { bg: 'bg-rose-50',   border: 'border-rose-200',   badge: 'bg-rose-100 text-rose-700',    icon: 'text-rose-600',   pill: 'bg-rose-600'   },
   orange: { bg: 'bg-orange-50', border: 'border-orange-200', badge: 'bg-orange-100 text-orange-700', icon: 'text-orange-600', pill: 'bg-orange-600' },
   green:  { bg: 'bg-emerald-50',border: 'border-emerald-200',badge: 'bg-emerald-100 text-emerald-700',icon:'text-emerald-600',pill:'bg-emerald-600' },
 };
@@ -215,7 +234,40 @@ export default function ProtocoloProyectos() {
                     </div>
                   ))}
 
-                  {/* Bloque especial de correo (solo fase 05) */}
+                {/* Bloque de descarga (solo fases con archivo adjunto) */}
+                  {(fase as any).descarga && (() => {
+                    const d = (fase as any).descarga;
+                    return (
+                      <div className={`mt-4 rounded-xl ${c.bg} border ${c.border} overflow-hidden`}>
+                        <div className={`px-4 py-2.5 border-b ${c.border} flex items-center gap-2`}>
+                          <AlertCircle className={`w-3.5 h-3.5 ${c.icon}`} />
+                          <span className={`text-xs font-bold uppercase tracking-wider ${c.icon}`}>
+                            Documento requerido para esta fase
+                          </span>
+                        </div>
+                        <div className="px-4 py-3">
+                          <button
+                            onClick={() => handleDownload(d.filename)}
+                            disabled={loadingFile === d.filename}
+                            className={`group flex items-center gap-3 p-3 rounded-lg border-2 border-slate-200 hover:${c.border} hover:${c.bg} transition-all duration-200 text-left w-full sm:w-auto bg-white`}
+                          >
+                            <div className={`w-9 h-9 rounded-lg bg-white border ${c.border} group-hover:${c.bg} flex items-center justify-center flex-shrink-0 transition-colors`}>
+                              <FileText className={`w-4 h-4 ${c.icon}`} />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <p className="text-sm font-bold text-slate-800 leading-tight">{d.label}</p>
+                              <p className="text-xs text-slate-500 mt-0.5">{d.descripcion}</p>
+                            </div>
+                            {loadingFile === d.filename
+                              ? <span className={`w-4 h-4 border-2 ${c.border} border-t-transparent rounded-full animate-spin flex-shrink-0`} />
+                              : <Download className={`w-4 h-4 text-slate-400 group-hover:${c.icon} flex-shrink-0 transition-colors`} />}
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })()}
+
+                  {/* Bloque especial de correo (solo fase con correo) */}
                   {fase.correo && (
                     <div className="mt-4 rounded-xl bg-slate-50 border border-slate-200 overflow-hidden">
                       <div className="px-4 py-2.5 bg-slate-100 border-b border-slate-200 flex items-center gap-2">
