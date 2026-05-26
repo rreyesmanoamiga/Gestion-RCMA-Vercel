@@ -1,11 +1,11 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 
 const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Origin': Deno.env.get('SITE_URL') ?? 'https://gestion-rcma-vercel.vercel.app',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-async function sendEmail(to: string, subject: string, html: string) {
+async function sendEmail(to: string, cc: string[], subject: string, html: string) {
   const smtpHost = Deno.env.get('SMTP_HOST') ?? 'smtp.office365.com';
   const smtpPort = parseInt(Deno.env.get('SMTP_PORT') ?? '587');
   const smtpUser = Deno.env.get('SMTP_USER') ?? '';
@@ -29,12 +29,20 @@ async function sendEmail(to: string, subject: string, html: string) {
   await tlsWrite(btoa(smtpPass));     await tlsRead();
   await tlsWrite(`MAIL FROM:<${smtpUser}>`); await tlsRead();
   await tlsWrite(`RCPT TO:<${to}>`);        await tlsRead();
-  await tlsWrite('DATA');                    await tlsRead();
+
+  // CC recipients
+  for (const ccAddr of cc) {
+    if (ccAddr) { await tlsWrite(`RCPT TO:<${ccAddr}>`); await tlsRead(); }
+  }
+
+  await tlsWrite('DATA'); await tlsRead();
 
   const boundary = 'bnd_' + Date.now();
+  const ccHeader = cc.filter(Boolean).join(', ');
   const msg = [
     `From: Sistema RCMA <${smtpUser}>`,
     `To: ${to}`,
+    ...(ccHeader ? [`Cc: ${ccHeader}`] : []),
     `Subject: ${subject}`,
     'MIME-Version: 1.0',
     `Content-Type: multipart/alternative; boundary="${boundary}"`,
@@ -55,11 +63,23 @@ serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
 
   try {
-    const { folio, colegio, solicitante, puesto, correo_solicitante, descripcion, clasificacion } = await req.json();
+    const { folio, colegio, solicitante, puesto, correo_solicitante, descripcion, clasificacion, territorio, correo_car } = await req.json();
 
     const adminEmail = Deno.env.get('ADMIN_EMAIL') ?? 'rreyes@manoamiga.edu.mx';
     const smtpUser   = Deno.env.get('SMTP_USER')   ?? '';
     const siteUrl    = Deno.env.get('SITE_URL')     ?? '';
+
+    // CC: jefe + ambos CARs (o solo el CAR del territorio si se conoce)
+    const CAR_CORREOS: Record<string, string> = {
+      NORTE:  'jalvarado@manoamiga.edu.mx',
+      MEXICO: 'gromero@manoamiga.edu.mx',
+    };
+    const carTerritorio = correo_car ?? (territorio ? CAR_CORREOS[territorio] ?? '' : '');
+    const ccList = [
+      'arodriguez@manoamiga.edu.mx',
+      'jalvarado@manoamiga.edu.mx',
+      'gromero@manoamiga.edu.mx',
+    ].filter((addr, i, arr) => addr && arr.indexOf(addr) === i); // deduplicar
 
     const html = `<!DOCTYPE html>
 <html lang="es">
@@ -101,7 +121,7 @@ serve(async (req) => {
 </body>
 </html>`;
 
-    await sendEmail(adminEmail, `🎫 Nuevo Ticket MAS: ${folio} — ${colegio ?? ''}`, html);
+    await sendEmail(adminEmail, ccList, `🎫 Nuevo Ticket MAS: ${folio} — ${colegio ?? ''}`, html);
 
     return new Response(JSON.stringify({ success: true }), {
       status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
