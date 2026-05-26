@@ -5,7 +5,7 @@ import { toast } from 'sonner';
 import { useAuth } from '@/lib/AuthContext';
 import {
   BookUser, Search, Pencil, Trash2, X, Phone, Mail,
-  MapPin, Building2, User, Users, ChevronDown, ChevronUp, AlertTriangle,
+  MapPin, Building2, User, Users, ChevronDown, AlertTriangle,
 } from 'lucide-react';
 import PageHeader from '@/components/shared/PageHeader';
 
@@ -36,6 +36,12 @@ interface Colegio {
   leo_nombre: string;
   leo_correo: string;
   leo_tel_movil: string;
+  gjo_nombre: string;
+  gjo_correo: string;
+  gjo_tel_movil: string;
+  ljo_nombre: string;
+  ljo_correo: string;
+  ljo_tel_movil: string;
   updated_at?: string;
 }
 
@@ -121,7 +127,7 @@ export default function Directorio() {
 
   const [search, setSearch]         = useState('');
   const [territorio, setTerritorio] = useState('todos');
-  const [expanded, setExpanded]     = useState<string | null>(null);
+  const [viewModal, setViewModal]   = useState<Colegio | null>(null);
   const [editModal, setEditModal]   = useState<Colegio | null>(null);
   const [editForm, setEditForm]     = useState<Partial<Colegio>>({});
   const [saving, setSaving]         = useState(false);
@@ -255,7 +261,6 @@ export default function Directorio() {
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
           {filtered.map(c => {
             const ts = TERR_STYLE[c.territorio] ?? TERR_STYLE.FMA;
-            const isOpen = expanded === c.id;
             return (
               <div key={c.id} className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
 
@@ -345,103 +350,161 @@ export default function Directorio() {
                     )}
                   </div>
 
-                  {/* Expand toggle */}
+                  {/* View all contacts button */}
                   <button
-                    onClick={() => setExpanded(prev => prev === c.id ? null : c.id)}
+                    onClick={() => setViewModal(c)}
                     className="mt-3 w-full flex items-center justify-center gap-1.5 py-1.5 text-xs font-semibold text-slate-500 hover:text-slate-800 hover:bg-slate-50 rounded-lg transition">
-                    {isOpen ? <><ChevronUp className="w-3.5 h-3.5" /> Ocultar contactos</> : <><ChevronDown className="w-3.5 h-3.5" /> Ver todos los contactos</>}
+                    <ChevronDown className="w-3.5 h-3.5" /> Ver todos los contactos
                   </button>
-
-                  {/* ── Expanded details ─────────────────────────────── */}
-                  {isOpen && (
-                    <div className="mt-3 pt-3 border-t border-slate-100 space-y-3.5">
-
-                      {/* Datos del colegio */}
-                      {(c.dir_fisica || c.dir_fiscal || c.telefonos) && (
-                        <div>
-                          <SectionHeader emoji="📍" title="Datos del Colegio" />
-                          <div className="space-y-1 pl-1">
-                            <CRow icon={MapPin} label="Dir. Física" value={c.dir_fisica} />
-                            {c.dir_fiscal && c.dir_fiscal !== c.dir_fisica && (
-                              <CRow icon={Building2} label="Dir. Fiscal" value={c.dir_fiscal} />
-                            )}
-                            <CRow icon={Phone} label="Teléfonos" value={c.telefonos} phone />
-                          </div>
-                        </div>
-                      )}
-
-                      {/* Director */}
-                      {c.dir_nombre && (
-                        <div>
-                          <SectionHeader emoji="👤" title="Director" />
-                          <div className="space-y-1 pl-1">
-                            <CRow icon={User}  value={c.dir_nombre} />
-                            <CRow icon={Mail}  value={c.dir_correo}    email />
-                            <CRow icon={Phone} label="Móvil" value={c.dir_tel_movil} phone />
-                            <CRow icon={Phone} label="Red"   value={c.dir_tel_red}   phone />
-                          </div>
-                        </div>
-                      )}
-
-                      {/* Administrador */}
-                      {c.adm_nombre && (
-                        <div>
-                          <SectionHeader emoji="👥" title="Administrador" />
-                          <div className="space-y-1 pl-1">
-                            <CRow icon={Users} value={c.adm_nombre} />
-                            <CRow icon={Mail}  value={c.adm_correo}    email />
-                            <CRow icon={Phone} label="Móvil" value={c.adm_tel_movil} phone />
-                            <CRow icon={Phone} label="Red"   value={c.adm_tel_red}   phone />
-                          </div>
-                        </div>
-                      )}
-
-                      {/* CAR */}
-                      {c.car_nombre && (
-                        <div>
-                          <SectionHeader emoji="🗂️" title="CAR" />
-                          <div className="space-y-1 pl-1">
-                            <CRow icon={User}  value={c.car_nombre} />
-                            <CRow icon={Mail}  value={c.car_correo}    email />
-                            <CRow icon={Phone} label="Móvil" value={c.car_tel_movil} phone />
-                          </div>
-                        </div>
-                      )}
-
-                      {/* ECO */}
-                      {(c.geo_nombre || c.leo_nombre) && (
-                        <div>
-                          <SectionHeader emoji="🏗️" title="Equipo ECO" />
-                          <div className="space-y-2.5 pl-1">
-                            {c.geo_nombre && (
-                              <div>
-                                <p className="text-[10px] font-semibold text-slate-500 mb-1">Gerente de Operaciones</p>
-                                <div className="space-y-1">
-                                  <CRow icon={User}  value={c.geo_nombre} />
-                                  <CRow icon={Mail}  value={c.geo_correo}    email />
-                                  <CRow icon={Phone} label="Móvil" value={c.geo_tel_movil} phone />
-                                </div>
-                              </div>
-                            )}
-                            {c.leo_nombre && (
-                              <div>
-                                <p className="text-[10px] font-semibold text-slate-500 mb-1">Líder de Proyecto</p>
-                                <div className="space-y-1">
-                                  <CRow icon={User}  value={c.leo_nombre} />
-                                  <CRow icon={Mail}  value={c.leo_correo}    email />
-                                  <CRow icon={Phone} label="Móvil" value={c.leo_tel_movil} phone />
-                                </div>
-                              </div>
-                            )}
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  )}
                 </div>
               </div>
             );
           })}
+        </div>
+      )}
+
+      {/* ══ View Modal (todos los contactos) ══════════════════════════════ */}
+      {viewModal && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-start justify-center p-4 overflow-y-auto"
+          onClick={e => { if (e.target === e.currentTarget) setViewModal(null); }}>
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl my-6">
+            {/* Header */}
+            <div className="flex items-center justify-between px-5 py-4 border-b bg-white rounded-t-xl sticky top-0 z-10">
+              <div>
+                <h2 className="text-base font-black text-slate-800">{viewModal.nombre}</h2>
+                {viewModal.nombre_oficial && (
+                  <p className="text-xs text-slate-400 mt-0.5">{viewModal.nombre_oficial}</p>
+                )}
+              </div>
+              <button onClick={() => setViewModal(null)} className="p-1 rounded hover:bg-slate-100">
+                <X className="w-5 h-5 text-slate-400" />
+              </button>
+            </div>
+
+            {/* Body */}
+            <div className="p-5 space-y-5">
+
+              {/* Datos del colegio */}
+              {(viewModal.dir_fisica || viewModal.dir_fiscal || viewModal.telefonos || viewModal.rfc) && (
+                <div>
+                  <SectionHeader emoji="📍" title="Datos del Colegio" />
+                  <div className="space-y-1 pl-1">
+                    {viewModal.rfc && <CRow icon={Building2} label="RFC" value={viewModal.rfc} />}
+                    <CRow icon={MapPin}    label="Dir. Física" value={viewModal.dir_fisica} />
+                    {viewModal.dir_fiscal && viewModal.dir_fiscal !== viewModal.dir_fisica && (
+                      <CRow icon={Building2} label="Dir. Fiscal" value={viewModal.dir_fiscal} />
+                    )}
+                    <CRow icon={Phone} label="Teléfonos" value={viewModal.telefonos} phone />
+                  </div>
+                </div>
+              )}
+
+              {/* Grid de contactos */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+
+                {/* Director */}
+                {viewModal.dir_nombre && (
+                  <div className="bg-slate-50 rounded-lg p-3 border border-slate-100">
+                    <SectionHeader emoji="👤" title="Director" />
+                    <div className="space-y-1 pl-1">
+                      <CRow icon={User}  value={viewModal.dir_nombre} />
+                      <CRow icon={Mail}  value={viewModal.dir_correo}    email />
+                      <CRow icon={Phone} label="Móvil" value={viewModal.dir_tel_movil} phone />
+                      <CRow icon={Phone} label="Red"   value={viewModal.dir_tel_red}   phone />
+                    </div>
+                  </div>
+                )}
+
+                {/* Administrador */}
+                {viewModal.adm_nombre && (
+                  <div className="bg-slate-50 rounded-lg p-3 border border-slate-100">
+                    <SectionHeader emoji="👥" title="Administrador" />
+                    <div className="space-y-1 pl-1">
+                      <CRow icon={Users} value={viewModal.adm_nombre} />
+                      <CRow icon={Mail}  value={viewModal.adm_correo}    email />
+                      <CRow icon={Phone} label="Móvil" value={viewModal.adm_tel_movil} phone />
+                      <CRow icon={Phone} label="Red"   value={viewModal.adm_tel_red}   phone />
+                    </div>
+                  </div>
+                )}
+
+                {/* CAR */}
+                {viewModal.car_nombre && (
+                  <div className="bg-slate-50 rounded-lg p-3 border border-slate-100">
+                    <SectionHeader emoji="🗂️" title="CAR" />
+                    <div className="space-y-1 pl-1">
+                      <CRow icon={User}  value={viewModal.car_nombre} />
+                      <CRow icon={Mail}  value={viewModal.car_correo}    email />
+                      <CRow icon={Phone} label="Móvil" value={viewModal.car_tel_movil} phone />
+                    </div>
+                  </div>
+                )}
+
+                {/* Gerente de Operaciones ECO */}
+                {viewModal.geo_nombre && (
+                  <div className="bg-slate-50 rounded-lg p-3 border border-slate-100">
+                    <SectionHeader emoji="🏗️" title="Gerente de Op. ECO" />
+                    <div className="space-y-1 pl-1">
+                      <CRow icon={User}  value={viewModal.geo_nombre} />
+                      <CRow icon={Mail}  value={viewModal.geo_correo}    email />
+                      <CRow icon={Phone} label="Móvil" value={viewModal.geo_tel_movil} phone />
+                    </div>
+                  </div>
+                )}
+
+                {/* Líder de Proyecto ECO */}
+                {viewModal.leo_nombre && (
+                  <div className="bg-slate-50 rounded-lg p-3 border border-slate-100">
+                    <SectionHeader emoji="🏗️" title="Líder de Proyecto ECO" />
+                    <div className="space-y-1 pl-1">
+                      <CRow icon={User}  value={viewModal.leo_nombre} />
+                      <CRow icon={Mail}  value={viewModal.leo_correo}    email />
+                      <CRow icon={Phone} label="Móvil" value={viewModal.leo_tel_movil} phone />
+                    </div>
+                  </div>
+                )}
+
+                {/* Gerente Jurídico OR-SER */}
+                {viewModal.gjo_nombre && (
+                  <div className="bg-slate-50 rounded-lg p-3 border border-slate-100">
+                    <SectionHeader emoji="⚖️" title="Gerente Jurídico OR-SER" />
+                    <div className="space-y-1 pl-1">
+                      <CRow icon={User}  value={viewModal.gjo_nombre} />
+                      <CRow icon={Mail}  value={viewModal.gjo_correo}    email />
+                      <CRow icon={Phone} label="Móvil" value={viewModal.gjo_tel_movil} phone />
+                    </div>
+                  </div>
+                )}
+
+                {/* Líder Jurídico OR-SER */}
+                {viewModal.ljo_nombre && (
+                  <div className="bg-slate-50 rounded-lg p-3 border border-slate-100">
+                    <SectionHeader emoji="⚖️" title="Líder Jurídico OR-SER" />
+                    <div className="space-y-1 pl-1">
+                      <CRow icon={User}  value={viewModal.ljo_nombre} />
+                      <CRow icon={Mail}  value={viewModal.ljo_correo}    email />
+                      <CRow icon={Phone} label="Móvil" value={viewModal.ljo_tel_movil} phone />
+                    </div>
+                  </div>
+                )}
+
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div className="px-5 py-4 border-t bg-slate-50 rounded-b-xl flex justify-end">
+              {isAdmin && (
+                <button onClick={() => { setViewModal(null); handleEdit(viewModal); }}
+                  className="mr-3 px-4 py-2 border border-slate-300 rounded-lg text-sm font-semibold text-slate-700 hover:bg-slate-100 transition flex items-center gap-1.5">
+                  <Pencil className="w-3.5 h-3.5" /> Editar
+                </button>
+              )}
+              <button onClick={() => setViewModal(null)}
+                className="px-4 py-2 bg-slate-900 text-white rounded-lg text-sm font-semibold hover:bg-slate-800 transition">
+                Cerrar
+              </button>
+            </div>
+          </div>
         </div>
       )}
 
@@ -501,6 +564,18 @@ export default function Directorio() {
                 { k: 'leo_nombre',    label: 'Nombre', full: true },
                 { k: 'leo_correo',    label: 'Correo', full: true },
                 { k: 'leo_tel_movil', label: 'Tel. Móvil' },
+              ]} />
+
+              <EditSection title="⚖️ Gerente Jurídico OR-SER" editForm={editForm} onSet={set} fields={[
+                { k: 'gjo_nombre',    label: 'Nombre', full: true },
+                { k: 'gjo_correo',    label: 'Correo', full: true },
+                { k: 'gjo_tel_movil', label: 'Tel. Móvil' },
+              ]} />
+
+              <EditSection title="⚖️ Líder Jurídico OR-SER" editForm={editForm} onSet={set} fields={[
+                { k: 'ljo_nombre',    label: 'Nombre', full: true },
+                { k: 'ljo_correo',    label: 'Correo', full: true },
+                { k: 'ljo_tel_movil', label: 'Tel. Móvil' },
               ]} />
             </div>
 
