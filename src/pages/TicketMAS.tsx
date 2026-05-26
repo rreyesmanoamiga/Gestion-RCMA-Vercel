@@ -1,10 +1,11 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabaseClient';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { useAuth } from '@/lib/AuthContext';
+import { usePermissions } from '@/hooks/usePermissions';
 import {
   Send, CheckCircle, Eye, X, Printer, ClipboardList,
   ChevronDown, FileCheck, Clock, Trash2, Ban, RefreshCw, AlertCircle
@@ -255,8 +256,13 @@ function generarHTMLTicket(t: TicketMAS, firma: string): string {
 // ─── Componente principal ─────────────────────────────────────────────────────
 export default function TicketMAS() {
   const { user }  = useAuth();
+  const { can }   = usePermissions();
   const isAdmin   = user?.user_metadata?.role === 'admin';
   const qc        = useQueryClient();
+
+  // Solo admin o usuarios con ver_lista_ticket_mas ven el listado
+  // Usuarios con ver_ticket_mas únicamente ven el formulario para enviar
+  const canVerLista = isAdmin || can('ver_lista_ticket_mas');
 
   // Vista: 'form' | 'lista' | 'detalle'
   const [vista, setVista]         = useState<'form'|'lista'|'detalle'>(isAdmin ? 'lista' : 'form');
@@ -264,6 +270,13 @@ export default function TicketMAS() {
   const [loading, setLoading]     = useState(false);
   const [viewing, setViewing]     = useState<TicketMAS | null>(null);
   const [filterStatus, setFilter] = useState('todos');
+
+  // Cuando se carguen los permisos y el usuario tenga ver_ticket_mas, redirigir a lista
+  useEffect(() => {
+    if (canVerLista && vista === 'form' && !isAdmin) {
+      setVista('lista');
+    }
+  }, [canVerLista]);
 
   // ── Form state (llenado por colegio) ────────────────────────────────────────
   const FORM_INIT = {
@@ -339,7 +352,7 @@ export default function TicketMAS() {
       if (error) throw error;
       return (data ?? []) as TicketMAS[];
     },
-    enabled: isAdmin,
+    enabled: canVerLista,
   });
 
   const ticketsFiltrados = useMemo(() => {
@@ -598,7 +611,7 @@ export default function TicketMAS() {
   // ─────────────────────────────────────────────────────────────────────────────
   // RENDER: Formulario (usuarios y admin)
   // ─────────────────────────────────────────────────────────────────────────────
-  if (!isAdmin || vista === 'form') {
+  if (!canVerLista || vista === 'form') {
     if (enviado) {
       return (
         <div className="min-h-screen flex flex-col items-center justify-center gap-4 p-8">
@@ -611,7 +624,7 @@ export default function TicketMAS() {
                 className="px-5 py-2 border border-slate-300 text-slate-700 text-sm font-semibold rounded-lg hover:bg-slate-50 transition">
                 Nuevo ticket
               </button>
-              {isAdmin && (
+              {canVerLista && (
                 <button onClick={() => { setEnviado(false); setForm({ ...FORM_INIT }); setVista('lista'); qc.invalidateQueries({ queryKey: ['tickets_mas'] }); }}
                   className="px-5 py-2 bg-slate-900 text-white text-sm font-semibold rounded-lg hover:bg-slate-700 transition">
                   Ver lista de tickets
@@ -626,7 +639,7 @@ export default function TicketMAS() {
     return (
       <div className="max-w-4xl mx-auto p-4 space-y-6">
         <div className="flex items-center gap-3">
-          {isAdmin && (
+          {canVerLista && (
             <button onClick={() => setVista('lista')}
               className="flex items-center gap-1 text-sm text-slate-500 hover:text-slate-800 transition">
               ← Volver a la lista

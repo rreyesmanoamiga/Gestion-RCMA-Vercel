@@ -21,6 +21,7 @@ const PERMISSION_DEFS: PermissionDef[] = [
   { key: 'editar_tickets',            label: 'Editar Tickets',            group: 'Tickets',               default: false },
   { key: 'eliminar_tickets',          label: 'Eliminar Tickets',          group: 'Tickets',               default: false },
   { key: 'ver_ticket_mas',            label: 'Ver Ticket MAS',            group: 'Ticket MAS',            default: false },
+  { key: 'ver_lista_ticket_mas',      label: 'Ver Listado Ticket MAS',    group: 'Ticket MAS',            default: false },
   { key: 'enviar_ticket_mas',         label: 'Enviar Ticket MAS',         group: 'Ticket MAS',            default: false },
   { key: 'ver_anteproyectos',         label: 'Ver Anteproyectos',         group: 'Anteproyectos',         default: true  },
   { key: 'crear_anteproyectos',       label: 'Crear Anteproyectos',       group: 'Anteproyectos',         default: false },
