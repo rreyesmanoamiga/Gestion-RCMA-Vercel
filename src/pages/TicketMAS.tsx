@@ -917,18 +917,20 @@ export default function TicketMAS() {
                           <Printer className="w-4 h-4" />
                         </button>
 
-                        {/* Cancelar */}
-                        {t.estatus !== 'cancelado' && (
+                        {/* Cancelar — solo admin */}
+                        {isAdmin && t.estatus !== 'cancelado' && (
                           <button onClick={() => { setCancelModal(t); setMotivoCancel(''); }} title="Cancelar"
                             className="p-1.5 rounded hover:bg-red-50 text-red-500 transition">
                             <Ban className="w-4 h-4" />
                           </button>
                         )}
-                        {/* Eliminar */}
-                        <button onClick={() => handleEliminar(t)} title="Eliminar"
-                          className="p-1.5 rounded hover:bg-red-50 text-red-600 transition">
-                          <Trash2 className="w-4 h-4" />
-                        </button>
+                        {/* Eliminar — solo admin */}
+                        {isAdmin && (
+                          <button onClick={() => handleEliminar(t)} title="Eliminar"
+                            className="p-1.5 rounded hover:bg-red-50 text-red-600 transition">
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        )}
                       </div>
                     </td>
                   </tr>
