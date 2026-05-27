@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { ChevronLeft, ChevronRight, Calendar, CheckCircle2, Clock, AlertTriangle, Wrench, X, Plus, Trash2, Bell, Mail, UserPlus, Pencil, Lock, Search } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Calendar, CheckCircle2, Clock, AlertTriangle, Wrench, X, Plus, Trash2, Bell, Mail, UserPlus, Pencil, Lock, Search, ChevronDown, ChevronUp, BellOff, Filter } from 'lucide-react';
 import { supabase } from '@/lib/supabaseClient';
 import { useAuth } from '@/lib/AuthContext';
 import { usePermissions } from '@/hooks/usePermissions';
@@ -15,6 +15,9 @@ interface Actividad {
   frecuenciaDias: number;
   descripcion: string;
   esPersonalizada?: boolean;
+  esSobreescrita?: boolean;   // base activity that has been overridden in DB
+  customId?: string;          // UUID of the custom_maintenance record (for base overrides)
+  base_id?: number;           // original ACTIVIDADES_BASE id (for overrides)
 }
 
 interface NotificationRecipient {
@@ -22,6 +25,7 @@ interface NotificationRecipient {
   email: string;
   nombre: string;
   activo: boolean;
+  actividades_ids: number[] | null; // null = todos los mttos
 }
 
 const ACTIVIDADES_BASE: Actividad[] = [
@@ -151,6 +155,14 @@ export default function CalendarioMantenimiento() {
   const [consultaActividadId, setConsultaActividadId] = useState<string>('');
   const [consultaCategoriaFiltro, setConsultaCategoriaFiltro] = useState<string>('');
 
+  // Gestionar: actividad seleccionada para editar dentro del modal
+  const [gestionSelected, setGestionSelected] = useState<Actividad | null>(null);
+  const [gestionSearch, setGestionSearch] = useState('');
+
+  // Recipient: selector de actividades al agregar
+  const [formRecipientTodos, setFormRecipientTodos] = useState(true);
+  const [formRecipientIds, setFormRecipientIds] = useState<number[]>([]);
+
   const [form, setForm] = useState({
     categoria: '', categoriaCustom: '', actividad: '',
     tipo: 'Limpiar' as 'Limpiar' | 'Renovar' | 'Revisar',
@@ -166,6 +178,34 @@ export default function CalendarioMantenimiento() {
       if (error) throw error;
       return data;
     },
+  });
+
+  // ── Admin notification toggle ──────────────────────────────────────────────
+  const { data: adminNotifData } = useQuery({
+    queryKey: ['maintenanceAdminSettings'],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from('maintenance_settings')
+        .select('value')
+        .eq('key', 'admin_notif_activo')
+        .single();
+      return data;
+    },
+  });
+  const adminNotifActivo: boolean = adminNotifData?.value ?? true;
+
+  const toggleAdminNotifMutation = useMutation({
+    mutationFn: async (activo: boolean) => {
+      const { error } = await supabase
+        .from('maintenance_settings')
+        .upsert({ key: 'admin_notif_activo', value: activo });
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['maintenanceAdminSettings'] });
+      toast.success(adminNotifActivo ? 'Notificaciones desactivadas para ti' : 'Notificaciones activadas para ti');
+    },
+    onError: () => toast.error('Error al actualizar'),
   });
 
   const { data: recipients = [], isLoading: loadingRecipients } = useQuery({
@@ -225,15 +265,17 @@ export default function CalendarioMantenimiento() {
   });
 
   const addRecipientMutation = useMutation({
-    mutationFn: async (data: { email: string; nombre: string }) => {
+    mutationFn: async (data: { email: string; nombre: string; actividades_ids: number[] | null }) => {
       const { error } = await supabase.from('maintenance_notification_recipients')
-        .insert({ email: data.email.toLowerCase().trim(), nombre: data.nombre.trim(), activo: true });
+        .insert({ email: data.email.toLowerCase().trim(), nombre: data.nombre.trim(), activo: true, actividades_ids: data.actividades_ids });
       if (error) throw error;
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['maintenanceRecipients'] });
       toast.success('Destinatario agregado');
       setFormRecipient({ email: '', nombre: '' });
+      setFormRecipientTodos(true);
+      setFormRecipientIds([]);
     },
     onError: (err: any) => {
       if (err?.message?.includes('duplicate') || err?.code === '23505') toast.error('Este correo ya esta registrado');
@@ -259,12 +301,49 @@ export default function CalendarioMantenimiento() {
     onError: () => toast.error('Error al eliminar'),
   });
 
+  // ── Guardar override de actividad base ────────────────────────────────────
+  const upsertBaseOverrideMutation = useMutation({
+    mutationFn: async ({ baseId, data }: { baseId: number; data: typeof form }) => {
+      const categoria = data.categoria === '__custom__' ? data.categoriaCustom : data.categoria;
+      const { error } = await supabase.from('custom_maintenance').upsert({
+        base_id: baseId,
+        categoria, actividad: data.actividad, tipo: data.tipo,
+        frecuencia: data.frecuencia, frecuencia_dias: data.frecuenciaDias, descripcion: data.descripcion,
+      }, { onConflict: 'base_id' });
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['customMaintenance'] });
+      toast.success('Mantenimiento base actualizado');
+      setEditingItem(null);
+      setGestionSelected(null);
+      setForm({ categoria: '', categoriaCustom: '', actividad: '', tipo: 'Limpiar', frecuencia: '1 mes', frecuenciaDias: 30, descripcion: '' });
+    },
+    onError: () => toast.error('Error al actualizar'),
+  });
+
+  // ── Mapear actividades custom + detectar overrides de base ────────────────
   const customActividades: Actividad[] = customRaw.map((r: any) => ({
-    id: r.id, categoria: r.categoria, actividad: r.actividad, tipo: r.tipo,
-    frecuencia: r.frecuencia, frecuenciaDias: r.frecuencia_dias, descripcion: r.descripcion || '', esPersonalizada: true,
+    id: r.base_id ?? r.id,
+    categoria: r.categoria, actividad: r.actividad, tipo: r.tipo,
+    frecuencia: r.frecuencia, frecuenciaDias: r.frecuencia_dias, descripcion: r.descripcion || '',
+    esPersonalizada: r.base_id == null,
+    esSobreescrita: r.base_id != null,
+    customId: r.id,
+    base_id: r.base_id ?? undefined,
   }));
 
-  const todasActividades = [...ACTIVIDADES_BASE, ...customActividades];
+  // Overrides indexados por base_id
+  const baseOverrides: Record<number, Actividad> = {};
+  customActividades.filter(a => a.base_id != null).forEach(a => { baseOverrides[a.base_id!] = a; });
+
+  // Actividades base con overrides aplicados
+  const actividadesBaseMerged: Actividad[] = ACTIVIDADES_BASE.map(a => baseOverrides[a.id as number] ?? a);
+
+  // Solo custom puras (no overrides)
+  const customPuras = customActividades.filter(a => a.base_id == null);
+
+  const todasActividades = [...actividadesBaseMerged, ...customPuras];
   const todasCategorias = [...new Set(todasActividades.map(a => a.categoria))];
 
   const actividadesPorDia = useMemo(() => {
@@ -510,44 +589,109 @@ export default function CalendarioMantenimiento() {
       {showNotificaciones && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4">
           <div className="bg-white rounded-xl shadow-2xl max-w-lg w-full max-h-[90vh] overflow-hidden flex flex-col border border-slate-200">
+            {/* Header */}
             <div className="p-5 border-b border-slate-100 bg-slate-50 flex justify-between items-center">
               <div className="flex items-center gap-2">
                 <Bell className="w-5 h-5 text-slate-700" />
                 <div>
-                  <h3 className="font-bold text-slate-900">Notificacion a Usuarios</h3>
-                  <p className="text-xs text-slate-500 mt-0.5">Correos que reciben recordatorios de mantenimiento</p>
+                  <h3 className="font-bold text-slate-900">Notificaciones</h3>
+                  <p className="text-xs text-slate-500 mt-0.5">Gestiona quién recibe recordatorios de mantenimiento</p>
                 </div>
               </div>
               <button onClick={() => setShowNotificaciones(false)} className="text-slate-400 hover:text-slate-600"><X className="w-5 h-5" /></button>
             </div>
-            <div className="mx-5 mt-4 bg-blue-50 border border-blue-200 rounded-lg p-3 flex gap-3">
-              <Mail className="w-4 h-4 text-blue-600 shrink-0 mt-0.5" />
-              <div>
-                <p className="text-xs font-semibold text-blue-800">Como funciona</p>
-                <p className="text-xs text-blue-700 mt-0.5 leading-relaxed">
-                  1 dia antes de cada mantenimiento, los destinatarios activos reciben un correo con el detalle y un archivo <strong>.ics</strong> para agregar el evento a su Outlook. Cuando aceptan, te llega confirmacion automatica.
-                </p>
+
+            {/* Toggle Admin */}
+            <div className="mx-5 mt-4 flex items-center justify-between bg-slate-50 border border-slate-200 rounded-lg px-4 py-3">
+              <div className="flex items-center gap-2">
+                {adminNotifActivo
+                  ? <Bell className="w-4 h-4 text-emerald-600" />
+                  : <BellOff className="w-4 h-4 text-slate-400" />}
+                <div>
+                  <p className="text-sm font-semibold text-slate-800">Mis notificaciones (admin)</p>
+                  <p className="text-xs text-slate-500">
+                    {adminNotifActivo ? 'Recibes correos de todos los mttos' : 'No recibes notificaciones actualmente'}
+                  </p>
+                </div>
               </div>
+              <button
+                onClick={() => toggleAdminNotifMutation.mutate(!adminNotifActivo)}
+                disabled={toggleAdminNotifMutation.isPending}
+                className={`relative w-11 h-6 rounded-full transition-colors ${adminNotifActivo ? 'bg-emerald-500' : 'bg-slate-300'}`}>
+                <span className={`absolute top-1 left-1 w-4 h-4 bg-white rounded-full shadow transition-transform ${adminNotifActivo ? 'translate-x-5' : 'translate-x-0'}`} />
+              </button>
             </div>
+
+            {/* Info box */}
+            <div className="mx-5 mt-3 bg-blue-50 border border-blue-200 rounded-lg p-3 flex gap-3">
+              <Mail className="w-4 h-4 text-blue-600 shrink-0 mt-0.5" />
+              <p className="text-xs text-blue-700 leading-relaxed">
+                1 día antes de cada mantenimiento, los destinatarios activos reciben un correo con el detalle y un archivo <strong>.ics</strong> para agregar el evento a su Outlook.
+              </p>
+            </div>
+
+            {/* Form agregar destinatario */}
             <div className="px-5 py-4 border-b border-slate-100">
               <p className="text-xs font-bold text-slate-500 uppercase mb-3">Agregar destinatario</p>
-              <div className="flex gap-2">
+              <div className="flex gap-2 mb-3">
                 <div className="flex-1 space-y-2">
                   <input className={inputClass} placeholder="Nombre (ej: Juan Perez)" value={formRecipient.nombre}
                     onChange={e => setFormRecipient(f => ({ ...f, nombre: e.target.value }))} />
                   <input className={inputClass} type="email" placeholder="correo@ejemplo.com" value={formRecipient.email}
-                    onChange={e => setFormRecipient(f => ({ ...f, email: e.target.value }))}
-                    onKeyDown={e => { if (e.key === 'Enter' && formRecipient.email && formRecipient.nombre && isValidEmail(formRecipient.email)) addRecipientMutation.mutate(formRecipient); }} />
+                    onChange={e => setFormRecipient(f => ({ ...f, email: e.target.value }))} />
                 </div>
-                <button disabled={!formRecipient.email || !formRecipient.nombre || !isValidEmail(formRecipient.email) || addRecipientMutation.isPending}
-                  onClick={() => addRecipientMutation.mutate(formRecipient)}
-                  className="px-4 py-2 bg-slate-900 text-white rounded-md text-sm font-medium hover:bg-slate-800 disabled:opacity-40 transition-colors flex items-center gap-1.5 self-end">
+                <button
+                  disabled={!formRecipient.email || !formRecipient.nombre || !isValidEmail(formRecipient.email) || addRecipientMutation.isPending || (!formRecipientTodos && formRecipientIds.length === 0)}
+                  onClick={() => addRecipientMutation.mutate({ ...formRecipient, actividades_ids: formRecipientTodos ? null : formRecipientIds })}
+                  className="px-3 py-2 bg-slate-900 text-white rounded-md text-sm font-medium hover:bg-slate-800 disabled:opacity-40 transition-colors flex items-center gap-1.5 self-end">
                   <UserPlus className="w-4 h-4" />
                   {addRecipientMutation.isPending ? '...' : 'Agregar'}
                 </button>
               </div>
-              {formRecipient.email && !isValidEmail(formRecipient.email) && <p className="text-xs text-red-500 mt-1">Correo no valido</p>}
+              {formRecipient.email && !isValidEmail(formRecipient.email) && <p className="text-xs text-red-500 mb-2">Correo no válido</p>}
+
+              {/* Selector de actividades */}
+              <div className="border border-slate-200 rounded-lg overflow-hidden">
+                <button
+                  onClick={() => setFormRecipientTodos(t => !t)}
+                  className="w-full flex items-center justify-between px-3 py-2 bg-slate-50 text-xs font-semibold text-slate-600 hover:bg-slate-100 transition">
+                  <span className="flex items-center gap-1.5">
+                    <Filter className="w-3.5 h-3.5" />
+                    {formRecipientTodos
+                      ? 'Recibirá: Todos los mantenimientos'
+                      : `Recibirá: ${formRecipientIds.length} mantenimiento(s) seleccionado(s)`}
+                  </span>
+                  {formRecipientTodos ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronUp className="w-3.5 h-3.5" />}
+                </button>
+                {!formRecipientTodos && (
+                  <div className="max-h-44 overflow-y-auto">
+                    <div className="px-3 py-2 flex items-center gap-2 bg-white border-b border-slate-100">
+                      <input type="checkbox" id="sel-todos"
+                        checked={formRecipientIds.length === todasActividades.length}
+                        onChange={e => setFormRecipientIds(e.target.checked ? todasActividades.map(a => Number(a.id)) : [])}
+                        className="rounded" />
+                      <label htmlFor="sel-todos" className="text-xs font-bold text-slate-700 cursor-pointer">Seleccionar todos</label>
+                    </div>
+                    {todasActividades.map(act => (
+                      <div key={act.id} className="px-3 py-1.5 flex items-center gap-2 hover:bg-slate-50 border-b border-slate-50">
+                        <input type="checkbox" id={`fid-${act.id}`}
+                          checked={formRecipientIds.includes(Number(act.id))}
+                          onChange={e => setFormRecipientIds(ids =>
+                            e.target.checked ? [...ids, Number(act.id)] : ids.filter(i => i !== Number(act.id))
+                          )}
+                          className="rounded shrink-0" />
+                        <label htmlFor={`fid-${act.id}`} className="text-xs text-slate-700 truncate cursor-pointer">
+                          <span className="font-medium">{act.actividad}</span>
+                          <span className="text-slate-400 ml-1">· {act.categoria}</span>
+                        </label>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
+
+            {/* Lista de destinatarios */}
             <div className="overflow-y-auto flex-1">
               {loadingRecipients ? (
                 <div className="py-8 text-center"><p className="text-sm text-slate-400">Cargando...</p></div>
@@ -555,7 +699,6 @@ export default function CalendarioMantenimiento() {
                 <div className="py-10 text-center px-5">
                   <Bell className="w-10 h-10 text-slate-200 mx-auto mb-3" />
                   <p className="text-sm font-semibold text-slate-500">Sin destinatarios configurados</p>
-                  <p className="text-xs text-slate-400 mt-1">Los recordatorios solo te llegaran a ti por ahora.</p>
                 </div>
               ) : (
                 <div className="divide-y divide-slate-100">
@@ -567,6 +710,9 @@ export default function CalendarioMantenimiento() {
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-semibold text-slate-800 truncate">{r.nombre || '-'}</p>
                         <p className="text-xs text-slate-500 truncate">{r.email}</p>
+                        <p className="text-[10px] text-slate-400 mt-0.5">
+                          {r.actividades_ids == null ? 'Todos los mttos' : `${r.actividades_ids.length} mtto(s) seleccionado(s)`}
+                        </p>
                       </div>
                       <div className="flex items-center gap-2 shrink-0">
                         <button onClick={() => toggleRecipientMutation.mutate({ id: r.id, activo: !r.activo })}
@@ -582,9 +728,12 @@ export default function CalendarioMantenimiento() {
                 </div>
               )}
             </div>
+
             <div className="p-4 border-t border-slate-100 bg-slate-50 flex items-center justify-between">
               <span className="text-xs text-slate-500">{activeRecipients} activo{activeRecipients !== 1 ? 's' : ''} de {recipients.length}</span>
-              <p className="text-xs text-slate-400 italic">Siempre recibes copia como admin</p>
+              <span className={`text-xs font-semibold ${adminNotifActivo ? 'text-emerald-600' : 'text-slate-400'}`}>
+                {adminNotifActivo ? '✓ Recibes notificaciones' : '✗ Tus notificaciones desactivadas'}
+              </span>
             </div>
           </div>
         </div>
@@ -647,50 +796,167 @@ export default function CalendarioMantenimiento() {
       )}
 
       {/* Modal Gestionar personalizados */}
+      {/* Modal Gestionar — todos los mantenimientos */}
       {showGestion && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4">
-          <div className="bg-white rounded-xl shadow-2xl max-w-lg w-full max-h-[90vh] overflow-hidden flex flex-col border border-slate-200">
+          <div className="bg-white rounded-xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-hidden flex flex-col border border-slate-200">
             <div className="p-5 border-b border-slate-100 bg-slate-50 flex justify-between items-center">
-              <h3 className="font-bold text-slate-900 flex items-center gap-2"><Wrench className="w-4 h-4" /> Mantenimientos Personalizados</h3>
-              <button onClick={() => setShowGestion(false)} className="text-slate-400 hover:text-slate-600"><X className="w-5 h-5" /></button>
+              <h3 className="font-bold text-slate-900 flex items-center gap-2">
+                <Wrench className="w-4 h-4" /> Gestionar Mantenimientos
+              </h3>
+              <button onClick={() => { setShowGestion(false); setGestionSelected(null); setGestionSearch(''); }}
+                className="text-slate-400 hover:text-slate-600"><X className="w-5 h-5" /></button>
             </div>
+
+            {/* Buscador */}
+            <div className="px-5 py-3 border-b border-slate-100">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                <input
+                  className="w-full pl-9 pr-3 py-2 border border-slate-300 rounded-md text-sm focus:ring-2 focus:ring-slate-900 focus:outline-none bg-white"
+                  placeholder="Buscar mantenimiento..."
+                  value={gestionSearch}
+                  onChange={e => setGestionSearch(e.target.value)} />
+              </div>
+            </div>
+
+            {/* Lista de todos los mantenimientos */}
             <div className="overflow-y-auto flex-1">
-              {customActividades.length === 0 ? (
-                <div className="py-12 text-center">
-                  <p className="text-sm text-slate-400 italic">No hay mantenimientos personalizados.</p>
-                  <button onClick={() => { setShowGestion(false); setShowModal(true); }}
-                    className="mt-4 px-4 py-2 bg-slate-900 text-white rounded-md text-sm font-medium hover:bg-slate-800 flex items-center gap-2 mx-auto">
-                    <Plus className="w-4 h-4" /> Agregar primero
+              {(() => {
+                const filtrados = todasActividades.filter(a =>
+                  gestionSearch === '' ||
+                  a.actividad.toLowerCase().includes(gestionSearch.toLowerCase()) ||
+                  a.categoria.toLowerCase().includes(gestionSearch.toLowerCase())
+                );
+                const grupos = filtrados.reduce((acc, act) => {
+                  if (!acc[act.categoria]) acc[act.categoria] = [];
+                  acc[act.categoria].push(act);
+                  return acc;
+                }, {} as Record<string, Actividad[]>);
+
+                return Object.entries(grupos).map(([cat, acts]) => (
+                  <div key={cat}>
+                    <div className="px-5 py-2 bg-slate-50 border-b border-slate-100 sticky top-0">
+                      <p className="text-[11px] font-bold uppercase tracking-wider text-slate-500 flex items-center gap-2">
+                        <span className="w-2 h-2 rounded-full inline-block" style={{ backgroundColor: colorCat(cat) }} />
+                        {cat}
+                      </p>
+                    </div>
+                    {acts.map(act => (
+                      <div key={act.id}
+                        className={`px-5 py-3 flex items-start gap-3 border-b border-slate-50 hover:bg-slate-50 cursor-pointer transition-colors ${gestionSelected?.id === act.id ? 'bg-blue-50' : ''}`}
+                        onClick={() => {
+                          if (gestionSelected?.id === act.id) {
+                            setGestionSelected(null);
+                          } else {
+                            setGestionSelected(act);
+                            setForm({
+                              categoria: act.categoria, categoriaCustom: '',
+                              actividad: act.actividad, tipo: act.tipo,
+                              frecuencia: act.frecuencia, frecuenciaDias: act.frecuenciaDias,
+                              descripcion: act.descripcion,
+                            });
+                          }
+                        }}>
+                        <div className="w-2 h-2 rounded-full mt-1.5 shrink-0" style={{ backgroundColor: colorCat(act.categoria) }} />
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-bold text-slate-900 flex items-center gap-2">
+                            {act.actividad}
+                            {act.esSobreescrita && (
+                              <span className="text-[9px] font-bold px-1.5 py-0.5 bg-amber-100 text-amber-700 rounded-full">EDITADO</span>
+                            )}
+                            {act.esPersonalizada && (
+                              <span className="text-[9px] font-bold px-1.5 py-0.5 bg-slate-200 text-slate-500 rounded-full">CUSTOM</span>
+                            )}
+                          </p>
+                          <p className="text-xs text-slate-500">{act.tipo} · Cada {act.frecuencia}</p>
+                        </div>
+                        <div className="flex gap-1 shrink-0">
+                          <span className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-200 rounded-md" title="Clic para editar">
+                            <Pencil className="w-3.5 h-3.5" />
+                          </span>
+                          {act.esPersonalizada && (
+                            <button
+                              onClick={e => { e.stopPropagation(); if (confirm('¿Eliminar este mantenimiento?')) deleteMutation.mutate(String(act.customId ?? act.id)); }}
+                              disabled={deleteMutation.isPending}
+                              className="p-1.5 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-md"
+                              title="Eliminar">
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ));
+              })()}
+            </div>
+
+            {/* Panel de edición inline */}
+            {gestionSelected && (
+              <div className="border-t-2 border-slate-200 bg-white">
+                <div className="px-5 py-3 bg-slate-900 text-white flex items-center justify-between">
+                  <p className="text-sm font-bold flex items-center gap-2">
+                    <Pencil className="w-3.5 h-3.5" /> Editando: {gestionSelected.actividad}
+                  </p>
+                  <button onClick={() => setGestionSelected(null)} className="text-slate-400 hover:text-white">
+                    <X className="w-4 h-4" />
                   </button>
                 </div>
-              ) : (
-                <div className="divide-y divide-slate-100">
-                  {customActividades.map(act => (
-                    <div key={act.id} className="px-5 py-3 flex items-start gap-3">
-                      <div className="w-2 h-2 rounded-full mt-1.5 shrink-0" style={{ backgroundColor: colorCat(act.categoria) }} />
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-bold text-slate-900">{act.actividad}</p>
-                        <p className="text-xs text-slate-500">{act.categoria} · {act.tipo} · Cada {act.frecuencia}</p>
-                        {act.descripcion && <p className="text-xs text-slate-400 mt-0.5">{act.descripcion}</p>}
-                      </div>
-                      <button onClick={() => deleteMutation.mutate(String(act.id))} disabled={deleteMutation.isPending}
-                        className="text-red-400 hover:text-red-600 transition-colors shrink-0 p-1"><Trash2 className="w-4 h-4" /></button>
-                    </div>
-                  ))}
+                <div className="p-4 grid grid-cols-2 gap-3">
+                  <div className="col-span-2">
+                    <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Actividad</label>
+                    <input className={inputClass} value={form.actividad} onChange={e => setForm(f => ({ ...f, actividad: e.target.value }))} />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Tipo</label>
+                    <select className={inputClass} value={form.tipo} onChange={e => setForm(f => ({ ...f, tipo: e.target.value as any }))}>
+                      <option value="Limpiar">Limpiar</option>
+                      <option value="Renovar">Renovar</option>
+                      <option value="Revisar">Revisar</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Frecuencia</label>
+                    <select className={inputClass} value={form.frecuencia} onChange={e => handleFrecuencia(e.target.value)}>
+                      {FRECUENCIAS_PRESET.map(f => <option key={f.label} value={f.label}>{f.label}</option>)}
+                    </select>
+                  </div>
+                  <div className="col-span-2">
+                    <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Descripción</label>
+                    <textarea className={inputClass} rows={2} value={form.descripcion} onChange={e => setForm(f => ({ ...f, descripcion: e.target.value }))} />
+                  </div>
+                  <div className="col-span-2 flex justify-end gap-2">
+                    <button onClick={() => setGestionSelected(null)}
+                      className="px-3 py-1.5 text-sm font-medium text-slate-600 hover:bg-slate-100 rounded-md">
+                      Cancelar
+                    </button>
+                    <button
+                      disabled={updateMutation.isPending || upsertBaseOverrideMutation.isPending || !form.actividad}
+                      onClick={() => {
+                        if (gestionSelected.esPersonalizada && !gestionSelected.esSobreescrita) {
+                          updateMutation.mutate({ id: String(gestionSelected.customId ?? gestionSelected.id), data: form });
+                        } else {
+                          upsertBaseOverrideMutation.mutate({ baseId: Number(gestionSelected.id), data: form });
+                        }
+                      }}
+                      className="px-4 py-1.5 bg-slate-900 text-white rounded-md text-sm font-medium hover:bg-slate-800 disabled:opacity-50 transition-colors">
+                      {(updateMutation.isPending || upsertBaseOverrideMutation.isPending) ? 'Guardando...' : 'Guardar cambios'}
+                    </button>
+                  </div>
                 </div>
-              )}
-            </div>
-            <div className="p-5 border-t border-slate-100 bg-slate-50 flex justify-between items-center">
-              <span className="text-xs text-slate-500">{customActividades.length} personalizados</span>
-              <button onClick={() => { setShowGestion(false); setShowModal(true); }}
-                className="px-4 py-2 bg-slate-900 text-white rounded-md text-sm font-medium hover:bg-slate-800 flex items-center gap-2">
-                <Plus className="w-4 h-4" /> Agregar nuevo
-              </button>
+              </div>
+            )}
+
+            <div className="p-4 border-t border-slate-100 bg-slate-50 flex items-center justify-between">
+              <span className="text-xs text-slate-500">{todasActividades.length} mantenimientos en total</span>
+              <span className="text-xs text-slate-400">Haz clic en uno para editarlo</span>
             </div>
           </div>
         </div>
       )}
-      {/* Modal Editar mantenimiento personalizado */}
+
+            {/* Modal Editar mantenimiento personalizado */}
       {editingItem && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4">
           <div className="bg-white rounded-xl shadow-2xl max-w-md w-full max-h-[90vh] overflow-hidden flex flex-col border border-slate-200">
