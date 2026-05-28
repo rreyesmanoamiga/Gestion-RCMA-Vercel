@@ -81,11 +81,13 @@ function drawKPIBoxes(
   boxes.forEach((box, i) => {
     const bx = x + i * (bw + 4);
     doc.setFillColor(...box.color); doc.rect(bx, y, bw, 16, 'F');
-    doc.setFontSize(7); doc.setFont('helvetica', 'bold'); doc.setTextColor(255, 255, 255);
-    const lbl = box.label.length > 16 ? box.label.slice(0,14)+'…' : box.label;
-    doc.text(lbl, bx + bw / 2, y + 5, { align: 'center' });
-    doc.setFontSize(9); doc.setFont('helvetica', 'bold');
-    doc.text(box.value, bx + bw / 2, y + 13, { align: 'center' });
+    doc.setTextColor(255, 255, 255); doc.setFont('helvetica', 'bold');
+    // Ajuste dinámico de fuente para que el label siempre quepa
+    const fs = box.label.length > 17 ? 5.5 : box.label.length > 14 ? 6 : 6.5;
+    doc.setFontSize(fs);
+    doc.text(box.label, bx + bw / 2, y + 5.5, { align: 'center' });
+    doc.setFontSize(10); doc.setFont('helvetica', 'bold');
+    doc.text(box.value, bx + bw / 2, y + 13.5, { align: 'center' });
   });
   return y + 22;
 }
@@ -132,9 +134,9 @@ function drawTable(
   rows: string[][],
   maxRows = 40
 ): number {
-  const pC = Object.fromEntries(headers.map(h => [h.label, h.x]));
+  const doc2 = doc as any;
   doc.setFillColor(241, 245, 249); doc.rect(18, y - 4, W - 36, 9, 'F');
-  doc.setFontSize(9); doc.setFont('helvetica', 'bold'); doc.setTextColor(100, 116, 139);
+  doc.setFontSize(8); doc.setFont('helvetica', 'bold'); doc.setTextColor(100, 116, 139);
   headers.forEach(h => doc.text(h.label, h.x, y, { align: h.align ?? 'left' }));
   y += 7;
   doc.setDrawColor(220, 220, 220); doc.line(20, y, W - 20, y); y += 2;
@@ -142,20 +144,26 @@ function drawTable(
   rows.slice(0, maxRows).forEach((row, i) => {
     if (y > 272) { doc.addPage(); y = 20; }
     if (i % 2 === 0) { doc.setFillColor(248, 250, 252); doc.rect(18, y - 4, W - 36, 8, 'F'); }
-    doc.setFontSize(9);
+    doc.setFontSize(8);
     row.forEach((cell, ci) => {
       const h = headers[ci];
-      const maxW = ci < headers.length - 1
-        ? (headers[ci + 1].x - h.x - 2)
-        : (W - 20 - h.x);
-      const txt = cell.length * 2.6 > maxW ? cell.slice(0, Math.floor(maxW / 2.6) - 1) + '…' : cell;
+      const nextX = ci < headers.length - 1 ? headers[ci + 1].x : (W - 18);
+      const maxW  = nextX - h.x - 2;
+      // Usar medición exacta de texto para truncar solo si es necesario
+      let txt = String(cell ?? '—');
+      if (doc2.getTextWidth && doc2.getTextWidth(txt) > maxW) {
+        while (txt.length > 1 && doc2.getTextWidth(txt + '…') > maxW) {
+          txt = txt.slice(0, -1);
+        }
+        txt = txt + '…';
+      }
       doc.text(txt, h.x, y, { align: h.align ?? 'left' });
     });
     y += 8;
   });
   if (rows.length > maxRows) {
-    y += 2; doc.setFontSize(9); doc.setTextColor(100, 116, 139);
-    doc.text(`… y ${rows.length - maxRows} registros más.`, 20, y); y += 6;
+    y += 2; doc.setFontSize(8); doc.setTextColor(100, 116, 139);
+    doc.text(`Mostrando ${maxRows} de ${rows.length} registros.`, 20, y); y += 6;
   }
   return y;
 }
