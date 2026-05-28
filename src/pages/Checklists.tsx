@@ -1388,10 +1388,6 @@ export default function Checklists() {
                         </div>
                       </div>
                       <div className="flex items-center gap-1 shrink-0">
-                        <button onClick={e => { e.stopPropagation(); generarPDFMinimos(ev); }}
-                          className="p-2 text-slate-400 hover:text-slate-900 hover:bg-slate-100 rounded-lg transition-colors" title="Detalle de evaluación (PDF)">
-                          <FileDown className="w-4 h-4" />
-                        </button>
                         <button onClick={e => { e.stopPropagation(); generarReporteColegio(ev); }}
                           className="p-2 text-teal-500 hover:text-teal-700 hover:bg-teal-50 rounded-lg transition-colors" title="Reporte por Colegio (PDF)">
                           <ClipboardCheck className="w-4 h-4" />
