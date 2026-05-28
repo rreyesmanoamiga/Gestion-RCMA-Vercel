@@ -142,7 +142,7 @@ function drawTable(
   doc.setDrawColor(220, 220, 220); doc.line(20, y, W - 20, y); y += 2;
   doc.setFont('helvetica', 'normal'); doc.setTextColor(30, 30, 30);
   rows.slice(0, maxRows).forEach((row, i) => {
-    if (y > 272) { doc.addPage(); y = 20; }
+    if (y > getH() - 30) { doc.addPage(); y = 20; }
     if (i % 2 === 0) { doc.setFillColor(248, 250, 252); doc.rect(18, y - 4, W - 36, 8, 'F'); }
     doc.setFontSize(8);
     row.forEach((cell, ci) => {
@@ -189,10 +189,18 @@ async function exportResumenPDF({ stats, projects, checklists, solicitudes, tick
   const JsPDF = await loadJsPDF();
   const doc = new JsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
   const now = new Date().toLocaleDateString('es-MX', { year: 'numeric', month: 'long', day: 'numeric' });
-  const W = 210; let y = 20;
+  let W = 210; let y = 20;
+  const getH = () => (doc as any).internal.pageSize.getHeight();
+
+  // Cambiar a horizontal (landscape) para secciones de tablas
+  const switchToLandscape = () => {
+    doc.addPage([297, 210]);
+    W = 297; y = 20;
+  };
 
   const section = (title: string) => {
-    if (y > 245) { doc.addPage(); y = 20; }
+    const H = getH();
+    if (y > H - 40) { doc.addPage(); y = 20; }
     y += 4;
     doc.setFillColor(15, 23, 42); doc.rect(18, y - 4, W - 36, 10, 'F');
     doc.setFontSize(10); doc.setFont('helvetica', 'bold'); doc.setTextColor(255, 255, 255);
@@ -274,7 +282,7 @@ async function exportResumenPDF({ stats, projects, checklists, solicitudes, tick
   y += 26;
 
   // Desglose territorial
-  if (y > 220) { doc.addPage(); y = 20; }
+  if (y > getH() - 40) { doc.addPage(); y = 20; }
   doc.setFontSize(9); doc.setFont('helvetica', 'bold'); doc.setTextColor(30, 30, 30);
   doc.text('Estado por Territorio', 20, y); y += 5;
   const tRows = ['NORTE', 'MEXICO', 'FMA'].map(ter => {
@@ -284,7 +292,7 @@ async function exportResumenPDF({ stats, projects, checklists, solicitudes, tick
     const tact = tp.filter(p => p.status !== 'completado' && p.status !== 'cancelado').length;
     return [ter, String(tp.length), String(tact), String(tt.length), String(tm.length)];
   });
-  y = drawTable(doc, y, W, [
+  y = drawTable(doc, y, 210, [
     { label: 'Territorio',       x: 20  },
     { label: 'Total Proyectos',  x: 72  },
     { label: 'Activos',          x: 118 },
@@ -325,7 +333,7 @@ async function exportResumenPDF({ stats, projects, checklists, solicitudes, tick
   y += 2;
 
   // ─── SECCIÓN 3: Análisis por Colegio ──────────────────────────────────────
-  if (y > 220) { doc.addPage(); y = 20; }
+  if (y > getH() - 40) { doc.addPage(); y = 20; }
   section('3. Actividad por Colegio');
 
   const colegios = Array.from(new Set(projects.map(p => p.colegio).filter(Boolean))).sort() as string[];
@@ -341,8 +349,8 @@ async function exportResumenPDF({ stats, projects, checklists, solicitudes, tick
   y = drawHorizontalBars(doc, 20 + (W - 44) / 2 + 6, startY3, (W - 44) / 2, topColegios.slice(half), '');
   y = Math.max(y, endLeft) + 2;
 
-  // ─── SECCIÓN 4: Tickets TCMM ──────────────────────────────────────────────
-  if (y > 220) { doc.addPage(); y = 20; }
+  // ─── CAMBIO A HORIZONTAL para secciones de tablas ────────────────────────
+  switchToLandscape();
   section('4. Tickets TCMM');
 
   // Distribución tickets por estatus
@@ -367,16 +375,16 @@ async function exportResumenPDF({ stats, projects, checklists, solicitudes, tick
 
   y = drawTable(doc, y, W, [
     { label: 'Folio',      x: 20  },
-    { label: 'Colegio',    x: 50  },
-    { label: 'Tipo',       x: 76  },
-    { label: 'Proveedor',  x: 112 },
-    { label: 'Monto',      x: 152, align: 'right' },
-    { label: 'Estatus',    x: 178 },
+    { label: 'Colegio',    x: 56  },
+    { label: 'Tipo',       x: 88  },
+    { label: 'Proveedor',  x: 130 },
+    { label: 'Monto',      x: 210, align: 'right' },
+    { label: 'Estatus',    x: 245 },
   ], ticketRows, 35);
   y += 2;
 
   // ─── SECCIÓN 5: Ticket MAS ────────────────────────────────────────────────
-  if (y > 220) { doc.addPage(); y = 20; }
+  if (y > getH() - 40) { doc.addPage(); y = 20; }
   section('5. Ticket MAS');
 
   const tmasTotal = ticketsMas.length;
@@ -407,11 +415,11 @@ async function exportResumenPDF({ stats, projects, checklists, solicitudes, tick
     });
     y = drawTable(doc, y, W, [
       { label: 'Folio',         x: 20  },
-      { label: 'Colegio',       x: 52  },
-      { label: 'Clasificación', x: 88  },
-      { label: 'Territorio',    x: 148 },
-      { label: 'Estatus',       x: 166 },
-      { label: 'Fecha',         x: 185 },
+      { label: 'Colegio',       x: 65  },
+      { label: 'Clasificación', x: 140 },
+      { label: 'Territorio',    x: 210 },
+      { label: 'Estatus',       x: 240 },
+      { label: 'Fecha',         x: 265 },
     ], tmasRows, 30);
   } else {
     doc.setFontSize(9); doc.setFont('helvetica', 'normal'); doc.setTextColor(150, 150, 150);
@@ -420,7 +428,7 @@ async function exportResumenPDF({ stats, projects, checklists, solicitudes, tick
   y += 4;
 
   // ─── SECCIÓN 6: Mínimos Indispensables ───────────────────────────────────
-  if (y > 220) { doc.addPage(); y = 20; }
+  if (y > getH() - 40) { doc.addPage(); y = 20; }
   section('6. Mínimos Indispensables');
 
   const minTotal   = minimos.length;
@@ -461,12 +469,12 @@ async function exportResumenPDF({ stats, projects, checklists, solicitudes, tick
       return [m.colegio ?? '—', m.territorio ?? '—', res, pct + '%', String(p1nc), fechaMin];
     });
     y = drawTable(doc, y, W, [
-      { label: 'Colegio',           x: 20  },
-      { label: 'Territorio',        x: 70  },
-      { label: 'Resultado',         x: 102 },
-      { label: '% Cumplim.',        x: 136 },
-      { label: 'Pend. Críticos',    x: 158 },
-      { label: 'Fecha Evaluación',  x: 178 },
+      { label: 'Colegio',          x: 20  },
+      { label: 'Territorio',       x: 80  },
+      { label: 'Resultado',        x: 120 },
+      { label: '% Cumplimiento',   x: 162 },
+      { label: 'Pend. Críticos',   x: 210 },
+      { label: 'Fecha Evaluación', x: 248 },
     ], minRows, 30);
   } else {
     doc.setFontSize(9); doc.setFont('helvetica', 'normal'); doc.setTextColor(150, 150, 150);
@@ -475,7 +483,7 @@ async function exportResumenPDF({ stats, projects, checklists, solicitudes, tick
   y += 4;
 
   // ─── SECCIÓN 7: Anteproyectos y Solicitudes ───────────────────────────────
-  if (y > 220) { doc.addPage(); y = 20; }
+  if (y > getH() - 40) { doc.addPage(); y = 20; }
   section('7. Anteproyectos y Solicitudes');
 
   // Sub-header anteproyectos
@@ -493,11 +501,11 @@ async function exportResumenPDF({ stats, projects, checklists, solicitudes, tick
     ]);
     y = drawTable(doc, y, W, [
       { label: 'Territorio', x: 20  },
-      { label: 'Colegio',    x: 48  },
-      { label: 'Proyecto',   x: 76  },
-      { label: 'Tipo',       x: 130 },
-      { label: 'Estatus',    x: 152 },
-      { label: 'Presupuesto',x: 172, align: 'right' },
+      { label: 'Colegio',    x: 52  },
+      { label: 'Proyecto',   x: 88  },
+      { label: 'Tipo',       x: 190 },
+      { label: 'Estatus',    x: 228 },
+      { label: 'Presupuesto',x: 262, align: 'right' },
     ], anteRows, 25);
   } else {
     doc.setFontSize(9); doc.setFont('helvetica', 'normal'); doc.setTextColor(150, 150, 150);
@@ -506,7 +514,7 @@ async function exportResumenPDF({ stats, projects, checklists, solicitudes, tick
   y += 6;
 
   // Sub-header solicitudes
-  if (y > 230) { doc.addPage(); y = 20; }
+  if (y > getH() - 40) { doc.addPage(); y = 20; }
   doc.setFontSize(9); doc.setFont('helvetica', 'bold'); doc.setTextColor(168, 85, 247);
   doc.text('Solicitudes de Proyecto (' + solicitudesAll.length + ')', 20, y); y += 4;
   doc.setDrawColor(216, 180, 254); doc.line(20, y, W - 20, y); y += 5;
@@ -520,11 +528,11 @@ async function exportResumenPDF({ stats, projects, checklists, solicitudes, tick
     ]);
     y = drawTable(doc, y, W, [
       { label: 'Centro',      x: 20  },
-      { label: 'Proyecto',    x: 65  },
-      { label: 'Solicitante', x: 112 },
-      { label: 'Tipo',        x: 143 },
-      { label: 'Estatus',     x: 160 },
-      { label: 'Fecha',       x: 180 },
+      { label: 'Proyecto',    x: 76  },
+      { label: 'Solicitante', x: 155 },
+      { label: 'Tipo',        x: 208 },
+      { label: 'Estatus',     x: 232 },
+      { label: 'Fecha',       x: 258 },
     ], solRows, 25);
   } else {
     doc.setFontSize(9); doc.setFont('helvetica', 'normal'); doc.setTextColor(150, 150, 150);
@@ -533,7 +541,7 @@ async function exportResumenPDF({ stats, projects, checklists, solicitudes, tick
   y += 4;
 
   // ─── SECCIÓN 8: Proyectos Activos ─────────────────────────────────────────
-  if (y > 220) { doc.addPage(); y = 20; }
+  if (y > getH() - 40) { doc.addPage(); y = 20; }
   section('8. Detalle Proyectos Activos');
 
   // Barra de avance promedio visual
@@ -555,17 +563,17 @@ async function exportResumenPDF({ stats, projects, checklists, solicitudes, tick
   ]);
   y = drawTable(doc, y, W, [
     { label: 'Folio',     x: 20  },
-    { label: 'Proyecto',  x: 46  },
-    { label: 'Colegio',   x: 112 },
-    { label: 'Estatus',   x: 140 },
-    { label: 'Avance',    x: 164 },
-    { label: 'Prioridad', x: 179 },
+    { label: 'Proyecto',  x: 58  },
+    { label: 'Colegio',   x: 178 },
+    { label: 'Estatus',   x: 214 },
+    { label: 'Avance',    x: 248 },
+    { label: 'Prioridad', x: 264 },
   ], activeRows, 40);
   y += 2;
 
   // ─── SECCIÓN 6: Proyectos Completados ─────────────────────────────────────
   if (completed.length > 0) {
-    if (y > 220) { doc.addPage(); y = 20; }
+    if (y > getH() - 40) { doc.addPage(); y = 20; }
     section('9. Proyectos Completados');
     const completedRows = completed.map(p => [
       p.folio ?? '—',
@@ -576,17 +584,17 @@ async function exportResumenPDF({ stats, projects, checklists, solicitudes, tick
     ]);
     y = drawTable(doc, y, W, [
       { label: 'Folio',       x: 20  },
-      { label: 'Proyecto',    x: 46  },
-      { label: 'Colegio',     x: 112 },
-      { label: 'Tipo',        x: 148 },
-      { label: 'Presupuesto', x: 175, align: 'right' },
+      { label: 'Proyecto',    x: 60  },
+      { label: 'Colegio',     x: 188 },
+      { label: 'Tipo',        x: 224 },
+      { label: 'Presupuesto', x: 260, align: 'right' },
     ], completedRows, 30);
     y += 2;
   }
 
   // ─── SECCIÓN 7: Pendientes ────────────────────────────────────────────────
   if (pendientes.length > 0) {
-    if (y > 220) { doc.addPage(); y = 20; }
+    if (y > getH() - 40) { doc.addPage(); y = 20; }
     section('10. Pendientes');
 
     const pendStatuses = ['pendiente', 'en_proceso', 'completado'];
@@ -608,11 +616,11 @@ async function exportResumenPDF({ stats, projects, checklists, solicitudes, tick
     ]);
     y = drawTable(doc, y, W, [
       { label: 'Territorio', x: 20  },
-      { label: 'Colegio',    x: 46  },
-      { label: 'Pendiente',  x: 80  },
-      { label: 'Prioridad',  x: 146 },
-      { label: 'Estatus',    x: 162 },
-      { label: 'Monto',      x: 180, align: 'right' },
+      { label: 'Colegio',    x: 56  },
+      { label: 'Pendiente',  x: 92  },
+      { label: 'Prioridad',  x: 196 },
+      { label: 'Estatus',    x: 224 },
+      { label: 'Monto',      x: 260, align: 'right' },
     ], pendRows, 30);
     y += 2;
   }
@@ -621,10 +629,12 @@ async function exportResumenPDF({ stats, projects, checklists, solicitudes, tick
   const pages = doc.getNumberOfPages();
   for (let i = 1; i <= pages; i++) {
     doc.setPage(i);
-    doc.setFillColor(15, 23, 42); doc.rect(0, 286, W, 11, 'F');
+    const pH = (doc as any).internal.pageSize.getHeight();
+    const pW = (doc as any).internal.pageSize.getWidth();
+    doc.setFillColor(15, 23, 42); doc.rect(0, pH - 11, pW, 11, 'F');
     doc.setFontSize(7); doc.setFont('helvetica', 'normal'); doc.setTextColor(160, 160, 180);
-    doc.text('Sistema RCMA  ·  Colegios Mano Amiga  ·  Documento confidencial', 20, 292);
-    doc.text('Página ' + i + ' de ' + pages, W - 20, 292, { align: 'right' });
+    doc.text('Sistema RCMA  ·  Colegios Mano Amiga  ·  Documento confidencial', 20, pH - 5);
+    doc.text('Página ' + i + ' de ' + pages, pW - 20, pH - 5, { align: 'right' });
   }
 
   doc.save('reporte-mano-amiga-' + Date.now() + '.pdf');
