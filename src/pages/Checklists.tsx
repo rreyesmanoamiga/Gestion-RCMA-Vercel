@@ -136,6 +136,8 @@ interface ItemEval {
   id: string; seccion: string; nombre: string;
   prioridad: Prioridad;
   estado: EstadoItem; observacion: string;
+  verificado_por?: string;
+  fecha_verificacion?: string;
 }
 
 // Mapa de prioridades para acceso rápido
@@ -1196,6 +1198,40 @@ export default function Checklists() {
     onError: () => toast.error('Error al eliminar'),
   });
 
+  // ── Estado para modal de verificación ────────────────────────────────────
+  const [verifyModal,     setVerifyModal]     = useState<{ eval: EvalMinimos; item: ItemEval } | null>(null);
+  const [verifyInspector, setVerifyInspector] = useState('');
+  const [verifyFecha,     setVerifyFecha]     = useState(format(new Date(), 'yyyy-MM-dd'));
+
+  // ── Mutación de verificación de cumplimiento ──────────────────────────────
+  const verifyItemMutation = useMutation({
+    mutationFn: async ({ evalId, itemId, inspector, fecha, items }: {
+      evalId: string; itemId: string; inspector: string; fecha: string; items: ItemEval[];
+    }) => {
+      const updatedItems = items.map(it =>
+        it.id === itemId
+          ? { ...it, estado: 'cumple' as EstadoItem, verificado_por: inspector, fecha_verificacion: fecha }
+          : it
+      );
+      const nuevoResultado = calcResultado(updatedItems.map(i => ({
+        ...i, prioridad: (ITEM_PRIORIDAD[i.id] ?? 'P3') as Prioridad,
+      })));
+      const { error } = await supabase
+        .from('minimos_indispensables')
+        .update({ items: updatedItems, resultado: nuevoResultado })
+        .eq('id', evalId);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['minimos_indispensables'] });
+      toast.success('Verificación registrada correctamente');
+      setVerifyModal(null);
+      setVerifyInspector('');
+      setVerifyFecha(format(new Date(), 'yyyy-MM-dd'));
+    },
+    onError: () => toast.error('Error al registrar la verificación'),
+  });
+
   const setItemEstado = (id: string, estado: EstadoItem) =>
     setFormItems(prev => prev.map(it => it.id === id ? { ...it, estado } : it));
   const setItemObs = (id: string, obs: string) =>
@@ -1423,12 +1459,26 @@ export default function Checklists() {
                               </div>
                               <div className="space-y-1">
                                 {secItems.map(it => (
-                                  <div key={it.id} className="flex items-start gap-3 py-1.5 px-2 rounded-lg bg-slate-50">
+                                  <div key={it.id} className={`flex items-start gap-3 py-1.5 px-2 rounded-lg ${it.estado === 'cumple' ? 'bg-green-50' : it.estado === 'no_cumple' ? 'bg-red-50' : 'bg-amber-50'}`}>
                                     <span className={`shrink-0 mt-0.5 text-xs font-bold px-1.5 py-0.5 rounded-full ${ESTADO_CFG[it.estado].badge}`}>{ESTADO_CFG[it.estado].label}</span>
                                     <div className="flex-1 min-w-0">
                                       <p className="text-xs font-medium text-slate-800">{it.nombre}</p>
                                       {it.observacion && <p className="text-xs text-slate-500 mt-0.5 italic">{it.observacion}</p>}
+                                      {/* Registro de verificación */}
+                                      {it.verificado_por && it.fecha_verificacion && (
+                                        <p className="text-[10px] text-green-700 font-semibold mt-0.5 flex items-center gap-1">
+                                          ✓ Verificado por {it.verificado_por} · {format(new Date(it.fecha_verificacion + 'T12:00:00'), "d MMM yyyy", { locale: es })}
+                                        </p>
+                                      )}
                                     </div>
+                                    {/* Botón verificar — solo admin y solo si no cumple o en proceso */}
+                                    {isAdmin && (it.estado === 'no_cumple' || it.estado === 'en_proceso') && (
+                                      <button
+                                        onClick={() => { setVerifyModal({ eval: ev, item: it }); setVerifyFecha(format(new Date(), 'yyyy-MM-dd')); setVerifyInspector(''); }}
+                                        className="shrink-0 text-[10px] font-bold px-2 py-1 bg-teal-600 text-white rounded-md hover:bg-teal-700 transition whitespace-nowrap">
+                                        ✓ Verificar
+                                      </button>
+                                    )}
                                   </div>
                                 ))}
                               </div>
@@ -1541,6 +1591,80 @@ export default function Checklists() {
                   <button disabled={!formColegio || createMinMutation.isPending} onClick={() => createMinMutation.mutate()}
                     className="px-5 py-2 bg-slate-900 text-white rounded-lg text-sm font-semibold hover:bg-slate-800 disabled:opacity-50 transition-colors">
                     {createMinMutation.isPending ? 'Guardando...' : 'Guardar Evaluación'}
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* ── Modal de verificación de cumplimiento ────────────────────── */}
+          {verifyModal && (
+            <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+              <div className="bg-white rounded-xl shadow-2xl w-full max-w-md">
+                {/* Header */}
+                <div className="px-5 py-4 border-b border-slate-100 bg-slate-50 rounded-t-xl">
+                  <h3 className="font-black text-slate-900 flex items-center gap-2 text-sm">
+                    <span className="w-6 h-6 bg-teal-600 rounded-full text-white flex items-center justify-center text-xs">✓</span>
+                    Verificar cumplimiento
+                  </h3>
+                  <p className="text-xs text-slate-500 mt-0.5">{verifyModal.eval.colegio} · {verifyModal.eval.territorio}</p>
+                </div>
+
+                {/* Ítem */}
+                <div className="px-5 py-4">
+                  <div className="bg-slate-50 rounded-lg p-3 mb-4 border border-slate-200">
+                    <p className="text-[10px] font-bold text-slate-400 uppercase mb-1">Ítem a verificar</p>
+                    <p className="text-sm font-semibold text-slate-800">{verifyModal.item.nombre}</p>
+                    <span className={`inline-block mt-1.5 text-[10px] font-bold px-2 py-0.5 rounded-full ${PRIORIDAD_CFG[verifyModal.item.prioridad as Prioridad].badge}`}>
+                      {PRIORIDAD_CFG[verifyModal.item.prioridad as Prioridad].label}
+                    </span>
+                  </div>
+
+                  <div className="space-y-3">
+                    <div>
+                      <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Nombre del inspector que verifica</label>
+                      <input
+                        className="w-full px-3 py-2 border border-slate-300 rounded-md text-sm focus:ring-2 focus:ring-teal-500 focus:outline-none"
+                        placeholder="Nombre completo del inspector"
+                        value={verifyInspector}
+                        onChange={e => setVerifyInspector(e.target.value)}
+                        autoFocus />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Fecha de verificación</label>
+                      <input
+                        type="date"
+                        className="w-full px-3 py-2 border border-slate-300 rounded-md text-sm focus:ring-2 focus:ring-teal-500 focus:outline-none"
+                        value={verifyFecha}
+                        onChange={e => setVerifyFecha(e.target.value)} />
+                    </div>
+                  </div>
+
+                  <div className="mt-4 bg-teal-50 border border-teal-200 rounded-lg p-3">
+                    <p className="text-xs text-teal-800">
+                      Al confirmar, este ítem pasará a <strong>Cumple</strong> y quedará registrado quién verificó la corrección y en qué fecha. Este registro no se puede revertir.
+                    </p>
+                  </div>
+                </div>
+
+                {/* Footer */}
+                <div className="flex gap-3 px-5 py-4 border-t border-slate-100 bg-slate-50 rounded-b-xl">
+                  <button
+                    onClick={() => { setVerifyModal(null); setVerifyInspector(''); }}
+                    className="flex-1 py-2 border border-slate-300 rounded-lg text-sm font-semibold text-slate-700 hover:bg-slate-100 transition">
+                    Cancelar
+                  </button>
+                  <button
+                    disabled={!verifyInspector.trim() || !verifyFecha || verifyItemMutation.isPending}
+                    onClick={() => verifyItemMutation.mutate({
+                      evalId:    verifyModal.eval.id,
+                      itemId:    verifyModal.item.id,
+                      inspector: verifyInspector.trim(),
+                      fecha:     verifyFecha,
+                      items:     verifyModal.eval.items,
+                    })}
+                    className="flex-1 py-2 bg-teal-600 text-white rounded-lg text-sm font-semibold hover:bg-teal-700 disabled:opacity-40 transition">
+                    {verifyItemMutation.isPending ? 'Guardando...' : '✓ Confirmar verificación'}
                   </button>
                 </div>
               </div>
