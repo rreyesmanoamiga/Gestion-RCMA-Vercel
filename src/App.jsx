@@ -48,6 +48,7 @@ import Accesos from '@/pages/Accesos';
 import Pendientes from '@/pages/Pendientes';
 import CalendarioMantenimiento from '@/pages/CalendarioMantenimiento';
 import Presupuestos from '@/pages/Presupuestos';
+import PoliticaUso from '@/components/PoliticaUso';
 
 // --- NUEVO IMPORT ---
 import Directorio from '@/pages/Directorio';
@@ -359,7 +360,9 @@ function AuthenticatedApp() {
   }
 
   return (
-    <Routes>
+    <>
+      <PoliticaUso />
+      <Routes>
       <Route path="/reset-password" element={<SetPasswordPage />} />
       {!user ? (
         <Route path="*" element={<LoginPage />} />
@@ -391,6 +394,7 @@ function AuthenticatedApp() {
         </Route>
       )}
     </Routes>
+    </>
   );
 }
 

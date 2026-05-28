@@ -642,9 +642,11 @@ async function generarReporteGeneral(evaluaciones: EvalMinimos[]) {
 export default function Checklists() {
   const navigate     = useNavigate();
   const qc           = useQueryClient();
-  const { isAdmin }  = usePermissions();
+  const { isAdmin, can } = usePermissions();
 
-  const [activeTab, setActiveTab] = useState<'inspecciones' | 'minimos'>('inspecciones');
+  // ECO solo tiene llenar_minimos — los lleva directo a esa pestaña
+  const soloMinimos = !isAdmin && can('llenar_minimos') && !can('ver_checklists');
+  const [activeTab, setActiveTab] = useState<'inspecciones' | 'minimos'>(soloMinimos ? 'minimos' : 'inspecciones');
 
   // ── Tab 1: Inspecciones ───────────────────────────────────────────────────
   const [search,     setSearch]     = useState('');
@@ -768,14 +770,16 @@ export default function Checklists() {
 
       {/* Tabs */}
       <div className="flex gap-1 mt-5 mb-6 bg-slate-100 rounded-lg p-1 w-fit">
-        <button
-          onClick={() => setActiveTab('inspecciones')}
-          className={`flex items-center gap-2 px-4 py-2 rounded-md text-sm font-semibold transition-all ${activeTab === 'inspecciones' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>
-          <ClipboardCheck className="w-4 h-4" /> Inspecciones
-          <span className={`text-xs px-1.5 py-0.5 rounded-full font-bold ${activeTab === 'inspecciones' ? 'bg-slate-900 text-white' : 'bg-slate-200 text-slate-500'}`}>
-            {checklists.length}
-          </span>
-        </button>
+        {!soloMinimos && (
+          <button
+            onClick={() => setActiveTab('inspecciones')}
+            className={`flex items-center gap-2 px-4 py-2 rounded-md text-sm font-semibold transition-all ${activeTab === 'inspecciones' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>
+            <ClipboardCheck className="w-4 h-4" /> Inspecciones
+            <span className={`text-xs px-1.5 py-0.5 rounded-full font-bold ${activeTab === 'inspecciones' ? 'bg-slate-900 text-white' : 'bg-slate-200 text-slate-500'}`}>
+              {checklists.length}
+            </span>
+          </button>
+        )}
         <button
           onClick={() => setActiveTab('minimos')}
           className={`flex items-center gap-2 px-4 py-2 rounded-md text-sm font-semibold transition-all ${activeTab === 'minimos' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>
