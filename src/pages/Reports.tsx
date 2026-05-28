@@ -190,11 +190,22 @@ async function exportResumenPDF({ stats, projects, checklists, solicitudes, tick
   const doc = new JsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
   const now = new Date().toLocaleDateString('es-MX', { year: 'numeric', month: 'long', day: 'numeric' });
   let W = 210; let y = 20;
-  const getH = () => (doc as any).internal.pageSize.getHeight();
+  const getH = () => {
+    try {
+      const ps = (doc as any).internal?.pageSize;
+      if (typeof ps?.getHeight === 'function') return ps.getHeight() as number;
+      if (typeof ps?.height === 'number') return ps.height as number;
+    } catch {}
+    return W > 210 ? 210 : 297;
+  };
 
   // Cambiar a horizontal (landscape) para secciones de tablas
   const switchToLandscape = () => {
-    doc.addPage([297, 210]);
+    try {
+      (doc as any).addPage('a4', 'l');
+    } catch {
+      doc.addPage();
+    }
     W = 297; y = 20;
   };
 
@@ -930,7 +941,7 @@ export default function Reports() {
     minimos:       rawMinimos       as any[],
     anteproyectos: rawAnteproyectos as any[],
     solicitudesAll: rawSolicitudesAll as any[],
-  }).catch(e => console.error('Error generando PDF:', e));
+  }).catch(e => { console.error('Error generando PDF:', e); alert('Error al generar PDF: ' + (e?.message ?? e)); });
 
   const handleExportExcel = () => exportMatrizExcel({
     projects: rawProjects, checklists: rawChecklists, tickets: rawTicketsFull,
