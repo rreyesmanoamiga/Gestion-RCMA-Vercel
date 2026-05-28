@@ -163,9 +163,9 @@ const ESTADO_CFG: Record<EstadoItem, { label: string; badge: string; pdf: [numbe
 };
 
 const RESULTADO_CFG = {
-  completo:   { label: 'Completo',   cls: 'bg-green-100 text-green-700 border border-green-200' },
-  en_proceso: { label: 'En Proceso', cls: 'bg-amber-100 text-amber-700 border border-amber-200' },
-  incompleto: { label: 'Incompleto', cls: 'bg-red-100 text-red-700 border border-red-200' },
+  completo:   { label: 'Sí Cumple',   cls: 'bg-green-100 text-green-700 border border-green-200' },
+  en_proceso: { label: 'En Proceso',  cls: 'bg-amber-100 text-amber-700 border border-amber-200' },
+  incompleto: { label: 'No Cumple',   cls: 'bg-red-100 text-red-700 border border-red-200' },
 };
 
 function calcResultado(items: ItemEval[]): EvalMinimos['resultado'] {
