@@ -42,6 +42,7 @@ interface Colegio {
   ljo_nombre: string;
   ljo_correo: string;
   ljo_tel_movil: string;
+  niveles?: string[]; // Preescolar, Primaria, Secundaria, Preparatoria
   updated_at?: string;
 }
 
@@ -130,9 +131,19 @@ export default function Directorio() {
   const [viewModal, setViewModal]   = useState<Colegio | null>(null);
   const [editModal, setEditModal]   = useState<Colegio | null>(null);
   const [editForm, setEditForm]     = useState<Partial<Colegio>>({});
+  const [editNiveles, setEditNiveles] = useState<string[]>([]);
   const [saving, setSaving]         = useState(false);
   const [deleteId, setDeleteId]     = useState<{ id: string; nombre: string } | null>(null);
   const [deleting, setDeleting]     = useState(false);
+
+  const NIVELES_OPCIONES = ['Preescolar', 'Primaria', 'Secundaria', 'Preparatoria'];
+  const NIVELES_COLOR: Record<string, string> = {
+    Preescolar:   'bg-pink-100 text-pink-700 border-pink-200',
+    Primaria:     'bg-blue-100 text-blue-700 border-blue-200',
+    Secundaria:   'bg-amber-100 text-amber-700 border-amber-200',
+    Preparatoria: 'bg-purple-100 text-purple-700 border-purple-200',
+  };
+  const esColegio = (c: Colegio) => !['FMA','FIA','AUN'].includes(c.territorio);
 
   // ── Fetch ────────────────────────────────────────────────────────────────
   const { data: colegios = [], isLoading } = useQuery({
@@ -185,21 +196,25 @@ export default function Directorio() {
     }
   };
 
-  const handleEdit = (c: Colegio) => { setEditModal(c); setEditForm({ ...c }); };
+  const handleEdit = (c: Colegio) => {
+    setEditModal(c);
+    setEditForm({ ...c });
+    setEditNiveles(Array.isArray(c.niveles) ? c.niveles : []);
+  };
   const set = (k: keyof Colegio, v: string) => setEditForm(p => ({ ...p, [k]: v }));
 
   const handleSave = async () => {
     if (!editModal) return;
     setSaving(true);
     try {
+      const updateData = { ...editForm, niveles: editNiveles, updated_at: new Date().toISOString() };
       const { error } = await supabase
         .from('directorio')
-        .update({ ...editForm, updated_at: new Date().toISOString() })
+        .update(updateData)
         .eq('id', editModal.id);
       if (error) throw error;
-      // Actualizar cache local inmediatamente para reflejar cambios en las tarjetas
       qc.setQueryData<Colegio[]>(['directorio'], prev =>
-        (prev ?? []).map(c => c.id === editModal.id ? { ...c, ...editForm } : c)
+        (prev ?? []).map(c => c.id === editModal.id ? { ...c, ...editForm, niveles: editNiveles } : c)
       );
       await qc.invalidateQueries({ queryKey: ['directorio'] });
       setEditModal(null);
@@ -350,6 +365,20 @@ export default function Directorio() {
                     )}
                   </div>
 
+                  {/* Niveles educativos — solo colegios */}
+                  {esColegio(c) && Array.isArray(c.niveles) && c.niveles.length > 0 && (
+                    <div className="flex flex-wrap gap-1 mt-2">
+                      {c.niveles.map(n => (
+                        <span key={n} className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${NIVELES_COLOR[n] ?? 'bg-slate-100 text-slate-600 border-slate-200'}`}>
+                          {n}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                  {esColegio(c) && (!c.niveles || c.niveles.length === 0) && (
+                    <p className="text-[10px] text-slate-400 mt-2 italic">Sin niveles registrados</p>
+                  )}
+
                   {/* View all contacts button */}
                   <button
                     onClick={() => setViewModal(c)}
@@ -489,6 +518,24 @@ export default function Directorio() {
                 )}
 
               </div>
+
+              {/* Niveles educativos en el view modal */}
+              {esColegio(viewModal) && (
+                <div className="mt-4 pt-4 border-t border-slate-100">
+                  <p className="text-xs font-bold text-slate-500 uppercase mb-2">🎓 Niveles Educativos</p>
+                  {Array.isArray(viewModal.niveles) && viewModal.niveles.length > 0 ? (
+                    <div className="flex flex-wrap gap-2">
+                      {viewModal.niveles.map(n => (
+                        <span key={n} className={`text-sm font-semibold px-3 py-1 rounded-full border ${NIVELES_COLOR[n] ?? 'bg-slate-100 text-slate-600 border-slate-200'}`}>
+                          {n}
+                        </span>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-sm text-slate-400 italic">Sin niveles registrados</p>
+                  )}
+                </div>
+              )}
             </div>
 
             {/* Footer */}
@@ -577,6 +624,33 @@ export default function Directorio() {
                 { k: 'ljo_correo',    label: 'Correo', full: true },
                 { k: 'ljo_tel_movil', label: 'Tel. Móvil' },
               ]} />
+
+              {/* Niveles educativos — solo colegios */}
+              {editModal && esColegio(editModal) && (
+                <div className="border border-slate-200 rounded-xl p-4">
+                  <p className="text-xs font-bold text-slate-500 uppercase mb-3">🎓 Niveles Educativos</p>
+                  <div className="grid grid-cols-2 gap-2">
+                    {NIVELES_OPCIONES.map(nivel => (
+                      <label key={nivel}
+                        className={`flex items-center gap-2.5 px-3 py-2.5 rounded-lg border cursor-pointer transition ${
+                          editNiveles.includes(nivel)
+                            ? NIVELES_COLOR[nivel] + ' border-current'
+                            : 'bg-slate-50 border-slate-200 hover:bg-slate-100'
+                        }`}>
+                        <input
+                          type="checkbox"
+                          checked={editNiveles.includes(nivel)}
+                          onChange={e => setEditNiveles(prev =>
+                            e.target.checked ? [...prev, nivel] : prev.filter(n => n !== nivel)
+                          )}
+                          className="rounded w-4 h-4 shrink-0"
+                        />
+                        <span className="text-sm font-semibold">{nivel}</span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Modal footer */}
