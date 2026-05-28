@@ -39,6 +39,7 @@ const COLEGIO_TERRITORIO: Record<string, string> = {
 const CAR_CORREOS: Record<string, string> = {
   NORTE:  'jalvarado@manoamiga.edu.mx',
   MEXICO: 'gromero@manoamiga.edu.mx',
+  FMA:    'fguerra@manoamiga.edu.mx',
 };
 
 const COLEGIOS_DATA = [

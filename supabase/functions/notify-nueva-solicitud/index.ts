@@ -5,7 +5,7 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-async function sendEmail(to: string, subject: string, html: string) {
+async function sendEmail(to: string, cc: string[], subject: string, html: string) {
   const smtpHost = Deno.env.get('SMTP_HOST') ?? 'smtp.office365.com';
   const smtpPort = parseInt(Deno.env.get('SMTP_PORT') ?? '587');
   const smtpUser = Deno.env.get('SMTP_USER') ?? '';
@@ -52,13 +52,19 @@ async function sendEmail(to: string, subject: string, html: string) {
   await tlsRead();
   await tlsWrite(`RCPT TO:<${to}>`);
   await tlsRead();
+  // CC recipients
+  for (const ccAddr of cc) {
+    if (ccAddr) { await tlsWrite(`RCPT TO:<${ccAddr}>`); await tlsRead(); }
+  }
   await tlsWrite('DATA');
   await tlsRead();
 
   const boundary = 'boundary_' + Date.now();
+  const ccHeader = cc.filter(Boolean).join(', ');
   const message = [
     `From: Sistema RCMA <${smtpUser}>`,
     `To: ${to}`,
+    ...(ccHeader ? [`Cc: ${ccHeader}`] : []),
     `Subject: ${subject}`,
     'MIME-Version: 1.0',
     `Content-Type: multipart/alternative; boundary="${boundary}"`,
@@ -206,12 +212,19 @@ serve(async (req) => {
     const subject = `📋 Nueva Solicitud: ${proyecto ?? 'Sin nombre'} — ${centro ?? ''}`;
 
     // Enviar al administrador
-    await sendEmail(adminEmail, subject, html);
+    // ── Mapa de CARs server-side (respaldo si el frontend no lo manda) ────────
+    const CAR_CORREOS: Record<string, string> = {
+      NORTE:  'jalvarado@manoamiga.edu.mx',
+      MEXICO: 'gromero@manoamiga.edu.mx',
+      FMA:    'fguerra@manoamiga.edu.mx',
+    };
+    const carCorreo = (correoCAR && correoCAR !== '')
+      ? correoCAR
+      : (CAR_CORREOS[territorio] ?? '');
 
-    // Enviar copia al CAR del territorio correspondiente (si aplica)
-    if (correoCAR && correoCAR !== adminEmail) {
-      await sendEmail(correoCAR, `[COPIA CAR] ${subject}`, html);
-    }
+    const ccList = [carCorreo].filter(Boolean).filter(c => c !== adminEmail);
+
+    await sendEmail(adminEmail, ccList, subject, html);
 
     return new Response(
       JSON.stringify({ success: true }),
