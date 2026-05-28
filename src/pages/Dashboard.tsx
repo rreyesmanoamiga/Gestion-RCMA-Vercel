@@ -15,7 +15,7 @@ import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid,
   AreaChart, Area,
 } from 'recharts';
-import { ACTIVIDADES_BASE, COLORES_CATEGORIA, proximosMantenimientos } from '@/lib/maintenanceActivities';
+import { ACTIVIDADES_BASE, COLORES_CATEGORIA, proximosMantenimientos, type ActividadBase } from '@/lib/maintenanceActivities';
 
 // ─── Interfaces ───────────────────────────────────────────────────────────────
 interface Project         { id: string; name?: string; status?: string; priority?: string; colegio?: string; territorio?: string; location?: string; progress?: number; created_at?: string; }
@@ -131,20 +131,31 @@ export default function Dashboard() {
   const isLoading = projectsQuery.isLoading || checklistsQuery.isLoading || maintenanceQuery.isLoading;
 
   // ─── Actividades para próximos mantenimientos (base + overrides) ────────────
-  const actividadesVigentes = useMemo(() => {
-    const custom: any[] = customMttoQuery.data ?? [];
-    const overrides: Record<number, typeof ACTIVIDADES_BASE[0]> = {};
-    custom.filter((r: any) => r.base_id != null).forEach((r: any) => {
-      overrides[r.base_id] = {
-        id: r.base_id, categoria: r.categoria, actividad: r.actividad,
-        tipo: r.tipo, frecuencia: r.frecuencia, frecuenciaDias: r.frecuencia_dias,
+  const actividadesVigentes = useMemo<ActividadBase[]>(() => {
+    const custom = (customMttoQuery.data ?? []) as any[];
+    const overrides: Record<number, ActividadBase> = {};
+
+    custom.filter(r => r.base_id != null).forEach(r => {
+      overrides[r.base_id as number] = {
+        id:             r.base_id,
+        categoria:      r.categoria,
+        actividad:      r.actividad,
+        tipo:           r.tipo as ActividadBase['tipo'],
+        frecuencia:     r.frecuencia,
+        frecuenciaDias: r.frecuencia_dias,
       };
     });
-    const base = ACTIVIDADES_BASE.map(a => overrides[a.id] ?? a);
-    const customPuras = custom.filter((r: any) => r.base_id == null).map((r: any) => ({
-      id: r.id, categoria: r.categoria, actividad: r.actividad, tipo: r.tipo,
-      frecuencia: r.frecuencia, frecuenciaDias: r.frecuencia_dias,
+
+    const base: ActividadBase[] = ACTIVIDADES_BASE.map(a => overrides[a.id as number] ?? a);
+    const customPuras: ActividadBase[] = custom.filter(r => r.base_id == null).map(r => ({
+      id:             r.id,
+      categoria:      r.categoria,
+      actividad:      r.actividad,
+      tipo:           r.tipo as ActividadBase['tipo'],
+      frecuencia:     r.frecuencia,
+      frecuenciaDias: r.frecuencia_dias,
     }));
+
     return [...base, ...customPuras];
   }, [customMttoQuery.data]);
 
