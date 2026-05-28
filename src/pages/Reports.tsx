@@ -223,12 +223,12 @@ async function exportResumenPDF({ stats, projects, checklists, solicitudes, tick
 
   // KPIs fila 1
   y = drawKPIBoxes(doc, 20, y, W, [
-    { label: 'Proyectos Activos',  value: String(active.length),       color: [59, 130, 246] },
-    { label: 'Completados',        value: String(completed.length),    color: [34, 197, 94]  },
-    { label: 'Avance Promedio',    value: avgA + '%',                  color: [99, 102, 241] },
-    { label: 'Tickets TCMM',       value: String(tickets.length),      color: [239, 68,  68] },
-    { label: 'Pendientes',         value: String(pendientes.length),   color: [245, 158, 11] },
-    { label: 'Inspecciones',       value: String(checklists.length),   color: [20,  184, 166] },
+    { label: 'Proy. Activos',  value: String(active.length),       color: [59, 130, 246] },
+    { label: 'Completados',    value: String(completed.length),    color: [34, 197, 94]  },
+    { label: 'Avance Prom.',   value: avgA + '%',                  color: [99, 102, 241] },
+    { label: 'Tickets TCMM',   value: String(tickets.length),      color: [239, 68,  68] },
+    { label: 'Pendientes',     value: String(pendientes.length),   color: [245, 158, 11] },
+    { label: 'Inspecciones',   value: String(checklists.length),   color: [20,  184, 166] },
   ]);
   y += 4;
 
@@ -238,12 +238,12 @@ async function exportResumenPDF({ stats, projects, checklists, solicitudes, tick
   const minCumple  = minimos.filter((m: any) => m.resultado === 'completo').length;
   const pctMin     = minimos.length > 0 ? Math.round((minCumple / minimos.length) * 100) : 0;
   y = drawKPIBoxes(doc, 20, y, W, [
-    { label: 'Ticket MAS Pendientes', value: String(tmasPend),             color: [13, 138, 126] },
-    { label: 'Ticket MAS Autorizado', value: String(tmasAut),             color: [22, 163, 74]  },
-    { label: '% Mínimos Cumplen',     value: pctMin + '%',                color: pctMin >= 80 ? [22,163,74] : pctMin >= 50 ? [202,138,4] : [220,38,38] },
-    { label: 'Anteproyectos',         value: String(anteproyectos.length), color: [99, 102, 241] },
-    { label: 'Solicitudes',           value: String(solicitudesAll.length),color: [168, 85, 247] },
-    { label: 'Urgentes',              value: String(projects.filter(p => p.priority === 'urgente' && p.status !== 'completado').length), color: [220, 38, 38] },
+    { label: 'MAS Pendientes', value: String(tmasPend),             color: [13, 138, 126] },
+    { label: 'MAS Autorizados', value: String(tmasAut),             color: [22, 163, 74]  },
+    { label: '% Mínimos OK',   value: pctMin + '%',                color: pctMin >= 80 ? [22,163,74] : pctMin >= 50 ? [202,138,4] : [220,38,38] },
+    { label: 'Anteproyectos',  value: String(anteproyectos.length), color: [99, 102, 241] },
+    { label: 'Solicitudes',    value: String(solicitudesAll.length),color: [168, 85, 247] },
+    { label: 'Urgentes',       value: String(projects.filter(p => p.priority === 'urgente' && p.status !== 'completado').length), color: [220, 38, 38] },
   ]);
   y += 4;
 
@@ -277,11 +277,11 @@ async function exportResumenPDF({ stats, projects, checklists, solicitudes, tick
     return [ter, String(tp.length), String(tact), String(tt.length), String(tm.length)];
   });
   y = drawTable(doc, y, W, [
-    { label: 'Territorio',      x: 20  },
-    { label: 'Total Proyectos', x: 70  },
-    { label: 'Activos',         x: 115 },
-    { label: 'Tickets TCMM',   x: 145 },
-    { label: 'Ticket MAS',     x: 178 },
+    { label: 'Territorio',       x: 20  },
+    { label: 'Total Proyectos',  x: 72  },
+    { label: 'Activos',          x: 118 },
+    { label: 'Tickets TCMM',    x: 148 },
+    { label: 'Ticket MAS',      x: 178 },
   ], tRows, 10);
   y += 6;
 
@@ -360,10 +360,10 @@ async function exportResumenPDF({ stats, projects, checklists, solicitudes, tick
   y = drawTable(doc, y, W, [
     { label: 'Folio',      x: 20  },
     { label: 'Colegio',    x: 50  },
-    { label: 'Tipo',       x: 74  },
-    { label: 'Proveedor',  x: 114 },
-    { label: 'Monto',      x: 153 },
-    { label: 'Estatus',    x: 180 },
+    { label: 'Tipo',       x: 76  },
+    { label: 'Proveedor',  x: 112 },
+    { label: 'Monto',      x: 152, align: 'right' },
+    { label: 'Estatus',    x: 178 },
   ], ticketRows, 35);
   y += 2;
 
@@ -387,21 +387,23 @@ async function exportResumenPDF({ stats, projects, checklists, solicitudes, tick
   y += 4;
 
   if (ticketsMas.length > 0) {
-    const tmasRows = ticketsMas.slice(0, 30).map((t: any) => [
-      t.folio ?? '—',
-      t.colegio ?? '—',
-      t.clasificacion ?? '—',
-      t.territorio ?? '—',
-      t.estatus === 'autorizado' ? 'Autorizado' : t.estatus === 'pendiente' ? 'Pendiente' : t.estatus === 'en_revision' ? 'En Revisión' : t.estatus === 'cancelado' ? 'Cancelado' : (t.estatus ?? '—'),
-      t.created_at ? new Date(t.created_at).toLocaleDateString('es-MX') : '—',
-    ]);
+    const tmasRows = ticketsMas.slice(0, 30).map((t: any) => {
+      const tmasEstLbl: Record<string,string> = { autorizado:'Autorizado', pendiente:'Pendiente', en_revision:'En Revisión', cancelado:'Cancelado' };
+      const fechaStr = t.created_at ? new Date(t.created_at).toLocaleDateString('es-MX', { day:'2-digit', month:'2-digit', year:'numeric' }) : '—';
+      return [
+        t.folio ?? '—', t.colegio ?? '—', t.clasificacion ?? '—',
+        t.territorio ?? '—',
+        tmasEstLbl[t.estatus as string] ?? (t.estatus ?? '—'),
+        fechaStr,
+      ];
+    });
     y = drawTable(doc, y, W, [
-      { label: 'Folio',          x: 20  },
-      { label: 'Colegio',        x: 55  },
-      { label: 'Clasificación',  x: 90  },
-      { label: 'Territorio',     x: 140 },
-      { label: 'Estatus',        x: 165 },
-      { label: 'Fecha',          x: 188 },
+      { label: 'Folio',         x: 20  },
+      { label: 'Colegio',       x: 52  },
+      { label: 'Clasificación', x: 88  },
+      { label: 'Territorio',    x: 148 },
+      { label: 'Estatus',       x: 166 },
+      { label: 'Fecha',         x: 185 },
     ], tmasRows, 30);
   } else {
     doc.setFontSize(9); doc.setFont('helvetica', 'normal'); doc.setTextColor(150, 150, 150);
@@ -447,15 +449,16 @@ async function exportResumenPDF({ stats, projects, checklists, solicitudes, tick
       const cumpleN = items.filter((i: any) => i.estado === 'cumple').length;
       const pct = activos > 0 ? Math.round((cumpleN / activos) * 100) : 0;
       const res = m.resultado === 'completo' ? 'Sí Cumple' : m.resultado === 'incompleto' ? 'No Cumple' : 'En Proceso';
-      return [m.colegio ?? '—', m.territorio ?? '—', res, pct + '%', String(p1nc), m.fecha ?? '—'];
+      const fechaMin = m.fecha ? new Date(m.fecha + 'T12:00:00').toLocaleDateString('es-MX', { day:'2-digit', month:'2-digit', year:'numeric' }) : '—';
+      return [m.colegio ?? '—', m.territorio ?? '—', res, pct + '%', String(p1nc), fechaMin];
     });
     y = drawTable(doc, y, W, [
-      { label: 'Colegio',             x: 20  },
-      { label: 'Territorio',          x: 75  },
-      { label: 'Resultado',           x: 108 },
-      { label: '% Cumplimiento',      x: 140 },
-      { label: 'Críticos Pendientes', x: 165 },
-      { label: 'Fecha',               x: 188 },
+      { label: 'Colegio',           x: 20  },
+      { label: 'Territorio',        x: 70  },
+      { label: 'Resultado',         x: 102 },
+      { label: '% Cumplim.',        x: 136 },
+      { label: 'Pend. Críticos',    x: 158 },
+      { label: 'Fecha Evaluación',  x: 178 },
     ], minRows, 30);
   } else {
     doc.setFontSize(9); doc.setFont('helvetica', 'normal'); doc.setTextColor(150, 150, 150);
@@ -473,18 +476,20 @@ async function exportResumenPDF({ stats, projects, checklists, solicitudes, tick
   doc.setDrawColor(199, 200, 246); doc.line(20, y, W - 20, y); y += 5;
 
   if (anteproyectos.length > 0) {
+    const anteEstLbl: Record<string,string> = { en_revision:'En Revisión', entregado:'Entregado', aprobado:'Aprobado', rechazado:'Rechazado', pendiente:'Pendiente' };
     const anteRows = anteproyectos.slice(0, 25).map((a: any) => [
       a.territorio ?? '—', a.colegio ?? '—', a.nombre_proyecto ?? '—',
-      a.tipo_proyecto ?? '—', a.estatus ?? '—',
-      a.presupuesto != null ? fmtMXN(a.presupuesto as number) : '—',
+      a.tipo_proyecto ?? '—',
+      anteEstLbl[a.estatus as string] ?? (a.estatus ?? '—'),
+      a.presupuesto != null ? fmtMXN(a.presupuesto as number) : 'Sin dato',
     ]);
     y = drawTable(doc, y, W, [
       { label: 'Territorio', x: 20  },
-      { label: 'Colegio',    x: 50  },
-      { label: 'Proyecto',   x: 80  },
-      { label: 'Tipo',       x: 134 },
-      { label: 'Estatus',    x: 158 },
-      { label: 'Presupuesto',x: 182, align: 'right' },
+      { label: 'Colegio',    x: 48  },
+      { label: 'Proyecto',   x: 76  },
+      { label: 'Tipo',       x: 130 },
+      { label: 'Estatus',    x: 152 },
+      { label: 'Presupuesto',x: 172, align: 'right' },
     ], anteRows, 25);
   } else {
     doc.setFontSize(9); doc.setFont('helvetica', 'normal'); doc.setTextColor(150, 150, 150);
@@ -503,15 +508,15 @@ async function exportResumenPDF({ stats, projects, checklists, solicitudes, tick
       s.nombre_centro ?? '—', s.nombre_proyecto ?? '—',
       s.nombre_solicitante ?? '—', s.tipo_iniciativa ?? '—',
       s.estatus ?? '—',
-      s.created_at ? new Date(s.created_at).toLocaleDateString('es-MX') : '—',
+      s.created_at ? new Date(s.created_at).toLocaleDateString('es-MX', { day:'2-digit', month:'2-digit', year:'numeric' }) : '—',
     ]);
     y = drawTable(doc, y, W, [
       { label: 'Centro',      x: 20  },
-      { label: 'Proyecto',    x: 60  },
-      { label: 'Solicitante', x: 108 },
-      { label: 'Tipo',        x: 142 },
-      { label: 'Estatus',     x: 162 },
-      { label: 'Fecha',       x: 188 },
+      { label: 'Proyecto',    x: 65  },
+      { label: 'Solicitante', x: 112 },
+      { label: 'Tipo',        x: 143 },
+      { label: 'Estatus',     x: 160 },
+      { label: 'Fecha',       x: 180 },
     ], solRows, 25);
   } else {
     doc.setFontSize(9); doc.setFont('helvetica', 'normal'); doc.setTextColor(150, 150, 150);
@@ -525,12 +530,12 @@ async function exportResumenPDF({ stats, projects, checklists, solicitudes, tick
 
   // Barra de avance promedio visual
   doc.setFontSize(8); doc.setFont('helvetica', 'bold'); doc.setTextColor(30, 30, 30);
-  doc.text('Avance promedio activos: ' + avgA + '%', 20, y);
-  doc.setFillColor(241, 245, 249); doc.rect(90, y - 5, 80, 7, 'F');
-  doc.setFillColor(59, 130, 246); doc.rect(90, y - 5, Math.round(avgA * 0.8), 7, 'F');
-  doc.setFontSize(7); doc.setFont('helvetica', 'bold'); doc.setTextColor(255, 255, 255);
-  if (avgA > 10) doc.text(avgA + '%', 90 + Math.round(avgA * 0.8) / 2, y);
-  y += 8;
+  doc.text('Avance promedio de proyectos activos:', 20, y);
+  doc.setFillColor(241, 245, 249); doc.rect(20, y + 3, W - 40, 8, 'F');
+  doc.setFillColor(59, 130, 246); doc.rect(20, y + 3, Math.round(((W - 40) * avgA) / 100), 8, 'F');
+  doc.setFontSize(7.5); doc.setFont('helvetica', 'bold'); doc.setTextColor(255, 255, 255);
+  if (avgA > 5) doc.text(avgA + '% de avance promedio', 24, y + 9);
+  y += 18;
 
   const activeRows = active.map(p => [
     p.folio ?? '—',
@@ -541,12 +546,12 @@ async function exportResumenPDF({ stats, projects, checklists, solicitudes, tick
     p.priority ?? '—',
   ]);
   y = drawTable(doc, y, W, [
-    { label: 'Folio',    x: 20  },
-    { label: 'Proyecto', x: 44  },
-    { label: 'Colegio',  x: 108 },
-    { label: 'Estatus',  x: 138 },
-    { label: 'Avance',   x: 162 },
-    { label: 'Prioridad',x: 178 },
+    { label: 'Folio',     x: 20  },
+    { label: 'Proyecto',  x: 46  },
+    { label: 'Colegio',   x: 112 },
+    { label: 'Estatus',   x: 140 },
+    { label: 'Avance',    x: 164 },
+    { label: 'Prioridad', x: 179 },
   ], activeRows, 40);
   y += 2;
 
@@ -562,11 +567,11 @@ async function exportResumenPDF({ stats, projects, checklists, solicitudes, tick
       p.budget != null ? fmtMXN(p.budget) : '—',
     ]);
     y = drawTable(doc, y, W, [
-      { label: 'Folio',    x: 20  },
-      { label: 'Proyecto', x: 44  },
-      { label: 'Colegio',  x: 110 },
-      { label: 'Tipo',     x: 148 },
-      { label: 'Presupuesto', x: 185, align: 'right' },
+      { label: 'Folio',       x: 20  },
+      { label: 'Proyecto',    x: 46  },
+      { label: 'Colegio',     x: 112 },
+      { label: 'Tipo',        x: 148 },
+      { label: 'Presupuesto', x: 175, align: 'right' },
     ], completedRows, 30);
     y += 2;
   }
@@ -595,11 +600,11 @@ async function exportResumenPDF({ stats, projects, checklists, solicitudes, tick
     ]);
     y = drawTable(doc, y, W, [
       { label: 'Territorio', x: 20  },
-      { label: 'Colegio',   x: 45  },
-      { label: 'Pendiente', x: 80  },
-      { label: 'Prioridad', x: 145 },
-      { label: 'Estatus',   x: 165 },
-      { label: 'Monto',     x: 188, align: 'right' },
+      { label: 'Colegio',    x: 46  },
+      { label: 'Pendiente',  x: 80  },
+      { label: 'Prioridad',  x: 146 },
+      { label: 'Estatus',    x: 162 },
+      { label: 'Monto',      x: 180, align: 'right' },
     ], pendRows, 30);
     y += 2;
   }
