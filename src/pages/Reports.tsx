@@ -446,6 +446,7 @@ async function loadXLSX() {
 async function exportMatrizExcel(data: {
   projects: unknown[]; checklists: unknown[]; tickets: unknown[];
   pendientes: unknown[]; anteproyectos: unknown[]; solicitudes: unknown[];
+  minimos: unknown[];
 }) {
   const XLSX = await loadXLSX();
   const wb   = XLSX.utils.book_new();
@@ -540,6 +541,73 @@ async function exportMatrizExcel(data: {
     (data.solicitudes as Record<string, unknown>[]).map(s => [s.nombre_centro ?? '—', s.nombre_proyecto ?? '—', s.nombre_solicitante ?? '—', s.puesto_solicitante ?? '—', s.tipo_iniciativa ?? '—', num(s.costo_aproximado as number), s.estatus ?? '—', fmt(s.created_at as string), fmt(s.fecha_inicio_propuesta as string)]),
     [22, 34, 24, 20, 22, 16, 14, 18, 20], 5);
 
+  // ── Mínimos Indispensables ────────────────────────────────────────────────
+  const ITEM_PRIO: Record<string, string> = {
+    puertas_ancho:'P1',pasillos:'P1',tablero:'P1',circuitos:'P1',polo_tierra:'P1',
+    agua_red:'P1',gas:'P1',pasillos_libres:'P1',const_pc:'P1',pipc:'P1',
+    seg_estr:'P1',extintores:'P1',senal_emerg:'P1',cisterna_limp:'P1',cert_extinct:'P1',
+    aulas_m2:'P2',sanitarios:'P2',bebederos:'P2',iluminacion:'P2',drenaje:'P2',
+    rampa_acceso:'P2',sia:'P2',sanitario_adapt:'P2',escalones:'P2',poliza_rc:'P2',
+    simulacros:'P2',brigadas:'P2',cronograma:'P2',bitacora:'P2',fumigacion:'P2',
+  };
+  const resLabelMin: Record<string, string> = { completo: 'Si Cumple', en_proceso: 'En Proceso', incompleto: 'No Cumple' };
+  const secNomMin: Record<string, string> = { construccion:'01 Construccion', instalaciones:'02 Instalaciones', accesibilidad:'03 Accesibilidad', seguridad:'04 Seguridad y PC', mantenimiento:'05 Mantenimiento' };
+  const estadoLblMin: Record<string, string> = { cumple:'Cumple', no_cumple:'No Cumple', en_proceso:'En Proceso', na:'N/A' };
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const minimosList = data.minimos as any[];
+
+  const minimosRows: (string | number | null | undefined)[][] = minimosList.map(m => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const its: any[] = Array.isArray(m.items) ? m.items : [];
+    const activos  = its.filter((i: any) => i.estado !== 'na');
+    const cumpleN  = its.filter((i: any) => i.estado === 'cumple').length;
+    const noCumple = its.filter((i: any) => i.estado === 'no_cumple').length;
+    const enProc   = its.filter((i: any) => i.estado === 'en_proceso').length;
+    const pct      = activos.length > 0 ? Math.round(cumpleN / activos.length * 100) : 0;
+    const p1All    = its.filter((i: any) => (ITEM_PRIO[i.id as string] ?? 'P3') === 'P1' && i.estado !== 'na');
+    const p2All    = its.filter((i: any) => (ITEM_PRIO[i.id as string] ?? 'P3') === 'P2' && i.estado !== 'na');
+    const pctP1    = p1All.length > 0 ? Math.round(p1All.filter((i: any) => i.estado === 'cumple').length / p1All.length * 100) : 100;
+    const pctP2    = p2All.length > 0 ? Math.round(p2All.filter((i: any) => i.estado === 'cumple').length / p2All.length * 100) : 100;
+    const pendP1   = its.filter((i: any) => (ITEM_PRIO[i.id as string] ?? 'P3') === 'P1' && i.estado === 'no_cumple').length;
+    const pendP2   = its.filter((i: any) => (ITEM_PRIO[i.id as string] ?? 'P3') === 'P2' && i.estado === 'no_cumple').length;
+    const verif    = its.filter((i: any) => i.verificado_por).length;
+    return [
+      String(m.colegio ?? '—'), String(m.territorio ?? '—'), String(m.inspector ?? 'Sin asignar'),
+      fmt(m.fecha as string), resLabelMin[m.resultado as string] ?? String(m.resultado ?? '—'),
+      pct, pctP1, pctP2, cumpleN, noCumple, enProc, pendP1, pendP2, verif,
+      fmt(m.created_at as string),
+    ];
+  });
+
+  buildSheet('Minimos Indispensables', 'Minimos Indispensables — Sistema RCMA',
+    ['Colegio','Territorio','Inspector','Fecha Evaluacion','Resultado','% Cumplimiento',
+     '% Criticos P1','% Urgentes P2','Items Cumple','Items No Cumple',
+     'Items En Proceso','Pendientes Criticos','Pendientes Urgentes','Verificaciones','Fecha Registro'],
+    minimosRows,
+    [22, 14, 22, 18, 16, 14, 14, 14, 12, 14, 14, 16, 16, 14, 18]);
+
+  const minimosDetalle: (string | number | null | undefined)[][] = minimosList.flatMap(m => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const its: any[] = Array.isArray(m.items) ? m.items : [];
+    return its.map((it: any) => [
+      String(m.colegio ?? '—'), String(m.territorio ?? '—'), fmt(m.fecha as string),
+      secNomMin[it.seccion as string] ?? String(it.seccion ?? '—'),
+      String(it.nombre ?? it.id ?? '—'),
+      ITEM_PRIO[it.id as string] ?? 'P3',
+      estadoLblMin[it.estado as string] ?? String(it.estado ?? '—'),
+      it.observacion ? String(it.observacion) : '—',
+      it.verificado_por ? String(it.verificado_por) : '—',
+      it.fecha_verificacion ? fmt(String(it.fecha_verificacion)) : '—',
+    ]);
+  });
+
+  buildSheet('Minimos Detalle', 'Detalle de Items por Evaluacion — Sistema RCMA',
+    ['Colegio','Territorio','Fecha Evaluacion','Seccion','Item','Prioridad',
+     'Estado','Observacion','Verificado Por','Fecha Verificacion'],
+    minimosDetalle,
+    [22, 14, 18, 22, 48, 12, 14, 32, 22, 18]);
+
   // Resumen ejecutivo
   const ws7: Record<string, unknown> = {};
   const resRows = [
@@ -547,6 +615,7 @@ async function exportMatrizExcel(data: {
     { label: 'Presupuesto vs Real', count: (data.projects as Record<string, unknown>[]).filter(p => p.budget != null).length },
     { label: 'Pendientes', count: data.pendientes.length }, { label: 'Anteproyectos', count: data.anteproyectos.length },
     { label: 'Inspecciones', count: data.checklists.length }, { label: 'Solicitudes', count: data.solicitudes.length },
+    { label: 'Mínimos Indispensables', count: data.minimos.length },
   ];
   const totalGeneral = resRows.reduce((a, r) => a + r.count, 0);
   const sRT = { font: { bold: true, sz: 16, name: 'Calibri', color: { rgb: 'FFFFFFFF' } }, fill: { patternType: 'solid', fgColor: { rgb: 'FF0F172A' } }, alignment: { horizontal: 'left', vertical: 'center' } };
@@ -574,7 +643,7 @@ async function exportMatrizExcel(data: {
   ws7['!merges'] = [{ s: { r: 0, c: 0 }, e: { r: 0, c: 1 } }, { s: { r: 1, c: 0 }, e: { r: 1, c: 1 } }];
   XLSX.utils.book_append_sheet(wb, ws7 as import('xlsx').WorkSheet, '📊 Resumen Ejecutivo');
 
-  wb.SheetNames = ['📊 Resumen Ejecutivo', '📁 Proyectos', '💰 Presupuesto vs Real', '🎫 Tickets TCMM', '⏳ Pendientes', '📐 Anteproyectos', '✅ Inspecciones', '📩 Solicitudes'];
+  wb.SheetNames = ['📊 Resumen Ejecutivo', '📁 Proyectos', '💰 Presupuesto vs Real', '🎫 Tickets TCMM', '⏳ Pendientes', '📐 Anteproyectos', '✅ Inspecciones', '📩 Solicitudes', 'Minimos Indispensables', 'Minimos Detalle'];
   XLSX.writeFile(wb, `Matriz_Sistema_RCMA_${new Date().toISOString().slice(0, 10)}.xlsx`);
 }
 
@@ -582,6 +651,18 @@ async function exportMatrizExcel(data: {
 export default function Reports() {
   const { data: rawProjects    = [] } = useQuery({ queryKey: ['projects'],    queryFn: () => db.Project.list('-created_at', 500) });
   const { data: rawChecklists  = [] } = useQuery({ queryKey: ['checklists'],  queryFn: () => db.Checklist.list('-created_at', 500) });
+  const { data: rawMinimos = [] } = useQuery({
+    queryKey: ['minimos_indispensables_report'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('minimos_indispensables')
+        .select('*')
+        .order('created_at', { ascending: false })
+        .limit(500);
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
   const { data: rawSolicitudes = [] } = useQuery({
     queryKey: ['solicitudes'],
     queryFn: async () => { const { data, error } = await supabase.from('solicitudes').select('id,nombre_centro,nombre_proyecto,estatus,created_at').order('created_at', { ascending: false }).limit(500); if (error) throw error; return data ?? []; },
@@ -631,6 +712,7 @@ export default function Reports() {
   const handleExportExcel = () => exportMatrizExcel({
     projects: rawProjects, checklists: rawChecklists, tickets: rawTicketsFull,
     pendientes: rawPendientes, anteproyectos: rawAnteproyectos, solicitudes: rawSolicitudesAll,
+    minimos: rawMinimos,
   }).catch(e => console.error('Error generando Excel:', e));
 
   return (
