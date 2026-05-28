@@ -132,7 +132,8 @@ function drawTable(
   doc: Doc, y: number, W: number,
   headers: { label: string; x: number; align?: 'left' | 'right' | 'center' }[],
   rows: string[][],
-  maxRows = 40
+  maxRows = 40,
+  pageH = 297
 ): number {
   const doc2 = doc as any;
   doc.setFillColor(241, 245, 249); doc.rect(18, y - 4, W - 36, 9, 'F');
@@ -142,7 +143,7 @@ function drawTable(
   doc.setDrawColor(220, 220, 220); doc.line(20, y, W - 20, y); y += 2;
   doc.setFont('helvetica', 'normal'); doc.setTextColor(30, 30, 30);
   rows.slice(0, maxRows).forEach((row, i) => {
-    if (y > getH() - 30) { doc.addPage(); y = 20; }
+    if (y > pageH - 32) { doc.addPage(); y = 20; }
     if (i % 2 === 0) { doc.setFillColor(248, 250, 252); doc.rect(18, y - 4, W - 36, 8, 'F'); }
     doc.setFontSize(8);
     row.forEach((cell, ci) => {
@@ -391,7 +392,7 @@ async function exportResumenPDF({ stats, projects, checklists, solicitudes, tick
     { label: 'Proveedor',  x: 130 },
     { label: 'Monto',      x: 210, align: 'right' },
     { label: 'Estatus',    x: 245 },
-  ], ticketRows, 35);
+  ], ticketRows, 35, 210);
   y += 2;
 
   // ─── SECCIÓN 5: Ticket MAS ────────────────────────────────────────────────
@@ -431,7 +432,7 @@ async function exportResumenPDF({ stats, projects, checklists, solicitudes, tick
       { label: 'Territorio',    x: 210 },
       { label: 'Estatus',       x: 240 },
       { label: 'Fecha',         x: 265 },
-    ], tmasRows, 30);
+    ], tmasRows, 30, 210);
   } else {
     doc.setFontSize(9); doc.setFont('helvetica', 'normal'); doc.setTextColor(150, 150, 150);
     doc.text('Sin Tickets MAS registrados.', 20, y); y += 10;
@@ -486,7 +487,7 @@ async function exportResumenPDF({ stats, projects, checklists, solicitudes, tick
       { label: '% Cumplimiento',   x: 162 },
       { label: 'Pend. Críticos',   x: 210 },
       { label: 'Fecha Evaluación', x: 248 },
-    ], minRows, 30);
+    ], minRows, 30, 210);
   } else {
     doc.setFontSize(9); doc.setFont('helvetica', 'normal'); doc.setTextColor(150, 150, 150);
     doc.text('Sin evaluaciones de Mínimos Indispensables registradas.', 20, y); y += 10;
@@ -517,7 +518,7 @@ async function exportResumenPDF({ stats, projects, checklists, solicitudes, tick
       { label: 'Tipo',       x: 190 },
       { label: 'Estatus',    x: 228 },
       { label: 'Presupuesto',x: 262, align: 'right' },
-    ], anteRows, 25);
+    ], anteRows, 25, 210);
   } else {
     doc.setFontSize(9); doc.setFont('helvetica', 'normal'); doc.setTextColor(150, 150, 150);
     doc.text('Sin anteproyectos registrados.', 20, y); y += 8;
@@ -544,7 +545,7 @@ async function exportResumenPDF({ stats, projects, checklists, solicitudes, tick
       { label: 'Tipo',        x: 208 },
       { label: 'Estatus',     x: 232 },
       { label: 'Fecha',       x: 258 },
-    ], solRows, 25);
+    ], solRows, 25, 210);
   } else {
     doc.setFontSize(9); doc.setFont('helvetica', 'normal'); doc.setTextColor(150, 150, 150);
     doc.text('Sin solicitudes registradas.', 20, y); y += 8;
@@ -579,7 +580,7 @@ async function exportResumenPDF({ stats, projects, checklists, solicitudes, tick
     { label: 'Estatus',   x: 214 },
     { label: 'Avance',    x: 248 },
     { label: 'Prioridad', x: 264 },
-  ], activeRows, 40);
+  ], activeRows, 40, 210);
   y += 2;
 
   // ─── SECCIÓN 6: Proyectos Completados ─────────────────────────────────────
@@ -599,7 +600,7 @@ async function exportResumenPDF({ stats, projects, checklists, solicitudes, tick
       { label: 'Colegio',     x: 188 },
       { label: 'Tipo',        x: 224 },
       { label: 'Presupuesto', x: 260, align: 'right' },
-    ], completedRows, 30);
+    ], completedRows, 30, 210);
     y += 2;
   }
 
@@ -632,7 +633,7 @@ async function exportResumenPDF({ stats, projects, checklists, solicitudes, tick
       { label: 'Prioridad',  x: 196 },
       { label: 'Estatus',    x: 224 },
       { label: 'Monto',      x: 260, align: 'right' },
-    ], pendRows, 30);
+    ], pendRows, 30, 210);
     y += 2;
   }
 
