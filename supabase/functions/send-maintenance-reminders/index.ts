@@ -1,8 +1,10 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
+const ALLOWED_ORIGIN = Deno.env.get('SITE_URL') ?? 'https://gestion-rcma-vercel.vercel.app';
+
 const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Origin': ALLOWED_ORIGIN,
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
@@ -204,13 +206,25 @@ serve(async (req) => {
     const { data: customRaw = [] } = await supabase
       .from('custom_maintenance').select('*');
 
-    const customActividades: Actividad[] = (customRaw || []).map((r: any) => ({
-      id: r.id, categoria: r.categoria, actividad: r.actividad,
-      tipo: r.tipo, frecuencia: r.frecuencia,
-      frecuenciaDias: r.frecuencia_dias, descripcion: r.descripcion || '',
-    }));
+    // Respetar overrides de actividades base (base_id)
+    const baseOverrides: Record<number, Actividad> = {};
+    (customRaw || []).filter((r: any) => r.base_id != null).forEach((r: any) => {
+      baseOverrides[r.base_id] = {
+        id: r.base_id, categoria: r.categoria, actividad: r.actividad,
+        tipo: r.tipo, frecuencia: r.frecuencia,
+        frecuenciaDias: r.frecuencia_dias, descripcion: r.descripcion || '',
+      };
+    });
+    const actividadesBase = ACTIVIDADES_BASE.map(a => baseOverrides[a.id as number] ?? a);
+    const customPuras: Actividad[] = (customRaw || [])
+      .filter((r: any) => r.base_id == null)
+      .map((r: any) => ({
+        id: r.id, categoria: r.categoria, actividad: r.actividad,
+        tipo: r.tipo, frecuencia: r.frecuencia,
+        frecuenciaDias: r.frecuencia_dias, descripcion: r.descripcion || '',
+      }));
 
-    const todasActividades = [...ACTIVIDADES_BASE, ...customActividades];
+    const todasActividades = [...actividadesBase, ...customPuras];
     const actividadesManana = todasActividades.filter(act => ocurreMañana(act, manana));
 
     if (actividadesManana.length === 0) {
@@ -220,20 +234,43 @@ serve(async (req) => {
       );
     }
 
+    // ── Verificar toggle del admin ──────────────────────────────────────────
+    const { data: settingData } = await supabase
+      .from('maintenance_settings')
+      .select('value')
+      .eq('key', 'admin_notif_activo')
+      .single();
+    const adminNotifActivo: boolean = settingData?.value ?? true;
+
+    // ── Destinatarios con filtro de actividades ─────────────────────────────
     const { data: recipientsRaw = [] } = await supabase
       .from('maintenance_notification_recipients')
-      .select('email').eq('activo', true);
-
-    const extraRecipients: string[] = (recipientsRaw || []).map((r: any) => r.email);
-    const destinatarios = [...new Set([adminEmail, ...extraRecipients])].filter(Boolean);
-
-    const MESES = ['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
-    const subject = `Sistema RCMA: ${actividadesManana.length} mantenimiento(s) para manana ${manana.getDate()} de ${MESES[manana.getMonth()]}`;
-    const htmlContent = generarHTML(actividadesManana, manana, adminEmail);
+      .select('email, actividades_ids')
+      .eq('activo', true);
 
     let sent = 0;
-    for (const email of destinatarios) {
-      await sendEmail(email, subject, htmlContent);
+    const MESES = ['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
+    const subject = `Sistema RCMA: ${actividadesManana.length} mantenimiento(s) para manana ${manana.getDate()} de ${MESES[manana.getMonth()]}`;
+
+    // Enviar al admin solo si tiene el toggle activado
+    if (adminNotifActivo && adminEmail) {
+      const htmlContent = generarHTML(actividadesManana, manana, adminEmail);
+      await sendEmail(adminEmail, subject, htmlContent);
+      sent++;
+    }
+
+    // Enviar a cada destinatario respetando su filtro de actividades
+    for (const r of (recipientsRaw || []) as any[]) {
+      if (!r.email) continue;
+      // Si tiene filtro, enviar solo las actividades que le corresponden
+      const actividadesParaEste: Actividad[] = r.actividades_ids == null
+        ? actividadesManana
+        : actividadesManana.filter(act => (r.actividades_ids as number[]).includes(Number(act.id)));
+
+      if (actividadesParaEste.length === 0) continue;
+
+      const htmlContent = generarHTML(actividadesParaEste, manana, adminEmail);
+      await sendEmail(r.email, subject, htmlContent);
       sent++;
     }
 
