@@ -456,6 +456,7 @@ export default function Accesos() {
                         <select className={`${inputClass} pl-10 bg-white`} disabled={!inviteTerritorio}
                           value={inviteColegio} onChange={e => setInviteColegio(e.target.value)}>
                           <option value="">{inviteTerritorio ? 'Seleccionar colegio...' : 'Primero selecciona territorio'}</option>
+                          {inviteTerritorio && <option value="ECO">── ECO (cubre varios colegios) ──</option>}
                           {inviteTerritorio && getColegiosByTerritorio(inviteTerritorio).map(c => <option key={c} value={c}>{c}</option>)}
                         </select>
                       </div>
@@ -539,6 +540,7 @@ export default function Accesos() {
                         value={editingUser.colegio}
                         onChange={e => setEditingUser(prev => prev ? { ...prev, colegio: e.target.value } : null)}>
                         <option value="">{editingUser.territorio ? 'Seleccionar colegio...' : 'Primero selecciona territorio'}</option>
+                        {editingUser.territorio && <option value="ECO">── ECO (cubre varios colegios) ──</option>}
                         {editingUser.territorio && getColegiosByTerritorio(editingUser.territorio).map(c => <option key={c} value={c}>{c}</option>)}
                       </select>
                     </div>
