@@ -84,7 +84,38 @@ serve(async (req) => {
   }
 
   try {
-    const { nombre, proyecto, centro, correoSolicitante, puesto, territorio, correoCAR } = await req.json();
+    const { nombre, proyecto, centro, correoSolicitante, puesto, territorio: territorioRecibido, correoCAR } = await req.json();
+
+    // ── Mapa de territorio como respaldo server-side ──────────────────────────
+    // Si el frontend no pudo determinar el territorio, lo calculamos aquí
+    const COLEGIO_TERRITORIO: Record<string, string> = {
+      'Mano Amiga Acapulco':          'MEXICO',
+      'Mano Amiga Aguascalientes':     'NORTE',
+      'Mano Amiga Cancún':             'MEXICO',
+      'Mano Amiga Chalco':             'MEXICO',
+      'Mano Amiga La Cima':            'NORTE',
+      'Mano Amiga Conkal':             'MEXICO',
+      'Mano Amiga Guadalajara':        'NORTE',
+      'Mano Amiga León':               'NORTE',
+      'Mano Amiga Lerma':              'MEXICO',
+      'Mano Amiga Morelia':            'MEXICO',
+      'Mano Amiga Monterrey':          'NORTE',
+      'Mano Amiga Piedras Negras':     'NORTE',
+      'Mano Amiga Puebla':             'MEXICO',
+      'Mano Amiga Querétaro':          'MEXICO',
+      'Mano Amiga Santa Catarina':     'NORTE',
+      'Mano Amiga Tapachula':          'MEXICO',
+      'Mano Amiga Tijuana':            'NORTE',
+      'Mano Amiga Torreón':            'NORTE',
+      'Mano Amiga Villas de San Juan': 'NORTE',
+      'Mano Amiga Zomeyucan':          'MEXICO',
+      'FIA': 'FMA', 'FMA': 'FMA', 'AUN': 'FMA',
+    };
+
+    // Usar el territorio recibido; si viene vacío, determinarlo del centro
+    const territorio = (territorioRecibido && territorioRecibido !== '')
+      ? territorioRecibido
+      : (COLEGIO_TERRITORIO[centro] ?? '—');
 
     const adminEmail = Deno.env.get('ADMIN_EMAIL') ?? '';
     const smtpUser   = Deno.env.get('SMTP_USER')   ?? '';
