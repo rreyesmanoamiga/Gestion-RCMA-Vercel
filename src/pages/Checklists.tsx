@@ -56,33 +56,36 @@ interface ChecklistRecord {
 // ─────────────────────────────────────────────────────────────────────────────
 // TAB 2 — MÍNIMOS INDISPENSABLES
 // ─────────────────────────────────────────────────────────────────────────────
+// P1 = Crítico (riesgo inmediato — debe cumplir al 100%)
+// P2 = Urgente  (normativo/salud — tolerancia máx. 20% incumplimiento)
+// P3 = Importante (calidad operativa)
 const SECCIONES_MINIMOS = [
   {
     id: 'construccion', titulo: '01 · Construcción y Espacios',
     colorHex: '#1A4B8C', norma: 'NMX-R-021-SCFI-2013 · LGE Art. 98-101',
     items: [
-      { id: 'aulas_m2',        nombre: 'Aulas con superficie mínima reglamentaria (24–48 m² según alumnos)' },
-      { id: 'puertas_ancho',   nombre: 'Puertas de aula >= 0.90 m y salidas de emergencia >= 1.20 m' },
-      { id: 'pasillos',        nombre: 'Pasillos comunes entre aulas >= 1.20 m de ancho' },
-      { id: 'direccion',       nombre: 'Dirección, subdirección y área administrativa' },
-      { id: 'bodega',          nombre: 'Bodega, archivo y caseta de vigilancia' },
-      { id: 'sanitarios',      nombre: 'Sanitarios separados por género (1 WC + 1 lavabo c/30 alumnos)' },
-      { id: 'bebederos',       nombre: 'Bebederos de agua potable con sistema de purificación' },
-      { id: 'areas_dep',       nombre: 'Áreas deportivas y recreativas' },
-      { id: 'estacionamiento', nombre: 'Estacionamiento (mín. 1 cajón por cada 40 m² construidos)' },
+      { id: 'aulas_m2',        prioridad: 'P2', nombre: 'Aulas con superficie mínima reglamentaria (24–48 m² según alumnos)' },
+      { id: 'puertas_ancho',   prioridad: 'P1', nombre: 'Puertas de aula >= 0.90 m y salidas de emergencia >= 1.20 m' },
+      { id: 'pasillos',        prioridad: 'P1', nombre: 'Pasillos comunes entre aulas >= 1.20 m de ancho' },
+      { id: 'direccion',       prioridad: 'P3', nombre: 'Dirección, subdirección y área administrativa' },
+      { id: 'bodega',          prioridad: 'P3', nombre: 'Bodega, archivo y caseta de vigilancia' },
+      { id: 'sanitarios',      prioridad: 'P2', nombre: 'Sanitarios separados por género (1 WC + 1 lavabo c/30 alumnos)' },
+      { id: 'bebederos',       prioridad: 'P2', nombre: 'Bebederos de agua potable con sistema de purificación' },
+      { id: 'areas_dep',       prioridad: 'P3', nombre: 'Áreas deportivas y recreativas' },
+      { id: 'estacionamiento', prioridad: 'P3', nombre: 'Estacionamiento (mín. 1 cajón por cada 40 m² construidos)' },
     ],
   },
   {
     id: 'instalaciones', titulo: '02 · Instalaciones',
     colorHex: '#E07B2A', norma: 'NOM-001-SEDE-2005 · NMX-R-080-SCFI-2015',
     items: [
-      { id: 'tablero',          nombre: 'Tablero eléctrico general con protecciones diferenciales' },
-      { id: 'circuitos',        nombre: 'Circuitos separados por áreas (iluminación, contactos, cómputo)' },
-      { id: 'iluminacion',      nombre: 'Iluminación mínima 300 lux en aulas — alumbrado de emergencia en pasillos' },
-      { id: 'polo_tierra',      nombre: 'Polo a tierra certificado en toda la instalación eléctrica' },
-      { id: 'agua_red',         nombre: 'Red de agua potable con suministro garantizado (cisterna o tinaco)' },
-      { id: 'drenaje',          nombre: 'Red de drenaje sanitario conectada a colector o planta de tratamiento' },
-      { id: 'gas',              nombre: 'Instalación de gas certificada con válvulas de corte accesibles (si aplica)' },
+      { id: 'tablero',          prioridad: 'P1', nombre: 'Tablero eléctrico general con protecciones diferenciales' },
+      { id: 'circuitos',        prioridad: 'P1', nombre: 'Circuitos separados por áreas (iluminación, contactos, cómputo)' },
+      { id: 'iluminacion',      prioridad: 'P2', nombre: 'Iluminación mínima 300 lux en aulas — alumbrado de emergencia en pasillos' },
+      { id: 'polo_tierra',      prioridad: 'P1', nombre: 'Polo a tierra certificado en toda la instalación eléctrica' },
+      { id: 'agua_red',         prioridad: 'P1', nombre: 'Red de agua potable con suministro garantizado (cisterna o tinaco)' },
+      { id: 'drenaje',          prioridad: 'P2', nombre: 'Red de drenaje sanitario conectada a colector o planta de tratamiento' },
+      { id: 'gas',              prioridad: 'P1', nombre: 'Instalación de gas certificada con válvulas de corte accesibles (si aplica)' },
       { id: 'inst_elect_cert',  nombre: 'Revisión y certificación de instalación eléctrica' },
     ],
   },
@@ -90,47 +93,61 @@ const SECCIONES_MINIMOS = [
     id: 'accesibilidad', titulo: '03 · Accesibilidad e Inclusión',
     colorHex: '#0D8A7E', norma: 'NMX-R-090-SCFI-2016',
     items: [
-      { id: 'rampa_acceso',    nombre: 'Rampa en acceso principal con pendiente <= 8%' },
-      { id: 'sia',             nombre: 'Señalización internacional de accesibilidad (SIA)' },
-      { id: 'pasillos_libres', nombre: 'Pasillos internos libres de obstáculos >= 1.20 m' },
-      { id: 'sanitario_adapt', nombre: 'Al menos un baño adaptado por género con barras de apoyo' },
-      { id: 'senaletica',      nombre: 'Señalética en braille en puertas y avisos en pictogramas' },
-      { id: 'escalones',       nombre: 'Contraste visual en bordes de escalones y pasamanos en rampas' },
+      { id: 'rampa_acceso',    prioridad: 'P2', nombre: 'Rampa en acceso principal con pendiente <= 8%' },
+      { id: 'sia',             prioridad: 'P2', nombre: 'Señalización internacional de accesibilidad (SIA)' },
+      { id: 'pasillos_libres', prioridad: 'P1', nombre: 'Pasillos internos libres de obstáculos >= 1.20 m' },
+      { id: 'sanitario_adapt', prioridad: 'P2', nombre: 'Al menos un baño adaptado por género con barras de apoyo' },
+      { id: 'senaletica',      prioridad: 'P3', nombre: 'Señalética en braille en puertas y avisos en pictogramas' },
+      { id: 'escalones',       prioridad: 'P2', nombre: 'Contraste visual en bordes de escalones y pasamanos en rampas' },
     ],
   },
   {
     id: 'seguridad', titulo: '04 · Seguridad y Protección Civil',
     colorHex: '#C0392B', norma: 'NOM-002-STPS-2010 · LGE Art. 101',
     items: [
-      { id: 'const_pc',       nombre: 'Constancia de Protección Civil vigente (anual)' },
-      { id: 'pipc',           nombre: 'Programa Interno de Protección Civil (PIPC) actualizado' },
-      { id: 'seg_estr',       nombre: 'Constancia de Seguridad Estructural vigente (cada 5 años)' },
-      { id: 'poliza_rc',      nombre: 'Póliza de Responsabilidad Civil vigente' },
-      { id: 'extintores',     nombre: 'Extintores certificados y señalizados en cada área' },
-      { id: 'senal_emerg',    nombre: 'Señalización completa de salidas de emergencia y rutas de evacuación' },
-      { id: 'simulacros',     nombre: 'Registro de simulacros realizados (mín. 4 al año)' },
-      { id: 'brigadas',       nombre: 'Brigadas de protección civil integradas y capacitadas' },
+      { id: 'const_pc',       prioridad: 'P1', nombre: 'Constancia de Protección Civil vigente (anual)' },
+      { id: 'pipc',           prioridad: 'P1', nombre: 'Programa Interno de Protección Civil (PIPC) actualizado' },
+      { id: 'seg_estr',       prioridad: 'P1', nombre: 'Constancia de Seguridad Estructural vigente (cada 5 años)' },
+      { id: 'poliza_rc',      prioridad: 'P2', nombre: 'Póliza de Responsabilidad Civil vigente' },
+      { id: 'extintores',     prioridad: 'P1', nombre: 'Extintores certificados y señalizados en cada área' },
+      { id: 'senal_emerg',    prioridad: 'P1', nombre: 'Señalización completa de salidas de emergencia y rutas de evacuación' },
+      { id: 'simulacros',     prioridad: 'P2', nombre: 'Registro de simulacros realizados (mín. 4 al año)' },
+      { id: 'brigadas',       prioridad: 'P2', nombre: 'Brigadas de protección civil integradas y capacitadas' },
     ],
   },
   {
     id: 'mantenimiento', titulo: '05 · Mantenimiento Preventivo',
     colorHex: '#1A7A4A', norma: 'NMX-R-021-SCFI-2013',
     items: [
-      { id: 'cronograma',    nombre: 'Cronograma de mantenimiento preventivo activo y documentado' },
-      { id: 'bitacora',      nombre: 'Bitácora de mantenimiento al día con evidencias fotográficas' },
-      { id: 'cisterna_limp', nombre: 'Limpieza y desinfección de cisterna/tinaco al corriente' },
-      { id: 'fumigacion',    nombre: 'Control de plagas y fumigación preventiva vigente' },
-      { id: 'cert_extinct',  nombre: 'Revisión y recarga de extintores al corriente' },
+      { id: 'cronograma',    prioridad: 'P2', nombre: 'Cronograma de mantenimiento preventivo activo y documentado' },
+      { id: 'bitacora',      prioridad: 'P2', nombre: 'Bitácora de mantenimiento al día con evidencias fotográficas' },
+      { id: 'cisterna_limp', prioridad: 'P1', nombre: 'Limpieza y desinfección de cisterna/tinaco al corriente' },
+      { id: 'fumigacion',    prioridad: 'P2', nombre: 'Control de plagas y fumigación preventiva vigente' },
+      { id: 'cert_extinct',  prioridad: 'P1', nombre: 'Revisión y recarga de extintores al corriente' },
     ],
   },
 ];
 
 type EstadoItem = 'cumple' | 'no_cumple' | 'en_proceso' | 'na';
 
+type Prioridad = 'P1' | 'P2' | 'P3';
+
 interface ItemEval {
   id: string; seccion: string; nombre: string;
+  prioridad: Prioridad;
   estado: EstadoItem; observacion: string;
 }
+
+// Mapa de prioridades para acceso rápido
+const ITEM_PRIORIDAD: Record<string, Prioridad> = Object.fromEntries(
+  SECCIONES_MINIMOS.flatMap(s => s.items.map(it => [it.id, it.prioridad as Prioridad]))
+);
+
+const PRIORIDAD_CFG: Record<Prioridad, { label: string; badge: string; rec: string }> = {
+  P1: { label: 'Crítico',    badge: 'bg-red-100 text-red-800 border border-red-200',    rec: 'Atención inmediata — riesgo físico o de clausura' },
+  P2: { label: 'Urgente',    badge: 'bg-amber-100 text-amber-800 border border-amber-200', rec: 'Resolver en menos de 30 días' },
+  P3: { label: 'Importante', badge: 'bg-blue-100 text-blue-800 border border-blue-200', rec: 'Programar en próximo ciclo de mantenimiento' },
+};
 
 interface EvalMinimos {
   id: string; colegio: string; territorio: string; inspector: string;
@@ -152,14 +169,119 @@ const RESULTADO_CFG = {
 };
 
 function calcResultado(items: ItemEval[]): EvalMinimos['resultado'] {
-  if (items.some(i => i.estado === 'no_cumple')) return 'incompleto';
-  if (items.some(i => i.estado === 'en_proceso')) return 'en_proceso';
+  const p1NoCumple = items.filter(i => i.prioridad === 'P1' && i.estado === 'no_cumple');
+  if (p1NoCumple.length > 0) return 'incompleto'; // cualquier P1 fallido = no cumple
+
+  const p2Total   = items.filter(i => i.prioridad === 'P2' && i.estado !== 'na');
+  const p2NoCumple = items.filter(i => i.prioridad === 'P2' && i.estado === 'no_cumple');
+  if (p2Total.length > 0 && p2NoCumple.length / p2Total.length > 0.20) return 'incompleto';
+
+  if (items.some(i => i.estado === 'no_cumple' || i.estado === 'en_proceso')) return 'en_proceso';
   return 'completo';
+}
+
+function generarRecomendaciones(items: ItemEval[]): {
+  cumple: boolean;
+  enProceso: boolean;
+  criticos: ItemEval[];
+  urgentes: ItemEval[];
+  importantes: ItemEval[];
+  pctP1: number; pctP2: number; pctGeneral: number;
+} {
+  const resultado = calcResultado(items);
+  const activos   = items.filter(i => i.estado !== 'na');
+  const cumpleN   = items.filter(i => i.estado === 'cumple').length;
+  const totalN    = activos.length;
+
+  const p1 = items.filter(i => i.prioridad === 'P1' && i.estado !== 'na');
+  const p2 = items.filter(i => i.prioridad === 'P2' && i.estado !== 'na');
+
+  return {
+    cumple:      resultado === 'completo',
+    enProceso:   resultado === 'en_proceso',
+    criticos:    items.filter(i => i.prioridad === 'P1' && i.estado === 'no_cumple'),
+    urgentes:    items.filter(i => i.prioridad === 'P2' && i.estado === 'no_cumple'),
+    importantes: items.filter(i => i.prioridad === 'P3' && i.estado === 'no_cumple'),
+    pctP1:    p1.length > 0 ? Math.round(p1.filter(i => i.estado === 'cumple').length / p1.length * 100) : 100,
+    pctP2:    p2.length > 0 ? Math.round(p2.filter(i => i.estado === 'cumple').length / p2.length * 100) : 100,
+    pctGeneral: totalN > 0 ? Math.round(cumpleN / totalN * 100) : 0,
+  };
 }
 
 function initItems(): ItemEval[] {
   return SECCIONES_MINIMOS.flatMap(s =>
-    s.items.map(it => ({ id: it.id, seccion: s.id, nombre: it.nombre, estado: 'na' as EstadoItem, observacion: '' }))
+    s.items.map(it => ({
+      id: it.id, seccion: s.id, nombre: it.nombre,
+      prioridad: it.prioridad as Prioridad,
+      estado: 'na' as EstadoItem, observacion: '',
+    }))
+  );
+}
+
+// ─── Panel de Recomendaciones ────────────────────────────────────────────────
+function PanelRecomendaciones({ items }: { items: ItemEval[] }) {
+  const rec = generarRecomendaciones(items);
+  const secNombre: Record<string, string> = {
+    construccion: '01 · Construcción y Espacios',
+    instalaciones: '02 · Instalaciones',
+    accesibilidad: '03 · Accesibilidad',
+    seguridad: '04 · Seguridad y Protección Civil',
+    mantenimiento: '05 · Mantenimiento Preventivo',
+  };
+
+  const pendientes = [...rec.criticos, ...rec.urgentes, ...rec.importantes];
+  if (pendientes.length === 0 && !rec.enProceso) return null;
+
+  return (
+    <div className="mt-4 rounded-xl border overflow-hidden" style={{ borderColor: rec.cumple ? '#d1fae5' : rec.enProceso ? '#fde68a' : '#fecaca' }}>
+      {/* Veredicto */}
+      <div className={`px-5 py-4 flex items-center gap-3 ${rec.cumple ? 'bg-green-50' : rec.enProceso ? 'bg-amber-50' : 'bg-red-50'}`}>
+        <div className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 text-lg font-black ${rec.cumple ? 'bg-green-100 text-green-700' : rec.enProceso ? 'bg-amber-100 text-amber-700' : 'bg-red-100 text-red-700'}`}>
+          {rec.cumple ? '✓' : rec.enProceso ? '~' : '✗'}
+        </div>
+        <div className="flex-1">
+          <p className={`font-black text-sm ${rec.cumple ? 'text-green-800' : rec.enProceso ? 'text-amber-800' : 'text-red-800'}`}>
+            {rec.cumple
+              ? 'Cumple con los mínimos indispensables'
+              : rec.enProceso
+              ? 'En proceso — algunos ítems pendientes de atención'
+              : 'No cumple con los mínimos indispensables'}
+          </p>
+          <p className={`text-xs mt-0.5 ${rec.cumple ? 'text-green-600' : rec.enProceso ? 'text-amber-600' : 'text-red-600'}`}>
+            Cumplimiento general: {rec.pctGeneral}% · Críticos: {rec.pctP1}% · Urgentes: {rec.pctP2}%
+          </p>
+        </div>
+      </div>
+
+      {/* Ítems pendientes por prioridad */}
+      {pendientes.length > 0 && (
+        <div className="bg-white divide-y divide-slate-100">
+          <div className="px-5 py-2.5 bg-slate-50">
+            <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">Partidas a atender — ordenadas por prioridad</p>
+          </div>
+          {pendientes.map((item, i) => {
+            const pcfg = PRIORIDAD_CFG[item.prioridad];
+            const sec  = secNombre[item.seccion] ?? item.seccion;
+            return (
+              <div key={item.id} className="px-5 py-3 flex items-start gap-3">
+                <span className="text-xs font-bold text-slate-400 mt-0.5 w-4 shrink-0">{i + 1}</span>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap mb-0.5">
+                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${pcfg.badge}`}>{pcfg.label}</span>
+                    <span className="text-[10px] text-slate-400">{sec}</span>
+                  </div>
+                  <p className="text-sm font-semibold text-slate-800 leading-snug">{item.nombre}</p>
+                  <p className="text-xs text-slate-500 mt-0.5">{pcfg.rec}</p>
+                  {item.observacion && (
+                    <p className="text-xs text-slate-500 mt-1 italic">Obs: {item.observacion}</p>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -642,11 +764,9 @@ async function generarReporteGeneral(evaluaciones: EvalMinimos[]) {
 export default function Checklists() {
   const navigate     = useNavigate();
   const qc           = useQueryClient();
-  const { isAdmin, can } = usePermissions();
+  const { isAdmin }  = usePermissions();
 
-  // ECO solo tiene llenar_minimos — los lleva directo a esa pestaña
-  const soloMinimos = !isAdmin && can('llenar_minimos') && !can('ver_checklists');
-  const [activeTab, setActiveTab] = useState<'inspecciones' | 'minimos'>(soloMinimos ? 'minimos' : 'inspecciones');
+  const [activeTab, setActiveTab] = useState<'inspecciones' | 'minimos'>('inspecciones');
 
   // ── Tab 1: Inspecciones ───────────────────────────────────────────────────
   const [search,     setSearch]     = useState('');
@@ -770,16 +890,14 @@ export default function Checklists() {
 
       {/* Tabs */}
       <div className="flex gap-1 mt-5 mb-6 bg-slate-100 rounded-lg p-1 w-fit">
-        {!soloMinimos && (
-          <button
-            onClick={() => setActiveTab('inspecciones')}
-            className={`flex items-center gap-2 px-4 py-2 rounded-md text-sm font-semibold transition-all ${activeTab === 'inspecciones' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>
-            <ClipboardCheck className="w-4 h-4" /> Inspecciones
-            <span className={`text-xs px-1.5 py-0.5 rounded-full font-bold ${activeTab === 'inspecciones' ? 'bg-slate-900 text-white' : 'bg-slate-200 text-slate-500'}`}>
-              {checklists.length}
-            </span>
-          </button>
-        )}
+        <button
+          onClick={() => setActiveTab('inspecciones')}
+          className={`flex items-center gap-2 px-4 py-2 rounded-md text-sm font-semibold transition-all ${activeTab === 'inspecciones' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>
+          <ClipboardCheck className="w-4 h-4" /> Inspecciones
+          <span className={`text-xs px-1.5 py-0.5 rounded-full font-bold ${activeTab === 'inspecciones' ? 'bg-slate-900 text-white' : 'bg-slate-200 text-slate-500'}`}>
+            {checklists.length}
+          </span>
+        </button>
         <button
           onClick={() => setActiveTab('minimos')}
           className={`flex items-center gap-2 px-4 py-2 rounded-md text-sm font-semibold transition-all ${activeTab === 'minimos' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>
@@ -989,6 +1107,13 @@ export default function Checklists() {
                             <p className="text-xs text-amber-800">{ev.notas}</p>
                           </div>
                         )}
+                        {/* Panel de recomendaciones */}
+                        {ev.items && (
+                          <PanelRecomendaciones items={ev.items.map(i => ({
+                            ...i,
+                            prioridad: (ITEM_PRIORIDAD[i.id] ?? 'P3') as Prioridad,
+                          }))} />
+                        )}
                       </div>
                     )}
                   </div>
@@ -1072,6 +1197,10 @@ export default function Checklists() {
                       </div>
                     </div>
                   ))}
+                </div>
+                {/* Panel de recomendaciones en vivo */}
+                <div className="px-5 pb-3">
+                  <PanelRecomendaciones items={formItems} />
                 </div>
                 <div className="p-5 border-t border-slate-100 bg-slate-50 flex justify-end gap-3 sticky bottom-0">
                   <button onClick={() => setShowForm(false)} className="px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-200 rounded-md">Cancelar</button>
