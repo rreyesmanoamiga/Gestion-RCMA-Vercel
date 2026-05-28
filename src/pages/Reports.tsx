@@ -173,9 +173,10 @@ async function loadJsPDF(): Promise<typeof import('jspdf').jsPDF> {
 }
 
 // ─── Export PDF mejorado ──────────────────────────────────────────────────────
-async function exportResumenPDF({ stats, projects, checklists, solicitudes, tickets, pendientes }: {
+async function exportResumenPDF({ stats, projects, checklists, solicitudes, tickets, pendientes, ticketsMas, minimos, anteproyectos, solicitudesAll }: {
   stats: Stats; projects: Project[]; checklists: unknown[];
   solicitudes: Solicitud[]; tickets: Ticket[]; pendientes: Pendiente[];
+  ticketsMas: any[]; minimos: any[]; anteproyectos: any[]; solicitudesAll: any[];
 }): Promise<void> {
   const JsPDF = await loadJsPDF();
   const doc = new JsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
@@ -217,26 +218,44 @@ async function exportResumenPDF({ stats, projects, checklists, solicitudes, tick
   const completed = projects.filter(p => p.status === 'completado');
   const budgetProj = projects.reduce((s, p) => s + (p.budget ?? 0), 0);
   const budgetTick = tickets.reduce((s, t) => s + (t.presupuesto ?? 0), 0);
+  const budgetAnte = anteproyectos.reduce((s: number, a: any) => s + ((a.presupuesto as number) ?? 0), 0);
   const avgA = active.length > 0 ? Math.round(active.reduce((a, p) => a + (p.progress ?? 0), 0) / active.length) : 0;
 
+  // KPIs fila 1
   y = drawKPIBoxes(doc, 20, y, W, [
-    { label: 'Proyectos Activos',  value: String(active.length),    color: [59, 130, 246] },
-    { label: 'Completados',        value: String(completed.length), color: [34, 197, 94]  },
-    { label: 'Avance Promedio',    value: avgA + '%',               color: [99, 102, 241] },
-    { label: 'Tickets TCMM',       value: String(tickets.length),   color: [239, 68,  68] },
-    { label: 'Pendientes',         value: String(pendientes.length),color: [245, 158, 11] },
-    { label: 'Inspecciones',       value: String(checklists.length),color: [20,  184, 166] },
+    { label: 'Proyectos Activos',  value: String(active.length),       color: [59, 130, 246] },
+    { label: 'Completados',        value: String(completed.length),    color: [34, 197, 94]  },
+    { label: 'Avance Promedio',    value: avgA + '%',                  color: [99, 102, 241] },
+    { label: 'Tickets TCMM',       value: String(tickets.length),      color: [239, 68,  68] },
+    { label: 'Pendientes',         value: String(pendientes.length),   color: [245, 158, 11] },
+    { label: 'Inspecciones',       value: String(checklists.length),   color: [20,  184, 166] },
+  ]);
+  y += 4;
+
+  // KPIs fila 2 — nuevos módulos
+  const tmasPend   = ticketsMas.filter((t: any) => t.estatus === 'pendiente' || t.estatus === 'en_revision').length;
+  const tmasAut    = ticketsMas.filter((t: any) => t.estatus === 'autorizado').length;
+  const minCumple  = minimos.filter((m: any) => m.resultado === 'completo').length;
+  const pctMin     = minimos.length > 0 ? Math.round((minCumple / minimos.length) * 100) : 0;
+  y = drawKPIBoxes(doc, 20, y, W, [
+    { label: 'Ticket MAS Pendientes', value: String(tmasPend),             color: [13, 138, 126] },
+    { label: 'Ticket MAS Autorizado', value: String(tmasAut),             color: [22, 163, 74]  },
+    { label: '% Mínimos Cumplen',     value: pctMin + '%',                color: pctMin >= 80 ? [22,163,74] : pctMin >= 50 ? [202,138,4] : [220,38,38] },
+    { label: 'Anteproyectos',         value: String(anteproyectos.length), color: [99, 102, 241] },
+    { label: 'Solicitudes',           value: String(solicitudesAll.length),color: [168, 85, 247] },
+    { label: 'Urgentes',              value: String(projects.filter(p => p.priority === 'urgente' && p.status !== 'completado').length), color: [220, 38, 38] },
   ]);
   y += 4;
 
   // Resumen financiero
   doc.setFontSize(9); doc.setFont('helvetica', 'bold'); doc.setTextColor(30, 30, 30);
   doc.text('Resumen Financiero', 20, y); y += 5;
-  const fw = (W - 40 - 8) / 3;
+  const fw = (W - 40 - 12) / 4;
   [
-    { label: 'Presupuesto Proyectos', value: fmtMXN(budgetProj), color: [59, 130, 246] as [number,number,number] },
-    { label: 'Presupuesto Tickets',   value: fmtMXN(budgetTick), color: [239, 68, 68]  as [number,number,number] },
-    { label: 'Total General',         value: fmtMXN(budgetProj + budgetTick), color: [15, 23, 42] as [number,number,number] },
+    { label: 'Presupuesto Proyectos',  value: fmtMXN(budgetProj),                    color: [59, 130, 246]  as [number,number,number] },
+    { label: 'Presupuesto Tickets',    value: fmtMXN(budgetTick),                    color: [239, 68, 68]   as [number,number,number] },
+    { label: 'Presupuesto Anteproyectos', value: fmtMXN(budgetAnte),                color: [99, 102, 241]  as [number,number,number] },
+    { label: 'Total General',          value: fmtMXN(budgetProj + budgetTick + budgetAnte), color: [15, 23, 42] as [number,number,number] },
   ].forEach((box, i) => {
     const bx = 20 + i * (fw + 4);
     doc.setFillColor(...box.color); doc.rect(bx, y, fw, 18, 'F');
@@ -245,6 +264,26 @@ async function exportResumenPDF({ stats, projects, checklists, solicitudes, tick
     doc.setFontSize(8.5); doc.text(box.value, bx + fw / 2, y + 14, { align: 'center' });
   });
   y += 26;
+
+  // Desglose territorial
+  if (y > 220) { doc.addPage(); y = 20; }
+  doc.setFontSize(9); doc.setFont('helvetica', 'bold'); doc.setTextColor(30, 30, 30);
+  doc.text('Estado por Territorio', 20, y); y += 5;
+  const tRows = ['NORTE', 'MEXICO', 'FMA'].map(ter => {
+    const tp = projects.filter(p => p.territorio === ter);
+    const tt = tickets.filter((t: any) => t.territorio === ter);
+    const tm = ticketsMas.filter((t: any) => t.territorio === ter);
+    const tact = tp.filter(p => p.status !== 'completado' && p.status !== 'cancelado').length;
+    return [ter, String(tp.length), String(tact), String(tt.length), String(tm.length)];
+  });
+  y = drawTable(doc, y, W, [
+    { label: 'Territorio',      x: 20  },
+    { label: 'Total Proyectos', x: 70  },
+    { label: 'Activos',         x: 115 },
+    { label: 'Tickets TCMM',   x: 145 },
+    { label: 'Ticket MAS',     x: 178 },
+  ], tRows, 10);
+  y += 6;
 
   // ─── SECCIÓN 2: Distribución de Proyectos ─────────────────────────────────
   section('2. Distribución de Proyectos');
@@ -328,9 +367,161 @@ async function exportResumenPDF({ stats, projects, checklists, solicitudes, tick
   ], ticketRows, 35);
   y += 2;
 
-  // ─── SECCIÓN 5: Proyectos Activos ─────────────────────────────────────────
+  // ─── SECCIÓN 5: Ticket MAS ────────────────────────────────────────────────
   if (y > 220) { doc.addPage(); y = 20; }
-  section('5. Detalle Proyectos Activos');
+  section('5. Ticket MAS');
+
+  const tmasTotal = ticketsMas.length;
+  const tmasPendiente  = ticketsMas.filter((t: any) => t.estatus === 'pendiente').length;
+  const tmasRevision   = ticketsMas.filter((t: any) => t.estatus === 'en_revision').length;
+  const tmasAutorizado = ticketsMas.filter((t: any) => t.estatus === 'autorizado').length;
+  const tmasCancelado  = ticketsMas.filter((t: any) => t.estatus === 'cancelado').length;
+
+  y = drawKPIBoxes(doc, 20, y, W, [
+    { label: 'Total Tickets MAS', value: String(tmasTotal),      color: [15, 23, 42]   },
+    { label: 'Pendientes',        value: String(tmasPendiente),  color: [245, 158, 11] },
+    { label: 'En Revisión',       value: String(tmasRevision),   color: [6, 182, 212]  },
+    { label: 'Autorizados',       value: String(tmasAutorizado), color: [22, 163, 74]  },
+    { label: 'Cancelados',        value: String(tmasCancelado),  color: [239, 68, 68]  },
+  ]);
+  y += 4;
+
+  if (ticketsMas.length > 0) {
+    const tmasRows = ticketsMas.slice(0, 30).map((t: any) => [
+      t.folio ?? '—',
+      t.colegio ?? '—',
+      t.clasificacion ?? '—',
+      t.territorio ?? '—',
+      t.estatus === 'autorizado' ? 'Autorizado' : t.estatus === 'pendiente' ? 'Pendiente' : t.estatus === 'en_revision' ? 'En Revisión' : t.estatus === 'cancelado' ? 'Cancelado' : (t.estatus ?? '—'),
+      t.created_at ? new Date(t.created_at).toLocaleDateString('es-MX') : '—',
+    ]);
+    y = drawTable(doc, y, W, [
+      { label: 'Folio',          x: 20  },
+      { label: 'Colegio',        x: 55  },
+      { label: 'Clasificación',  x: 90  },
+      { label: 'Territorio',     x: 140 },
+      { label: 'Estatus',        x: 165 },
+      { label: 'Fecha',          x: 188 },
+    ], tmasRows, 30);
+  } else {
+    doc.setFontSize(9); doc.setFont('helvetica', 'normal'); doc.setTextColor(150, 150, 150);
+    doc.text('Sin Tickets MAS registrados.', 20, y); y += 10;
+  }
+  y += 4;
+
+  // ─── SECCIÓN 6: Mínimos Indispensables ───────────────────────────────────
+  if (y > 220) { doc.addPage(); y = 20; }
+  section('6. Mínimos Indispensables');
+
+  const minTotal   = minimos.length;
+  const minCumpleN = minimos.filter((m: any) => m.resultado === 'completo').length;
+  const minNoCumpl = minimos.filter((m: any) => m.resultado === 'incompleto').length;
+  const minEnProc  = minimos.filter((m: any) => m.resultado === 'en_proceso').length;
+  const pctMinG    = minTotal > 0 ? Math.round((minCumpleN / minTotal) * 100) : 0;
+
+  y = drawKPIBoxes(doc, 20, y, W, [
+    { label: 'Evaluados',    value: String(minTotal),   color: [15, 23, 42]   },
+    { label: 'Sí Cumplen',   value: String(minCumpleN), color: [22, 163, 74]  },
+    { label: 'No Cumplen',   value: String(minNoCumpl), color: [220, 38, 38]  },
+    { label: 'En Proceso',   value: String(minEnProc),  color: [202, 138, 4]  },
+    { label: '% Cumplimiento', value: pctMinG + '%',   color: pctMinG >= 80 ? [22,163,74] : pctMinG >= 50 ? [202,138,4] : [220,38,38] },
+  ]);
+  y += 4;
+
+  // Barra de progreso
+  doc.setFillColor(226, 232, 240); doc.roundedRect(20, y, W - 40, 10, 2, 2, 'F');
+  const barColor: [number,number,number] = pctMinG >= 80 ? [22,163,74] : pctMinG >= 50 ? [202,138,4] : [220,38,38];
+  doc.setFillColor(...barColor); doc.roundedRect(20, y, Math.max(((W - 40) * pctMinG) / 100, 4), 10, 2, 2, 'F');
+  doc.setFontSize(7.5); doc.setFont('helvetica', 'bold'); doc.setTextColor(255, 255, 255);
+  if (pctMinG > 8) doc.text(pctMinG + '% de los colegios evaluados cumplen con los mínimos', 24, y + 7);
+  y += 16;
+
+  if (minimos.length > 0) {
+    const ITEM_PRIO_PDF: Record<string, string> = {
+      puertas_ancho:'P1',pasillos:'P1',tablero:'P1',circuitos:'P1',polo_tierra:'P1',agua_red:'P1',gas:'P1',pasillos_libres:'P1',const_pc:'P1',pipc:'P1',seg_estr:'P1',extintores:'P1',senal_emerg:'P1',cisterna_limp:'P1',cert_extinct:'P1',
+    };
+    const minRows = minimos.slice(0, 30).map((m: any) => {
+      const items: any[] = Array.isArray(m.items) ? m.items : [];
+      const p1nc = items.filter((i: any) => (ITEM_PRIO_PDF[i.id] ?? 'P2') === 'P1' && i.estado === 'no_cumple').length;
+      const activos = items.filter((i: any) => i.estado !== 'na').length;
+      const cumpleN = items.filter((i: any) => i.estado === 'cumple').length;
+      const pct = activos > 0 ? Math.round((cumpleN / activos) * 100) : 0;
+      const res = m.resultado === 'completo' ? 'Sí Cumple' : m.resultado === 'incompleto' ? 'No Cumple' : 'En Proceso';
+      return [m.colegio ?? '—', m.territorio ?? '—', res, pct + '%', String(p1nc), m.fecha ?? '—'];
+    });
+    y = drawTable(doc, y, W, [
+      { label: 'Colegio',             x: 20  },
+      { label: 'Territorio',          x: 75  },
+      { label: 'Resultado',           x: 108 },
+      { label: '% Cumplimiento',      x: 140 },
+      { label: 'Críticos Pendientes', x: 165 },
+      { label: 'Fecha',               x: 188 },
+    ], minRows, 30);
+  } else {
+    doc.setFontSize(9); doc.setFont('helvetica', 'normal'); doc.setTextColor(150, 150, 150);
+    doc.text('Sin evaluaciones de Mínimos Indispensables registradas.', 20, y); y += 10;
+  }
+  y += 4;
+
+  // ─── SECCIÓN 7: Anteproyectos y Solicitudes ───────────────────────────────
+  if (y > 220) { doc.addPage(); y = 20; }
+  section('7. Anteproyectos y Solicitudes');
+
+  // Sub-header anteproyectos
+  doc.setFontSize(9); doc.setFont('helvetica', 'bold'); doc.setTextColor(99, 102, 241);
+  doc.text('Anteproyectos (' + anteproyectos.length + ')', 20, y); y += 4;
+  doc.setDrawColor(199, 200, 246); doc.line(20, y, W - 20, y); y += 5;
+
+  if (anteproyectos.length > 0) {
+    const anteRows = anteproyectos.slice(0, 25).map((a: any) => [
+      a.territorio ?? '—', a.colegio ?? '—', a.nombre_proyecto ?? '—',
+      a.tipo_proyecto ?? '—', a.estatus ?? '—',
+      a.presupuesto != null ? fmtMXN(a.presupuesto as number) : '—',
+    ]);
+    y = drawTable(doc, y, W, [
+      { label: 'Territorio', x: 20  },
+      { label: 'Colegio',    x: 50  },
+      { label: 'Proyecto',   x: 80  },
+      { label: 'Tipo',       x: 134 },
+      { label: 'Estatus',    x: 158 },
+      { label: 'Presupuesto',x: 182, align: 'right' },
+    ], anteRows, 25);
+  } else {
+    doc.setFontSize(9); doc.setFont('helvetica', 'normal'); doc.setTextColor(150, 150, 150);
+    doc.text('Sin anteproyectos registrados.', 20, y); y += 8;
+  }
+  y += 6;
+
+  // Sub-header solicitudes
+  if (y > 230) { doc.addPage(); y = 20; }
+  doc.setFontSize(9); doc.setFont('helvetica', 'bold'); doc.setTextColor(168, 85, 247);
+  doc.text('Solicitudes de Proyecto (' + solicitudesAll.length + ')', 20, y); y += 4;
+  doc.setDrawColor(216, 180, 254); doc.line(20, y, W - 20, y); y += 5;
+
+  if (solicitudesAll.length > 0) {
+    const solRows = solicitudesAll.slice(0, 25).map((s: any) => [
+      s.nombre_centro ?? '—', s.nombre_proyecto ?? '—',
+      s.nombre_solicitante ?? '—', s.tipo_iniciativa ?? '—',
+      s.estatus ?? '—',
+      s.created_at ? new Date(s.created_at).toLocaleDateString('es-MX') : '—',
+    ]);
+    y = drawTable(doc, y, W, [
+      { label: 'Centro',      x: 20  },
+      { label: 'Proyecto',    x: 60  },
+      { label: 'Solicitante', x: 108 },
+      { label: 'Tipo',        x: 142 },
+      { label: 'Estatus',     x: 162 },
+      { label: 'Fecha',       x: 188 },
+    ], solRows, 25);
+  } else {
+    doc.setFontSize(9); doc.setFont('helvetica', 'normal'); doc.setTextColor(150, 150, 150);
+    doc.text('Sin solicitudes registradas.', 20, y); y += 8;
+  }
+  y += 4;
+
+  // ─── SECCIÓN 8: Proyectos Activos ─────────────────────────────────────────
+  if (y > 220) { doc.addPage(); y = 20; }
+  section('8. Detalle Proyectos Activos');
 
   // Barra de avance promedio visual
   doc.setFontSize(8); doc.setFont('helvetica', 'bold'); doc.setTextColor(30, 30, 30);
@@ -362,7 +553,7 @@ async function exportResumenPDF({ stats, projects, checklists, solicitudes, tick
   // ─── SECCIÓN 6: Proyectos Completados ─────────────────────────────────────
   if (completed.length > 0) {
     if (y > 220) { doc.addPage(); y = 20; }
-    section('6. Proyectos Completados');
+    section('9. Proyectos Completados');
     const completedRows = completed.map(p => [
       p.folio ?? '—',
       p.name ?? '—',
@@ -383,7 +574,7 @@ async function exportResumenPDF({ stats, projects, checklists, solicitudes, tick
   // ─── SECCIÓN 7: Pendientes ────────────────────────────────────────────────
   if (pendientes.length > 0) {
     if (y > 220) { doc.addPage(); y = 20; }
-    section('7. Pendientes');
+    section('10. Pendientes');
 
     const pendStatuses = ['pendiente', 'en_proceso', 'completado'];
     const pendByStatus = pendStatuses.map(k => ({
@@ -685,6 +876,11 @@ export default function Reports() {
     queryFn: async () => { const { data, error } = await supabase.from('solicitudes').select('*').order('created_at', { ascending: false }).limit(500); if (error) throw error; return data ?? []; },
   });
 
+  const { data: rawTicketsMas = [] } = useQuery({
+    queryKey: ['tickets_mas_pdf_report'],
+    queryFn: async () => { const { data, error } = await supabase.from('tickets_mas').select('*').order('created_at', { ascending: false }).limit(500); if (error) throw error; return data ?? []; },
+  });
+
   const projects    = rawProjects    as unknown as Project[];
   const checklists  = rawChecklists  as unknown[];
   const solicitudes = rawSolicitudes as unknown as Solicitud[];
@@ -707,6 +903,10 @@ export default function Reports() {
   const handleExportPDF = () => exportResumenPDF({
     stats, projects, checklists, solicitudes, tickets: rawTicketsFull as unknown as Ticket[],
     pendientes,
+    ticketsMas:    rawTicketsMas    as any[],
+    minimos:       rawMinimos       as any[],
+    anteproyectos: rawAnteproyectos as any[],
+    solicitudesAll: rawSolicitudesAll as any[],
   }).catch(e => console.error('Error generando PDF:', e));
 
   const handleExportExcel = () => exportMatrizExcel({
