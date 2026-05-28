@@ -436,6 +436,215 @@ async function generarPDFMinimos(ev: EvalMinimos) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// PDF REPORTE POR COLEGIO — con veredicto y recomendaciones
+// ─────────────────────────────────────────────────────────────────────────────
+async function generarReporteColegio(ev: EvalMinimos) {
+  const JsPDF = await loadJsPDF();
+  const doc   = new JsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+  const W = 210, mL = 20, mR = 20, cW = W - mL - mR;
+  let y = 0;
+  const now = format(new Date(), "d 'de' MMMM 'de' yyyy", { locale: es });
+
+  // ── PORTADA ──────────────────────────────────────────────────────────────
+  doc.setFillColor(15, 23, 42); doc.rect(0, 0, W, 28, 'F');
+  doc.setFillColor(13, 138, 126); doc.rect(0, 0, 4, 28, 'F');
+  doc.setFontSize(13); doc.setFont('helvetica', 'bold'); doc.setTextColor(255, 255, 255);
+  doc.text('Reporte de Mínimos Indispensables por Colegio', mL, 12);
+  doc.setFontSize(9); doc.setFont('helvetica', 'normal'); doc.setTextColor(180, 180, 200);
+  doc.text('Coordinación de Obras y Mantenimientos · RCMA · Generado el ' + now, mL, 22);
+  try {
+    const logoImg = await new Promise<string>((res, rej) => {
+      const img = new Image(); img.crossOrigin = 'anonymous';
+      img.onload = () => { const cv = document.createElement('canvas'); cv.width = img.width; cv.height = img.height; cv.getContext('2d')!.drawImage(img, 0, 0); res(cv.toDataURL('image/png')); };
+      img.onerror = rej; img.src = '/logo.png';
+    });
+    doc.addImage(logoImg, 'PNG', W - 38, 2, 28, 24);
+  } catch { /* sin logo */ }
+  y = 36;
+
+  // ── VEREDICTO PROMINENTE ──────────────────────────────────────────────────
+  const itemsEv  = (ev.items ?? []) as ItemEval[];
+  const imap     = Object.fromEntries(SECCIONES_MINIMOS.flatMap(s => s.items.map(it => [it.id, it.prioridad])));
+  const withPrio = itemsEv.map(i => ({ ...i, prioridad: (imap[i.id] ?? 'P3') as Prioridad }));
+  const rec      = generarRecomendaciones(withPrio);
+
+  const verdictColor: [number,number,number] = rec.cumple ? [22,163,74] : rec.enProceso ? [202,138,4] : [220,38,38];
+  const verdictBg:    [number,number,number] = rec.cumple ? [240,253,244] : rec.enProceso ? [255,251,235] : [254,242,242];
+  const verdictText   = rec.cumple ? 'SÍ CUMPLE CON LOS MÍNIMOS INDISPENSABLES' :
+                        rec.enProceso ? 'EN PROCESO — REQUIERE ATENCIÓN EN ALGUNOS PUNTOS' :
+                        'NO CUMPLE CON LOS MÍNIMOS INDISPENSABLES';
+  const verdictIcon   = rec.cumple ? '✓' : rec.enProceso ? '~' : '✗';
+
+  doc.setFillColor(...verdictBg); doc.roundedRect(mL, y, cW, 22, 3, 3, 'F');
+  doc.setDrawColor(...verdictColor); doc.setLineWidth(0.8); doc.roundedRect(mL, y, cW, 22, 3, 3, 'D');
+  doc.setFontSize(18); doc.setFont('helvetica', 'bold'); doc.setTextColor(...verdictColor);
+  doc.text(verdictIcon, mL + 8, y + 14);
+  doc.setFontSize(11);
+  doc.text(verdictText, mL + 18, y + 14);
+  doc.setLineWidth(0.2);
+  y += 30;
+
+  // ── DATOS DEL COLEGIO ─────────────────────────────────────────────────────
+  doc.setFillColor(241, 245, 249); doc.roundedRect(mL, y - 4, cW, 22, 2, 2, 'F');
+  [
+    { label: 'COLEGIO',   val: ev.colegio ?? '—',   sub: ev.territorio ?? '' },
+    { label: 'INSPECTOR', val: ev.inspector || 'Sin asignar', sub: '' },
+    { label: 'FECHA',     val: ev.fecha ? format(new Date(ev.fecha + 'T12:00:00'), "d MMM yyyy", { locale: es }) : '—', sub: '' },
+  ].forEach((item, i) => {
+    const x = mL + i * (cW / 3) + 4;
+    doc.setFontSize(7); doc.setFont('helvetica', 'bold'); doc.setTextColor(100, 116, 139); doc.text(item.label, x, y + 2);
+    doc.setFontSize(10); doc.setFont('helvetica', 'bold'); doc.setTextColor(15, 23, 42); doc.text(item.val, x, y + 10);
+    if (item.sub) { doc.setFontSize(7); doc.setFont('helvetica', 'normal'); doc.setTextColor(148, 163, 184); doc.text(item.sub, x, y + 16); }
+  });
+  y += 28;
+
+  // ── INDICADORES DE CUMPLIMIENTO ───────────────────────────────────────────
+  doc.setFontSize(10); doc.setFont('helvetica', 'bold'); doc.setTextColor(15, 23, 42);
+  doc.text('Indicadores de Cumplimiento', mL, y); y += 4;
+  doc.setDrawColor(220,220,220); doc.line(mL, y, W - mR, y); y += 6;
+
+  const kpiW3 = (cW - 4) / 3;
+  [
+    { label: 'General', val: rec.pctGeneral, color: rec.pctGeneral >= 80 ? [22,163,74] : rec.pctGeneral >= 50 ? [202,138,4] : [220,38,38] as [number,number,number] },
+    { label: 'Críticos (P1)', val: rec.pctP1, color: rec.pctP1 === 100 ? [22,163,74] : rec.pctP1 >= 80 ? [202,138,4] : [220,38,38] as [number,number,number] },
+    { label: 'Urgentes (P2)', val: rec.pctP2, color: rec.pctP2 >= 80 ? [22,163,74] : rec.pctP2 >= 60 ? [202,138,4] : [220,38,38] as [number,number,number] },
+  ].forEach((k, i) => {
+    const x = mL + i * (kpiW3 + 2);
+    doc.setFillColor(248, 250, 252); doc.setDrawColor(220,220,220); doc.roundedRect(x, y, kpiW3, 20, 2, 2, 'FD');
+    doc.setFontSize(16); doc.setFont('helvetica', 'bold'); doc.setTextColor(...(k.color as [number,number,number]));
+    doc.text(k.val + '%', x + kpiW3 / 2, y + 12, { align: 'center' });
+    doc.setFontSize(7); doc.setTextColor(100, 116, 139); doc.text(k.label, x + kpiW3 / 2, y + 18, { align: 'center' });
+  });
+  y += 28;
+
+  // ── SECCIÓN DE RECOMENDACIONES ────────────────────────────────────────────
+  const pendientes = [...rec.criticos, ...rec.urgentes, ...rec.importantes];
+
+  if (pendientes.length > 0) {
+    if (y > 200) { doc.addPage(); y = 20; }
+
+    const headerText = rec.cumple
+      ? 'El colegio es funcional — Oportunidades de mejora detectadas'
+      : rec.enProceso
+      ? 'El colegio es funcional pero debe atender los siguientes puntos'
+      : 'El colegio NO cumple con los mínimos — Acciones requeridas';
+    const hColor: [number,number,number] = rec.cumple ? [22,101,52] : rec.enProceso ? [120,53,15] : [153,27,27];
+    const hBg:    [number,number,number] = rec.cumple ? [240,253,244] : rec.enProceso ? [255,251,235] : [254,242,242];
+
+    doc.setFillColor(...hBg); doc.rect(mL - 2, y - 4, cW + 4, 10, 'F');
+    doc.setFontSize(10); doc.setFont('helvetica', 'bold'); doc.setTextColor(...hColor);
+    doc.text(headerText, mL + 1, y + 2);
+    y += 12;
+
+    const prioConfig: Record<Prioridad, { label: string; color: [number,number,number]; bg: [number,number,number]; rec: string }> = {
+      P1: { label: 'CRÍTICO',    color: [153,27,27],  bg: [254,226,226], rec: 'Acción inmediata requerida' },
+      P2: { label: 'URGENTE',    color: [120,53,15],  bg: [254,243,199], rec: 'Resolver en menos de 30 días' },
+      P3: { label: 'IMPORTANTE', color: [30,64,175],  bg: [219,234,254], rec: 'Programar en próximo ciclo de mantenimiento' },
+    };
+
+    const secNombre: Record<string, string> = {
+      construccion: '01 · Construcción', instalaciones: '02 · Instalaciones',
+      accesibilidad: '03 · Accesibilidad', seguridad: '04 · Seguridad y PC',
+      mantenimiento: '05 · Mantenimiento',
+    };
+
+    pendientes.forEach((item, idx) => {
+      if (y > 260) { doc.addPage(); y = 20; }
+      const pc = prioConfig[item.prioridad];
+      const rowH = item.observacion ? 19 : 14;
+
+      doc.setFillColor(idx % 2 === 0 ? 248 : 255, idx % 2 === 0 ? 250 : 255, idx % 2 === 0 ? 252 : 255);
+      doc.rect(mL - 2, y - 2, cW + 4, rowH, 'F');
+
+      // Número
+      doc.setFontSize(7); doc.setFont('helvetica', 'bold'); doc.setTextColor(150, 150, 150);
+      doc.text(String(idx + 1), mL, y + 5);
+
+      // Badge prioridad
+      doc.setFillColor(...pc.bg); doc.roundedRect(mL + 5, y, 22, 6, 1, 1, 'F');
+      doc.setFontSize(6.5); doc.setFont('helvetica', 'bold'); doc.setTextColor(...pc.color);
+      doc.text(pc.label, mL + 16, y + 4.3, { align: 'center' });
+
+      // Sección
+      doc.setFontSize(7); doc.setFont('helvetica', 'normal'); doc.setTextColor(150, 150, 150);
+      doc.text(secNombre[item.seccion] ?? item.seccion, mL + 30, y + 4.5);
+
+      // Nombre del ítem
+      doc.setFontSize(9); doc.setFont('helvetica', 'bold'); doc.setTextColor(15, 23, 42);
+      const nombreLines = doc.splitTextToSize(sanitize(item.nombre), cW - 28);
+      doc.text(nombreLines[0], mL + 5, y + 10);
+
+      // Recomendación
+      doc.setFontSize(7.5); doc.setFont('helvetica', 'italic'); doc.setTextColor(...pc.color);
+      doc.text(pc.rec, mL + 5, y + 14.5);
+
+      if (item.observacion) {
+        doc.setFontSize(7); doc.setFont('helvetica', 'normal'); doc.setTextColor(100, 116, 139);
+        doc.text('Obs: ' + sanitize(item.observacion), mL + 5, y + rowH - 2);
+      }
+      y += rowH + 2;
+    });
+
+    y += 6;
+  } else {
+    doc.setFillColor(240, 253, 244); doc.setDrawColor(134, 239, 172);
+    doc.roundedRect(mL, y, cW, 12, 2, 2, 'FD');
+    doc.setFontSize(10); doc.setFont('helvetica', 'bold'); doc.setTextColor(22, 101, 52);
+    doc.text('✓  Este colegio cumple con todos los mínimos indispensables', W / 2, y + 8, { align: 'center' });
+    y += 18;
+  }
+
+  // ── DETALLE COMPLETO POR SECCIÓN ──────────────────────────────────────────
+  if (y > 220) { doc.addPage(); y = 20; }
+  doc.setFontSize(10); doc.setFont('helvetica', 'bold'); doc.setTextColor(15, 23, 42);
+  doc.text('Detalle Completo por Sección', mL, y); y += 4;
+  doc.setDrawColor(220,220,220); doc.line(mL, y, W - mR, y); y += 6;
+
+  SECCIONES_MINIMOS.forEach(sec => {
+    const secItems = withPrio.filter(it => it.seccion === sec.id);
+    if (!secItems.length) return;
+    if (y > 240) { doc.addPage(); y = 20; }
+    const hex = sec.colorHex.replace('#', '');
+    doc.setFillColor(parseInt(hex.substring(0,2),16), parseInt(hex.substring(2,4),16), parseInt(hex.substring(4,6),16));
+    doc.rect(mL - 2, y - 3, cW + 4, 8, 'F');
+    doc.setFontSize(9); doc.setFont('helvetica', 'bold'); doc.setTextColor(255, 255, 255);
+    doc.text(sec.titulo, mL + 1, y + 2);
+    doc.setFontSize(6.5); doc.setFont('helvetica', 'normal'); doc.setTextColor(200, 220, 255);
+    doc.text(sec.norma, W - mR - 2, y + 2, { align: 'right' });
+    y += 10;
+
+    secItems.forEach((item, i) => {
+      if (y > 265) { doc.addPage(); y = 20; }
+      const rowH = item.observacion ? 13 : 9;
+      if (i % 2 === 0) { doc.setFillColor(248, 250, 252); doc.rect(mL - 2, y - 3, cW + 4, rowH + 2, 'F'); }
+      const [er, eg, eb] = ESTADO_CFG[item.estado].pdf;
+      doc.setFillColor(Math.min(er+200,255), Math.min(eg+200,255), Math.min(eb+200,255));
+      doc.roundedRect(mL, y - 2, 28, 6, 1, 1, 'F');
+      doc.setFontSize(6.5); doc.setFont('helvetica', 'bold'); doc.setTextColor(er, eg, eb);
+      doc.text(ESTADO_CFG[item.estado].label.toUpperCase(), mL + 14, y + 2.2, { align: 'center' });
+      doc.setFontSize(8.5); doc.setFont('helvetica', 'bold'); doc.setTextColor(15, 23, 42);
+      doc.text(sanitize(item.nombre), mL + 32, y + 2);
+      if (item.observacion) {
+        doc.setFontSize(7.5); doc.setFont('helvetica', 'normal'); doc.setTextColor(100, 116, 139);
+        doc.text('Obs: ' + sanitize(item.observacion), mL + 32, y + 8);
+      }
+      y += rowH + 3;
+    });
+    y += 4;
+  });
+
+  const pages = doc.getNumberOfPages();
+  for (let i = 1; i <= pages; i++) {
+    doc.setPage(i);
+    doc.setFontSize(7); doc.setTextColor(160, 160, 160);
+    doc.text('Sistema RCMA — Reporte de Mínimos Indispensables · ' + (ev.colegio ?? '') + ' — Pág. ' + i + ' de ' + pages, mL, 290);
+    doc.text('Documento confidencial · Colegios Mano Amiga', W - mR, 290, { align: 'right' });
+  }
+
+  doc.save('reporte-colegio-' + (ev.colegio ?? 'colegio').toLowerCase().replace(/[^a-z0-9]+/g,'-') + '-' + (ev.fecha ?? format(new Date(), 'yyyy-MM-dd')) + '.pdf');
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // PDF REPORTE GENERAL
 // ─────────────────────────────────────────────────────────────────────────────
 async function generarReporteGeneral(evaluaciones: EvalMinimos[]) {
@@ -754,6 +963,132 @@ async function generarReporteGeneral(evaluaciones: EvalMinimos[]) {
     }
   });
 
+  // ── PÁGINA FINAL: RESUMEN EJECUTIVO DE CUMPLIMIENTO ──────────────────────
+  doc.addPage(); y = 20;
+
+  doc.setFillColor(15, 23, 42); doc.rect(0, 0, W, 14, 'F');
+  doc.setFillColor(13, 138, 126); doc.rect(0, 0, 4, 14, 'F');
+  doc.setFontSize(11); doc.setFont('helvetica', 'bold'); doc.setTextColor(255, 255, 255);
+  doc.text('Resumen Ejecutivo de Cumplimiento', mL, 10);
+  y = 22;
+
+  // KPIs de resumen
+  const totalEv  = evaluaciones.length;
+  const cumplen  = evaluaciones.filter(e => e.resultado === 'completo').length;
+  const noCumpl  = evaluaciones.filter(e => e.resultado === 'incompleto').length;
+  const enProc   = evaluaciones.filter(e => e.resultado === 'en_proceso').length;
+  const pctTotal = totalEv > 0 ? Math.round((cumplen / totalEv) * 100) : 0;
+
+  const resKpis = [
+    { label: 'Colegios Evaluados', val: String(totalEv),       color: [15,23,42]   as [number,number,number], bg: [241,245,249] as [number,number,number] },
+    { label: 'Sí Cumplen',         val: String(cumplen),        color: [22,163,74]  as [number,number,number], bg: [240,253,244] as [number,number,number] },
+    { label: 'No Cumplen',         val: String(noCumpl),        color: [220,38,38]  as [number,number,number], bg: [254,242,242] as [number,number,number] },
+    { label: 'En Proceso',         val: String(enProc),         color: [202,138,4]  as [number,number,number], bg: [255,251,235] as [number,number,number] },
+    { label: '% Cumplimiento',     val: pctTotal + '%',         color: pctTotal >= 80 ? [22,163,74] as [number,number,number] : pctTotal >= 50 ? [202,138,4] as [number,number,number] : [220,38,38] as [number,number,number], bg: [248,250,252] as [number,number,number] },
+  ];
+  const rkW = (cW - 8) / 5;
+  resKpis.forEach((k, i) => {
+    const x = mL + i * (rkW + 2);
+    doc.setFillColor(...k.bg); doc.setDrawColor(220,220,220); doc.roundedRect(x, y, rkW, 22, 2, 2, 'FD');
+    doc.setFontSize(15); doc.setFont('helvetica', 'bold'); doc.setTextColor(...k.color);
+    doc.text(k.val, x + rkW / 2, y + 13, { align: 'center' });
+    doc.setFontSize(6.5); doc.setTextColor(100,116,139); doc.text(k.label, x + rkW / 2, y + 19, { align: 'center' });
+  });
+  y += 30;
+
+  // Barra de progreso general
+  const barWg = cW;
+  doc.setFillColor(226, 232, 240); doc.roundedRect(mL, y, barWg, 10, 2, 2, 'F');
+  const barCg: [number,number,number] = pctTotal >= 80 ? [22,163,74] : pctTotal >= 50 ? [202,138,4] : [220,38,38];
+  doc.setFillColor(...barCg); doc.roundedRect(mL, y, Math.max((pctTotal / 100) * barWg, 4), 10, 2, 2, 'F');
+  doc.setFontSize(8); doc.setFont('helvetica', 'bold'); doc.setTextColor(255,255,255);
+  if (pctTotal > 5) doc.text(pctTotal + '% de los colegios cumplen con los mínimos indispensables', mL + 4, y + 7);
+  y += 18;
+
+  // Tabla: colegios que cumplen vs no cumplen
+  const twoCols = (cW - 4) / 2;
+
+  // Columna izquierda: Sí cumplen
+  doc.setFillColor(240,253,244); doc.rect(mL, y, twoCols, 8, 'F');
+  doc.setFontSize(9); doc.setFont('helvetica', 'bold'); doc.setTextColor(22,101,52);
+  doc.text('✓  Sí cumplen (' + cumplen + ')', mL + 3, y + 5.5);
+  y += 10;
+  evaluaciones.filter(e => e.resultado === 'completo').forEach((ev, i) => {
+    if (y > 260) { doc.addPage(); y = 20; }
+    if (i % 2 === 0) { doc.setFillColor(249, 250, 251); doc.rect(mL, y - 1, twoCols, 7, 'F'); }
+    doc.setFontSize(8); doc.setFont('helvetica', 'normal'); doc.setTextColor(15,23,42);
+    doc.text(sanitize(ev.colegio ?? '—'), mL + 4, y + 4);
+    doc.setFontSize(7); doc.setTextColor(100,116,139);
+    doc.text(ev.territorio ?? '', mL + twoCols - 4, y + 4, { align: 'right' });
+    y += 7;
+  });
+  if (!cumplen) { doc.setFontSize(8); doc.setTextColor(100,116,139); doc.text('Ningún colegio cumple aún', mL + 4, y + 4); y += 7; }
+
+  // Volver al lado derecho para los que no cumplen
+  const rightX = mL + twoCols + 4;
+  let yRight = y - (cumplen + 1) * 7 - 10;
+  if (yRight < 22 + 30 + 18 + 10) yRight = 22 + 30 + 18 + 10; // safety
+
+  doc.setFillColor(254,242,242); doc.rect(rightX, yRight, twoCols, 8, 'F');
+  doc.setFontSize(9); doc.setFont('helvetica', 'bold'); doc.setTextColor(153,27,27);
+  doc.text('✗  No cumplen / En proceso (' + (noCumpl + enProc) + ')', rightX + 3, yRight + 5.5);
+  yRight += 10;
+  evaluaciones.filter(e => e.resultado !== 'completo').forEach((ev, i) => {
+    const rowCl: [number,number,number] = ev.resultado === 'incompleto' ? [253,226,226] : [255,251,235];
+    doc.setFillColor(...rowCl); doc.rect(rightX, yRight - 1, twoCols, 7, 'F');
+    doc.setFontSize(8); doc.setFont('helvetica', 'normal'); doc.setTextColor(15,23,42);
+    doc.text(sanitize(ev.colegio ?? '—'), rightX + 4, yRight + 4);
+    const lbl = ev.resultado === 'incompleto' ? 'No cumple' : 'En proceso';
+    const lc: [number,number,number] = ev.resultado === 'incompleto' ? [220,38,38] : [202,138,4];
+    doc.setFontSize(7); doc.setFont('helvetica', 'bold'); doc.setTextColor(...lc);
+    doc.text(lbl, rightX + twoCols - 4, yRight + 4, { align: 'right' });
+    yRight += 7;
+  });
+
+  y = Math.max(y, yRight) + 10;
+
+  // ── Ítems urgentes a nivel red ─────────────────────────────────────────────
+  if (y > 220) { doc.addPage(); y = 20; }
+  doc.setFontSize(10); doc.setFont('helvetica', 'bold'); doc.setTextColor(15, 23, 42);
+  doc.text('Puntos críticos a nivel Red — requieren atención inmediata', mL, y); y += 4;
+  doc.setDrawColor(220,220,220); doc.line(mL, y, W - mR, y); y += 6;
+
+  // Contar ítems no_cumple por id en todos los colegios
+  const itemCount: Record<string, { nombre: string; seccion: string; prioridad: string; count: number; colegios: string[] }> = {};
+  const imap2 = Object.fromEntries(SECCIONES_MINIMOS.flatMap(s => s.items.map(it => [it.id, { nombre: it.nombre, sec: s.titulo, prio: it.prioridad }])));
+  evaluaciones.forEach(ev => {
+    (ev.items ?? []).filter(i => i.estado === 'no_cumple').forEach(i => {
+      if (!itemCount[i.id]) itemCount[i.id] = { nombre: imap2[i.id]?.nombre ?? i.nombre, seccion: imap2[i.id]?.sec ?? '', prioridad: imap2[i.id]?.prio ?? 'P3', count: 0, colegios: [] };
+      itemCount[i.id].count++;
+      itemCount[i.id].colegios.push(ev.colegio ?? '');
+    });
+  });
+
+  const sorted = Object.values(itemCount)
+    .sort((a, b) => { const po = { P1: 0, P2: 1, P3: 2 }; return (po[a.prioridad as keyof typeof po] - po[b.prioridad as keyof typeof po]) || b.count - a.count; });
+
+  if (sorted.length === 0) {
+    doc.setFontSize(9); doc.setFont('helvetica', 'normal'); doc.setTextColor(100,116,139);
+    doc.text('No se detectaron puntos críticos en los colegios evaluados.', mL, y); y += 10;
+  } else {
+    sorted.forEach((item, idx) => {
+      if (y > 262) { doc.addPage(); y = 20; }
+      const pc2 = { P1: { bg: [254,226,226] as [number,number,number], text: [153,27,27] as [number,number,number], label: 'CRÍTICO' },
+                    P2: { bg: [254,243,199] as [number,number,number], text: [120,53,15] as [number,number,number], label: 'URGENTE' },
+                    P3: { bg: [219,234,254] as [number,number,number], text: [30,64,175] as [number,number,number],  label: 'IMPORTANTE' } }[item.prioridad as 'P1'|'P2'|'P3'];
+      if (idx % 2 === 0) { doc.setFillColor(248,250,252); doc.rect(mL - 2, y - 2, cW + 4, 13, 'F'); }
+      doc.setFillColor(...pc2.bg); doc.roundedRect(mL, y, 22, 5.5, 1, 1, 'F');
+      doc.setFontSize(6); doc.setFont('helvetica', 'bold'); doc.setTextColor(...pc2.text);
+      doc.text(pc2.label, mL + 11, y + 4, { align: 'center' });
+      doc.setFontSize(8.5); doc.setFont('helvetica', 'bold'); doc.setTextColor(15,23,42);
+      doc.text(sanitize(item.nombre), mL + 26, y + 4);
+      doc.setFontSize(7); doc.setFont('helvetica', 'normal'); doc.setTextColor(100,116,139);
+      const colegiosStr = item.colegios.slice(0, 4).join(', ') + (item.colegios.length > 4 ? ' +' + (item.colegios.length - 4) + ' más' : '');
+      doc.text(item.count + ' colegio(s): ' + sanitize(colegiosStr), mL + 26, y + 9.5);
+      y += 15;
+    });
+  }
+
   addFooters();
   doc.save(`reporte-general-minimos-${format(new Date(), 'yyyy-MM-dd')}.pdf`);
 }
@@ -974,14 +1309,13 @@ export default function Checklists() {
       ════════════════════════════════════════════════════════════════════ */}
       {activeTab === 'minimos' && (
         <>
-          {/* Stats + botón reporte general */}
+          {/* Stats + botones de reporte */}
           <div className="flex flex-col sm:flex-row sm:items-center gap-3 mb-5">
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 flex-1">
+            <div className="grid grid-cols-3 gap-3 flex-1">
               {[
-                { label: 'Total',       val: minimosRaw.length,                                          cls: 'bg-slate-900 text-white' },
-                { label: 'Completos',   val: minimosRaw.filter(e => e.resultado === 'completo').length,   cls: 'bg-green-50 text-green-700 border border-green-200' },
+                { label: 'Sí Cumplen',  val: minimosRaw.filter(e => e.resultado === 'completo').length,   cls: 'bg-green-50 text-green-700 border border-green-200' },
+                { label: 'No Cumplen',  val: minimosRaw.filter(e => e.resultado === 'incompleto').length, cls: 'bg-red-50 text-red-700 border border-red-200' },
                 { label: 'En Proceso',  val: minimosRaw.filter(e => e.resultado === 'en_proceso').length, cls: 'bg-amber-50 text-amber-700 border border-amber-200' },
-                { label: 'Incompletos', val: minimosRaw.filter(e => e.resultado === 'incompleto').length, cls: 'bg-red-50 text-red-700 border border-red-200' },
               ].map(s => (
                 <div key={s.label} className={`rounded-xl p-4 ${s.cls}`}>
                   <p className="text-xs font-bold uppercase tracking-wide opacity-70 mb-1">{s.label}</p>
@@ -1055,8 +1389,12 @@ export default function Checklists() {
                       </div>
                       <div className="flex items-center gap-1 shrink-0">
                         <button onClick={e => { e.stopPropagation(); generarPDFMinimos(ev); }}
-                          className="p-2 text-slate-400 hover:text-slate-900 hover:bg-slate-100 rounded-lg transition-colors" title="Descargar PDF">
+                          className="p-2 text-slate-400 hover:text-slate-900 hover:bg-slate-100 rounded-lg transition-colors" title="Detalle de evaluación (PDF)">
                           <FileDown className="w-4 h-4" />
+                        </button>
+                        <button onClick={e => { e.stopPropagation(); generarReporteColegio(ev); }}
+                          className="p-2 text-teal-500 hover:text-teal-700 hover:bg-teal-50 rounded-lg transition-colors" title="Reporte por Colegio (PDF)">
+                          <ClipboardCheck className="w-4 h-4" />
                         </button>
                         {isAdmin && (
                           <button onClick={e => { e.stopPropagation(); setConfirmDel(ev.id); }}
