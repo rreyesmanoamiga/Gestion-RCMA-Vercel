@@ -48,7 +48,7 @@ import Accesos from '@/pages/Accesos';
 import Pendientes from '@/pages/Pendientes';
 import CalendarioMantenimiento from '@/pages/CalendarioMantenimiento';
 import Presupuestos from '@/pages/Presupuestos';
-import PoliticaUso from '@/components/PoliticaUso';
+import Insumos from '@/pages/Insumos';
 
 // --- NUEVO IMPORT ---
 import Directorio from '@/pages/Directorio';
@@ -360,9 +360,7 @@ function AuthenticatedApp() {
   }
 
   return (
-    <>
-      <PoliticaUso />
-      <Routes>
+    <Routes>
       <Route path="/reset-password" element={<SetPasswordPage />} />
       {!user ? (
         <Route path="*" element={<LoginPage />} />
@@ -384,6 +382,7 @@ function AuthenticatedApp() {
           <Route path="/accesos"            element={<Accesos />} />
           <Route path="/pendientes"         element={<Pendientes />} />
           <Route path="/calendario"         element={<CalendarioMantenimiento />} />
+          <Route path="/insumos"             element={<Insumos />} />
           <Route path="/presupuestos"       element={<Presupuestos />} />
           
           {/* --- RUTA DE DIRECTORIO AGREGADA --- */}
@@ -394,7 +393,6 @@ function AuthenticatedApp() {
         </Route>
       )}
     </Routes>
-    </>
   );
 }
 

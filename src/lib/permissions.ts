@@ -30,7 +30,6 @@ const PERMISSION_DEFS: PermissionDef[] = [
   { key: 'crear_checklists',          label: 'Crear Checklists',          group: 'Checklists',            default: false },
   { key: 'editar_checklists',         label: 'Editar Checklists',         group: 'Checklists',            default: false },
   { key: 'eliminar_checklists',       label: 'Eliminar Checklists',       group: 'Checklists',            default: false },
-  { key: 'llenar_minimos',            label: 'Llenar Mínimos Indispensables', group: 'Checklists',       default: false },
   { key: 'ver_calendario',            label: 'Ver Calendario',            group: 'Calendario',            default: true  },
   { key: 'crear_calendario',          label: 'Crear Eventos',             group: 'Calendario',            default: false },
   { key: 'editar_calendario',         label: 'Editar Eventos',            group: 'Calendario',            default: false },
@@ -45,6 +44,8 @@ const PERMISSION_DEFS: PermissionDef[] = [
   { key: 'crear_reportes',            label: 'Crear Reportes',            group: 'Reportes',              default: false },
   { key: 'editar_reportes',           label: 'Editar Reportes',           group: 'Reportes',              default: false },
   { key: 'eliminar_reportes',         label: 'Eliminar Reportes',         group: 'Reportes',              default: false },
+  { key: 'ver_insumos',               label: 'Ver Insumos',               group: 'Insumos',               default: false },
+  { key: 'vobo_insumos',              label: 'VoBo Insumos',              group: 'Insumos',               default: false },
 ];
 
 export const PERMISSIONS: Record<string, string> = Object.fromEntries(

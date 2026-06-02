@@ -20,7 +20,7 @@ import {
   FileSignature,
   BarChart3,
   // --- ICONO AGREGADO ---
-  BookUser,
+  BookUser, Package,
 } from 'lucide-react';
 import { useAuth } from '@/lib/AuthContext';
 import { cn } from '@/lib/utils';
@@ -185,6 +185,13 @@ export default function Sidebar({ isOpen, onToggle }) {
             <Link to="/calendario" onClick={handleNavClick} className={navLinkClass('/calendario')}>
               <CalendarDays className="w-[18px] h-[18px]" />
               Calendario
+            </Link>
+          )}
+
+          {(isAdmin || can('ver_insumos')) && (
+            <Link to="/insumos" onClick={handleNavClick} className={navLinkClass('/insumos')}>
+              <Package className="w-[18px] h-[18px]" />
+              Insumos
             </Link>
           )}
 
