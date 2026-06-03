@@ -15,8 +15,10 @@ import {
 // ─── Types ────────────────────────────────────────────────────────────────────
 interface Proveedor   { id: string; nombre: string; contacto: string; correo: string; telefono: string; activo: boolean; notas: string; }
 interface Producto    { id: string; codigo: string; nombre: string; descripcion: string; unidad: string; categoria: string; precio_referencia: number; activo: boolean; }
-interface ReqItem     { id?: string; producto_id?: string; nombre_producto: string; descripcion: string; unidad: string; cantidad: number; precio_referencia?: number; precio_cotizado?: number | null; }
-interface Requisicion { id: string; folio: string; proveedores_ids: string[]; proveedores_nombres: string[]; estatus: string; link_cotizacion: string; vobo_por: string; vobo_fecha: string | null; notas: string; total_cotizado: number; created_at: string; items?: ReqItem[]; }
+interface ReqItem     { id?: string; producto_id?: string; nombre_producto: string; descripcion: string; unidad: string; cantidad: number; precio_referencia?: number; precio_cotizado?: number | null; observaciones?: string; }
+interface Requisicion { id: string; folio: string; proveedores_ids: string[]; proveedores_nombres: string[]; estatus: string; link_cotizacion: string; vobo_por: string; vobo_fecha: string | null; notas: string; total_cotizado: number; created_at: string; items?: ReqItem[];
+  // Nuevos campos
+  fecha_requerida?: string; prioridad?: string; justificacion?: string; departamento?: string; }
 
 const UNIDADES = ['pieza', 'litro', 'kg', 'rollo', 'caja', 'bolsa', 'galón', 'frasco', 'paquete', 'par', 'metro', 'juego'];
 const CATEGORIAS_PROD = ['Limpieza', 'Sanitario', 'Cocina', 'Papelería', 'Herramienta', 'General'];
@@ -297,6 +299,9 @@ export default function Insumos() {
   const [reqItems, setReqItems]             = useState<ReqItem[]>([]);
   const [selProveedores, setSelProveedores] = useState<string[]>([]);
   const [reqNotas, setReqNotas]             = useState('');
+  const [reqFechaReq, setReqFechaReq]       = useState('');
+  const [reqPrioridad, setReqPrioridad]     = useState('Normal');
+  const [reqJustif, setReqJustif]           = useState('');
 
   const addReqItem = () => setReqItems(prev => [...prev, { nombre_producto: '', descripcion: '', unidad: 'pieza', cantidad: 1 }]);
   const removeReqItem = (i: number) => setReqItems(prev => prev.filter((_, idx) => idx !== i));
@@ -307,11 +312,18 @@ export default function Insumos() {
 
   const createReqMutation = useMutation({
     mutationFn: async () => {
+      if (!reqJustif.trim())   { toast.error('Ingresa la justificación de la compra'); throw new Error('Falta justificación'); }
+      if (!reqFechaReq)        { toast.error('Selecciona la fecha requerida de entrega'); throw new Error('Falta fecha'); }
+      if (reqItems.filter(it => it.nombre_producto).length === 0) { toast.error('Agrega al menos un producto'); throw new Error('Sin productos'); }
       const folio = await generarFolio();
       const provNombres = selProveedores.map(id => proveedores.find(p => p.id === id)?.nombre ?? id);
       const { data: req, error } = await supabase.from('insumos_requisiciones').insert({
         folio, proveedores_ids: selProveedores, proveedores_nombres: provNombres,
         estatus: 'pendiente_cotizacion', notas: reqNotas, created_by: user?.email ?? '',
+        fecha_requerida: reqFechaReq || null,
+        prioridad: reqPrioridad,
+        justificacion: reqJustif,
+        departamento: 'Coordinación de Obras y Mantenimiento — FMA Oficina Monterrey',
       }).select().single();
       if (error) throw error;
       if (reqItems.length > 0) {
@@ -325,6 +337,7 @@ export default function Insumos() {
       qc.invalidateQueries({ queryKey: ['insumos_requisiciones'] });
       toast.success(`Requisición ${req.folio} creada`);
       setShowReqForm(false); setReqItems([]); setSelProveedores([]); setReqNotas('');
+      setReqFechaReq(''); setReqPrioridad('Normal'); setReqJustif('');
     },
     onError: (e: any) => toast.error(e.message ?? 'Error al crear'),
   });
@@ -441,6 +454,8 @@ export default function Insumos() {
     },
     onError: (e: any) => toast.error(e.message ?? 'Error al eliminar'),
   });
+
+  const filteredReq = useMemo(() => requisiciones.filter(r =>
     !search || r.folio.toLowerCase().includes(search.toLowerCase()) ||
     (r.proveedores_nombres ?? []).some(p => p.toLowerCase().includes(search.toLowerCase()))
   ), [requisiciones, search]);
@@ -520,12 +535,16 @@ export default function Insumos() {
                     <div className="flex items-center gap-2 flex-wrap">
                       <span className="font-black text-slate-900">{req.folio}</span>
                       <StatusBadge estatus={req.estatus} />
+                      {req.prioridad === 'Urgente' && (
+                        <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-red-100 text-red-700 border border-red-200">🔴 Urgente</span>
+                      )}
                       {req.total_cotizado > 0 && (
                         <span className="text-xs font-bold text-slate-600 bg-slate-100 px-2 py-0.5 rounded-full">{fmtMXN(req.total_cotizado)}</span>
                       )}
                     </div>
                     <p className="text-xs text-slate-500 mt-0.5">
                       {(req.proveedores_nombres ?? []).join(', ') || 'Sin proveedor'} · {fmtDate(req.created_at)}
+                      {req.fecha_requerida && <span className="text-amber-600 font-semibold"> · Entrega: {fmtDate(req.fecha_requerida)}</span>}
                     </p>
                   </div>
 
@@ -685,6 +704,36 @@ export default function Insumos() {
       {showReqForm && (
         <Modal title="Nueva Requisición de Insumos" onClose={() => setShowReqForm(false)} wide>
           <div className="space-y-4 overflow-y-auto max-h-[60vh] p-1">
+            {/* Prioridad y Fecha requerida */}
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Prioridad *</label>
+                <select className={inputCls} value={reqPrioridad} onChange={e => setReqPrioridad(e.target.value)}>
+                  <option value="Normal">Normal</option>
+                  <option value="Urgente">🔴 Urgente</option>
+                  <option value="Programada">Programada</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Fecha requerida de entrega *</label>
+                <input type="date" className={inputCls} value={reqFechaReq} onChange={e => setReqFechaReq(e.target.value)} />
+              </div>
+            </div>
+
+            {/* Justificación */}
+            <div>
+              <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Justificación / Motivo de la compra *</label>
+              <textarea className={inputCls} rows={2} value={reqJustif}
+                onChange={e => setReqJustif(e.target.value)}
+                placeholder="Ej: Reposición de stock agotado para limpieza mensual de oficinas..." />
+            </div>
+
+            {/* Departamento — fijo, informativo */}
+            <div className="bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 flex items-center gap-2">
+              <span className="text-xs font-bold text-slate-500 uppercase">Departamento:</span>
+              <span className="text-xs text-slate-700">Coordinación de Obras y Mantenimiento — FMA Oficina Monterrey</span>
+            </div>
+
             {/* Proveedores */}
             <div>
               <label className="block text-xs font-bold text-slate-500 uppercase mb-2">Proveedor(es) *</label>
@@ -712,7 +761,7 @@ export default function Insumos() {
               <div className="space-y-2">
                 {reqItems.map((it, i) => (
                   <div key={i} className="grid grid-cols-12 gap-2 items-start p-2 bg-slate-50 rounded-lg border border-slate-100">
-                    <div className="col-span-5">
+                    <div className="col-span-4">
                       <label className="text-[10px] text-slate-400 mb-0.5 block">Producto</label>
                       <input list={`prods-${i}`} className={inputCls} placeholder="Nombre del producto"
                         value={it.nombre_producto}
@@ -731,18 +780,19 @@ export default function Insumos() {
                         {UNIDADES.map(u => <option key={u}>{u}</option>)}
                       </select>
                     </div>
-                    <div className="col-span-2">
-                      <label className="text-[10px] text-slate-400 mb-0.5 block">Cantidad</label>
+                    <div className="col-span-1">
+                      <label className="text-[10px] text-slate-400 mb-0.5 block">Cant.</label>
                       <input type="number" min="1" className={inputCls} value={it.cantidad}
                         onChange={e => setReqItem(i, 'cantidad', parseFloat(e.target.value) || 1)} />
                     </div>
-                    <div className="col-span-2">
-                      <label className="text-[10px] text-slate-400 mb-0.5 block">Ref.</label>
-                      <input type="text" className={inputCls + " bg-slate-100"} readOnly
-                        value={it.precio_referencia ? fmtMXN(it.precio_referencia) : '—'} />
+                    <div className="col-span-4">
+                      <label className="text-[10px] text-slate-400 mb-0.5 block">Observaciones / Especificaciones</label>
+                      <input className={inputCls} placeholder="Marca sugerida, presentación, etc."
+                        value={it.observaciones ?? ''}
+                        onChange={e => setReqItem(i, 'observaciones', e.target.value)} />
                     </div>
                     <div className="col-span-1 flex items-end pb-0.5">
-                      <button onClick={() => removeReqItem(i)} className="p-1.5 text-red-400 hover:text-red-600 rounded">
+                      <button type="button" onClick={() => removeReqItem(i)} className="p-1.5 text-red-400 hover:text-red-600 rounded">
                         <Trash2 className="w-4 h-4" />
                       </button>
                     </div>
@@ -798,10 +848,19 @@ export default function Insumos() {
                   </div>
                 ))}
               </div>
-              <div className="mt-2 text-right">
-                <span className="text-sm font-black text-slate-800">
-                  Total: {fmtMXN(pricingItems.reduce((s, it) => s + ((it.precio_cotizado ?? 0) * it.cantidad), 0))}
-                </span>
+              <div className="mt-2 bg-slate-50 border border-slate-200 rounded-lg p-3 space-y-1">
+                <div className="flex justify-between text-sm">
+                  <span className="text-slate-500">Subtotal:</span>
+                  <span className="font-semibold">{fmtMXN(pricingItems.reduce((s, it) => s + ((it.precio_cotizado ?? 0) * it.cantidad), 0))}</span>
+                </div>
+                <div className="flex justify-between text-sm">
+                  <span className="text-slate-500">IVA (16%):</span>
+                  <span className="font-semibold">{fmtMXN(pricingItems.reduce((s, it) => s + ((it.precio_cotizado ?? 0) * it.cantidad), 0) * 0.16)}</span>
+                </div>
+                <div className="flex justify-between text-sm border-t border-slate-300 pt-1">
+                  <span className="font-black text-slate-800">Total con IVA:</span>
+                  <span className="font-black text-slate-900">{fmtMXN(pricingItems.reduce((s, it) => s + ((it.precio_cotizado ?? 0) * it.cantidad), 0) * 1.16)}</span>
+                </div>
               </div>
             </div>
           </div>
