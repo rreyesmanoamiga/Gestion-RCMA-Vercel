@@ -241,7 +241,7 @@ async function generarPDFRequisicion(req: Requisicion, items: ReqItem[], autoriz
     doc.text('Sistema RCMA  ·  FMA Oficina Monterrey  ·  Documento confidencial', 10, 292);
     doc.text('Pág. ' + i + ' de ' + pages, W - 14, 292, { align: 'right' });
   }
-  doc.save(req.folio + (autorizado ? '-AUTORIZADO' : '-BORRADOR') + '.pdf');
+  doc.save(req.folio + (autorizado ? '-AUTORIZADO' : '') + '.pdf');
 }
 // ─── Componente principal ──────────────────────────────────────────────────────
 export default function Insumos() {
