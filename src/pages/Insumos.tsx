@@ -90,23 +90,23 @@ async function generarPDFRequisicion(req: Requisicion, items: ReqItem[], autoriz
   doc.setFontSize(8); doc.setTextColor(100, 116, 139);
   doc.text('Documento confidencial — solo para uso interno', 14, 29);
 
-  // Folio badge
-  doc.setFillColor(13, 138, 126); doc.roundedRect(W - 52, 6, 38, 10, 2, 2, 'F');
+  // Folio badge — a la izquierda del logo
+  doc.setFillColor(13, 138, 126); doc.roundedRect(W - 94, 8, 42, 10, 2, 2, 'F');
   doc.setFontSize(9); doc.setFont('helvetica', 'bold'); doc.setTextColor(255, 255, 255);
-  doc.text(req.folio, W - 33, 13, { align: 'center' });
+  doc.text(req.folio, W - 73, 15, { align: 'center' });
   if (autorizado && req.vobo_por) {
-    doc.setFillColor(22, 163, 74); doc.roundedRect(W - 52, 18, 38, 10, 2, 2, 'F');
-    doc.setFontSize(7.5); doc.text('AUTORIZADO', W - 33, 25, { align: 'center' });
+    doc.setFillColor(22, 163, 74); doc.roundedRect(W - 94, 20, 42, 10, 2, 2, 'F');
+    doc.setFontSize(7.5); doc.text('AUTORIZADO', W - 73, 27, { align: 'center' });
   }
 
-  // Logo
+  // Logo — extremo derecho sin solaparse
   try {
     const logoImg = await new Promise<string>((res, rej) => {
       const img = new Image(); img.crossOrigin = 'anonymous';
       img.onload = () => { const cv = document.createElement('canvas'); cv.width = img.width; cv.height = img.height; cv.getContext('2d')!.drawImage(img, 0, 0); res(cv.toDataURL('image/png')); };
       img.onerror = rej; img.src = '/logo.png';
     });
-    doc.addImage(logoImg, 'PNG', W - 38, 2, 24, 24);
+    doc.addImage(logoImg, 'PNG', W - 46, 4, 24, 24);
   } catch { /* sin logo */ }
   y = 44;
 
