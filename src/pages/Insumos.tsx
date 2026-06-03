@@ -702,7 +702,7 @@ export default function Insumos() {
 
       {/* Modal: Nueva Requisición */}
       {showReqForm && (
-        <Modal title="Nueva Requisición de Insumos" onClose={() => setShowReqForm(false)} wide>
+        <Modal title="Nueva Requisición de Insumos" onClose={() => setShowReqForm(false)} wide xl>
           <div className="space-y-4 overflow-y-auto max-h-[60vh] p-1">
             {/* Prioridad y Fecha requerida */}
             <div className="grid grid-cols-2 gap-3">
@@ -760,7 +760,7 @@ export default function Insumos() {
               {reqItems.length === 0 && <p className="text-xs text-slate-400 text-center py-3">Da clic en "Agregar producto" para empezar</p>}
               <div className="space-y-2">
                 {reqItems.map((it, i) => (
-                  <div key={i} className="grid grid-cols-12 gap-2 items-start p-2 bg-slate-50 rounded-lg border border-slate-100">
+                  <div key={i} className="grid grid-cols-12 gap-2 items-start p-3 bg-slate-50 rounded-lg border border-slate-100">
                     <div className="col-span-4">
                       <label className="text-[10px] text-slate-400 mb-0.5 block">Producto</label>
                       <input list={`prods-${i}`} className={inputCls} placeholder="Nombre del producto"
@@ -780,19 +780,19 @@ export default function Insumos() {
                         {UNIDADES.map(u => <option key={u}>{u}</option>)}
                       </select>
                     </div>
-                    <div className="col-span-1">
-                      <label className="text-[10px] text-slate-400 mb-0.5 block">Cant.</label>
-                      <input type="number" min="1" className={inputCls} value={it.cantidad}
+                    <div className="col-span-2">
+                      <label className="text-[10px] text-slate-400 mb-0.5 block">Cantidad</label>
+                      <input type="number" min="1" step="1" className={inputCls + " text-center font-bold"} value={it.cantidad}
                         onChange={e => setReqItem(i, 'cantidad', parseFloat(e.target.value) || 1)} />
                     </div>
-                    <div className="col-span-4">
+                    <div className="col-span-3">
                       <label className="text-[10px] text-slate-400 mb-0.5 block">Observaciones / Especificaciones</label>
-                      <input className={inputCls} placeholder="Marca sugerida, presentación, etc."
+                      <input className={inputCls} placeholder="Marca, presentación..."
                         value={it.observaciones ?? ''}
                         onChange={e => setReqItem(i, 'observaciones', e.target.value)} />
                     </div>
-                    <div className="col-span-1 flex items-end pb-0.5">
-                      <button type="button" onClick={() => removeReqItem(i)} className="p-1.5 text-red-400 hover:text-red-600 rounded">
+                    <div className="col-span-1 flex items-end pb-0.5 justify-center">
+                      <button type="button" onClick={() => removeReqItem(i)} className="p-1.5 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition">
                         <Trash2 className="w-4 h-4" />
                       </button>
                     </div>
@@ -1010,13 +1010,13 @@ function ReqDetail({ reqId, req, getItems, openPricing }: { reqId: string; req: 
 }
 
 // ─── Modal wrapper ────────────────────────────────────────────────────────────
-function Modal({ title, onClose, children, wide }: { title: string; onClose: () => void; children: React.ReactNode; wide?: boolean }) {
+function Modal({ title, onClose, children, wide, xl }: { title: string; onClose: () => void; children: React.ReactNode; wide?: boolean; xl?: boolean }) {
   return (
     <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
-      <div className={`bg-white rounded-xl shadow-2xl w-full ${wide ? 'max-w-2xl' : 'max-w-md'} flex flex-col max-h-[90vh]`}>
+      <div className={`bg-white rounded-xl shadow-2xl w-full ${xl ? 'max-w-4xl' : wide ? 'max-w-2xl' : 'max-w-md'} flex flex-col max-h-[90vh]`}>
         <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100 bg-slate-50 rounded-t-xl">
           <h3 className="font-black text-slate-900 text-sm">{title}</h3>
-          <button onClick={onClose} className="p-1 rounded hover:bg-slate-200"><X className="w-4 h-4 text-slate-400" /></button>
+          <button type="button" onClick={onClose} className="p-1 rounded hover:bg-slate-200"><X className="w-4 h-4 text-slate-400" /></button>
         </div>
         <div className="px-5 py-4 overflow-y-auto flex-1">{children}</div>
       </div>
