@@ -69,9 +69,8 @@ serve(async (req) => {
     const smtpUser   = Deno.env.get('SMTP_USER')   ?? '';
     const appUrl     = siteUrl ?? Deno.env.get('SITE_URL') ?? '';
 
-    // ── PRUEBA: ambos campos usan el correo de prueba ─────────────────────
-    const voboEmail = 'rjrm031086@gmail.com';   // → cambiar a arodriguez@manoamiga.edu.mx
-    const ccEmail   = 'rjrm031086@gmail.com';   // → cambiar a fguerra@manoamiga.edu.mx
+    const voboEmail = 'fguerra@manoamiga.edu.mx';     // Félix Guerra — autoriza
+    const ccEmail   = 'arodriguez@manoamiga.edu.mx';   // Ángel Rodríguez — copia
 
     const itemsHTML = (items as any[]).map((it: any, i: number) => `
       <tr style="background:${i % 2 === 0 ? '#f8fafc' : '#fff'}">
