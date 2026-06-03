@@ -90,24 +90,20 @@ async function generarPDFRequisicion(req: Requisicion, items: ReqItem[], autoriz
   doc.setFontSize(8); doc.setTextColor(100, 116, 139);
   doc.text('Documento confidencial — solo para uso interno', 14, 29);
 
-  // Folio badge — a la izquierda del logo
-  doc.setFillColor(13, 138, 126); doc.roundedRect(W - 94, 8, 42, 10, 2, 2, 'F');
-  doc.setFontSize(9); doc.setFont('helvetica', 'bold'); doc.setTextColor(255, 255, 255);
-  doc.text(req.folio, W - 73, 15, { align: 'center' });
-  if (autorizado && req.vobo_por) {
-    doc.setFillColor(22, 163, 74); doc.roundedRect(W - 94, 20, 42, 10, 2, 2, 'F');
-    doc.setFontSize(7.5); doc.text('AUTORIZADO', W - 73, 27, { align: 'center' });
-  }
-
-  // Logo — extremo derecho sin solaparse
+  // Logo arriba a la derecha
   try {
     const logoImg = await new Promise<string>((res, rej) => {
       const img = new Image(); img.crossOrigin = 'anonymous';
       img.onload = () => { const cv = document.createElement('canvas'); cv.width = img.width; cv.height = img.height; cv.getContext('2d')!.drawImage(img, 0, 0); res(cv.toDataURL('image/png')); };
       img.onerror = rej; img.src = '/logo.png';
     });
-    doc.addImage(logoImg, 'PNG', W - 46, 4, 24, 24);
+    doc.addImage(logoImg, 'PNG', W - 38, 3, 22, 22);
   } catch { /* sin logo */ }
+
+  // Folio badge pequeño — justo abajo del logo
+  doc.setFillColor(13, 138, 126); doc.roundedRect(W - 38, 27, 22, 6, 1, 1, 'F');
+  doc.setFontSize(6.5); doc.setFont('helvetica', 'bold'); doc.setTextColor(255, 255, 255);
+  doc.text(req.folio, W - 27, 31.5, { align: 'center' });
   y = 44;
 
   // ── DATOS GENERALES ───────────────────────────────────────────────────
@@ -188,48 +184,45 @@ async function generarPDFRequisicion(req: Requisicion, items: ReqItem[], autoriz
     y += 18;
   } else { y += 10; }
 
-  // ── BLOQUE DE FIRMAS ──────────────────────────────────────────────────
-  if (y > 228) { doc.addPage(); y = 20; }
-  doc.setDrawColor(200, 200, 200); doc.setLineWidth(0.4);
-  doc.line(14, y, W - 14, y); y += 10;
+  // ── BLOQUE DE FIRMAS — solo se imprime cuando ya está autorizado ────────
+  if (autorizado) {
+    if (y > 228) { doc.addPage(); y = 20; }
+    doc.setDrawColor(200, 200, 200); doc.setLineWidth(0.4);
+    doc.line(14, y, W - 14, y); y += 10;
+    const sigW = (W - 28 - 12) / 2;
 
-  const sigW = (W - 28 - 12) / 2;
-
-  // Firma solicitante
-  doc.setFontSize(7); doc.setFont('helvetica', 'bold'); doc.setTextColor(100, 116, 139);
-  doc.text('ELABORÓ Y SOLICITÓ', 14, y);
-  y += 14;
-  doc.setDrawColor(60, 60, 60); doc.line(14, y, 14 + sigW, y);
-  doc.setFontSize(9); doc.setFont('helvetica', 'bold'); doc.setTextColor(15, 23, 42);
-  doc.text('Ricardo Joanathan Reyes Medina', 14, y + 5);
-  doc.setFontSize(7.5); doc.setFont('helvetica', 'normal'); doc.setTextColor(80, 80, 80);
-  doc.text('Coordinador de Obras y Mantenimiento', 14, y + 11);
-  doc.text('Red de Colegios Mano Amiga', 14, y + 16);
-  doc.setFontSize(7); doc.setTextColor(120, 120, 120);
-  doc.text('Fecha: ' + nowFull, 14, y + 22);
-
-  // VoBo
-  const xR = 14 + sigW + 12;
-  doc.setFontSize(7); doc.setFont('helvetica', 'bold'); doc.setTextColor(100, 116, 139);
-  doc.text('AUTORIZÓ — VoBo', xR, y - 14);
-  if (autorizado && req.vobo_por) {
-    doc.setDrawColor(22, 163, 74); doc.line(xR, y, xR + sigW, y);
-    doc.setFontSize(9); doc.setFont('helvetica', 'bold'); doc.setTextColor(22, 163, 74);
-    doc.text(req.vobo_por, xR, y + 5);
+    // Elaboró y solicitó
+    doc.setFontSize(7); doc.setFont('helvetica', 'bold'); doc.setTextColor(100, 116, 139);
+    doc.text('ELABORÓ Y SOLICITÓ', 14, y);
+    y += 14;
+    doc.setDrawColor(60, 60, 60); doc.line(14, y, 14 + sigW, y);
+    doc.setFontSize(9); doc.setFont('helvetica', 'bold'); doc.setTextColor(15, 23, 42);
+    doc.text('Ricardo Joanathan Reyes Medina', 14, y + 5);
     doc.setFontSize(7.5); doc.setFont('helvetica', 'normal'); doc.setTextColor(80, 80, 80);
-    doc.text('Visto Bueno Otorgado', xR, y + 11);
+    doc.text('Coordinador de Obras y Mantenimiento', 14, y + 11);
+    doc.text('Red de Colegios Mano Amiga', 14, y + 16);
     doc.setFontSize(7); doc.setTextColor(120, 120, 120);
-    doc.text('Fecha VoBo: ' + fmtDate(req.vobo_fecha), xR, y + 17);
-    doc.setFillColor(240, 253, 244); doc.setDrawColor(22, 163, 74);
-    doc.roundedRect(xR, y + 20, sigW, 9, 2, 2, 'FD');
-    doc.setFontSize(8); doc.setFont('helvetica', 'bold'); doc.setTextColor(22, 163, 74);
-    doc.text('VISTO BUENO AUTORIZADO', xR + sigW / 2, y + 26, { align: 'center' });
-  } else {
-    doc.setDrawColor(180, 180, 180); doc.line(xR, y, xR + sigW, y);
-    doc.setFontSize(7.5); doc.setFont('helvetica', 'normal'); doc.setTextColor(160, 160, 160);
-    doc.text('Pendiente de autorización', xR, y + 6);
+    doc.text('Fecha: ' + nowFull, 14, y + 22);
+
+    // VoBo — Ángel
+    const xR = 14 + sigW + 12;
+    if (req.vobo_por) {
+      doc.setFontSize(7); doc.setFont('helvetica', 'bold'); doc.setTextColor(100, 116, 139);
+      doc.text('AUTORIZÓ — VoBo', xR, y - 14);
+      doc.setDrawColor(22, 163, 74); doc.line(xR, y, xR + sigW, y);
+      doc.setFontSize(9); doc.setFont('helvetica', 'bold'); doc.setTextColor(22, 163, 74);
+      doc.text(req.vobo_por, xR, y + 5);
+      doc.setFontSize(7.5); doc.setFont('helvetica', 'normal'); doc.setTextColor(80, 80, 80);
+      doc.text('Visto Bueno Otorgado', xR, y + 11);
+      doc.setFontSize(7); doc.setTextColor(120, 120, 120);
+      doc.text('Fecha VoBo: ' + fmtDate(req.vobo_fecha), xR, y + 17);
+      doc.setFillColor(240, 253, 244); doc.setDrawColor(22, 163, 74);
+      doc.roundedRect(xR, y + 20, sigW, 9, 2, 2, 'FD');
+      doc.setFontSize(8); doc.setFont('helvetica', 'bold'); doc.setTextColor(22, 163, 74);
+      doc.text('VISTO BUENO AUTORIZADO', xR + sigW / 2, y + 26, { align: 'center' });
+    }
+    doc.setLineWidth(0.2);
   }
-  doc.setLineWidth(0.2);
 
   // ── FOOTER en todas las páginas — mismo estilo que Reporte General ───
   const pages = doc.getNumberOfPages();
