@@ -59,102 +59,188 @@ async function generarFolio(): Promise<string> {
   return `REQ-${year}-${String(next).padStart(3, '0')}`;
 }
 
-// ─── PDF de requisición ────────────────────────────────────────────────────────
+// ─── PDF de requisición — mismo estilo que Reporte General ──────────────────
 async function generarPDFRequisicion(req: Requisicion, items: ReqItem[], autorizado = false) {
-  const jsPDFModule = await import('https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js' as any).catch(() => null);
-  const JsPDF = (window as any).jspdf?.jsPDF;
+  let JsPDF = (window as any).jspdf?.jsPDF;
+  if (!JsPDF) {
+    await new Promise<void>((res, rej) => {
+      const s = document.createElement('script');
+      s.src = 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js';
+      s.onload = () => res(); s.onerror = () => rej(new Error('No se pudo cargar jsPDF'));
+      document.head.appendChild(s);
+    }).catch(() => null);
+    JsPDF = (window as any).jspdf?.jsPDF;
+  }
   if (!JsPDF) { toast.error('No se pudo cargar el generador de PDF'); return; }
+
   const doc = new JsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
-  const W = 210; let y = 20;
-  const now = format(new Date(), "d 'de' MMMM 'de' yyyy", { locale: es });
+  const W = 210; let y = 0;
+  const now     = format(new Date(), "d 'de' MMMM 'de' yyyy", { locale: es });
+  const nowFull = format(new Date(), "d 'de' MMMM 'de' yyyy, HH:mm 'hrs'", { locale: es });
 
-  // Header
-  doc.setFillColor(15, 23, 42); doc.rect(0, 0, W, 26, 'F');
-  doc.setFillColor(13, 138, 126); doc.rect(0, 0, 4, 26, 'F');
-  doc.setFontSize(14); doc.setFont('helvetica', 'bold'); doc.setTextColor(255, 255, 255);
-  doc.text('Requisición de Insumos', 18, 12);
-  doc.setFontSize(9); doc.setFont('helvetica', 'normal'); doc.setTextColor(148, 163, 184);
-  doc.text(`Sistema RCMA · FMA Oficina Monterrey · ${now}`, 18, 21);
-  doc.setFontSize(12); doc.setFont('helvetica', 'bold'); doc.setTextColor(20, 184, 166);
-  doc.text(req.folio, W - 18, 15, { align: 'right' });
+  // ── HEADER — mismo estilo que Reporte General ─────────────────────────
+  doc.setFillColor(15, 23, 42); doc.rect(0, 0, W, 35, 'F');
+  doc.setFillColor(13, 138, 126); doc.rect(0, 0, 4, 35, 'F');
+  doc.setFontSize(16); doc.setFont('helvetica', 'bold'); doc.setTextColor(255, 255, 255);
+  doc.text('Requisición de Insumos', 14, 14);
+  doc.setFontSize(9); doc.setFont('helvetica', 'normal'); doc.setTextColor(180, 180, 200);
+  doc.text('Sistema RCMA  ·  FMA Oficina Monterrey  ·  Generado el ' + now, 14, 22);
+  doc.setFontSize(8); doc.setTextColor(100, 116, 139);
+  doc.text('Documento confidencial — solo para uso interno', 14, 29);
 
+  // Folio badge
+  doc.setFillColor(13, 138, 126); doc.roundedRect(W - 52, 6, 38, 10, 2, 2, 'F');
+  doc.setFontSize(9); doc.setFont('helvetica', 'bold'); doc.setTextColor(255, 255, 255);
+  doc.text(req.folio, W - 33, 13, { align: 'center' });
   if (autorizado && req.vobo_por) {
-    doc.setFillColor(22, 163, 74); doc.rect(W - 60, 18, 42, 7, 'F');
-    doc.setFontSize(7); doc.setFont('helvetica', 'bold'); doc.setTextColor(255, 255, 255);
-    doc.text('AUTORIZADO', W - 39, 23.5, { align: 'center' });
+    doc.setFillColor(22, 163, 74); doc.roundedRect(W - 52, 18, 38, 10, 2, 2, 'F');
+    doc.setFontSize(7.5); doc.text('AUTORIZADO', W - 33, 25, { align: 'center' });
   }
-  y = 36;
 
-  // Info
-  doc.setFillColor(241, 245, 249); doc.roundedRect(18, y - 4, W - 36, 22, 2, 2, 'F');
-  doc.setFontSize(8); doc.setFont('helvetica', 'bold'); doc.setTextColor(100, 116, 139);
-  doc.text('PROVEEDOR(ES)', 22, y + 2);
-  doc.text('ESTATUS', 110, y + 2);
-  doc.setFontSize(10); doc.setFont('helvetica', 'bold'); doc.setTextColor(15, 23, 42);
-  doc.text((req.proveedores_nombres ?? []).join(', ') || '—', 22, y + 10);
-  doc.text(ESTATUS_CFG[req.estatus]?.label ?? req.estatus, 110, y + 10);
-  if (autorizado && req.vobo_por) {
-    doc.setFontSize(7); doc.setFont('helvetica', 'normal'); doc.setTextColor(100, 116, 139);
-    doc.text(`VoBo: ${req.vobo_por}  ·  ${fmtDate(req.vobo_fecha)}`, 22, y + 17);
+  // Logo
+  try {
+    const logoImg = await new Promise<string>((res, rej) => {
+      const img = new Image(); img.crossOrigin = 'anonymous';
+      img.onload = () => { const cv = document.createElement('canvas'); cv.width = img.width; cv.height = img.height; cv.getContext('2d')!.drawImage(img, 0, 0); res(cv.toDataURL('image/png')); };
+      img.onerror = rej; img.src = '/logo.png';
+    });
+    doc.addImage(logoImg, 'PNG', W - 38, 2, 24, 24);
+  } catch { /* sin logo */ }
+  y = 44;
+
+  // ── DATOS GENERALES ───────────────────────────────────────────────────
+  doc.setFillColor(241, 245, 249); doc.rect(12, y, W - 24, 30, 'F');
+  doc.setDrawColor(220, 220, 230); doc.setLineWidth(0.3); doc.rect(12, y, W - 24, 30, 'D');
+
+  doc.setFontSize(7); doc.setFont('helvetica', 'bold'); doc.setTextColor(100, 116, 139);
+  doc.text('PROVEEDOR(ES)', 16, y + 5);
+  doc.setFontSize(9); doc.setFont('helvetica', 'bold'); doc.setTextColor(15, 23, 42);
+  doc.text((req.proveedores_nombres ?? []).join(', ') || '—', 16, y + 11);
+
+  doc.setFontSize(7); doc.setFont('helvetica', 'bold'); doc.setTextColor(100, 116, 139);
+  doc.text('ESTATUS', 115, y + 5);
+  doc.setFontSize(9); doc.setFont('helvetica', 'bold'); doc.setTextColor(15, 23, 42);
+  doc.text(ESTATUS_CFG[req.estatus]?.label ?? req.estatus, 115, y + 11);
+
+  doc.setFontSize(7); doc.setFont('helvetica', 'bold'); doc.setTextColor(100, 116, 139);
+  doc.text('ELABORÓ / SOLICITÓ', 16, y + 18);
+  doc.setFontSize(8.5); doc.setFont('helvetica', 'bold'); doc.setTextColor(15, 23, 42);
+  doc.text('Ricardo Joanathan Reyes Medina', 16, y + 24);
+  doc.setFontSize(7.5); doc.setFont('helvetica', 'normal'); doc.setTextColor(80, 80, 80);
+  doc.text('Coordinador de Obras y Mantenimiento RCMA', 16, y + 29);
+  doc.setLineWidth(0.2);
+  y += 38;
+
+  if (req.notas) {
+    doc.setFontSize(7.5); doc.setFont('helvetica', 'italic'); doc.setTextColor(80, 80, 80);
+    doc.text('Notas: ' + req.notas, 14, y); y += 8;
   }
-  y += 30;
 
-  // Tabla
-  doc.setFillColor(15, 23, 42); doc.rect(18, y - 4, W - 36, 9, 'F');
-  doc.setFontSize(8); doc.setFont('helvetica', 'bold'); doc.setTextColor(255, 255, 255);
-  ['Producto', 'Unidad', 'Cantidad', 'Precio Unit.', 'Subtotal'].forEach((h, i) => {
-    const xs = [22, 90, 112, 142, 170];
-    doc.text(h, xs[i], y + 1);
-  });
-  y += 10;
-  doc.setFont('helvetica', 'normal'); doc.setTextColor(30, 30, 30);
+  // ── TABLA DE PRODUCTOS ────────────────────────────────────────────────
+  doc.setFontSize(9); doc.setFont('helvetica', 'bold'); doc.setTextColor(15, 23, 42);
+  doc.text('Detalle de Productos', 14, y); y += 4;
+  doc.setDrawColor(220, 220, 220); doc.line(14, y, W - 14, y); y += 5;
+
+  const drawTableHeader = () => {
+    doc.setFillColor(15, 23, 42); doc.rect(12, y - 4, W - 24, 9, 'F');
+    doc.setFontSize(7.5); doc.setFont('helvetica', 'bold'); doc.setTextColor(255, 255, 255);
+    doc.text('Producto', 16, y + 1);
+    doc.text('Unidad',   102, y + 1);
+    doc.text('Cant.',    124, y + 1);
+    if (autorizado) {
+      doc.text('P. Unit.',  146, y + 1);
+      doc.text('Subtotal',  W - 16, y + 1, { align: 'right' });
+    }
+    y += 10;
+    doc.setFont('helvetica', 'normal'); doc.setTextColor(30, 30, 30);
+  };
+  drawTableHeader();
+
+  let totalCalc = 0;
   items.forEach((it, i) => {
-    if (y > 262) { doc.addPage(); y = 20; }
-    if (i % 2 === 0) { doc.setFillColor(248, 250, 252); doc.rect(18, y - 4, W - 36, 8, 'F'); }
-    doc.setFontSize(8);
-    const precio = it.precio_cotizado ?? 0;
-    const subtotal = precio * it.cantidad;
-    doc.text(String(it.nombre_producto ?? ''), 22, y);
-    doc.text(String(it.unidad ?? ''), 90, y);
-    doc.text(String(it.cantidad ?? ''), 112, y);
-    doc.text(autorizado && precio ? fmtMXN(precio) : '—', 142, y);
-    doc.text(autorizado && precio ? fmtMXN(subtotal) : '—', 170, y);
-    y += 9;
+    if (y > 252) { doc.addPage(); y = 20; drawTableHeader(); }
+    if (i % 2 === 0) { doc.setFillColor(248, 250, 252); doc.rect(12, y - 5, W - 24, 9, 'F'); }
+    doc.setFontSize(8); doc.setFont('helvetica', 'bold'); doc.setTextColor(15, 23, 42);
+    const nom = String(it.nombre_producto ?? '');
+    doc.text(nom.length > 44 ? nom.slice(0, 42) + '…' : nom, 16, y);
+    doc.setFontSize(8); doc.setFont('helvetica', 'normal'); doc.setTextColor(30, 30, 30);
+    doc.text(String(it.unidad ?? ''), 102, y);
+    doc.text(String(it.cantidad ?? ''), 126, y, { align: 'center' });
+    if (autorizado) {
+      const precio = it.precio_cotizado ?? 0;
+      const sub    = precio * it.cantidad;
+      totalCalc   += sub;
+      doc.text(precio ? fmtMXN(precio) : '—', 152, y, { align: 'right' });
+      doc.setFont('helvetica', 'bold');
+      doc.text(precio ? fmtMXN(sub) : '—', W - 16, y, { align: 'right' });
+    }
+    y += 8.5;
   });
 
-  // Total
   if (autorizado) {
     y += 2;
-    doc.setFillColor(15, 23, 42); doc.rect(130, y - 4, W - 148, 10, 'F');
+    doc.setFillColor(15, 23, 42); doc.rect(135, y - 3, W - 147, 11, 'F');
     doc.setFontSize(9); doc.setFont('helvetica', 'bold'); doc.setTextColor(255, 255, 255);
-    doc.text('TOTAL', 134, y + 2);
-    doc.text(fmtMXN(req.total_cotizado), W - 20, y + 2, { align: 'right' });
-    y += 16;
-  }
+    doc.text('TOTAL', 139, y + 4);
+    doc.text(fmtMXN(req.total_cotizado || totalCalc), W - 16, y + 4, { align: 'right' });
+    y += 18;
+  } else { y += 10; }
 
-  // VoBo stamp
+  // ── BLOQUE DE FIRMAS ──────────────────────────────────────────────────
+  if (y > 228) { doc.addPage(); y = 20; }
+  doc.setDrawColor(200, 200, 200); doc.setLineWidth(0.4);
+  doc.line(14, y, W - 14, y); y += 10;
+
+  const sigW = (W - 28 - 12) / 2;
+
+  // Firma solicitante
+  doc.setFontSize(7); doc.setFont('helvetica', 'bold'); doc.setTextColor(100, 116, 139);
+  doc.text('ELABORÓ Y SOLICITÓ', 14, y);
+  y += 14;
+  doc.setDrawColor(60, 60, 60); doc.line(14, y, 14 + sigW, y);
+  doc.setFontSize(9); doc.setFont('helvetica', 'bold'); doc.setTextColor(15, 23, 42);
+  doc.text('Ricardo Joanathan Reyes Medina', 14, y + 5);
+  doc.setFontSize(7.5); doc.setFont('helvetica', 'normal'); doc.setTextColor(80, 80, 80);
+  doc.text('Coordinador de Obras y Mantenimiento', 14, y + 11);
+  doc.text('Red de Colegios Mano Amiga', 14, y + 16);
+  doc.setFontSize(7); doc.setTextColor(120, 120, 120);
+  doc.text('Fecha: ' + nowFull, 14, y + 22);
+
+  // VoBo
+  const xR = 14 + sigW + 12;
+  doc.setFontSize(7); doc.setFont('helvetica', 'bold'); doc.setTextColor(100, 116, 139);
+  doc.text('AUTORIZÓ — VoBo', xR, y - 14);
   if (autorizado && req.vobo_por) {
-    doc.setDrawColor(22, 163, 74); doc.setLineWidth(1); doc.roundedRect(18, y, 80, 22, 2, 2, 'D');
-    doc.setFontSize(7); doc.setFont('helvetica', 'bold'); doc.setTextColor(22, 163, 74);
-    doc.text('VISTO BUENO AUTORIZADO', 22, y + 7);
-    doc.setFontSize(9); doc.setFont('helvetica', 'bold'); doc.setTextColor(15, 23, 42);
-    doc.text(req.vobo_por, 22, y + 14);
-    doc.setFontSize(7); doc.setFont('helvetica', 'normal'); doc.setTextColor(100, 116, 139);
-    doc.text(fmtDate(req.vobo_fecha), 22, y + 20);
+    doc.setDrawColor(22, 163, 74); doc.line(xR, y, xR + sigW, y);
+    doc.setFontSize(9); doc.setFont('helvetica', 'bold'); doc.setTextColor(22, 163, 74);
+    doc.text(req.vobo_por, xR, y + 5);
+    doc.setFontSize(7.5); doc.setFont('helvetica', 'normal'); doc.setTextColor(80, 80, 80);
+    doc.text('Visto Bueno Otorgado', xR, y + 11);
+    doc.setFontSize(7); doc.setTextColor(120, 120, 120);
+    doc.text('Fecha VoBo: ' + fmtDate(req.vobo_fecha), xR, y + 17);
+    doc.setFillColor(240, 253, 244); doc.setDrawColor(22, 163, 74);
+    doc.roundedRect(xR, y + 20, sigW, 9, 2, 2, 'FD');
+    doc.setFontSize(8); doc.setFont('helvetica', 'bold'); doc.setTextColor(22, 163, 74);
+    doc.text('VISTO BUENO AUTORIZADO', xR + sigW / 2, y + 26, { align: 'center' });
+  } else {
+    doc.setDrawColor(180, 180, 180); doc.line(xR, y, xR + sigW, y);
+    doc.setFontSize(7.5); doc.setFont('helvetica', 'normal'); doc.setTextColor(160, 160, 160);
+    doc.text('Pendiente de autorización', xR, y + 6);
   }
+  doc.setLineWidth(0.2);
 
-  // Footer
+  // ── FOOTER en todas las páginas — mismo estilo que Reporte General ───
   const pages = doc.getNumberOfPages();
   for (let i = 1; i <= pages; i++) {
     doc.setPage(i);
     doc.setFillColor(15, 23, 42); doc.rect(0, 286, W, 11, 'F');
+    doc.setFillColor(13, 138, 126); doc.rect(0, 286, 4, 11, 'F');
     doc.setFontSize(7); doc.setFont('helvetica', 'normal'); doc.setTextColor(160, 160, 180);
-    doc.text('Sistema RCMA · FMA Oficina Monterrey · Documento confidencial', 20, 292);
-    doc.text(`Pág. ${i} de ${pages}`, W - 20, 292, { align: 'right' });
+    doc.text('Sistema RCMA  ·  FMA Oficina Monterrey  ·  Documento confidencial', 10, 292);
+    doc.text('Pág. ' + i + ' de ' + pages, W - 14, 292, { align: 'right' });
   }
-  doc.save(`${req.folio}${autorizado ? '-AUTORIZADO' : ''}.pdf`);
+  doc.save(req.folio + (autorizado ? '-AUTORIZADO' : '-BORRADOR') + '.pdf');
 }
-
 // ─── Componente principal ──────────────────────────────────────────────────────
 export default function Insumos() {
   const { user } = useAuth();
@@ -340,7 +426,21 @@ export default function Insumos() {
     onError: (e: any) => toast.error(e.message ?? 'Error'),
   });
 
-  const filteredReq = useMemo(() => requisiciones.filter(r =>
+  const [confirmDel, setConfirmDel] = useState<Requisicion | null>(null);
+
+  const deleteReqMutation = useMutation({
+    mutationFn: async (id: string) => {
+      await supabase.from('insumos_items').delete().eq('requisicion_id', id);
+      const { error } = await supabase.from('insumos_requisiciones').delete().eq('id', id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['insumos_requisiciones'] });
+      toast.success('Requisición eliminada');
+      setConfirmDel(null);
+    },
+    onError: (e: any) => toast.error(e.message ?? 'Error al eliminar'),
+  });
     !search || r.folio.toLowerCase().includes(search.toLowerCase()) ||
     (r.proveedores_nombres ?? []).some(p => p.toLowerCase().includes(search.toLowerCase()))
   ), [requisiciones, search]);
@@ -462,12 +562,19 @@ export default function Insumos() {
                       </button>
                     )}
                     {/* Descargar PDF */}
-                    <button onClick={async () => {
+                    <button type="button" onClick={async () => {
                       const items = await getItems(req.id);
                       generarPDFRequisicion(req, items, req.estatus === 'autorizado' || req.estatus === 'surtido');
                     }} className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition" title="Descargar PDF">
                       <Download className="w-4 h-4" />
                     </button>
+                    {/* Eliminar — solo admin */}
+                    {isAdmin && (
+                      <button type="button" onClick={() => setConfirmDel(req)}
+                        className="p-1.5 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition" title="Eliminar requisición">
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    )}
                     {/* Expandir */}
                     <button onClick={() => setExpanded(isOpen ? null : req.id)}
                       className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition">
@@ -548,6 +655,31 @@ export default function Insumos() {
       )}
 
       {/* ════ MODALES ════════════════════════════════════════════════════════ */}
+
+      {/* Modal: Confirmar eliminación */}
+      {confirmDel && (
+        <Modal title="Eliminar Requisición" onClose={() => setConfirmDel(null)}>
+          <div className="space-y-3">
+            <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+              <p className="font-bold text-red-800 text-sm mb-1">¿Eliminar {confirmDel.folio}?</p>
+              <p className="text-xs text-red-700">
+                Esta acción no se puede deshacer. Se eliminarán la requisición y todos sus ítems.
+              </p>
+            </div>
+            <p className="text-xs text-slate-500">
+              Proveedor: {(confirmDel.proveedores_nombres ?? []).join(', ') || '—'} · Estatus: {ESTATUS_CFG[confirmDel.estatus]?.label}
+            </p>
+          </div>
+          <div className="flex gap-3 mt-4">
+            <button type="button" onClick={() => setConfirmDel(null)} className={btnOutline + " flex-1"}>Cancelar</button>
+            <button type="button" disabled={deleteReqMutation.isPending}
+              onClick={() => deleteReqMutation.mutate(confirmDel.id)}
+              className="flex-1 py-2 bg-red-600 text-white rounded-lg text-sm font-semibold hover:bg-red-700 disabled:opacity-40 transition">
+              {deleteReqMutation.isPending ? 'Eliminando...' : 'Sí, eliminar'}
+            </button>
+          </div>
+        </Modal>
+      )}
 
       {/* Modal: Nueva Requisición */}
       {showReqForm && (
