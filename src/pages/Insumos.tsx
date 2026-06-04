@@ -608,9 +608,17 @@ export default function Insumos() {
                     )}
                     {/* Solicitar VoBo */}
                     {isAdmin && req.estatus === 'cotizacion_recibida' && (
-                      <button onClick={() => solicitarVoBo.mutate(req)} disabled={solicitarVoBo.isPending}
+                      <button type="button" onClick={() => solicitarVoBo.mutate(req)} disabled={solicitarVoBo.isPending}
                         className="px-3 py-1.5 text-xs font-bold bg-orange-500 text-white rounded-lg hover:bg-orange-600 transition">
                         Solicitar VoBo
+                      </button>
+                    )}
+                    {/* Reenviar correo VoBo — ya en autorización */}
+                    {isAdmin && req.estatus === 'en_autorizacion' && (
+                      <button type="button" onClick={() => solicitarVoBo.mutate(req)} disabled={solicitarVoBo.isPending}
+                        className="px-3 py-1.5 text-xs font-bold bg-orange-400 text-white rounded-lg hover:bg-orange-500 transition"
+                        title="Reenviar correo de VoBo a Félix">
+                        ↺ Reenviar VoBo
                       </button>
                     )}
                     {/* Dar VoBo */}
