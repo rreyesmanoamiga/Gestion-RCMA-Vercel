@@ -61,22 +61,62 @@ serve(async (req) => {
 
   try {
     const {
-      folio, proveedores, items, total, iva_porcentaje, total_con_iva, notas,
-      link_cotizacion, siteUrl, solicitante,
+      tipo, folio, proveedores, items, total, iva_porcentaje, total_con_iva, notas,
+      link_cotizacion, siteUrl, solicitante, vobo_por, vobo_fecha,
     } = await req.json();
 
     const adminEmail = Deno.env.get('ADMIN_EMAIL') ?? 'rreyes@manoamiga.edu.mx';
     const smtpUser   = Deno.env.get('SMTP_USER')   ?? '';
     const appUrl     = siteUrl ?? Deno.env.get('SITE_URL') ?? '';
 
-    const voboEmail = 'fguerra@manoamiga.edu.mx';
-    const ccEmail   = 'arodriguez@manoamiga.edu.mx';
-
     const ivaPct   = Number(iva_porcentaje ?? 16);
     const subtotal = Number(total ?? 0);
     const ivaAmt   = subtotal * (ivaPct / 100);
     const totalIVA = Number(total_con_iva ?? (subtotal + ivaAmt));
     const fmt = (n: number) => n.toLocaleString('es-MX', { style:'currency', currency:'MXN' });
+
+    // ── Correo de CONFIRMACIÓN al admin cuando Felix autoriza ────────────────
+    if (tipo === 'autorizado') {
+      const htmlAuth = `<!DOCTYPE html><html><head><meta charset="UTF-8"></head>
+<body style="font-family:Arial,sans-serif;background:#f1f5f9;margin:0;padding:20px;">
+  <div style="max-width:620px;margin:0 auto;background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 2px 12px rgba(0,0,0,.08);">
+    <div style="background:#0f172a;padding:20px 28px;">
+      <p style="color:#94a3b8;font-size:11px;margin:0 0 2px;text-transform:uppercase;letter-spacing:.08em;">Sistema RCMA — Insumos</p>
+      <h1 style="color:#fff;font-size:17px;font-weight:700;margin:0;">✅ VoBo Autorizado</h1>
+    </div>
+    <div style="padding:24px 28px;">
+      <p style="color:#334155;font-size:14px;margin:0 0 20px;">
+        La requisición <strong>${folio}</strong> ha sido <strong style="color:#16a34a;">AUTORIZADA</strong> por <strong>${vobo_por}</strong> el ${vobo_fecha ?? 'hoy'}.
+      </p>
+      <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:16px 20px;margin-bottom:20px;">
+        <table style="width:100%;">
+          <tr><td style="font-size:12px;color:#64748b;font-weight:700;padding:4px 0;">PROVEEDOR</td>
+              <td style="font-size:13px;color:#0f172a;font-weight:600;">${Array.isArray(proveedores) ? proveedores.join(', ') : proveedores ?? '—'}</td></tr>
+          <tr><td style="font-size:12px;color:#64748b;font-weight:700;padding:4px 0;">SUBTOTAL</td>
+              <td style="font-size:13px;color:#0f172a;">${fmt(subtotal)}</td></tr>
+          <tr><td style="font-size:12px;color:#64748b;font-weight:700;padding:4px 0;">IVA (${ivaPct}%)</td>
+              <td style="font-size:13px;color:#0f172a;">${fmt(ivaAmt)}</td></tr>
+          <tr><td style="font-size:12px;color:#64748b;font-weight:700;padding:4px 0;">TOTAL A PAGAR</td>
+              <td style="font-size:15px;color:#16a34a;font-weight:700;">${fmt(totalIVA)}</td></tr>
+        </table>
+      </div>
+      <p style="color:#64748b;font-size:13px;">Ya puedes descargar el PDF autorizado desde el sistema y notificar al proveedor.</p>
+      <div style="text-align:center;margin-top:20px;">
+        <a href="${appUrl}/insumos" style="display:inline-block;background:#0d8a7e;color:#fff;font-size:14px;font-weight:700;padding:12px 32px;border-radius:8px;text-decoration:none;">Ver en el sistema →</a>
+      </div>
+    </div>
+    <div style="background:#f8fafc;padding:14px 28px;border-top:1px solid #e2e8f0;text-align:center;">
+      <p style="font-size:11px;color:#94a3b8;margin:0;">Sistema RCMA · Insumos FMA Oficina Monterrey</p>
+    </div>
+  </div>
+</body></html>`;
+      await sendEmail(adminEmail, `✅ VoBo Autorizado — ${folio} | Insumos FMA`, htmlAuth);
+      return new Response(JSON.stringify({ success: true }), { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+    }
+
+    // ── Correo de SOLICITUD a Félix (flujo original) ─────────────────────────
+    const voboEmail = 'fguerra@manoamiga.edu.mx';
+    const ccEmail   = 'arodriguez@manoamiga.edu.mx';
 
     const itemsHTML = (items as any[]).map((it: any, i: number) => `
       <tr style="background:${i % 2 === 0 ? '#f8fafc' : '#fff'}">

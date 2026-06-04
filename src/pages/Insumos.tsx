@@ -440,9 +440,19 @@ export default function Insumos() {
         estatus: 'autorizado', vobo_por: nombre,
         vobo_fecha: new Date().toISOString(), updated_at: new Date().toISOString(),
       }).eq('id', req.id);
-      // Notificar al admin
+      // Notificar al admin (Ricardo) que el VoBo fue otorgado
       await supabase.functions.invoke('notify-vobo-insumos', {
-        body: { folio: req.folio, proveedores: req.proveedores_nombres, items: [], total: req.total_cotizado, notas: `VoBo otorgado por ${nombre}`, link_cotizacion: '', siteUrl: window.location.origin, solicitante: nombre },
+        body: {
+          tipo: 'autorizado',
+          folio: req.folio,
+          proveedores: req.proveedores_nombres,
+          total: req.total_cotizado,
+          iva_porcentaje: req.iva_porcentaje ?? 16,
+          total_con_iva: req.total_con_iva ?? req.total_cotizado,
+          vobo_por: nombre,
+          vobo_fecha: new Date().toLocaleDateString('es-MX', { day:'2-digit', month:'long', year:'numeric' }),
+          siteUrl: window.location.origin,
+        },
       });
     },
     onSuccess: () => {
