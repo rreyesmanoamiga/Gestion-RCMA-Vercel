@@ -23,11 +23,11 @@ interface SysUser   { user_email: string; nombre: string; territorio: string; co
 
 const COLORES    = ['#0f172a','#0d8a7e','#2563eb','#7c3aed','#db2777','#ea580c','#16a34a','#d97706'];
 const CATEGORIAS = ['General','Importante','Ideas','Recordatorios','Proyectos','Personal'];
-const PRIO_CFG: Record<string,{label:string;cls:string;dot:string}> = {
-  urgente: { label:'Urgente', cls:'bg-red-100 text-red-700 border-red-200',       dot:'bg-red-500'    },
-  alta:    { label:'Alta',    cls:'bg-orange-100 text-orange-700 border-orange-200', dot:'bg-orange-500' },
-  normal:  { label:'Normal',  cls:'bg-blue-100 text-blue-700 border-blue-200',    dot:'bg-blue-500'   },
-  baja:    { label:'Baja',    cls:'bg-slate-100 text-slate-500 border-slate-200', dot:'bg-slate-400'  },
+const PRIO_CFG: Record<string,{label:string;cls:string;dot:string;cardLeft:string;selectorBg:string;selectorText:string}> = {
+  urgente: { label:'🔴 Urgente', cls:'bg-red-100 text-red-700 border-red-200',        dot:'bg-red-500',    cardLeft:'border-l-red-500',    selectorBg:'bg-red-500',    selectorText:'text-white' },
+  alta:    { label:'🟠 Alta',    cls:'bg-orange-100 text-orange-700 border-orange-200', dot:'bg-orange-500', cardLeft:'border-l-orange-400', selectorBg:'bg-orange-400', selectorText:'text-white' },
+  normal:  { label:'🔵 Normal',  cls:'bg-blue-100 text-blue-700 border-blue-200',     dot:'bg-blue-500',   cardLeft:'border-l-blue-400',   selectorBg:'bg-blue-500',   selectorText:'text-white' },
+  baja:    { label:'⚪ Baja',    cls:'bg-slate-100 text-slate-500 border-slate-200',  dot:'bg-slate-400',  cardLeft:'border-l-slate-300',  selectorBg:'bg-slate-300',  selectorText:'text-slate-700' },
 };
 const EST_CFG: Record<string,{label:string;icon:React.ReactNode;cls:string;cardBorder:string}> = {
   pendiente:  { label:'Pendiente',  icon:<Clock className="w-3 h-3"/>,        cls:'bg-amber-100 text-amber-700 border-amber-200',    cardBorder:'border-t-amber-400'   },
@@ -185,7 +185,7 @@ export default function Nexus() {
     const pCfg   = PRIO_CFG[p.prioridad];
     const eCfg   = EST_CFG[p.estatus];
     return (
-      <div className={`bg-white rounded-xl border-2 border-slate-200 border-t-4 ${eCfg?.cardBorder??'border-t-slate-300'} shadow-sm overflow-hidden flex flex-col`}>
+      <div className={`bg-white rounded-xl border border-slate-200 border-t-4 border-l-4 ${eCfg?.cardBorder??'border-t-slate-300'} ${pCfg?.cardLeft??'border-l-slate-300'} shadow-sm overflow-hidden flex flex-col`}>
         <div className="p-4 flex-1">
           <div className="flex items-start justify-between gap-2 mb-2">
             <h3 className={`font-black text-sm text-slate-900 leading-snug ${p.estatus==='completado'?'line-through text-slate-400':''}`}>{p.titulo}</h3>
@@ -360,7 +360,22 @@ export default function Nexus() {
           <div className="grid grid-cols-2 gap-3">
             <div className="col-span-2"><label className="block text-xs font-bold text-slate-500 uppercase mb-1">Título *</label><input className={inputCls} value={pendForm.titulo} onChange={e=>setPendForm(f=>({...f,titulo:e.target.value}))} placeholder="¿Qué hay que hacer?"/></div>
             <div><label className="block text-xs font-bold text-slate-500 uppercase mb-1">Tipo</label><select className={inputCls} value={pendForm.tipo} onChange={e=>setPendForm(f=>({...f,tipo:e.target.value,asignado_a:'',asignado_nombre:''}))}><option value="personal">Personal (solo yo)</option><option value="compartido">Compartido (asignar a usuario)</option></select></div>
-            <div><label className="block text-xs font-bold text-slate-500 uppercase mb-1">Prioridad</label><select className={inputCls} value={pendForm.prioridad} onChange={e=>setPendForm(f=>({...f,prioridad:e.target.value}))}><option value="baja">Baja</option><option value="normal">Normal</option><option value="alta">Alta</option><option value="urgente">🔴 Urgente</option></select></div>
+            <div>
+              <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Prioridad</label>
+              <div className="grid grid-cols-4 gap-1.5">
+                {(['baja','normal','alta','urgente'] as const).map(p => {
+                  const cfg = PRIO_CFG[p];
+                  const selected = pendForm.prioridad === p;
+                  return (
+                    <button key={p} type="button"
+                      onClick={() => setPendForm(f => ({...f, prioridad: p}))}
+                      className={`py-2 rounded-lg text-xs font-bold transition border-2 ${selected ? `${cfg.selectorBg} ${cfg.selectorText} border-transparent shadow-md scale-105` : 'bg-white text-slate-600 border-slate-200 hover:border-slate-300'}`}>
+                      {cfg.label}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
           </div>
           <div><label className="block text-xs font-bold text-slate-500 uppercase mb-1">Descripción</label><textarea className={inputCls} rows={2} value={pendForm.descripcion} onChange={e=>setPendForm(f=>({...f,descripcion:e.target.value}))} placeholder="Detalle opcional..."/></div>
 
