@@ -594,9 +594,16 @@ export default function Insumos() {
                   <div className="flex items-center gap-1.5 shrink-0">
                     {/* Capturar cotización */}
                     {isAdmin && req.estatus === 'pendiente_cotizacion' && (
-                      <button onClick={() => openPricing(req)}
+                      <button type="button" onClick={() => openPricing(req)}
                         className="px-3 py-1.5 text-xs font-bold bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition">
                         + Cotización
+                      </button>
+                    )}
+                    {/* Editar cotización ya registrada */}
+                    {isAdmin && (req.estatus === 'cotizacion_recibida' || req.estatus === 'en_autorizacion') && (
+                      <button type="button" onClick={() => openPricing(req)}
+                        className="px-3 py-1.5 text-xs font-bold bg-slate-600 text-white rounded-lg hover:bg-slate-700 transition flex items-center gap-1">
+                        <Pencil className="w-3 h-3" /> Editar cotización
                       </button>
                     )}
                     {/* Solicitar VoBo */}
