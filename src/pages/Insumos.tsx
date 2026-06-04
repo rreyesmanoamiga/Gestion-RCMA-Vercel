@@ -350,11 +350,13 @@ export default function Insumos() {
   // ── Capturar precios de cotización ────────────────────────────────────────
   const [pricingItems, setPricingItems] = useState<ReqItem[]>([]);
   const [linkCotizacion, setLinkCotizacion] = useState('');
+  const [ivaPercent, setIvaPercent] = useState('16');
 
   const openPricing = async (req: Requisicion) => {
     const items = await getItems(req.id);
     setPricingItems(items);
     setLinkCotizacion(req.link_cotizacion ?? '');
+    setIvaPercent('16');
     setPricingModal(req);
   };
 
@@ -824,54 +826,102 @@ export default function Insumos() {
 
       {/* Modal: Capturar precios de cotización */}
       {pricingModal && (
-        <Modal title={`Registrar Cotización — ${pricingModal.folio}`} onClose={() => setPricingModal(null)} wide>
-          <div className="space-y-4 overflow-y-auto max-h-[55vh] p-1">
+        <Modal title={`Registrar Cotización — ${pricingModal.folio}`} onClose={() => setPricingModal(null)} wide xl>
+          <div className="space-y-4 overflow-y-auto max-h-[65vh] p-1">
+
             {/* Link OneDrive */}
             <div>
-              <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Link cotización del proveedor (OneDrive/Drive)</label>
+              <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Link cotización del proveedor (OneDrive / Drive)</label>
               <div className="flex gap-2">
                 <input className={inputCls} placeholder="https://..." value={linkCotizacion} onChange={e => setLinkCotizacion(e.target.value)} />
                 {linkCotizacion && <a href={linkCotizacion} target="_blank" rel="noreferrer" className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg border border-blue-200 transition"><ExternalLink className="w-4 h-4" /></a>}
               </div>
             </div>
-            {/* Precios por ítem */}
+
+            {/* IVA configurable */}
+            <div className="flex items-center gap-3 bg-teal-50 border border-teal-200 rounded-lg px-4 py-3">
+              <span className="text-sm font-bold text-teal-800 whitespace-nowrap">¿Qué IVA aplica?</span>
+              <div className="flex items-center gap-1">
+                <input
+                  type="text"
+                  inputMode="decimal"
+                  className="w-20 px-3 py-1.5 border border-teal-300 rounded-lg text-sm font-bold text-center focus:ring-2 focus:ring-teal-500 focus:outline-none bg-white"
+                  value={ivaPercent}
+                  onChange={e => setIvaPercent(e.target.value.replace(/[^0-9.]/g, ''))}
+                  placeholder="16"
+                />
+                <span className="text-sm font-black text-teal-700">%</span>
+              </div>
+              <span className="text-xs text-teal-600">· Ejemplos: 0% (sin IVA), 8%, 16%</span>
+            </div>
+
+            {/* Tabla de precios */}
             <div>
-              <label className="block text-xs font-bold text-slate-500 uppercase mb-2">Precios de la cotización</label>
-              <div className="space-y-2">
+              <label className="block text-xs font-bold text-slate-500 uppercase mb-2">Captura los precios unitarios de la cotización</label>
+              <div className="rounded-xl border border-slate-200 overflow-hidden">
+                {/* Header */}
+                <div className="grid grid-cols-12 gap-0 bg-slate-800 text-white text-xs font-bold px-3 py-2">
+                  <div className="col-span-5">Producto</div>
+                  <div className="col-span-2 text-center">Cant. / Unidad</div>
+                  <div className="col-span-3 text-center">Precio Unitario</div>
+                  <div className="col-span-2 text-right">Subtotal</div>
+                </div>
                 {pricingItems.map((it, i) => (
-                  <div key={i} className="grid grid-cols-12 gap-2 items-center p-2 bg-slate-50 rounded-lg border border-slate-100">
-                    <div className="col-span-5 text-sm font-semibold text-slate-800">{it.nombre_producto}</div>
-                    <div className="col-span-2 text-xs text-slate-500">{it.cantidad} {it.unidad}</div>
-                    <div className="col-span-4">
-                      <input type="number" min="0" step="0.01" className={inputCls} placeholder="Precio unitario"
-                        value={it.precio_cotizado ?? ''}
-                        onChange={e => setPricingItems(prev => prev.map((p, idx) => idx === i ? { ...p, precio_cotizado: parseFloat(e.target.value) || null } : p))} />
+                  <div key={i} className={`grid grid-cols-12 gap-0 items-center px-3 py-2.5 border-b border-slate-100 ${i % 2 === 0 ? 'bg-white' : 'bg-slate-50'}`}>
+                    <div className="col-span-5 text-sm font-semibold text-slate-800 pr-2">{it.nombre_producto}</div>
+                    <div className="col-span-2 text-xs text-slate-500 text-center">{it.cantidad} {it.unidad}</div>
+                    <div className="col-span-3 px-1">
+                      <div className="relative">
+                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-sm font-semibold">$</span>
+                        <input
+                          type="text"
+                          inputMode="decimal"
+                          className="w-full pl-7 pr-3 py-1.5 border border-slate-300 rounded-lg text-sm text-right font-mono focus:ring-2 focus:ring-teal-500 focus:outline-none bg-white [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                          placeholder="0.00"
+                          value={it.precio_cotizado ?? ''}
+                          onChange={e => {
+                            const val = e.target.value.replace(/[^0-9.]/g, '');
+                            setPricingItems(prev => prev.map((p, idx) => idx === i ? { ...p, precio_cotizado: val === '' ? null : parseFloat(val) || null } : p));
+                          }}
+                        />
+                      </div>
                     </div>
-                    <div className="col-span-1 text-xs text-slate-500 text-right">
-                      {it.precio_cotizado ? fmtMXN(it.precio_cotizado * it.cantidad) : '—'}
+                    <div className="col-span-2 text-sm font-bold text-slate-700 text-right">
+                      {it.precio_cotizado ? fmtMXN((it.precio_cotizado as number) * it.cantidad) : '—'}
                     </div>
                   </div>
                 ))}
               </div>
-              <div className="mt-2 bg-slate-50 border border-slate-200 rounded-lg p-3 space-y-1">
-                <div className="flex justify-between text-sm">
-                  <span className="text-slate-500">Subtotal:</span>
-                  <span className="font-semibold">{fmtMXN(pricingItems.reduce((s, it) => s + ((it.precio_cotizado ?? 0) * it.cantidad), 0))}</span>
-                </div>
-                <div className="flex justify-between text-sm">
-                  <span className="text-slate-500">IVA (16%):</span>
-                  <span className="font-semibold">{fmtMXN(pricingItems.reduce((s, it) => s + ((it.precio_cotizado ?? 0) * it.cantidad), 0) * 0.16)}</span>
-                </div>
-                <div className="flex justify-between text-sm border-t border-slate-300 pt-1">
-                  <span className="font-black text-slate-800">Total con IVA:</span>
-                  <span className="font-black text-slate-900">{fmtMXN(pricingItems.reduce((s, it) => s + ((it.precio_cotizado ?? 0) * it.cantidad), 0) * 1.16)}</span>
-                </div>
-              </div>
             </div>
+
+            {/* Resumen financiero */}
+            {(() => {
+              const subtotal = pricingItems.reduce((s, it) => s + ((it.precio_cotizado ?? 0) * it.cantidad), 0);
+              const ivaPct   = parseFloat(ivaPercent) || 0;
+              const ivaAmt   = subtotal * (ivaPct / 100);
+              const total    = subtotal + ivaAmt;
+              return (
+                <div className="bg-slate-900 rounded-xl p-4 text-white space-y-2">
+                  <div className="flex justify-between text-sm">
+                    <span className="text-slate-400">Subtotal:</span>
+                    <span className="font-semibold">{fmtMXN(subtotal)}</span>
+                  </div>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-slate-400">IVA ({ivaPct}%):</span>
+                    <span className="font-semibold">{fmtMXN(ivaAmt)}</span>
+                  </div>
+                  <div className="flex justify-between text-base border-t border-slate-700 pt-2 mt-1">
+                    <span className="font-black">TOTAL con IVA:</span>
+                    <span className="font-black text-teal-400 text-lg">{fmtMXN(total)}</span>
+                  </div>
+                </div>
+              );
+            })()}
           </div>
+
           <div className="flex gap-3 mt-4">
-            <button onClick={() => setPricingModal(null)} className={btnOutline + " flex-1"}>Cancelar</button>
-            <button disabled={savePricingMutation.isPending}
+            <button type="button" onClick={() => setPricingModal(null)} className={btnOutline + " flex-1"}>Cancelar</button>
+            <button type="button" disabled={savePricingMutation.isPending}
               onClick={() => savePricingMutation.mutate({ req: pricingModal, items: pricingItems, link: linkCotizacion })}
               className={btnPrimary + " flex-1"}>
               {savePricingMutation.isPending ? 'Guardando...' : 'Guardar Cotización'}
