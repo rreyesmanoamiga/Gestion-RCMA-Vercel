@@ -17,7 +17,7 @@ import {
 // ── Types ─────────────────────────────────────────────────────────────────────
 interface Nota      { id: string; titulo: string; contenido: string; categoria: string; color: string; fijada: boolean; colegio: string; territorio: string; created_at: string; updated_at: string; }
 interface Pendiente { id: string; titulo: string; descripcion: string; tipo: string; asignado_a: string; asignado_nombre: string; prioridad: string; fecha_limite: string | null; estatus: string; completado_at: string | null; created_by: string; created_at: string;
-  proyecto_id?: string; proyecto_nombre?: string; ticket_mas_id?: string; ticket_mas_folio?: string; colegio?: string; territorio?: string; }
+  proyecto_id?: string; proyecto_nombre?: string; ticket_id?: string; ticket_folio?: string; colegio?: string; territorio?: string; }
 interface Comentario { id: string; pendiente_id: string; autor_email: string; autor_nombre: string; contenido: string; leido: boolean; created_at: string; }
 interface SysUser   { user_email: string; nombre: string; territorio: string; colegio: string; puesto: string; }
 
@@ -60,7 +60,7 @@ async function generarPDFPendiente(p: Pendiente, comentarios: Comentario[]) {
   doc.text(`Prioridad: ${pCfg?.label ?? p.prioridad}  ·  Estatus: ${eCfg?.label ?? p.estatus}  ·  Tipo: ${p.tipo==='compartido'?'Compartido':'Personal'}`,16,y+15);
   if (p.colegio) doc.text(`Colegio: ${p.colegio}  ·  Territorio: ${p.territorio}`,16,y+21);
   if (p.proyecto_nombre) doc.text(`Proyecto: ${p.proyecto_nombre}`,16,y+27);
-  if (p.ticket_mas_folio) doc.text(`Ticket MAS: ${p.ticket_mas_folio}`,p.proyecto_nombre?100:16,y+(p.colegio?27:21));
+  if (p.ticket_folio) doc.text(`Ticket: ${p.ticket_folio}`,p.proyecto_nombre?100:16,y+(p.colegio?27:21));
   if (p.fecha_limite) doc.text(`Fecha límite: ${fmtDate(p.fecha_limite)}`,16,y+33);
   y += 42;
   if (p.descripcion) { doc.setFontSize(8.5); doc.setFont('helvetica','normal'); doc.setTextColor(50,50,50); const lines=doc.splitTextToSize(p.descripcion,W-32) as string[]; doc.text(lines,16,y); y+=lines.length*5+8; }
@@ -135,7 +135,7 @@ export default function Nexus() {
 
   const { data: rawProyectos = [] } = useQuery({ queryKey:['proyectos_nexus'], queryFn: async()=>{ const {data}=await supabase.from('projects').select('id, name, territorio, colegio').order('name'); return data??[]; }, enabled:isAdmin });
 
-  const { data: rawTicketsMas = [] } = useQuery({ queryKey:['tickets_mas_nexus'], queryFn: async()=>{ const {data}=await supabase.from('tickets_mas').select('id, folio, colegio, territorio').order('folio',{ascending:false}); return data??[]; }, enabled:isAdmin });
+  const { data: rawTickets = [] } = useQuery({ queryKey:['tickets_nexus'], queryFn: async()=>{ const {data}=await supabase.from('tickets').select('id, folio, colegio, territorio').order('folio',{ascending:false}); return data??[]; }, enabled:isAdmin });
 
   const { data: notas = [] } = useQuery({ queryKey:['nexus_notas'], queryFn: async()=>{ const {data}=await supabase.from('nexus_notas').select('*').order('fijada',{ascending:false}).order('updated_at',{ascending:false}); return (data??[]) as Nota[]; }, enabled:isAdmin });
 
@@ -152,7 +152,7 @@ export default function Nexus() {
   });
 
   // ── Form Pendiente ────────────────────────────────────────────────────────
-  const [pendForm, setPendForm] = useState({ titulo:'',descripcion:'',tipo:'personal',asignado_a:'',asignado_nombre:'',prioridad:'normal',fecha_limite:'',estatus:'pendiente',proyecto_id:'',proyecto_nombre:'',ticket_mas_id:'',ticket_mas_folio:'',colegio:'',territorio:'' });
+  const [pendForm, setPendForm] = useState({ titulo:'',descripcion:'',tipo:'personal',asignado_a:'',asignado_nombre:'',prioridad:'normal',fecha_limite:'',estatus:'pendiente',proyecto_id:'',proyecto_nombre:'',ticket_id:'',ticket_folio:'',colegio:'',territorio:'' });
   const [sinProyecto, setSinProyecto] = useState(false);
 
   // Usuarios filtrados por colegio seleccionado en el form
@@ -170,7 +170,7 @@ export default function Nexus() {
 
   const openNota = (n?:Nota)=>{ setEditNota(n??null); setNotaConColegio(!!(n?.colegio)); setNotaForm(n?{titulo:n.titulo,contenido:n.contenido,categoria:n.categoria,color:n.color,fijada:n.fijada,territorio:n.territorio??'',colegio:n.colegio??''}:{titulo:'',contenido:'',categoria:'General',color:'#0f172a',fijada:false,territorio:'',colegio:''}); setShowNota(true); };
 
-  const openPend = (p?:Pendiente)=>{ setEditPend(p??null); setSinProyecto(!!(p&&!p.proyecto_id&&p.proyecto_nombre)); setPendForm(p?{titulo:p.titulo,descripcion:p.descripcion,tipo:p.tipo,asignado_a:p.asignado_a,asignado_nombre:p.asignado_nombre,prioridad:p.prioridad,fecha_limite:p.fecha_limite??'',estatus:p.estatus,proyecto_id:p.proyecto_id??'',proyecto_nombre:p.proyecto_nombre??'',ticket_mas_id:p.ticket_mas_id??'',ticket_mas_folio:p.ticket_mas_folio??'',colegio:p.colegio??'',territorio:p.territorio??''}:{titulo:'',descripcion:'',tipo:tab==='compartidos'?'compartido':'personal',asignado_a:'',asignado_nombre:'',prioridad:'normal',fecha_limite:'',estatus:'pendiente',proyecto_id:'',proyecto_nombre:'',ticket_mas_id:'',ticket_mas_folio:'',colegio:'',territorio:''}); setShowPend(true); };
+  const openPend = (p?:Pendiente)=>{ setEditPend(p??null); setSinProyecto(!!(p&&!p.proyecto_id&&p.proyecto_nombre)); setPendForm(p?{titulo:p.titulo,descripcion:p.descripcion,tipo:p.tipo,asignado_a:p.asignado_a,asignado_nombre:p.asignado_nombre,prioridad:p.prioridad,fecha_limite:p.fecha_limite??'',estatus:p.estatus,proyecto_id:p.proyecto_id??'',proyecto_nombre:p.proyecto_nombre??'',ticket_id:p.ticket_id??'',ticket_folio:p.ticket_folio??'',colegio:p.colegio??'',territorio:p.territorio??''}:{titulo:'',descripcion:'',tipo:tab==='compartidos'?'compartido':'personal',asignado_a:'',asignado_nombre:'',prioridad:'normal',fecha_limite:'',estatus:'pendiente',proyecto_id:'',proyecto_nombre:'',ticket_id:'',ticket_folio:'',colegio:'',territorio:''}); setShowPend(true); };
 
   // ── KPIs ─────────────────────────────────────────────────────────────────
   const kpis = useMemo(()=>({ total: pendientes.length, personales: pendientes.filter(p=>p.tipo==='personal').length, compartidos: pendientes.filter(p=>p.tipo==='compartido').length, completados: pendientes.filter(p=>p.estatus==='completado').length, urgentes: pendientes.filter(p=>p.prioridad==='urgente'&&p.estatus!=='completado').length, activos: pendientes.filter(p=>p.estatus!=='completado').length, }),[pendientes]);
@@ -196,7 +196,7 @@ export default function Nexus() {
           {(p.proyecto_nombre||p.ticket_mas_folio) && (
             <div className="flex flex-wrap gap-1.5 mb-2">
               {p.proyecto_nombre && <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-blue-700 bg-blue-50 border border-blue-200 px-2 py-0.5 rounded-full"><ClipboardList className="w-3 h-3"/>{p.proyecto_nombre}</span>}
-              {p.ticket_mas_folio && <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-purple-700 bg-purple-50 border border-purple-200 px-2 py-0.5 rounded-full"><Link2 className="w-3 h-3"/>{p.ticket_mas_folio}</span>}
+              {p.ticket_folio && <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-purple-700 bg-purple-50 border border-purple-200 px-2 py-0.5 rounded-full"><Link2 className="w-3 h-3"/>{p.ticket_folio}</span>}
             </div>
           )}
 
@@ -390,13 +390,13 @@ export default function Nexus() {
 
           {/* Vinculación Ticket MAS */}
           <div className="bg-purple-50 border border-purple-200 rounded-lg p-3 space-y-2">
-            <p className="text-xs font-bold text-purple-700 uppercase">Vinculación con Ticket MAS (opcional)</p>
-            <select className={inputCls} value={pendForm.ticket_mas_id} onChange={e=>{
-              const t=(rawTicketsMas as any[]).find(t=>t.id===e.target.value);
-              setPendForm(f=>({...f,ticket_mas_id:e.target.value,ticket_mas_folio:t?.folio??''}));
+            <p className="text-xs font-bold text-purple-700 uppercase">Vinculación con Ticket Registrado (opcional)</p>
+            <select className={inputCls} value={pendForm.ticket_id} onChange={e=>{
+              const t=(rawTickets as any[]).find(t=>t.id===e.target.value);
+              setPendForm(f=>({...f,ticket_id:e.target.value,ticket_folio:t?.folio??''}));
             }}>
               <option value="">Sin ticket vinculado</option>
-              {(rawTicketsMas as any[]).map((t:any)=><option key={t.id} value={t.id}>{t.folio} — {t.colegio}</option>)}
+              {(rawTickets as any[]).map((t:any)=><option key={t.id} value={t.id}>{t.folio} — {t.colegio}</option>)}
             </select>
           </div>
 
