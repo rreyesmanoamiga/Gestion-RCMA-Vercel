@@ -61,7 +61,7 @@ serve(async (req) => {
 
   try {
     const {
-      folio, proveedores, items, total, notas,
+      folio, proveedores, items, total, iva_porcentaje, total_con_iva, notas,
       link_cotizacion, siteUrl, solicitante,
     } = await req.json();
 
@@ -69,8 +69,14 @@ serve(async (req) => {
     const smtpUser   = Deno.env.get('SMTP_USER')   ?? '';
     const appUrl     = siteUrl ?? Deno.env.get('SITE_URL') ?? '';
 
-    const voboEmail = 'fguerra@manoamiga.edu.mx';     // Félix Guerra — autoriza
-    const ccEmail   = 'arodriguez@manoamiga.edu.mx';   // Ángel Rodríguez — copia
+    const voboEmail = 'fguerra@manoamiga.edu.mx';
+    const ccEmail   = 'arodriguez@manoamiga.edu.mx';
+
+    const ivaPct   = Number(iva_porcentaje ?? 16);
+    const subtotal = Number(total ?? 0);
+    const ivaAmt   = subtotal * (ivaPct / 100);
+    const totalIVA = Number(total_con_iva ?? (subtotal + ivaAmt));
+    const fmt = (n: number) => n.toLocaleString('es-MX', { style:'currency', currency:'MXN' });
 
     const itemsHTML = (items as any[]).map((it: any, i: number) => `
       <tr style="background:${i % 2 === 0 ? '#f8fafc' : '#fff'}">
@@ -85,7 +91,7 @@ serve(async (req) => {
         </td>
       </tr>`).join('');
 
-    const totalFmt = Number(total ?? 0).toLocaleString('es-MX', { style: 'currency', currency: 'MXN' });
+    const totalFmt = fmt(subtotal);
 
     const html = `
 <!DOCTYPE html><html><head><meta charset="UTF-8"></head>
@@ -126,9 +132,17 @@ serve(async (req) => {
         </thead>
         <tbody>${itemsHTML}</tbody>
         <tfoot>
-          <tr style="background:#0f172a;">
-            <td colspan="4" style="padding:10px;color:#fff;font-size:13px;font-weight:700;text-align:right;">TOTAL</td>
-            <td style="padding:10px;color:#fff;font-size:14px;font-weight:700;text-align:right;">${totalFmt}</td>
+          <tr style="background:#f8fafc;">
+            <td colspan="4" style="padding:8px 10px;font-size:12px;color:#64748b;text-align:right;">Subtotal:</td>
+            <td style="padding:8px 10px;font-size:12px;font-weight:600;text-align:right;">\${fmt(subtotal)}</td>
+          </tr>
+          <tr style="background:#f8fafc;">
+            <td colspan="4" style="padding:8px 10px;font-size:12px;color:#64748b;text-align:right;">IVA (\${ivaPct}%):</td>
+            <td style="padding:8px 10px;font-size:12px;font-weight:600;text-align:right;">\${fmt(ivaAmt)}</td>
+          </tr>
+          <tr style="background:#0d8a7e;">
+            <td colspan="4" style="padding:12px 10px;color:#fff;font-size:13px;font-weight:700;text-align:right;">TOTAL A PAGAR (con IVA)</td>
+            <td style="padding:12px 10px;color:#fff;font-size:15px;font-weight:700;text-align:right;">\${fmt(totalIVA)}</td>
           </tr>
         </tfoot>
       </table>
