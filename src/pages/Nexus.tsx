@@ -156,7 +156,7 @@ export default function Nexus() {
   const [sinProyecto, setSinProyecto] = useState(false);
 
   // Usuarios filtrados por colegio seleccionado en el form
-  const usuariosFiltrados = useMemo(()=>{ if(!pendForm.colegio) return allUsers; return allUsers.filter(u=>u.colegio===pendForm.colegio||u.territorio===pendForm.territorio); },[allUsers, pendForm.colegio, pendForm.territorio]);
+  const usuariosFiltrados = useMemo(()=>{ if(pendForm.colegio) return allUsers.filter(u=>u.colegio===pendForm.colegio); if(pendForm.territorio) return allUsers.filter(u=>u.territorio===pendForm.territorio); return []; },[allUsers, pendForm.colegio, pendForm.territorio]);
 
   const savePend = useMutation({
     mutationFn: async()=>{ if(!pendForm.titulo.trim()) throw new Error('El título es obligatorio'); const data={...pendForm,fecha_limite:pendForm.fecha_limite||null,created_by:userEmail,updated_at:new Date().toISOString()}; if(editPend){await supabase.from('nexus_pendientes').update(data).eq('id',editPend.id);} else{ const {error}=await supabase.from('nexus_pendientes').insert(data); if(error) throw error; if(pendForm.tipo==='compartido'&&pendForm.asignado_a){await supabase.functions.invoke('notify-nexus-asignacion',{body:{destinatario_email:pendForm.asignado_a,destinatario_nombre:pendForm.asignado_nombre||pendForm.asignado_a,titulo:pendForm.titulo,descripcion:pendForm.descripcion,prioridad:pendForm.prioridad,fecha_limite:pendForm.fecha_limite?fmtDate(pendForm.fecha_limite):null,asignado_por:userName,siteUrl:window.location.origin}});} } },
@@ -388,17 +388,6 @@ export default function Nexus() {
             )}
           </div>
 
-          {/* Vinculación Ticket MAS */}
-          <div className="bg-purple-50 border border-purple-200 rounded-lg p-3 space-y-2">
-            <p className="text-xs font-bold text-purple-700 uppercase">Vinculación con Ticket Registrado (opcional)</p>
-            <select className={inputCls} value={pendForm.ticket_id} onChange={e=>{
-              const t=(rawTickets as any[]).find(t=>t.id===e.target.value);
-              setPendForm(f=>({...f,ticket_id:e.target.value,ticket_folio:t?.folio??''}));
-            }}>
-              <option value="">Sin ticket vinculado</option>
-              {(rawTickets as any[]).map((t:any)=><option key={t.id} value={t.id}>{t.folio} — {t.colegio}</option>)}
-            </select>
-          </div>
 
           {/* Territorio / Colegio */}
           <div className="grid grid-cols-2 gap-3">
