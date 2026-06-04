@@ -49,6 +49,8 @@ import Pendientes from '@/pages/Pendientes';
 import CalendarioMantenimiento from '@/pages/CalendarioMantenimiento';
 import Presupuestos from '@/pages/Presupuestos';
 import Insumos from '@/pages/Insumos';
+import Nexus from '@/pages/Nexus';
+import Nexus from '@/pages/Nexus';
 
 // --- NUEVO IMPORT ---
 import Directorio from '@/pages/Directorio';
@@ -383,6 +385,8 @@ function AuthenticatedApp() {
           <Route path="/pendientes"         element={<Pendientes />} />
           <Route path="/calendario"         element={<CalendarioMantenimiento />} />
           <Route path="/insumos"             element={<Insumos />} />
+          <Route path="/nexus"               element={<Nexus />} />
+          <Route path="/nexus"               element={<Nexus />} />
           <Route path="/presupuestos"       element={<Presupuestos />} />
           
           {/* --- RUTA DE DIRECTORIO AGREGADA --- */}

@@ -46,6 +46,7 @@ const PERMISSION_DEFS: PermissionDef[] = [
   { key: 'eliminar_reportes',         label: 'Eliminar Reportes',         group: 'Reportes',              default: false },
   { key: 'ver_insumos',               label: 'Ver Insumos',               group: 'Insumos',               default: false },
   { key: 'vobo_insumos',              label: 'VoBo Insumos',              group: 'Insumos',               default: false },
+  { key: 'ver_nexus',                 label: 'Ver NEXUS',                 group: 'NEXUS',                 default: false },
 ];
 
 export const PERMISSIONS: Record<string, string> = Object.fromEntries(

@@ -1,0 +1,604 @@
+import React, { useState, useMemo, useRef } from 'react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { supabase } from '@/lib/supabaseClient';
+import { useAuth } from '@/lib/AuthContext';
+import { usePermissions } from '@/hooks/usePermissions';
+import { toast } from 'sonner';
+import { format } from 'date-fns';
+import { es } from 'date-fns/locale';
+import {
+  Plus, X, Pencil, Trash2, CheckCircle2, Clock, AlertCircle,
+  MessageSquare, Send, FileText, Pin, Search, Download,
+  ChevronDown, ChevronUp, BookOpen, ListChecks, Users,
+} from 'lucide-react';
+
+// ── Types ─────────────────────────────────────────────────────────────────────
+interface Nota      { id: string; titulo: string; contenido: string; categoria: string; color: string; fijada: boolean; created_at: string; updated_at: string; }
+interface Pendiente { id: string; titulo: string; descripcion: string; tipo: string; asignado_a: string; asignado_nombre: string; prioridad: string; fecha_limite: string | null; estatus: string; completado_at: string | null; created_by: string; created_at: string; }
+interface Comentario { id: string; pendiente_id: string; autor_email: string; autor_nombre: string; contenido: string; leido: boolean; created_at: string; }
+
+const COLORES = ['#0f172a','#0d8a7e','#2563eb','#7c3aed','#db2777','#ea580c','#16a34a','#d97706'];
+const CATEGORIAS = ['General','Importante','Ideas','Recordatorios','Proyectos','Personal'];
+const PRIO_CFG: Record<string,{label:string;cls:string;dot:string}> = {
+  urgente: { label:'Urgente',  cls:'bg-red-100 text-red-700 border-red-200',    dot:'bg-red-500'    },
+  alta:    { label:'Alta',     cls:'bg-orange-100 text-orange-700 border-orange-200', dot:'bg-orange-500' },
+  normal:  { label:'Normal',   cls:'bg-blue-100 text-blue-700 border-blue-200', dot:'bg-blue-500'   },
+  baja:    { label:'Baja',     cls:'bg-slate-100 text-slate-500 border-slate-200', dot:'bg-slate-400' },
+};
+const EST_CFG: Record<string,{label:string;icon:React.ReactNode;cls:string}> = {
+  pendiente:  { label:'Pendiente',  icon:<Clock className="w-3 h-3"/>,        cls:'bg-amber-100 text-amber-700 border-amber-200'   },
+  en_proceso: { label:'En Proceso', icon:<AlertCircle className="w-3 h-3"/>,  cls:'bg-blue-100 text-blue-700 border-blue-200'      },
+  completado: { label:'Completado', icon:<CheckCircle2 className="w-3 h-3"/>, cls:'bg-emerald-100 text-emerald-700 border-emerald-200' },
+};
+const fmtDate = (d?: string | null) => d ? format(new Date(d.includes('T') ? d : d + 'T12:00:00'), "d MMM yyyy", { locale: es }) : '—';
+const fmtFull = (d?: string | null) => d ? format(new Date(d), "d MMM yyyy HH:mm", { locale: es }) : '—';
+const inputCls = "w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-slate-900 focus:outline-none bg-white";
+const btnPrimary = "px-4 py-2 bg-slate-900 text-white rounded-lg text-sm font-semibold hover:bg-slate-800 disabled:opacity-40 transition";
+const btnOutline = "px-4 py-2 border border-slate-300 rounded-lg text-sm font-semibold text-slate-700 hover:bg-slate-100 transition";
+
+// ── PDF de pendiente ───────────────────────────────────────────────────────────
+async function generarPDFPendiente(p: Pendiente, comentarios: Comentario[]) {
+  let JsPDF = (window as any).jspdf?.jsPDF;
+  if (!JsPDF) {
+    await new Promise<void>((res, rej) => { const s = document.createElement('script'); s.src = 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js'; s.onload = () => res(); s.onerror = rej; document.head.appendChild(s); }).catch(() => null);
+    JsPDF = (window as any).jspdf?.jsPDF;
+  }
+  if (!JsPDF) { toast.error('No se pudo cargar jsPDF'); return; }
+  const doc = new JsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+  const W = 210; let y = 0;
+  const now = format(new Date(), "d 'de' MMMM 'de' yyyy", { locale: es });
+
+  // Header
+  doc.setFillColor(15, 23, 42); doc.rect(0, 0, W, 32, 'F');
+  doc.setFillColor(13, 138, 126); doc.rect(0, 0, 4, 32, 'F');
+  doc.setFontSize(14); doc.setFont('helvetica', 'bold'); doc.setTextColor(255, 255, 255);
+  doc.text('NEXUS — Pendiente', 14, 13);
+  doc.setFontSize(8); doc.setFont('helvetica', 'normal'); doc.setTextColor(148, 163, 184);
+  doc.text('Sistema RCMA  ·  Generado el ' + now, 14, 21);
+  doc.text('Documento confidencial — solo para uso interno', 14, 27);
+
+  // Logo
+  try {
+    const li = await new Promise<string>((res, rej) => { const img = new Image(); img.crossOrigin='anonymous'; img.onload = () => { const cv=document.createElement('canvas'); cv.width=img.width; cv.height=img.height; cv.getContext('2d')!.drawImage(img,0,0); res(cv.toDataURL('image/png')); }; img.onerror=rej; img.src='/logo.png'; });
+    doc.addImage(li,'PNG',W-38,4,22,22);
+  } catch {}
+  y = 42;
+
+  // Info principal
+  doc.setFillColor(241,245,249); doc.rect(12,y,W-24,p.descripcion ? 32 : 22,'F');
+  doc.setDrawColor(220,220,230); doc.setLineWidth(0.3); doc.rect(12,y,W-24,p.descripcion ? 32 : 22,'D');
+  doc.setFontSize(13); doc.setFont('helvetica','bold'); doc.setTextColor(15,23,42);
+  doc.text(p.titulo, 16, y+8);
+  doc.setFontSize(7.5); doc.setFont('helvetica','normal'); doc.setTextColor(100,116,139);
+  const pCfg = PRIO_CFG[p.prioridad]; const eCfg = EST_CFG[p.estatus];
+  doc.text(`Prioridad: ${pCfg?.label ?? p.prioridad}  ·  Estatus: ${eCfg?.label ?? p.estatus}  ·  Tipo: ${p.tipo === 'compartido' ? 'Compartido' : 'Personal'}`, 16, y+15);
+  if (p.fecha_limite) { doc.text(`Fecha límite: ${fmtDate(p.fecha_limite)}`, 16, y+21); }
+  if (p.descripcion) { doc.setFontSize(8.5); doc.setFont('helvetica','normal'); doc.setTextColor(50,50,50); doc.text(p.descripcion, 16, y+(p.fecha_limite ? 28 : 22), { maxWidth: W-32 }); }
+  if (p.asignado_a && p.tipo === 'compartido') {
+    doc.setFontSize(7.5); doc.setTextColor(100,116,139);
+    doc.text(`Asignado a: ${p.asignado_nombre} (${p.asignado_a})`, 16, y+(p.descripcion ? 38 : 22)+4);
+  }
+  y += (p.descripcion ? 32 : 22) + 14;
+
+  // Historial de comentarios
+  if (comentarios.length > 0) {
+    doc.setFontSize(9); doc.setFont('helvetica','bold'); doc.setTextColor(15,23,42);
+    doc.text('Historial de comentarios', 14, y); y += 5;
+    doc.setDrawColor(220,220,220); doc.line(14, y, W-14, y); y += 6;
+    comentarios.forEach((c, i) => {
+      if (y > 260) { doc.addPage(); y = 20; }
+      if (i % 2 === 0) { doc.setFillColor(248,250,252); doc.rect(12, y-4, W-24, 18, 'F'); }
+      doc.setFontSize(8); doc.setFont('helvetica','bold'); doc.setTextColor(15,23,42);
+      doc.text(c.autor_nombre, 16, y);
+      doc.setFontSize(7); doc.setFont('helvetica','normal'); doc.setTextColor(100,116,139);
+      doc.text(fmtFull(c.created_at), W-16, y, { align:'right' });
+      doc.setFontSize(8.5); doc.setFont('helvetica','normal'); doc.setTextColor(50,50,50);
+      const lines = doc.splitTextToSize(c.contenido, W-32) as string[];
+      doc.text(lines, 16, y+6);
+      y += 8 + (lines.length * 5);
+    });
+  }
+
+  // Footer
+  const pages = doc.getNumberOfPages();
+  for (let i=1;i<=pages;i++) {
+    doc.setPage(i);
+    doc.setFillColor(15,23,42); doc.rect(0,286,W,11,'F');
+    doc.setFillColor(13,138,126); doc.rect(0,286,4,11,'F');
+    doc.setFontSize(7); doc.setFont('helvetica','normal'); doc.setTextColor(160,160,180);
+    doc.text('Sistema RCMA  ·  NEXUS  ·  Documento confidencial', 10, 292);
+    doc.text(`Pág. ${i} de ${pages}`, W-14, 292, { align:'right' });
+  }
+  doc.save(`NEXUS-${p.titulo.replace(/\s+/g,'-').slice(0,30)}.pdf`);
+}
+
+// ── Modal ──────────────────────────────────────────────────────────────────────
+function Modal({ title, onClose, children, wide }: { title:string; onClose:()=>void; children:React.ReactNode; wide?:boolean }) {
+  return (
+    <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={e => { if(e.target===e.currentTarget) onClose(); }}>
+      <div className={`bg-white rounded-xl shadow-2xl w-full ${wide?'max-w-2xl':'max-w-md'} flex flex-col max-h-[90vh]`}>
+        <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100 bg-slate-50 rounded-t-xl">
+          <h3 className="font-black text-slate-900 text-sm">{title}</h3>
+          <button type="button" onClick={onClose} className="p-1 rounded hover:bg-slate-200"><X className="w-4 h-4 text-slate-400"/></button>
+        </div>
+        <div className="px-5 py-4 overflow-y-auto flex-1">{children}</div>
+      </div>
+    </div>
+  );
+}
+
+// ── Componente de Comentarios ─────────────────────────────────────────────────
+function ComentariosPanel({ pendiente, userEmail, userName, isAdmin }: { pendiente: Pendiente; userEmail: string; userName: string; isAdmin: boolean }) {
+  const qc = useQueryClient();
+  const [texto, setTexto] = useState('');
+  const endRef = useRef<HTMLDivElement>(null);
+
+  const { data: comentarios = [] } = useQuery({
+    queryKey: ['nexus_comentarios', pendiente.id],
+    queryFn: async () => {
+      const { data } = await supabase.from('nexus_comentarios').select('*').eq('pendiente_id', pendiente.id).order('created_at');
+      return (data ?? []) as Comentario[];
+    },
+    refetchInterval: 15000,
+  });
+
+  const sendMutation = useMutation({
+    mutationFn: async (contenido: string) => {
+      await supabase.from('nexus_comentarios').insert({ pendiente_id: pendiente.id, autor_email: userEmail, autor_nombre: userName, contenido });
+      // Determinar destinatario del correo
+      const destEmail = isAdmin ? pendiente.asignado_a : (pendiente.created_by || 'rreyes@manoamiga.edu.mx');
+      const destNombre = isAdmin ? pendiente.asignado_nombre : 'Ricardo Joanathan Reyes Medina';
+      if (destEmail) {
+        await supabase.functions.invoke('notify-nexus-comentario', {
+          body: { destinatario_email: destEmail, destinatario_nombre: destNombre, autor_nombre: userName, pendiente_titulo: pendiente.titulo, comentario: contenido, siteUrl: window.location.origin },
+        });
+      }
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['nexus_comentarios', pendiente.id] });
+      setTexto('');
+      setTimeout(() => endRef.current?.scrollIntoView({ behavior:'smooth' }), 100);
+    },
+    onError: (e:any) => toast.error(e.message ?? 'Error'),
+  });
+
+  return (
+    <div className="flex flex-col h-full">
+      <div className="flex-1 overflow-y-auto space-y-3 mb-3 max-h-64">
+        {comentarios.length === 0 && <p className="text-xs text-slate-400 text-center py-4">Sin comentarios aún. Sé el primero.</p>}
+        {comentarios.map(c => {
+          const esMio = c.autor_email === userEmail;
+          return (
+            <div key={c.id} className={`flex ${esMio ? 'justify-end' : 'justify-start'}`}>
+              <div className={`max-w-[80%] rounded-xl px-3 py-2 ${esMio ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-800'}`}>
+                <p className={`text-[10px] font-bold mb-1 ${esMio ? 'text-slate-300' : 'text-slate-500'}`}>{c.autor_nombre}</p>
+                <p className="text-sm">{c.contenido}</p>
+                <p className={`text-[10px] mt-1 ${esMio ? 'text-slate-400' : 'text-slate-400'}`}>{fmtFull(c.created_at)}</p>
+              </div>
+            </div>
+          );
+        })}
+        <div ref={endRef} />
+      </div>
+      <div className="flex gap-2">
+        <textarea className={inputCls + " resize-none"} rows={2} placeholder="Escribe un comentario..."
+          value={texto} onChange={e => setTexto(e.target.value)}
+          onKeyDown={e => { if(e.key==='Enter' && !e.shiftKey) { e.preventDefault(); if(texto.trim()) sendMutation.mutate(texto.trim()); }}} />
+        <button type="button" disabled={!texto.trim() || sendMutation.isPending}
+          onClick={() => sendMutation.mutate(texto.trim())}
+          className="p-2 bg-slate-900 text-white rounded-lg hover:bg-slate-800 disabled:opacity-40 transition shrink-0">
+          <Send className="w-4 h-4"/>
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ── Componente principal ───────────────────────────────────────────────────────
+export default function Nexus() {
+  const { user } = useAuth();
+  const { isAdmin } = usePermissions();
+  const qc = useQueryClient();
+  const userEmail = user?.email ?? '';
+  const userName = user?.user_metadata?.nombre || user?.email || 'Usuario';
+
+  const [tab, setTab] = useState<'notas'|'personales'|'compartidos'>(isAdmin ? 'notas' : 'compartidos');
+  const [search, setSearch] = useState('');
+  const [expandedP, setExpandedP] = useState<string|null>(null);
+
+  // Modals
+  const [showNota,  setShowNota]  = useState(false);
+  const [showPend,  setShowPend]  = useState(false);
+  const [editNota,  setEditNota]  = useState<Nota|null>(null);
+  const [editPend,  setEditPend]  = useState<Pendiente|null>(null);
+  const [viewNota,  setViewNota]  = useState<Nota|null>(null);
+  const [confirmDel, setConfirmDel] = useState<{type:'nota'|'pendiente';id:string;titulo:string}|null>(null);
+
+  // Usuarios del sistema
+  const { data: usuarios = [] } = useQuery({
+    queryKey: ['usuarios_nexus'],
+    queryFn: async () => {
+      const { data } = await supabase.from('user_permissions').select('user_id, user_email, user_name');
+      return (data ?? []).filter((u:any) => u.user_email !== userEmail);
+    },
+    enabled: isAdmin,
+  });
+
+  // Notas
+  const { data: notas = [] } = useQuery({
+    queryKey: ['nexus_notas'],
+    queryFn: async () => {
+      const { data } = await supabase.from('nexus_notas').select('*').order('fijada', { ascending: false }).order('updated_at', { ascending: false });
+      return (data ?? []) as Nota[];
+    },
+    enabled: isAdmin,
+  });
+
+  // Pendientes
+  const { data: pendientes = [] } = useQuery({
+    queryKey: ['nexus_pendientes'],
+    queryFn: async () => {
+      let q = supabase.from('nexus_pendientes').select('*').order('created_at', { ascending: false });
+      if (!isAdmin) q = q.eq('asignado_a', userEmail).neq('estatus','completado');
+      const { data } = await q;
+      return (data ?? []) as Pendiente[];
+    },
+    refetchInterval: 30000,
+  });
+
+  // Comentarios no leídos
+  const { data: unreadCount = 0 } = useQuery({
+    queryKey: ['nexus_unread', userEmail],
+    queryFn: async () => {
+      const myPendIds = pendientes.filter(p => p.asignado_a === userEmail || (isAdmin && p.tipo === 'compartido')).map(p => p.id);
+      if (myPendIds.length === 0) return 0;
+      const { count } = await supabase.from('nexus_comentarios').select('*', { count:'exact', head:true }).in('pendiente_id', myPendIds).eq('leido', false).neq('autor_email', userEmail);
+      return count ?? 0;
+    },
+    enabled: pendientes.length > 0,
+    refetchInterval: 30000,
+  });
+
+  // Formulario Nota
+  const [notaForm, setNotaForm] = useState({ titulo:'', contenido:'', categoria:'General', color:'#0f172a', fijada: false });
+
+  const saveNota = useMutation({
+    mutationFn: async () => {
+      if (editNota) { await supabase.from('nexus_notas').update({ ...notaForm, updated_at: new Date().toISOString() }).eq('id', editNota.id); }
+      else           { await supabase.from('nexus_notas').insert(notaForm); }
+    },
+    onSuccess: () => { qc.invalidateQueries({ queryKey:['nexus_notas'] }); toast.success('Nota guardada'); setShowNota(false); setEditNota(null); },
+    onError: (e:any) => toast.error(e.message),
+  });
+
+  // Formulario Pendiente
+  const [pendForm, setPendForm] = useState({ titulo:'', descripcion:'', tipo:'personal', asignado_a:'', asignado_nombre:'', prioridad:'normal', fecha_limite:'', estatus:'pendiente' });
+
+  const savePend = useMutation({
+    mutationFn: async () => {
+      if (!pendForm.titulo.trim()) throw new Error('El título es obligatorio');
+      const data = { ...pendForm, fecha_limite: pendForm.fecha_limite || null, created_by: userEmail, updated_at: new Date().toISOString() };
+      if (editPend) {
+        await supabase.from('nexus_pendientes').update(data).eq('id', editPend.id);
+      } else {
+        const { data: newP, error } = await supabase.from('nexus_pendientes').insert(data).select().single();
+        if (error) throw error;
+        if (pendForm.tipo === 'compartido' && pendForm.asignado_a) {
+          await supabase.functions.invoke('notify-nexus-asignacion', {
+            body: { destinatario_email: pendForm.asignado_a, destinatario_nombre: pendForm.asignado_nombre || pendForm.asignado_a, titulo: pendForm.titulo, descripcion: pendForm.descripcion, prioridad: pendForm.prioridad, fecha_limite: pendForm.fecha_limite ? fmtDate(pendForm.fecha_limite) : null, asignado_por: userName, siteUrl: window.location.origin },
+          });
+        }
+      }
+    },
+    onSuccess: () => { qc.invalidateQueries({ queryKey:['nexus_pendientes'] }); toast.success('Pendiente guardado'); setShowPend(false); setEditPend(null); },
+    onError: (e:any) => toast.error(e.message),
+  });
+
+  const completarPend = useMutation({
+    mutationFn: async (p: Pendiente) => {
+      await supabase.from('nexus_pendientes').update({ estatus:'completado', completado_at: new Date().toISOString(), updated_at: new Date().toISOString() }).eq('id', p.id);
+    },
+    onSuccess: () => { qc.invalidateQueries({ queryKey:['nexus_pendientes'] }); toast.success('Pendiente completado ✓'); },
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: async ({ type, id }: { type:'nota'|'pendiente'; id:string }) => {
+      if (type === 'nota') await supabase.from('nexus_notas').delete().eq('id', id);
+      else { await supabase.from('nexus_comentarios').delete().eq('pendiente_id', id); await supabase.from('nexus_pendientes').delete().eq('id', id); }
+    },
+    onSuccess: () => { qc.invalidateQueries({ queryKey:['nexus_notas'] }); qc.invalidateQueries({ queryKey:['nexus_pendientes'] }); toast.success('Eliminado'); setConfirmDel(null); },
+  });
+
+  const filteredNotas = useMemo(() => notas.filter(n => !search || n.titulo.toLowerCase().includes(search.toLowerCase()) || n.contenido.toLowerCase().includes(search.toLowerCase())), [notas, search]);
+  const pendPersonales = useMemo(() => pendientes.filter(p => p.tipo === 'personal'), [pendientes]);
+  const pendCompartidos = useMemo(() => isAdmin ? pendientes.filter(p => p.tipo === 'compartido') : pendientes, [pendientes, isAdmin]);
+
+  const openNota = (n?: Nota) => { setEditNota(n ?? null); setNotaForm(n ? { titulo:n.titulo, contenido:n.contenido, categoria:n.categoria, color:n.color, fijada:n.fijada } : { titulo:'', contenido:'', categoria:'General', color:'#0f172a', fijada:false }); setShowNota(true); };
+  const openPend = (p?: Pendiente) => { setEditPend(p ?? null); setPendForm(p ? { titulo:p.titulo, descripcion:p.descripcion, tipo:p.tipo, asignado_a:p.asignado_a, asignado_nombre:p.asignado_nombre, prioridad:p.prioridad, fecha_limite:p.fecha_limite ?? '', estatus:p.estatus } : { titulo:'', descripcion:'', tipo: tab==='compartidos'?'compartido':'personal', asignado_a:'', asignado_nombre:'', prioridad:'normal', fecha_limite:'', estatus:'pendiente' }); setShowPend(true); };
+
+  const PendienteCard = ({ p }: { p: Pendiente }) => {
+    const isOpen = expandedP === p.id;
+    const pCfg = PRIO_CFG[p.prioridad];
+    const eCfg = EST_CFG[p.estatus];
+    return (
+      <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+        <div className="flex items-start gap-3 px-4 py-3">
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2 flex-wrap mb-1">
+              <span className={`font-black text-slate-900 text-sm ${p.estatus==='completado'?'line-through text-slate-400':''}`}>{p.titulo}</span>
+              <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-bold border ${pCfg?.cls}`}>{pCfg?.label}</span>
+              <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-bold border ${eCfg?.cls}`}>{eCfg?.icon}{eCfg?.label}</span>
+            </div>
+            <p className="text-xs text-slate-500">
+              {p.tipo==='compartido' && isAdmin && <span className="font-semibold text-teal-600 mr-2">→ {p.asignado_nombre}</span>}
+              {p.tipo==='compartido' && !isAdmin && <span className="font-semibold text-teal-600 mr-2">Asignado por: Admin</span>}
+              {p.fecha_limite && <span className="text-amber-600">📅 {fmtDate(p.fecha_limite)} · </span>}
+              {fmtDate(p.created_at)}
+            </p>
+          </div>
+          <div className="flex items-center gap-1 shrink-0">
+            {p.estatus !== 'completado' && (
+              <button type="button" onClick={() => completarPend.mutate(p)}
+                className="p-1.5 text-emerald-500 hover:text-emerald-700 hover:bg-emerald-50 rounded-lg transition" title="Completar">
+                <CheckCircle2 className="w-4 h-4"/>
+              </button>
+            )}
+            {isAdmin && p.estatus !== 'completado' && (
+              <button type="button" onClick={() => openPend(p)} className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition"><Pencil className="w-4 h-4"/></button>
+            )}
+            {(p.estatus === 'completado') && (
+              <button type="button" onClick={async () => { const items = await supabase.from('nexus_comentarios').select('*').eq('pendiente_id', p.id).order('created_at').then(r => r.data ?? []); generarPDFPendiente(p, items as Comentario[]); }}
+                className="p-1.5 text-slate-400 hover:text-teal-600 rounded-lg transition" title="Descargar PDF">
+                <Download className="w-4 h-4"/>
+              </button>
+            )}
+            {isAdmin && (
+              <button type="button" onClick={() => setConfirmDel({ type:'pendiente', id:p.id, titulo:p.titulo })}
+                className="p-1.5 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition"><Trash2 className="w-4 h-4"/></button>
+            )}
+            <button type="button" onClick={() => setExpandedP(isOpen ? null : p.id)}
+              className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition">
+              {isOpen ? <ChevronUp className="w-4 h-4"/> : <ChevronDown className="w-4 h-4"/>}
+            </button>
+          </div>
+        </div>
+        {isOpen && (
+          <div className="border-t border-slate-100 px-4 py-4 space-y-3">
+            {p.descripcion && <p className="text-sm text-slate-600">{p.descripcion}</p>}
+            {p.estatus==='completado' && p.completado_at && <p className="text-xs text-emerald-600 font-semibold">✓ Completado el {fmtFull(p.completado_at)}</p>}
+            <div>
+              <p className="text-xs font-bold text-slate-500 uppercase mb-2 flex items-center gap-1.5"><MessageSquare className="w-3.5 h-3.5"/> Comentarios</p>
+              <ComentariosPanel pendiente={p} userEmail={userEmail} userName={userName} isAdmin={isAdmin} />
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  return (
+    <div className="space-y-5">
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-black text-slate-900 uppercase tracking-tight flex items-center gap-2">
+            <BookOpen className="w-6 h-6 text-teal-600"/> NEXUS
+            {unreadCount > 0 && <span className="text-xs font-bold bg-red-500 text-white px-2 py-0.5 rounded-full">{unreadCount}</span>}
+          </h1>
+          <p className="text-sm text-slate-500 mt-0.5">Notas, pendientes y colaboración</p>
+        </div>
+        <div className="flex gap-2">
+          {isAdmin && tab === 'notas' && (
+            <button type="button" onClick={() => openNota()} className={btnPrimary + " flex items-center gap-2"}><Plus className="w-4 h-4"/> Nueva Nota</button>
+          )}
+          {(tab === 'personales' || tab === 'compartidos') && isAdmin && (
+            <button type="button" onClick={() => openPend()} className={btnPrimary + " flex items-center gap-2"}><Plus className="w-4 h-4"/> Nuevo Pendiente</button>
+          )}
+        </div>
+      </div>
+
+      {/* Tabs */}
+      <div className="flex gap-1 bg-slate-100 rounded-lg p-1 w-fit">
+        {isAdmin && (
+          <button type="button" onClick={() => setTab('notas')}
+            className={`flex items-center gap-1.5 px-4 py-2 rounded-md text-sm font-semibold transition ${tab==='notas'?'bg-white text-slate-900 shadow-sm':'text-slate-500 hover:text-slate-700'}`}>
+            <FileText className="w-4 h-4"/> Notas <span className={`ml-1 text-xs px-1.5 py-0.5 rounded-full font-bold ${tab==='notas'?'bg-slate-900 text-white':'bg-slate-200 text-slate-500'}`}>{notas.length}</span>
+          </button>
+        )}
+        {isAdmin && (
+          <button type="button" onClick={() => setTab('personales')}
+            className={`flex items-center gap-1.5 px-4 py-2 rounded-md text-sm font-semibold transition ${tab==='personales'?'bg-white text-slate-900 shadow-sm':'text-slate-500 hover:text-slate-700'}`}>
+            <ListChecks className="w-4 h-4"/> Mis Pendientes <span className={`ml-1 text-xs px-1.5 py-0.5 rounded-full font-bold ${tab==='personales'?'bg-slate-900 text-white':'bg-slate-200 text-slate-500'}`}>{pendPersonales.filter(p=>p.estatus!=='completado').length}</span>
+          </button>
+        )}
+        <button type="button" onClick={() => setTab('compartidos')}
+          className={`flex items-center gap-1.5 px-4 py-2 rounded-md text-sm font-semibold transition ${tab==='compartidos'?'bg-white text-slate-900 shadow-sm':'text-slate-500 hover:text-slate-700'}`}>
+          <Users className="w-4 h-4"/> {isAdmin ? 'Compartidos' : 'Mis Pendientes'} <span className={`ml-1 text-xs px-1.5 py-0.5 rounded-full font-bold ${tab==='compartidos'?'bg-slate-900 text-white':'bg-slate-200 text-slate-500'}`}>{pendCompartidos.filter(p=>p.estatus!=='completado').length}</span>
+        </button>
+      </div>
+
+      {/* Búsqueda en notas */}
+      {tab === 'notas' && (
+        <div className="relative max-w-sm">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400"/>
+          <input className="pl-9 pr-4 py-2 border border-slate-300 rounded-lg text-sm w-full focus:ring-2 focus:ring-slate-900 focus:outline-none"
+            placeholder="Buscar notas..." value={search} onChange={e => setSearch(e.target.value)}/>
+        </div>
+      )}
+
+      {/* ── Tab: Notas ──────────────────────────────────────────────────── */}
+      {tab === 'notas' && isAdmin && (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          {filteredNotas.length === 0 && (
+            <div className="col-span-3 text-center py-12">
+              <FileText className="w-10 h-10 text-slate-200 mx-auto mb-3"/>
+              <p className="text-sm font-semibold text-slate-500">Sin notas aún</p>
+            </div>
+          )}
+          {filteredNotas.map(n => (
+            <div key={n.id} className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden cursor-pointer hover:shadow-md transition" onClick={() => setViewNota(n)}>
+              <div className="h-2" style={{ background: n.color }}/>
+              <div className="p-4">
+                <div className="flex items-start justify-between mb-2">
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-1.5 mb-1">
+                      {n.fijada && <Pin className="w-3 h-3 text-amber-500 shrink-0"/>}
+                      <h3 className="font-bold text-slate-900 text-sm truncate">{n.titulo}</h3>
+                    </div>
+                    <span className="text-[10px] bg-slate-100 text-slate-500 px-2 py-0.5 rounded-full">{n.categoria}</span>
+                  </div>
+                  <div className="flex gap-1 ml-2" onClick={e => e.stopPropagation()}>
+                    <button type="button" onClick={() => openNota(n)} className="p-1 text-slate-400 hover:text-slate-700 rounded"><Pencil className="w-3.5 h-3.5"/></button>
+                    <button type="button" onClick={() => setConfirmDel({ type:'nota', id:n.id, titulo:n.titulo })} className="p-1 text-red-400 hover:text-red-600 rounded"><Trash2 className="w-3.5 h-3.5"/></button>
+                  </div>
+                </div>
+                <p className="text-xs text-slate-500 line-clamp-3">{n.contenido || <span className="italic">Sin contenido</span>}</p>
+                <p className="text-[10px] text-slate-400 mt-3">{fmtDate(n.updated_at)}</p>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* ── Tab: Pendientes ──────────────────────────────────────────────── */}
+      {(tab === 'personales' || tab === 'compartidos') && (
+        <div className="space-y-3">
+          {/* Activos */}
+          {(tab==='personales' ? pendPersonales : pendCompartidos).filter(p => p.estatus !== 'completado').length === 0 && (
+            <div className="text-center py-12">
+              <CheckCircle2 className="w-10 h-10 text-emerald-200 mx-auto mb-3"/>
+              <p className="text-sm font-semibold text-slate-500">¡Todo al día! Sin pendientes activos.</p>
+            </div>
+          )}
+          {(tab==='personales' ? pendPersonales : pendCompartidos).filter(p => p.estatus !== 'completado').map(p => <PendienteCard key={p.id} p={p}/>)}
+
+          {/* Completados (solo admin los ve) */}
+          {isAdmin && (tab==='personales' ? pendPersonales : pendCompartidos).filter(p => p.estatus === 'completado').length > 0 && (
+            <div className="pt-4">
+              <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-3 flex items-center gap-2">
+                <CheckCircle2 className="w-3.5 h-3.5"/> Completados — evidencia
+              </p>
+              {(tab==='personales' ? pendPersonales : pendCompartidos).filter(p => p.estatus === 'completado').map(p => <PendienteCard key={p.id} p={p}/>)}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ══ MODALES ══════════════════════════════════════════════════════════ */}
+
+      {/* Ver Nota */}
+      {viewNota && (
+        <Modal title={viewNota.titulo} onClose={() => setViewNota(null)} wide>
+          <div className="space-y-3">
+            <div className="flex items-center gap-2">
+              <span className="w-3 h-3 rounded-full" style={{ background: viewNota.color }}/>
+              <span className="text-xs bg-slate-100 text-slate-600 px-2 py-0.5 rounded-full">{viewNota.categoria}</span>
+              {viewNota.fijada && <span className="text-xs bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full flex items-center gap-1"><Pin className="w-3 h-3"/> Fijada</span>}
+            </div>
+            <div className="bg-slate-50 rounded-lg p-4 min-h-[200px] text-sm text-slate-700 whitespace-pre-wrap">{viewNota.contenido || <span className="text-slate-400 italic">Sin contenido</span>}</div>
+            <p className="text-xs text-slate-400">Actualizada: {fmtFull(viewNota.updated_at)}</p>
+          </div>
+          <div className="flex gap-3 mt-4">
+            <button type="button" onClick={() => setViewNota(null)} className={btnOutline + " flex-1"}>Cerrar</button>
+            <button type="button" onClick={() => { setViewNota(null); openNota(viewNota); }} className={btnPrimary + " flex-1 flex items-center justify-center gap-2"}><Pencil className="w-4 h-4"/> Editar</button>
+          </div>
+        </Modal>
+      )}
+
+      {/* Formulario Nota */}
+      {showNota && (
+        <Modal title={editNota ? 'Editar Nota' : 'Nueva Nota'} onClose={() => { setShowNota(false); setEditNota(null); }} wide>
+          <div className="space-y-3">
+            <div><label className="block text-xs font-bold text-slate-500 uppercase mb-1">Título *</label>
+              <input className={inputCls} value={notaForm.titulo} onChange={e => setNotaForm(f=>({...f,titulo:e.target.value}))} placeholder="Título de la nota"/></div>
+            <div className="grid grid-cols-2 gap-3">
+              <div><label className="block text-xs font-bold text-slate-500 uppercase mb-1">Categoría</label>
+                <select className={inputCls} value={notaForm.categoria} onChange={e => setNotaForm(f=>({...f,categoria:e.target.value}))}>
+                  {CATEGORIAS.map(c => <option key={c}>{c}</option>)}</select></div>
+              <div><label className="block text-xs font-bold text-slate-500 uppercase mb-1">Color</label>
+                <div className="flex gap-2 flex-wrap pt-1">
+                  {COLORES.map(c => <button type="button" key={c} onClick={() => setNotaForm(f=>({...f,color:c}))} className={`w-6 h-6 rounded-full border-2 transition ${notaForm.color===c?'border-slate-900 scale-110':'border-transparent'}`} style={{background:c}}/> )}</div></div>
+            </div>
+            <div><label className="block text-xs font-bold text-slate-500 uppercase mb-1">Contenido</label>
+              <textarea className={inputCls} rows={8} value={notaForm.contenido} onChange={e => setNotaForm(f=>({...f,contenido:e.target.value}))} placeholder="Escribe aquí tu nota..."/></div>
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input type="checkbox" className="rounded" checked={notaForm.fijada} onChange={e => setNotaForm(f=>({...f,fijada:e.target.checked}))}/>
+              <span className="text-sm font-semibold text-slate-700">Fijar nota (aparece primero)</span>
+            </label>
+          </div>
+          <div className="flex gap-3 mt-4">
+            <button type="button" onClick={() => { setShowNota(false); setEditNota(null); }} className={btnOutline + " flex-1"}>Cancelar</button>
+            <button type="button" disabled={!notaForm.titulo.trim() || saveNota.isPending} onClick={() => saveNota.mutate()} className={btnPrimary + " flex-1"}>{saveNota.isPending?'Guardando...':'Guardar'}</button>
+          </div>
+        </Modal>
+      )}
+
+      {/* Formulario Pendiente */}
+      {showPend && (
+        <Modal title={editPend ? 'Editar Pendiente' : 'Nuevo Pendiente'} onClose={() => { setShowPend(false); setEditPend(null); }} wide>
+          <div className="space-y-3">
+            <div><label className="block text-xs font-bold text-slate-500 uppercase mb-1">Título *</label>
+              <input className={inputCls} value={pendForm.titulo} onChange={e => setPendForm(f=>({...f,titulo:e.target.value}))} placeholder="¿Qué hay que hacer?"/></div>
+            <div><label className="block text-xs font-bold text-slate-500 uppercase mb-1">Descripción</label>
+              <textarea className={inputCls} rows={3} value={pendForm.descripcion} onChange={e => setPendForm(f=>({...f,descripcion:e.target.value}))} placeholder="Detalle opcional..."/></div>
+            <div className="grid grid-cols-2 gap-3">
+              <div><label className="block text-xs font-bold text-slate-500 uppercase mb-1">Tipo</label>
+                <select className={inputCls} value={pendForm.tipo} onChange={e => setPendForm(f=>({...f,tipo:e.target.value,asignado_a:'',asignado_nombre:''}))}>
+                  <option value="personal">Personal (solo yo)</option>
+                  <option value="compartido">Compartido (asignar a usuario)</option>
+                </select></div>
+              <div><label className="block text-xs font-bold text-slate-500 uppercase mb-1">Prioridad</label>
+                <select className={inputCls} value={pendForm.prioridad} onChange={e => setPendForm(f=>({...f,prioridad:e.target.value}))}>
+                  <option value="baja">Baja</option><option value="normal">Normal</option>
+                  <option value="alta">Alta</option><option value="urgente">🔴 Urgente</option>
+                </select></div>
+            </div>
+            {pendForm.tipo === 'compartido' && (
+              <div><label className="block text-xs font-bold text-slate-500 uppercase mb-1">Asignar a *</label>
+                <select className={inputCls} value={pendForm.asignado_a}
+                  onChange={e => { const u = usuarios.find((u:any) => u.user_email === e.target.value); setPendForm(f=>({...f, asignado_a: e.target.value, asignado_nombre: u?.user_name || e.target.value})); }}>
+                  <option value="">Selecciona un usuario...</option>
+                  {(usuarios as any[]).map((u:any) => <option key={u.user_email} value={u.user_email}>{u.user_name || u.user_email}</option>)}
+                </select></div>
+            )}
+            <div className="grid grid-cols-2 gap-3">
+              <div><label className="block text-xs font-bold text-slate-500 uppercase mb-1">Fecha límite</label>
+                <input type="date" className={inputCls} value={pendForm.fecha_limite} onChange={e => setPendForm(f=>({...f,fecha_limite:e.target.value}))}/></div>
+              {editPend && (
+                <div><label className="block text-xs font-bold text-slate-500 uppercase mb-1">Estatus</label>
+                  <select className={inputCls} value={pendForm.estatus} onChange={e => setPendForm(f=>({...f,estatus:e.target.value}))}>
+                    <option value="pendiente">Pendiente</option><option value="en_proceso">En Proceso</option>
+                    <option value="completado">Completado</option><option value="cancelado">Cancelado</option>
+                  </select></div>
+              )}
+            </div>
+          </div>
+          <div className="flex gap-3 mt-4">
+            <button type="button" onClick={() => { setShowPend(false); setEditPend(null); }} className={btnOutline + " flex-1"}>Cancelar</button>
+            <button type="button" disabled={!pendForm.titulo.trim() || (pendForm.tipo==='compartido' && !pendForm.asignado_a) || savePend.isPending}
+              onClick={() => savePend.mutate()} className={btnPrimary + " flex-1"}>{savePend.isPending?'Guardando...':'Guardar'}</button>
+          </div>
+        </Modal>
+      )}
+
+      {/* Confirmar eliminación */}
+      {confirmDel && (
+        <Modal title="Confirmar eliminación" onClose={() => setConfirmDel(null)}>
+          <div className="space-y-3">
+            <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+              <p className="font-bold text-red-800 text-sm mb-1">¿Eliminar "{confirmDel.titulo}"?</p>
+              <p className="text-xs text-red-700">Esta acción no se puede deshacer.</p>
+            </div>
+          </div>
+          <div className="flex gap-3 mt-4">
+            <button type="button" onClick={() => setConfirmDel(null)} className={btnOutline + " flex-1"}>Cancelar</button>
+            <button type="button" disabled={deleteMutation.isPending} onClick={() => deleteMutation.mutate(confirmDel)}
+              className="flex-1 py-2 bg-red-600 text-white rounded-lg text-sm font-semibold hover:bg-red-700 disabled:opacity-40 transition">
+              {deleteMutation.isPending ? 'Eliminando...' : 'Sí, eliminar'}
+            </button>
+          </div>
+        </Modal>
+      )}
+    </div>
+  );
+}
