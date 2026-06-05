@@ -136,6 +136,7 @@ export default function Nexus() {
   const [editNota,  setEditNota]  = useState<Nota|null>(null);
   const [editPend,  setEditPend]  = useState<Pendiente|null>(null);
   const [viewNota,  setViewNota]  = useState<Nota|null>(null);
+  const [viewPend,  setViewPend]  = useState<Pendiente|null>(null);
   const [confirmDel, setConfirmDel] = useState<{type:'nota'|'pendiente';id:string;titulo:string}|null>(null);
 
   // ── Queries ───────────────────────────────────────────────────────────────
@@ -211,7 +212,8 @@ export default function Nexus() {
     const pCfg   = PRIO_CFG[p.prioridad];
     const eCfg   = EST_CFG[p.estatus];
     return (
-      <div className={`bg-white rounded-xl border border-slate-200 border-t-4 border-l-4 ${eCfg?.cardBorder??'border-t-slate-300'} ${pCfg?.cardLeft??'border-l-slate-300'} shadow-sm overflow-hidden flex flex-col`}>
+      <div onClick={() => setViewPend(p)}
+        className={`bg-white rounded-xl border border-slate-200 border-t-4 border-l-4 ${eCfg?.cardBorder??'border-t-slate-300'} ${pCfg?.cardLeft??'border-l-slate-300'} shadow-sm overflow-hidden flex flex-col cursor-pointer hover:shadow-md transition`}>
         <div className="p-4 flex-1">
           <div className="flex items-start justify-between gap-2 mb-2">
             <h3 className={`font-black text-sm text-slate-900 leading-snug ${p.estatus==='completado'?'line-through text-slate-400':''}`}>{p.titulo}</h3>
@@ -247,19 +249,15 @@ export default function Nexus() {
         </div>
 
         {/* Footer */}
-        <div className="px-4 py-2 bg-slate-50 border-t border-slate-100 flex items-center justify-between">
+        <div className="px-4 py-2 bg-slate-50 border-t border-slate-100 flex items-center justify-between" onClick={e => e.stopPropagation()}>
           <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-bold border ${eCfg?.cls}`}>{eCfg?.icon}{eCfg?.label}</span>
           <div className="flex items-center gap-1">
-            {p.estatus!=='completado' && <button type="button" onClick={()=>completarPend.mutate(p)} className="p-1.5 text-emerald-500 hover:text-emerald-700 hover:bg-emerald-50 rounded-lg transition" title="Completar"><CheckCircle2 className="w-4 h-4"/></button>}
-            {isAdmin&&p.estatus!=='completado' && <button type="button" onClick={()=>openPend(p)} className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition"><Pencil className="w-3.5 h-3.5"/></button>}
-            {p.estatus==='completado' && <button type="button" onClick={async()=>{ const items=await supabase.from('nexus_comentarios').select('*').eq('pendiente_id',p.id).order('created_at').then(r=>r.data??[]); generarPDFPendiente(p,items as Comentario[]); }} className="p-1.5 text-slate-400 hover:text-teal-600 rounded-lg transition" title="PDF"><Download className="w-4 h-4"/></button>}
-            {isAdmin && <button type="button" onClick={()=>setConfirmDel({type:'pendiente',id:p.id,titulo:p.titulo})} className="p-1.5 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition"><Trash2 className="w-3.5 h-3.5"/></button>}
-            <button type="button" onClick={()=>setExpandedP(isOpen?null:p.id)} className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition"><MessageSquare className="w-3.5 h-3.5"/></button>
+            {p.estatus!=='completado' && <button type="button" onClick={e=>{e.stopPropagation();completarPend.mutate(p);}} className="p-1.5 text-emerald-500 hover:text-emerald-700 hover:bg-emerald-50 rounded-lg transition" title="Completar"><CheckCircle2 className="w-4 h-4"/></button>}
+            {isAdmin&&p.estatus!=='completado' && <button type="button" onClick={e=>{e.stopPropagation();openPend(p);}} className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition"><Pencil className="w-3.5 h-3.5"/></button>}
+            {p.estatus==='completado' && <button type="button" onClick={async e=>{e.stopPropagation();const items=await supabase.from('nexus_comentarios').select('*').eq('pendiente_id',p.id).order('created_at').then(r=>r.data??[]); generarPDFPendiente(p,items as Comentario[]);}} className="p-1.5 text-slate-400 hover:text-teal-600 rounded-lg transition" title="PDF"><Download className="w-4 h-4"/></button>}
+            {isAdmin && <button type="button" onClick={e=>{e.stopPropagation();setConfirmDel({type:'pendiente',id:p.id,titulo:p.titulo});}} className="p-1.5 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition"><Trash2 className="w-3.5 h-3.5"/></button>}
           </div>
         </div>
-
-        {/* Comentarios expandibles */}
-        {isOpen && <div className="border-t border-slate-100 px-4 py-3"><ComentariosPanel pendiente={p} userEmail={userEmail} userName={userName} isAdmin={isAdmin}/></div>}
       </div>
     );
   };
@@ -361,6 +359,54 @@ export default function Nexus() {
       )}
 
       {/* ══ MODALES ═══════════════════════════════════════════════════════════ */}
+
+      {/* Ver Pendiente */}
+      {viewPend && (
+        <Modal title={viewPend.titulo} onClose={() => setViewPend(null)} wide>
+          <div className="space-y-4">
+            {/* Badges prioridad / estatus */}
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold border ${PRIO_CFG[viewPend.prioridad]?.cls}`}>{PRIO_CFG[viewPend.prioridad]?.label}</span>
+              <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold border ${EST_CFG[viewPend.estatus]?.cls}`}>{EST_CFG[viewPend.estatus]?.icon}{EST_CFG[viewPend.estatus]?.label}</span>
+              <span className="text-xs text-slate-400 ml-auto">{fmtDate(viewPend.created_at)}</span>
+            </div>
+
+            {/* Descripción */}
+            {viewPend.descripcion && (
+              <div className="bg-slate-50 rounded-lg p-4 text-sm text-slate-700 whitespace-pre-wrap min-h-[60px]">{viewPend.descripcion}</div>
+            )}
+
+            {/* Info colegio / proyecto */}
+            <div className="grid grid-cols-2 gap-3 text-sm">
+              {viewPend.territorio && <div><p className="text-xs font-bold text-slate-400 uppercase mb-1">Territorio</p><p className="font-semibold text-teal-700">{viewPend.territorio}</p></div>}
+              {viewPend.colegio    && <div><p className="text-xs font-bold text-slate-400 uppercase mb-1">Colegio</p><p className="font-semibold text-slate-700">{viewPend.colegio}</p></div>}
+              {viewPend.proyecto_nombre && <div><p className="text-xs font-bold text-slate-400 uppercase mb-1">Proyecto vinculado</p><p className="font-semibold text-blue-700">{viewPend.proyecto_nombre}</p></div>}
+              {viewPend.asignado_nombre && viewPend.tipo==='compartido' && <div><p className="text-xs font-bold text-slate-400 uppercase mb-1">Asignado a</p><p className="font-semibold text-slate-700">{viewPend.asignado_nombre}</p></div>}
+              {viewPend.fecha_limite && <div><p className="text-xs font-bold text-slate-400 uppercase mb-1">Fecha límite</p><p className="font-semibold text-amber-600">{fmtDate(viewPend.fecha_limite)}</p></div>}
+              {viewPend.completado_at && <div><p className="text-xs font-bold text-slate-400 uppercase mb-1">Completado el</p><p className="font-semibold text-emerald-600">{fmtFull(viewPend.completado_at)}</p></div>}
+            </div>
+
+            {/* Comentarios */}
+            <div>
+              <p className="text-xs font-bold text-slate-500 uppercase mb-2 flex items-center gap-1.5"><MessageSquare className="w-3.5 h-3.5"/>Comentarios</p>
+              <ComentariosPanel pendiente={viewPend} userEmail={userEmail} userName={userName} isAdmin={isAdmin}/>
+            </div>
+          </div>
+
+          <div className="flex gap-3 mt-4">
+            <button type="button" onClick={() => setViewPend(null)} className={btnOutline + " flex-1"}>Cerrar</button>
+            {isAdmin && viewPend.estatus !== 'completado' && (
+              <button type="button" onClick={() => { setViewPend(null); openPend(viewPend); }} className={btnPrimary + " flex-1 flex items-center justify-center gap-2"}><Pencil className="w-4 h-4"/>Editar</button>
+            )}
+            {viewPend.estatus !== 'completado' && (
+              <button type="button" onClick={() => { completarPend.mutate(viewPend); setViewPend(null); }}
+                className="flex-1 py-2 bg-emerald-600 text-white rounded-lg text-sm font-semibold hover:bg-emerald-700 transition flex items-center justify-center gap-2">
+                <CheckCircle2 className="w-4 h-4"/> Completar
+              </button>
+            )}
+          </div>
+        </Modal>
+      )}
 
       {/* Ver Nota */}
       {viewNota&&(<Modal title={viewNota.titulo} onClose={()=>setViewNota(null)} wide><div className="space-y-3"><div className="flex items-center gap-2"><span className="w-3 h-3 rounded-full" style={{background:viewNota.color}}/><span className="text-xs bg-slate-100 text-slate-600 px-2 py-0.5 rounded-full">{viewNota.categoria}</span>{viewNota.fijada&&<span className="text-xs bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full flex items-center gap-1"><Pin className="w-3 h-3"/>Fijada</span>}{viewNota.colegio&&<span className="text-xs bg-teal-50 text-teal-700 px-2 py-0.5 rounded-full">{viewNota.territorio} · {viewNota.colegio}</span>}</div><div className="bg-slate-50 rounded-lg p-4 min-h-[200px] text-sm text-slate-700 whitespace-pre-wrap">{viewNota.contenido||<span className="text-slate-400 italic">Sin contenido</span>}</div><p className="text-xs text-slate-400">Actualizada: {fmtFull(viewNota.updated_at)}</p></div><div className="flex gap-3 mt-4"><button type="button" onClick={()=>setViewNota(null)} className={btnOutline+" flex-1"}>Cerrar</button><button type="button" onClick={()=>{setViewNota(null);openNota(viewNota);}} className={btnPrimary+" flex-1 flex items-center justify-center gap-2"}><Pencil className="w-4 h-4"/>Editar</button></div></Modal>)}
