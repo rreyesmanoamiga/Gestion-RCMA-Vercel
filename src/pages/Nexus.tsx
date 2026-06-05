@@ -16,7 +16,7 @@ import {
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 interface Nota      { id: string; titulo: string; contenido: string; categoria: string; color: string; fijada: boolean; colegio: string; territorio: string; created_at: string; updated_at: string; }
-interface Pendiente { id: string; titulo: string; descripcion: string; tipo: string; asignado_a: string; asignado_nombre: string; prioridad: string; fecha_limite: string | null; estatus: string; completado_at: string | null; created_by: string; created_at: string;
+interface Pendiente { id: string; titulo: string; descripcion: string; tipo: string; asignado_a: string; asignado_nombre: string; asignado_cc: string; asignado_cc_nombre: string; prioridad: string; fecha_limite: string | null; estatus: string; completado_at: string | null; created_by: string; created_at: string;
   proyecto_id?: string; proyecto_nombre?: string; ticket_id?: string; ticket_folio?: string; colegio?: string; territorio?: string; }
 interface Comentario { id: string; pendiente_id: string; autor_email: string; autor_nombre: string; contenido: string; leido: boolean; created_at: string; }
 interface SysUser   { user_email: string; nombre: string; territorio: string; colegio: string; puesto: string; }
@@ -231,8 +231,18 @@ export default function Nexus() {
   const [pendForm, setPendForm] = useState({ titulo:'',descripcion:'',tipo:'personal',asignado_a:'',asignado_nombre:'',prioridad:'normal',fecha_limite:'',estatus:'pendiente',proyecto_id:'',proyecto_nombre:'',ticket_id:'',ticket_folio:'',colegio:'',territorio:'' });
   const [sinProyecto, setSinProyecto] = useState(false);
 
-  // Usuarios filtrados por colegio seleccionado en el form
-  const usuariosFiltrados = useMemo(()=>{ if(pendForm.colegio) return allUsers.filter(u=>u.colegio===pendForm.colegio); if(pendForm.territorio) return allUsers.filter(u=>u.territorio===pendForm.territorio); return []; },[allUsers, pendForm.colegio, pendForm.territorio]);
+  // Usuarios: colegio seleccionado + FMA siempre disponible
+  const usuariosPorGrupo = useMemo(() => {
+    const fmaUsers = allUsers.filter(u => u.territorio === 'FMA');
+    const isFMA = pendForm.territorio === 'FMA';
+    const colegioUsers = !isFMA && pendForm.colegio
+      ? allUsers.filter(u => u.colegio === pendForm.colegio)
+      : !isFMA && pendForm.territorio
+        ? allUsers.filter(u => u.territorio === pendForm.territorio)
+        : [];
+    return { colegioUsers, fmaUsers: isFMA ? [] : fmaUsers };
+  }, [allUsers, pendForm.colegio, pendForm.territorio]);
+  const todosUsuarios = [...usuariosPorGrupo.colegioUsers, ...usuariosPorGrupo.fmaUsers];
 
   const savePend = useMutation({
     mutationFn: async()=>{ 
@@ -250,7 +260,29 @@ export default function Nexus() {
         const {error}=await supabase.from('nexus_pendientes').insert(data); 
         if(error) throw error; 
         if(pendForm.tipo==='compartido'&&pendForm.asignado_a){
-          await supabase.functions.invoke('notify-nexus-asignacion',{body:{destinatario_email:pendForm.asignado_a,destinatario_nombre:pendForm.asignado_nombre||pendForm.asignado_a,titulo:pendForm.titulo,descripcion:pendForm.descripcion,prioridad:pendForm.prioridad,fecha_limite:pendForm.fecha_limite?fmtDate(pendForm.fecha_limite):null,asignado_por:userName,siteUrl:window.location.origin}});
+          // Correo al responsable directo
+          await supabase.functions.invoke('notify-nexus-asignacion',{body:{
+            destinatario_email:pendForm.asignado_a,
+            destinatario_nombre:pendForm.asignado_nombre||pendForm.asignado_a,
+            titulo:pendForm.titulo, descripcion:pendForm.descripcion,
+            prioridad:pendForm.prioridad,
+            fecha_limite:pendForm.fecha_limite?fmtDate(pendForm.fecha_limite):null,
+            asignado_por:userName, siteUrl:window.location.origin,
+            es_directo:true,
+          }});
+          // Correo al CC — con conocimiento de
+          if(pendForm.asignado_cc){
+            await supabase.functions.invoke('notify-nexus-asignacion',{body:{
+              destinatario_email:pendForm.asignado_cc,
+              destinatario_nombre:pendForm.asignado_cc_nombre||pendForm.asignado_cc,
+              titulo:pendForm.titulo, descripcion:pendForm.descripcion,
+              prioridad:pendForm.prioridad,
+              fecha_limite:pendForm.fecha_limite?fmtDate(pendForm.fecha_limite):null,
+              asignado_por:userName, siteUrl:window.location.origin,
+              es_directo:false,
+              responsable_nombre:pendForm.asignado_nombre||pendForm.asignado_a,
+            }});
+          }
         } 
       } 
     },
@@ -263,18 +295,17 @@ export default function Nexus() {
       await supabase.from('nexus_pendientes').update({
         estatus:'completado', completado_at: new Date().toISOString(), updated_at: new Date().toISOString()
       }).eq('id', p.id);
-      // Notificar al usuario asignado si es compartido
+      // Notificar al responsable directo
       if (p.tipo === 'compartido' && p.asignado_a) {
         await supabase.functions.invoke('notify-nexus-comentario', {
-          body: {
-            destinatario_email: p.asignado_a,
-            destinatario_nombre: p.asignado_nombre || p.asignado_a,
-            autor_nombre: userName,
-            pendiente_titulo: p.titulo,
-            comentario: '✅ Este pendiente ha sido marcado como COMPLETADO.',
-            siteUrl: window.location.origin,
-          },
+          body: { destinatario_email:p.asignado_a, destinatario_nombre:p.asignado_nombre||p.asignado_a, autor_nombre:userName, pendiente_titulo:p.titulo, comentario:'✅ Este pendiente ha sido marcado como COMPLETADO.', siteUrl:window.location.origin },
         });
+        // Notificar al CC si existe
+        if (p.asignado_cc) {
+          await supabase.functions.invoke('notify-nexus-comentario', {
+            body: { destinatario_email:p.asignado_cc, destinatario_nombre:p.asignado_cc_nombre||p.asignado_cc, autor_nombre:userName, pendiente_titulo:p.titulo, comentario:`✅ El pendiente asignado a ${p.asignado_nombre} ha sido marcado como COMPLETADO.`, siteUrl:window.location.origin },
+          });
+        }
       }
     },
     onSuccess: () => { qc.invalidateQueries({queryKey:['nexus_pendientes']}); toast.success('Pendiente completado ✓'); }
@@ -284,7 +315,7 @@ export default function Nexus() {
 
   const openNota = (n?:Nota)=>{ setEditNota(n??null); setNotaConColegio(!!(n?.colegio)); setNotaForm(n?{titulo:n.titulo,contenido:n.contenido,categoria:n.categoria,color:n.color,fijada:n.fijada,territorio:n.territorio??'',colegio:n.colegio??''}:{titulo:'',contenido:'',categoria:'General',color:'#0f172a',fijada:false,territorio:'',colegio:''}); setShowNota(true); };
 
-  const openPend = (p?:Pendiente)=>{ setEditPend(p??null); setSinProyecto(!!(p&&!p.proyecto_id&&p.proyecto_nombre)); setPendForm(p?{titulo:p.titulo,descripcion:p.descripcion,tipo:p.tipo,asignado_a:p.asignado_a,asignado_nombre:p.asignado_nombre,prioridad:p.prioridad,fecha_limite:p.fecha_limite??'',estatus:p.estatus,proyecto_id:p.proyecto_id??'',proyecto_nombre:p.proyecto_nombre??'',ticket_id:p.ticket_id??'',ticket_folio:p.ticket_folio??'',colegio:p.colegio??'',territorio:p.territorio??''}:{titulo:'',descripcion:'',tipo:tab==='compartidos'?'compartido':'personal',asignado_a:'',asignado_nombre:'',prioridad:'normal',fecha_limite:'',estatus:'pendiente',proyecto_id:'',proyecto_nombre:'',ticket_id:'',ticket_folio:'',colegio:'',territorio:''}); setShowPend(true); };
+  const openPend = (p?:Pendiente)=>{ setEditPend(p??null); setSinProyecto(!!(p&&!p.proyecto_id&&p.proyecto_nombre)); setPendForm(p?{titulo:p.titulo,descripcion:p.descripcion,tipo:p.tipo,asignado_a:p.asignado_a,asignado_nombre:p.asignado_nombre,asignado_cc:p.asignado_cc??'',asignado_cc_nombre:p.asignado_cc_nombre??'',prioridad:p.prioridad,fecha_limite:p.fecha_limite??'',estatus:p.estatus,proyecto_id:p.proyecto_id??'',proyecto_nombre:p.proyecto_nombre??'',ticket_id:p.ticket_id??'',ticket_folio:p.ticket_folio??'',colegio:p.colegio??'',territorio:p.territorio??''}:{titulo:'',descripcion:'',tipo:tab==='compartidos'?'compartido':'personal',asignado_a:'',asignado_nombre:'',asignado_cc:'',asignado_cc_nombre:'',prioridad:'normal',fecha_limite:'',estatus:'pendiente',proyecto_id:'',proyecto_nombre:'',ticket_id:'',ticket_folio:'',colegio:'',territorio:''}); setShowPend(true); };
 
   // ── KPIs ─────────────────────────────────────────────────────────────────
   const kpis = useMemo(()=>({ total: pendientes.length, personales: pendientes.filter(p=>p.tipo==='personal').length, compartidos: pendientes.filter(p=>p.tipo==='compartido').length, completados: pendientes.filter(p=>p.estatus==='completado').length, urgentes: pendientes.filter(p=>p.prioridad==='urgente'&&p.estatus!=='completado').length, activos: pendientes.filter(p=>p.estatus!=='completado').length, }),[pendientes]);
@@ -331,7 +362,8 @@ export default function Nexus() {
 
           {/* Asignado / Fecha */}
           <div className="text-xs text-slate-500 space-y-0.5">
-            {p.tipo==='compartido'&&p.asignado_nombre && <p className="font-semibold text-teal-600">→ {p.asignado_nombre}</p>}
+            {p.tipo==='compartido'&&p.asignado_nombre && <p className="font-semibold text-teal-600 text-xs">→ <span className="font-black">{p.asignado_nombre}</span></p>}
+            {p.tipo==='compartido'&&p.asignado_cc_nombre && <p className="text-slate-400 text-[10px]">Con conocimiento de: {p.asignado_cc_nombre}</p>}
             {p.fecha_limite && <p className="text-amber-600 font-semibold">📅 {fmtDate(p.fecha_limite)}</p>}
             {hasComents && coment.lastDate && (
               <p className="text-slate-400 text-[10px]">Actualizado: {fmtDate(coment.lastDate)}</p>
@@ -481,7 +513,8 @@ export default function Nexus() {
               {viewPend.territorio && <div><p className="text-xs font-bold text-slate-400 uppercase mb-1">Territorio</p><p className="font-semibold text-teal-700">{viewPend.territorio}</p></div>}
               {viewPend.colegio    && <div><p className="text-xs font-bold text-slate-400 uppercase mb-1">Colegio</p><p className="font-semibold text-slate-700">{viewPend.colegio}</p></div>}
               {viewPend.proyecto_nombre && <div><p className="text-xs font-bold text-slate-400 uppercase mb-1">Proyecto vinculado</p><p className="font-semibold text-blue-700">{viewPend.proyecto_nombre}</p></div>}
-              {viewPend.asignado_nombre && viewPend.tipo==='compartido' && <div><p className="text-xs font-bold text-slate-400 uppercase mb-1">Asignado a</p><p className="font-semibold text-slate-700">{viewPend.asignado_nombre}</p></div>}
+              {viewPend.asignado_nombre && viewPend.tipo==='compartido' && <div><p className="text-xs font-bold text-slate-400 uppercase mb-1">Responsable directo</p><p className="font-semibold text-teal-700">{viewPend.asignado_nombre}</p><p className="text-xs text-slate-400">{viewPend.asignado_a}</p></div>}
+              {viewPend.asignado_cc_nombre && <div><p className="text-xs font-bold text-slate-400 uppercase mb-1">Con conocimiento de</p><p className="font-semibold text-slate-600">{viewPend.asignado_cc_nombre}</p><p className="text-xs text-slate-400">{viewPend.asignado_cc}</p></div>}
               {viewPend.fecha_limite && <div><p className="text-xs font-bold text-slate-400 uppercase mb-1">Fecha límite</p><p className="font-semibold text-amber-600">{fmtDate(viewPend.fecha_limite)}</p></div>}
               {viewPend.completado_at && <div><p className="text-xs font-bold text-slate-400 uppercase mb-1">Completado el</p><p className="font-semibold text-emerald-600">{fmtFull(viewPend.completado_at)}</p></div>}
             </div>
@@ -597,18 +630,46 @@ export default function Nexus() {
           {pendForm.tipo==='compartido'&&(
             <div className="bg-teal-50 border border-teal-200 rounded-lg p-3 space-y-2">
               <p className="text-xs font-bold text-teal-700 uppercase">Asignar a usuario *</p>
-              {usuariosFiltrados.length===0?(
-                <p className="text-xs text-slate-500 italic">{pendForm.colegio?`Sin usuarios registrados en ${pendForm.colegio}`:'Selecciona territorio/colegio para filtrar usuarios'}</p>
-              ):(
-                <select className={inputCls} value={pendForm.asignado_a} onChange={e=>{
-                  const u=usuariosFiltrados.find(u=>u.user_email===e.target.value);
+              <select className={inputCls} value={pendForm.asignado_a} onChange={e=>{
+                  const u=todosUsuarios.find(u=>u.user_email===e.target.value);
                   setPendForm(f=>({...f,asignado_a:e.target.value,asignado_nombre:u?.nombre||e.target.value}));
                 }}>
-                  <option value="">Selecciona un usuario...</option>
-                  {usuariosFiltrados.map(u=><option key={u.user_email} value={u.user_email}>{u.nombre||u.user_email} — {u.colegio||u.territorio}</option>)}
+                <option value="">Selecciona un usuario...</option>
+                {usuariosPorGrupo.colegioUsers.length>0&&(
+                  <optgroup label={`— ${pendForm.colegio||pendForm.territorio||'Colegio'} —`}>
+                    {usuariosPorGrupo.colegioUsers.map(u=><option key={u.user_email} value={u.user_email}>{u.nombre||u.user_email} — {u.colegio}</option>)}
+                  </optgroup>
+                )}
+                {usuariosPorGrupo.fmaUsers.length>0&&(
+                  <optgroup label="— FMA Oficinas —">
+                    {usuariosPorGrupo.fmaUsers.map(u=><option key={u.user_email} value={u.user_email}>{u.nombre||u.user_email} — {u.colegio||'FMA'}</option>)}
+                  </optgroup>
+                )}
+              </select>
+              {pendForm.asignado_a&&<p className="text-xs text-teal-700 font-semibold">📧 {pendForm.asignado_a}</p>}
+
+              {/* Con conocimiento de — segundo usuario */}
+              <div className="border-t border-teal-200 pt-2 mt-1">
+                <p className="text-xs font-bold text-teal-600 mb-1">Con conocimiento de <span className="font-normal text-teal-500">(opcional)</span></p>
+                <select className={inputCls} value={pendForm.asignado_cc}
+                  onChange={e=>{
+                    const u=todosUsuarios.find(u=>u.user_email===e.target.value);
+                    setPendForm(f=>({...f,asignado_cc:e.target.value,asignado_cc_nombre:u?.nombre||e.target.value}));
+                  }}>
+                  <option value="">Sin copia...</option>
+                  {usuariosPorGrupo.colegioUsers.length>0&&(
+                    <optgroup label={`— ${pendForm.colegio||pendForm.territorio||'Colegio'} —`}>
+                      {usuariosPorGrupo.colegioUsers.filter(u=>u.user_email!==pendForm.asignado_a).map(u=><option key={u.user_email} value={u.user_email}>{u.nombre||u.user_email} — {u.colegio}</option>)}
+                    </optgroup>
+                  )}
+                  {usuariosPorGrupo.fmaUsers.length>0&&(
+                    <optgroup label="— FMA Oficinas —">
+                      {usuariosPorGrupo.fmaUsers.filter(u=>u.user_email!==pendForm.asignado_a).map(u=><option key={u.user_email} value={u.user_email}>{u.nombre||u.user_email} — {u.colegio||'FMA'}</option>)}
+                    </optgroup>
+                  )}
                 </select>
-              )}
-              {pendForm.asignado_a&&<p className="text-xs text-teal-700 font-semibold">📧 Correo: {pendForm.asignado_a}</p>}
+                {pendForm.asignado_cc&&<p className="text-xs text-teal-600 mt-1">📧 {pendForm.asignado_cc}</p>}
+              </div>
             </div>
           )}
 
