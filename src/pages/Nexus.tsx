@@ -53,16 +53,65 @@ async function generarPDFPendiente(p: Pendiente, comentarios: Comentario[]) {
   doc.setFontSize(8); doc.setFont('helvetica','normal'); doc.setTextColor(148,163,184); doc.text('Sistema RCMA  ·  Generado el '+now,14,21); doc.text('Documento confidencial — solo para uso interno',14,27);
   try { const li=await new Promise<string>((res,rej)=>{const img=new Image();img.crossOrigin='anonymous';img.onload=()=>{const cv=document.createElement('canvas');cv.width=img.width;cv.height=img.height;cv.getContext('2d')!.drawImage(img,0,0);res(cv.toDataURL('image/png'));};img.onerror=rej;img.src='/logo.png';}); doc.addImage(li,'PNG',W-38,4,22,22); } catch {}
   y = 42;
-  doc.setFillColor(241,245,249); doc.rect(12,y,W-24,34,'F'); doc.setDrawColor(220,220,230); doc.setLineWidth(0.3); doc.rect(12,y,W-24,34,'D');
-  doc.setFontSize(13); doc.setFont('helvetica','bold'); doc.setTextColor(15,23,42); doc.text(p.titulo,16,y+8);
-  const pCfg=PRIO_CFG[p.prioridad]; const eCfg=EST_CFG[p.estatus];
-  doc.setFontSize(7.5); doc.setFont('helvetica','normal'); doc.setTextColor(100,116,139);
-  doc.text(`Prioridad: ${pCfg?.label ?? p.prioridad}  ·  Estatus: ${eCfg?.label ?? p.estatus}  ·  Tipo: ${p.tipo==='compartido'?'Compartido':'Personal'}`,16,y+15);
-  if (p.colegio) doc.text(`Colegio: ${p.colegio}  ·  Territorio: ${p.territorio}`,16,y+21);
-  if (p.proyecto_nombre) doc.text(`Proyecto: ${p.proyecto_nombre}`,16,y+27);
-  if (p.ticket_folio) doc.text(`Ticket: ${p.ticket_folio}`,p.proyecto_nombre?100:16,y+(p.colegio?27:21));
-  if (p.fecha_limite) doc.text(`Fecha límite: ${fmtDate(p.fecha_limite)}`,16,y+33);
-  y += 42;
+  // Recuadro info del pendiente
+  const PRIO_LABEL_PDF: Record<string,string> = { urgente:'URGENTE', alta:'ALTA', normal:'NORMAL', baja:'BAJA' };
+  const EST_LABEL_PDF:  Record<string,string> = { pendiente:'Pendiente', en_proceso:'En Proceso', completado:'Completado', cancelado:'Cancelado' };
+  const PRIO_RGB: Record<string,[number,number,number]> = { urgente:[220,38,38], alta:[234,88,12], normal:[37,99,235], baja:[100,116,139] };
+  const pRGB = PRIO_RGB[p.prioridad] ?? [100,116,139];
+
+  // Barra de color según prioridad
+  doc.setFillColor(...pRGB); doc.rect(12, y, 4, 42, 'F');
+  doc.setFillColor(248,250,252); doc.rect(16, y, W-28, 42, 'F');
+  doc.setDrawColor(220,220,230); doc.setLineWidth(0.3); doc.rect(12, y, W-24, 42, 'D');
+
+  // Título
+  doc.setFontSize(13); doc.setFont('helvetica','bold'); doc.setTextColor(15,23,42);
+  doc.text(p.titulo, 20, y+8);
+
+  // Badge de prioridad
+  doc.setFillColor(...pRGB); doc.roundedRect(W-46, y+3, 30, 7, 1, 1, 'F');
+  doc.setFontSize(7); doc.setFont('helvetica','bold'); doc.setTextColor(255,255,255);
+  doc.text(PRIO_LABEL_PDF[p.prioridad] ?? p.prioridad, W-31, y+8, { align:'center' });
+
+  // Info línea 1
+  doc.setFontSize(7.5); doc.setFont('helvetica','bold'); doc.setTextColor(100,116,139);
+  doc.text('Estatus:', 20, y+16);
+  doc.setFont('helvetica','normal'); doc.setTextColor(15,23,42);
+  doc.text(EST_LABEL_PDF[p.estatus] ?? p.estatus, 40, y+16);
+  doc.setFont('helvetica','bold'); doc.setTextColor(100,116,139);
+  doc.text('Tipo:', 80, y+16);
+  doc.setFont('helvetica','normal'); doc.setTextColor(15,23,42);
+  doc.text(p.tipo==='compartido'?'Compartido':'Personal', 93, y+16);
+
+  // Info línea 2 — colegio/territorio
+  if (p.colegio || p.territorio) {
+    doc.setFont('helvetica','bold'); doc.setTextColor(100,116,139);
+    doc.text('Territorio / Colegio:', 20, y+23);
+    doc.setFont('helvetica','normal'); doc.setTextColor(15,23,42);
+    doc.text(`${p.territorio ?? ''}  /  ${p.colegio ?? ''}`, 63, y+23);
+  }
+
+  // Info línea 3 — proyecto
+  if (p.proyecto_nombre) {
+    doc.setFont('helvetica','bold'); doc.setTextColor(100,116,139);
+    doc.text('Proyecto:', 20, y+30);
+    doc.setFont('helvetica','normal'); doc.setTextColor(37,99,235);
+    const pNom = p.proyecto_nombre.length > 55 ? p.proyecto_nombre.slice(0,53)+'...' : p.proyecto_nombre;
+    doc.text(pNom, 40, y+30);
+  }
+
+  // Info línea 4 — fechas
+  const fechaY = y + (p.proyecto_nombre ? 37 : (p.colegio ? 30 : 23));
+  doc.setFont('helvetica','bold'); doc.setTextColor(100,116,139);
+  if (p.fecha_limite) { doc.text('Fecha limite:', 20, fechaY); doc.setFont('helvetica','normal'); doc.setTextColor(180,90,0); doc.text(fmtDate(p.fecha_limite), 46, fechaY); }
+  if (p.completado_at) {
+    const cx = p.fecha_limite ? 90 : 20;
+    doc.setFont('helvetica','bold'); doc.setTextColor(100,116,139);
+    doc.text('Completado:', cx, fechaY);
+    doc.setFont('helvetica','normal'); doc.setTextColor(22,163,74);
+    doc.text(fmtDate(p.completado_at), cx+28, fechaY);
+  }
+  y += 50;
   if (p.descripcion) { doc.setFontSize(8.5); doc.setFont('helvetica','normal'); doc.setTextColor(50,50,50); const lines=doc.splitTextToSize(p.descripcion,W-32) as string[]; doc.text(lines,16,y); y+=lines.length*5+8; }
   if (comentarios.length>0) {
     doc.setFontSize(9); doc.setFont('helvetica','bold'); doc.setTextColor(15,23,42); doc.text('Historial de comentarios',14,y); y+=5;
