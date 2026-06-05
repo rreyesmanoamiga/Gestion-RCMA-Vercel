@@ -274,18 +274,18 @@ export default function Nexus() {
 
       {/* KPIs — solo admin */}
       {isAdmin && (
-        <div className="grid grid-cols-3 sm:grid-cols-6 gap-3">
+        <div className="grid grid-cols-3 sm:grid-cols-6 gap-4">
           {[
-            { label:'Total',        val:kpis.total,      color:'bg-slate-800'   },
-            { label:'Activos',      val:kpis.activos,    color:'bg-blue-600'    },
-            { label:'Personales',   val:kpis.personales, color:'bg-indigo-600'  },
-            { label:'Compartidos',  val:kpis.compartidos,color:'bg-teal-600'    },
-            { label:'Completados',  val:kpis.completados,color:'bg-emerald-600' },
-            { label:'Urgentes',     val:kpis.urgentes,   color:'bg-red-600'     },
+            { label:'Total Pendientes', val:kpis.total,       color:'text-slate-800'   },
+            { label:'Activos',          val:kpis.activos,     color:'text-blue-600'    },
+            { label:'Personales',       val:kpis.personales,  color:'text-indigo-600'  },
+            { label:'Compartidos',      val:kpis.compartidos, color:'text-teal-600'    },
+            { label:'Completados',      val:kpis.completados, color:'text-emerald-600' },
+            { label:'Urgentes',         val:kpis.urgentes,    color:'text-red-500'     },
           ].map(k=>(
-            <div key={k.label} className={`${k.color} rounded-xl p-3 text-white text-center`}>
-              <div className="text-2xl font-black">{k.val}</div>
-              <div className="text-xs font-semibold opacity-80 mt-0.5">{k.label}</div>
+            <div key={k.label} className="bg-white rounded-xl border border-slate-200 shadow-sm px-4 py-4">
+              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">{k.label}</p>
+              <p className={`text-3xl font-black ${k.color}`}>{k.val}</p>
             </div>
           ))}
         </div>
