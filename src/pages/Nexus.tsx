@@ -159,7 +159,25 @@ export default function Nexus() {
   const usuariosFiltrados = useMemo(()=>{ if(pendForm.colegio) return allUsers.filter(u=>u.colegio===pendForm.colegio); if(pendForm.territorio) return allUsers.filter(u=>u.territorio===pendForm.territorio); return []; },[allUsers, pendForm.colegio, pendForm.territorio]);
 
   const savePend = useMutation({
-    mutationFn: async()=>{ if(!pendForm.titulo.trim()) throw new Error('El título es obligatorio'); const data={...pendForm,fecha_limite:pendForm.fecha_limite||null,created_by:userEmail,updated_at:new Date().toISOString()}; if(editPend){await supabase.from('nexus_pendientes').update(data).eq('id',editPend.id);} else{ const {error}=await supabase.from('nexus_pendientes').insert(data); if(error) throw error; if(pendForm.tipo==='compartido'&&pendForm.asignado_a){await supabase.functions.invoke('notify-nexus-asignacion',{body:{destinatario_email:pendForm.asignado_a,destinatario_nombre:pendForm.asignado_nombre||pendForm.asignado_a,titulo:pendForm.titulo,descripcion:pendForm.descripcion,prioridad:pendForm.prioridad,fecha_limite:pendForm.fecha_limite?fmtDate(pendForm.fecha_limite):null,asignado_por:userName,siteUrl:window.location.origin}});} } },
+    mutationFn: async()=>{ 
+      if(!pendForm.titulo.trim()) throw new Error('El título es obligatorio'); 
+      const data = {
+        ...pendForm,
+        proyecto_id:  pendForm.proyecto_id  || null,
+        ticket_id:    pendForm.ticket_id    || null,
+        fecha_limite: pendForm.fecha_limite || null,
+        created_by:   userEmail,
+        updated_at:   new Date().toISOString(),
+      };
+      if(editPend){ await supabase.from('nexus_pendientes').update(data).eq('id',editPend.id); }
+      else { 
+        const {error}=await supabase.from('nexus_pendientes').insert(data); 
+        if(error) throw error; 
+        if(pendForm.tipo==='compartido'&&pendForm.asignado_a){
+          await supabase.functions.invoke('notify-nexus-asignacion',{body:{destinatario_email:pendForm.asignado_a,destinatario_nombre:pendForm.asignado_nombre||pendForm.asignado_a,titulo:pendForm.titulo,descripcion:pendForm.descripcion,prioridad:pendForm.prioridad,fecha_limite:pendForm.fecha_limite?fmtDate(pendForm.fecha_limite):null,asignado_por:userName,siteUrl:window.location.origin}});
+        } 
+      } 
+    },
     onSuccess:()=>{ qc.invalidateQueries({queryKey:['nexus_pendientes']}); toast.success('Pendiente guardado'); setShowPend(false); setEditPend(null); },
     onError:(e:any)=>toast.error(e.message),
   });
