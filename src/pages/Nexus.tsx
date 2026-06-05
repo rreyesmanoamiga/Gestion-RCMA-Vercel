@@ -150,6 +150,24 @@ export default function Nexus() {
 
   const { data: pendientes = [] } = useQuery({ queryKey:['nexus_pendientes'], queryFn: async()=>{ let q=supabase.from('nexus_pendientes').select('*').order('created_at',{ascending:false}); if(!isAdmin) q=q.eq('asignado_a',userEmail).neq('estatus','completado'); const {data}=await q; return (data??[]) as Pendiente[]; }, refetchInterval:30000 });
 
+  // Resumen de comentarios por pendiente (count + última fecha)
+  const { data: rawComentResumen = [] } = useQuery({
+    queryKey: ['nexus_comentarios_resumen'],
+    queryFn: async () => {
+      const { data } = await supabase.from('nexus_comentarios').select('pendiente_id, created_at').order('created_at', { ascending: false });
+      return data ?? [];
+    },
+    refetchInterval: 30000,
+  });
+  const comentariosMap = useMemo(() => {
+    const map: Record<string, { count: number; lastDate: string }> = {};
+    for (const c of rawComentResumen as any[]) {
+      if (!map[c.pendiente_id]) { map[c.pendiente_id] = { count: 1, lastDate: c.created_at }; }
+      else { map[c.pendiente_id].count++; }
+    }
+    return map;
+  }, [rawComentResumen]);
+
   // ── Form Nota ─────────────────────────────────────────────────────────────
   const [notaForm, setNotaForm] = useState({ titulo:'',contenido:'',categoria:'General',color:'#0f172a',fijada:false,territorio:'',colegio:'' });
   const [notaConColegio, setNotaConColegio] = useState(false);
@@ -208,9 +226,10 @@ export default function Nexus() {
 
   // ── Tarjeta de Pendiente ──────────────────────────────────────────────────
   const PendCard = ({ p }: { p:Pendiente }) => {
-    const isOpen = expandedP === p.id;
     const pCfg   = PRIO_CFG[p.prioridad];
     const eCfg   = EST_CFG[p.estatus];
+    const coment = comentariosMap[p.id];
+    const hasComents = coment && coment.count > 0;
     return (
       <div onClick={() => setViewPend(p)}
         className={`bg-white rounded-xl border border-slate-200 border-t-4 border-l-4 ${eCfg?.cardBorder??'border-t-slate-300'} ${pCfg?.cardLeft??'border-l-slate-300'} shadow-sm overflow-hidden flex flex-col cursor-pointer hover:shadow-md transition`}>
@@ -245,6 +264,9 @@ export default function Nexus() {
           <div className="text-xs text-slate-500 space-y-0.5">
             {p.tipo==='compartido'&&p.asignado_nombre && <p className="font-semibold text-teal-600">→ {p.asignado_nombre}</p>}
             {p.fecha_limite && <p className="text-amber-600 font-semibold">📅 {fmtDate(p.fecha_limite)}</p>}
+            {hasComents && coment.lastDate && (
+              <p className="text-slate-400 text-[10px]">Actualizado: {fmtDate(coment.lastDate)}</p>
+            )}
           </div>
         </div>
 
@@ -256,6 +278,15 @@ export default function Nexus() {
             {isAdmin&&p.estatus!=='completado' && <button type="button" onClick={e=>{e.stopPropagation();openPend(p);}} className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition"><Pencil className="w-3.5 h-3.5"/></button>}
             {p.estatus==='completado' && <button type="button" onClick={async e=>{e.stopPropagation();const items=await supabase.from('nexus_comentarios').select('*').eq('pendiente_id',p.id).order('created_at').then(r=>r.data??[]); generarPDFPendiente(p,items as Comentario[]);}} className="p-1.5 text-slate-400 hover:text-teal-600 rounded-lg transition" title="PDF"><Download className="w-4 h-4"/></button>}
             {isAdmin && <button type="button" onClick={e=>{e.stopPropagation();setConfirmDel({type:'pendiente',id:p.id,titulo:p.titulo});}} className="p-1.5 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition"><Trash2 className="w-3.5 h-3.5"/></button>}
+            {/* Ícono comentarios — con color e indicador si hay comentarios */}
+            <div className="relative p-1.5">
+              <MessageSquare className={`w-3.5 h-3.5 ${hasComents ? 'text-teal-500' : 'text-slate-300'}`}/>
+              {hasComents && (
+                <span className="absolute -top-0.5 -right-0.5 bg-teal-500 text-white text-[9px] font-black rounded-full w-3.5 h-3.5 flex items-center justify-center leading-none">
+                  {coment.count > 9 ? '9+' : coment.count}
+                </span>
+              )}
+            </div>
           </div>
         </div>
       </div>
