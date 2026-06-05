@@ -129,6 +129,19 @@ export default function Dashboard() {
 
   const isLoading = projectsQuery.isLoading || checklistsQuery.isLoading || maintenanceQuery.isLoading;
 
+  // ─── NEXUS pendientes activos ─────────────────────────────────────────────
+  const { data: nexusPendientesActivos = 0 } = useQuery({
+    queryKey: ['nexus_activos_dashboard'],
+    queryFn: async () => {
+      const { count } = await supabase
+        .from('nexus_pendientes')
+        .select('*', { count: 'exact', head: true })
+        .neq('estatus', 'completado');
+      return count ?? 0;
+    },
+    refetchInterval: 60000,
+  });
+
   // ─── KPIs ──────────────────────────────────────────────────────────────────
   const stats = useMemo(() => ({
     activeProjects:     projects.filter(p => p.status === 'en_proceso' || p.status === 'en_espera').length,
@@ -218,6 +231,10 @@ export default function Dashboard() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
+          {/* Saludo dinámico */}
+          <p className="text-sm font-semibold text-teal-600 mb-1">
+            {(() => { const h = new Date().getHours(); return h < 12 ? '☀️ Buenos días' : h < 19 ? '🌤️ Buenas tardes' : '🌙 Buenas noches'; })()}, Ing. Ricardo J.
+          </p>
           <div className="flex items-center gap-3 mb-1">
             <div className="w-8 h-8 rounded-lg bg-slate-900 flex items-center justify-center">
               <Building2 className="w-4 h-4 text-white" />
@@ -243,10 +260,10 @@ export default function Dashboard() {
           subtitle={`${tickets.length} tickets totales`}
           icon={TicketCheck} color="red" to="/tickets"
           trend={stats.openTickets > 5 ? 'down' : 'neutral'} trendLabel={`${tickets.length} total`} />
-        <KPICard title="Pendientes" value={stats.pendingMaintenance}
-          subtitle="Ver en NEXUS"
-          icon={ClockAlert} color="orange" to="/nexus"
-          trend="neutral" trendLabel="NEXUS" />
+        <KPICard title="Pendientes Activos" value={nexusPendientesActivos}
+          subtitle="Ver todos en NEXUS"
+          icon={ClockAlert} color={nexusPendientesActivos > 0 ? 'orange' : 'green'} to="/nexus"
+          trend={nexusPendientesActivos > 0 ? 'down' : 'up'} trendLabel={`${nexusPendientesActivos} activos`} />
         <KPICard title="Inspecciones" value={stats.criticalChecklists > 0 ? stats.criticalChecklists : checklists.length}
           subtitle={stats.criticalChecklists > 0 ? 'requieren atención' : 'sin alertas críticas'}
           icon={ClipboardCheck} color={stats.criticalChecklists > 0 ? 'red' : 'green'} to="/checklists"
