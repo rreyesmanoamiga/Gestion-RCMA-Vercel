@@ -20,8 +20,38 @@ import {
   FileSignature,
   BarChart3,
   // --- ICONO AGREGADO ---
-  BookUser,
+  BookUser, Package,
 } from 'lucide-react';
+import { useQuery } from '@tanstack/react-query';
+
+function NexusLink({ navLinkClass, handleNavClick, userEmail, isAdmin }) {
+  const { data: badge = 0 } = useQuery({
+    queryKey: ['nexus_badge', userEmail],
+    queryFn: async () => {
+      if (!userEmail) return 0;
+      let q = supabase.from('nexus_pendientes').select('id').neq('estatus','completado');
+      if (!isAdmin) q = q.eq('asignado_a', userEmail);
+      const { data } = await q;
+      if (!data || data.length === 0) return 0;
+      const ids = data.map(p => p.id);
+      const { count } = await supabase.from('nexus_comentarios').select('*', { count:'exact', head:true }).in('pendiente_id', ids).eq('leido', false).neq('autor_email', userEmail);
+      return (!isAdmin ? data.length : 0) + (count ?? 0);
+    },
+    refetchInterval: 30000,
+    enabled: !!userEmail,
+  });
+  return (
+    <Link to="/nexus" onClick={handleNavClick} className={navLinkClass('/nexus') + ' relative'}>
+      <BookOpen className="w-[18px] h-[18px]" />
+      NEXUS
+      {badge > 0 && (
+        <span className="absolute right-2 top-1/2 -translate-y-1/2 bg-red-500 text-white text-[10px] font-bold min-w-[16px] h-[16px] rounded-full flex items-center justify-center px-1">
+          {badge > 9 ? '9+' : badge}
+        </span>
+      )}
+    </Link>
+  );
+}
 import { useAuth } from '@/lib/AuthContext';
 import { cn } from '@/lib/utils';
 import { useIsMobile } from '@/hooks/use-mobile';
@@ -179,6 +209,19 @@ export default function Sidebar({ isOpen, onToggle }) {
               <CalendarDays className="w-[18px] h-[18px]" />
               Calendario
             </Link>
+          )}
+
+          {/* Insumos */}
+          {(isAdmin || can('ver_insumos')) && (
+            <Link to="/insumos" onClick={handleNavClick} className={navLinkClass('/insumos')}>
+              <Package className="w-[18px] h-[18px]" />
+              Insumos
+            </Link>
+          )}
+
+          {/* NEXUS */}
+          {(isAdmin || can('ver_nexus')) && (
+            <NexusLink navLinkClass={navLinkClass} handleNavClick={handleNavClick} userEmail={user?.email} isAdmin={isAdmin} />
           )}
 
           {/* 13 — Reportes */}
