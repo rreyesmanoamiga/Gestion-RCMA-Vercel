@@ -94,7 +94,15 @@ function ComentariosPanel({ pendiente, userEmail, userName, isAdmin }: { pendien
   const [texto, setTexto] = useState('');
   const endRef = useRef<HTMLDivElement>(null);
   const { data: comentarios = [] } = useQuery({ queryKey:['nexus_comentarios',pendiente.id], queryFn: async()=>{ const {data}=await supabase.from('nexus_comentarios').select('*').eq('pendiente_id',pendiente.id).order('created_at'); return (data??[]) as Comentario[]; }, refetchInterval:15000 });
-  const sendMutation = useMutation({ mutationFn: async(contenido:string)=>{ await supabase.from('nexus_comentarios').insert({pendiente_id:pendiente.id,autor_email:userEmail,autor_nombre:userName,contenido}); const destEmail=isAdmin?pendiente.asignado_a:(pendiente.created_by||'rreyes@manoamiga.edu.mx'); const destNombre=isAdmin?pendiente.asignado_nombre:'Ricardo Joanathan Reyes Medina'; if(destEmail){await supabase.functions.invoke('notify-nexus-comentario',{body:{destinatario_email:destEmail,destinatario_nombre:destNombre,autor_nombre:userName,pendiente_titulo:pendiente.titulo,comentario:contenido,siteUrl:window.location.origin}});} }, onSuccess:()=>{ qc.invalidateQueries({queryKey:['nexus_comentarios',pendiente.id]}); setTexto(''); setTimeout(()=>endRef.current?.scrollIntoView({behavior:'smooth'}),100); }, onError:(e:any)=>toast.error(e.message??'Error') });
+  const sendMutation = useMutation({ mutationFn: async(contenido:string)=>{ 
+    await supabase.from('nexus_comentarios').insert({pendiente_id:pendiente.id,autor_email:userEmail,autor_nombre:userName,contenido}); 
+    // Solo notificar si es compartido y hay alguien asignado
+    if (pendiente.tipo === 'compartido') {
+      const destEmail=isAdmin?pendiente.asignado_a:(pendiente.created_by||'rreyes@manoamiga.edu.mx'); 
+      const destNombre=isAdmin?pendiente.asignado_nombre:'Ricardo Joanathan Reyes Medina'; 
+      if(destEmail){ await supabase.functions.invoke('notify-nexus-comentario',{body:{destinatario_email:destEmail,destinatario_nombre:destNombre,autor_nombre:userName,pendiente_titulo:pendiente.titulo,comentario:contenido,siteUrl:window.location.origin}}); }
+    }
+  }, onSuccess:()=>{ qc.invalidateQueries({queryKey:['nexus_comentarios',pendiente.id]}); setTexto(''); setTimeout(()=>endRef.current?.scrollIntoView({behavior:'smooth'}),100); }, onError:(e:any)=>toast.error(e.message??'Error') });
   return (
     <div className="flex flex-col h-full">
       <div className="flex-1 overflow-y-auto space-y-3 mb-3 max-h-52">
@@ -209,6 +217,11 @@ export default function Nexus() {
             <h3 className={`font-black text-sm text-slate-900 leading-snug ${p.estatus==='completado'?'line-through text-slate-400':''}`}>{p.titulo}</h3>
             <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-bold border shrink-0 ${pCfg?.cls}`}>{pCfg?.label}</span>
           </div>
+
+          {/* Descripción */}
+          {p.descripcion && (
+            <p className="text-xs text-slate-500 line-clamp-2 mb-2">{p.descripcion}</p>
+          )}
 
           {/* Proyecto / Ticket */}
           {(p.proyecto_nombre||p.ticket_mas_folio) && (
