@@ -360,6 +360,7 @@ function AuthenticatedApp() {
   }
 
   return (
+    <>
     <Routes>
       <Route path="/reset-password" element={<SetPasswordPage />} />
       {!user ? (
@@ -394,6 +395,7 @@ function AuthenticatedApp() {
       )}
     </Routes>
     <PWAUpdatePrompt />
+  </>
   );
 }
 
