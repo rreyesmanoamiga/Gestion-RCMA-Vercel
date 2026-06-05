@@ -137,7 +137,7 @@ export default function Dashboard() {
     pendingMaintenance: 0,
     urgentItems:        projects.filter(p => p.priority === 'urgente' && p.status !== 'completado' && p.status !== 'cancelado').length,
     openTickets:        tickets.filter(t => t.estatus !== 'cerrado' && t.estatus !== 'resuelto').length,
-  }), [projects, checklists, pendientes, tickets]);
+  }), [projects, checklists, tickets]);
 
   // ─── Datos para gráficas ───────────────────────────────────────────────────
   const projectsByStatus = useMemo(() => {
@@ -190,12 +190,9 @@ export default function Dashboard() {
       id: `t-${t.id}`, label: t.titulo ?? `Ticket ${t.folio ?? ''}`, sub: t.colegio ?? '',
       type: 'ticket', date: t.created_at ?? '', to: '/tickets',
     }));
-    pendientes.slice(0, 4).forEach(p => items.push({
-      id: `pe-${p.id}`, label: p.nombre_proyecto ?? 'Pendiente sin nombre', sub: p.colegio ?? '',
-      type: 'pendiente', date: p.created_at ?? '', to: '/nexus',
-    }));
+
     return items.sort((a, b) => b.date.localeCompare(a.date)).slice(0, 8);
-  }, [projects, tickets, pendientes]);
+  }, [projects, tickets]);
 
   const recentProjects = useMemo(() => projects.slice(0, 5), [projects]);
 
