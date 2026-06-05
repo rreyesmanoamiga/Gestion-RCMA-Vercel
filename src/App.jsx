@@ -49,6 +49,8 @@ import Presupuestos from '@/pages/Presupuestos';
 
 // --- NUEVO IMPORT ---
 import Directorio from '@/pages/Directorio';
+import Insumos from '@/pages/Insumos';
+import Nexus from '@/pages/Nexus';
 
 const inputClass = "w-full px-3 py-2 border border-slate-300 rounded-md text-sm focus:ring-2 focus:ring-slate-900 focus:outline-none bg-white";
 
@@ -382,6 +384,8 @@ function AuthenticatedApp() {
           
           {/* --- RUTA DE DIRECTORIO AGREGADA --- */}
           <Route path="/directorio"         element={<Directorio />} />
+          <Route path="/insumos"             element={<Insumos />} />
+          <Route path="/nexus"               element={<Nexus />} />
 
           <Route path="/login"               element={<Navigate to="/" replace />} />
           <Route path="*"                   element={<PageNotFound />} />
