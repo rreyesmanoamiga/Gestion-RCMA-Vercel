@@ -258,7 +258,27 @@ export default function Nexus() {
     onError:(e:any)=>toast.error(e.message),
   });
 
-  const completarPend = useMutation({ mutationFn:async(p:Pendiente)=>{ await supabase.from('nexus_pendientes').update({estatus:'completado',completado_at:new Date().toISOString(),updated_at:new Date().toISOString()}).eq('id',p.id); }, onSuccess:()=>{ qc.invalidateQueries({queryKey:['nexus_pendientes']}); toast.success('Pendiente completado ✓'); } });
+  const completarPend = useMutation({ 
+    mutationFn: async(p: Pendiente) => { 
+      await supabase.from('nexus_pendientes').update({
+        estatus:'completado', completado_at: new Date().toISOString(), updated_at: new Date().toISOString()
+      }).eq('id', p.id);
+      // Notificar al usuario asignado si es compartido
+      if (p.tipo === 'compartido' && p.asignado_a) {
+        await supabase.functions.invoke('notify-nexus-comentario', {
+          body: {
+            destinatario_email: p.asignado_a,
+            destinatario_nombre: p.asignado_nombre || p.asignado_a,
+            autor_nombre: userName,
+            pendiente_titulo: p.titulo,
+            comentario: '✅ Este pendiente ha sido marcado como COMPLETADO.',
+            siteUrl: window.location.origin,
+          },
+        });
+      }
+    },
+    onSuccess: () => { qc.invalidateQueries({queryKey:['nexus_pendientes']}); toast.success('Pendiente completado ✓'); }
+  });
 
   const deleteMutation = useMutation({ mutationFn:async({type,id}:{type:'nota'|'pendiente';id:string})=>{ if(type==='nota') await supabase.from('nexus_notas').delete().eq('id',id); else{ await supabase.from('nexus_comentarios').delete().eq('pendiente_id',id); await supabase.from('nexus_pendientes').delete().eq('id',id); } }, onSuccess:()=>{ qc.invalidateQueries({queryKey:['nexus_notas']}); qc.invalidateQueries({queryKey:['nexus_pendientes']}); toast.success('Eliminado'); setConfirmDel(null); } });
 
@@ -323,7 +343,7 @@ export default function Nexus() {
         <div className="px-4 py-2 bg-slate-50 border-t border-slate-100 flex items-center justify-between" onClick={e => e.stopPropagation()}>
           <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-bold border ${eCfg?.cls}`}>{eCfg?.icon}{eCfg?.label}</span>
           <div className="flex items-center gap-1">
-            {p.estatus!=='completado' && <button type="button" onClick={e=>{e.stopPropagation();completarPend.mutate(p);}} className="p-1.5 text-emerald-500 hover:text-emerald-700 hover:bg-emerald-50 rounded-lg transition" title="Completar"><CheckCircle2 className="w-4 h-4"/></button>}
+            {isAdmin && p.estatus!=='completado' && <button type="button" onClick={e=>{e.stopPropagation();completarPend.mutate(p);}} className="p-1.5 text-emerald-500 hover:text-emerald-700 hover:bg-emerald-50 rounded-lg transition" title="Completar"><CheckCircle2 className="w-4 h-4"/></button>}
             {isAdmin&&p.estatus!=='completado' && <button type="button" onClick={e=>{e.stopPropagation();openPend(p);}} className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition"><Pencil className="w-3.5 h-3.5"/></button>}
             {p.estatus==='completado' && <button type="button" onClick={async e=>{e.stopPropagation();const items=await supabase.from('nexus_comentarios').select('*').eq('pendiente_id',p.id).order('created_at').then(r=>r.data??[]); generarPDFPendiente(p,items as Comentario[]);}} className="p-1.5 text-slate-400 hover:text-teal-600 rounded-lg transition" title="PDF"><Download className="w-4 h-4"/></button>}
             {isAdmin && <button type="button" onClick={e=>{e.stopPropagation();setConfirmDel({type:'pendiente',id:p.id,titulo:p.titulo});}} className="p-1.5 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition"><Trash2 className="w-3.5 h-3.5"/></button>}
@@ -478,7 +498,7 @@ export default function Nexus() {
             {isAdmin && viewPend.estatus !== 'completado' && (
               <button type="button" onClick={() => { setViewPend(null); openPend(viewPend); }} className={btnPrimary + " flex-1 flex items-center justify-center gap-2"}><Pencil className="w-4 h-4"/>Editar</button>
             )}
-            {viewPend.estatus !== 'completado' && (
+            {isAdmin && viewPend.estatus !== 'completado' && (
               <button type="button" onClick={() => { completarPend.mutate(viewPend); setViewPend(null); }}
                 className="flex-1 py-2 bg-emerald-600 text-white rounded-lg text-sm font-semibold hover:bg-emerald-700 transition flex items-center justify-center gap-2">
                 <CheckCircle2 className="w-4 h-4"/> Completar
