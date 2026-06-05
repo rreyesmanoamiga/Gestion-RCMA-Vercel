@@ -51,6 +51,7 @@ import Presupuestos from '@/pages/Presupuestos';
 import Directorio from '@/pages/Directorio';
 import Insumos from '@/pages/Insumos';
 import Nexus from '@/pages/Nexus';
+import PWAUpdatePrompt from '@/components/PWAUpdatePrompt';
 
 const inputClass = "w-full px-3 py-2 border border-slate-300 rounded-md text-sm focus:ring-2 focus:ring-slate-900 focus:outline-none bg-white";
 
@@ -392,6 +393,7 @@ function AuthenticatedApp() {
         </Route>
       )}
     </Routes>
+    <PWAUpdatePrompt />
   );
 }
 
