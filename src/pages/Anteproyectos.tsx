@@ -3,7 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabaseClient';
 import { useSharePointUpload } from '@/hooks/useSharePointUpload';
 import { db } from '@/lib/db';
-import { FolderOpen, ChevronDown, Pencil, Trash2, X, Save, Calendar, Link2, FolderInput, TrendingUp, CheckCircle2, Clock, DollarSign } from 'lucide-react';
+import { FolderOpen, ChevronDown, Pencil, Trash2, X, Save, Calendar, Link2, FolderInput, TrendingUp, CheckCircle2, Clock, DollarSign, Upload, FileArchive, ExternalLink } from 'lucide-react';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { toast } from 'sonner';
@@ -454,15 +454,14 @@ export default function Anteproyectos() {
   const hasMore   = visibleCount < filtered.length;
   const remaining = filtered.length - visibleCount;
 
-  // ── ZipUploader ──────────────────────────────────────────────────────────
+  // ── ZipUploader ─────────────────────────────────────────────────────────────
   function ZipUploader({ ant }: { ant: any }) {
     const qcZ = useQueryClient();
     const { upload, uploading } = useSharePointUpload();
-
     const handleZip = async (e: React.ChangeEvent<HTMLInputElement>) => {
       const file = e.target.files?.[0];
       if (!file) return;
-      if (!file.name.toLowerCase().endsWith('.zip')) { toast.error('Solo se permiten archivos .zip'); return; }
+      if (!file.name.toLowerCase().endsWith('.zip')) { toast.error('Solo archivos .zip'); return; }
       const result = await upload(file, {
         modulo: 'Anteproyectos',
         colegio: ant.colegio,
@@ -474,21 +473,17 @@ export default function Anteproyectos() {
         qcZ.invalidateQueries({ queryKey: ['anteproyectos'] });
       }
     };
-
     if (ant.zip_url) return (
       <div className="flex items-center gap-1.5 mt-1.5 bg-blue-50 border border-blue-200 rounded-lg px-2 py-1">
         <FileArchive className="w-3 h-3 text-blue-500 shrink-0" />
         <span className="text-[10px] text-blue-700 font-semibold truncate max-w-[140px]">{ant.zip_nombre ?? 'Archivo ZIP'}</span>
-        <a href={ant.zip_url} target="_blank" rel="noreferrer" className="p-0.5 text-blue-500 hover:text-blue-700">
-          <ExternalLink className="w-3 h-3" />
-        </a>
+        <a href={ant.zip_url} target="_blank" rel="noreferrer" className="p-0.5 text-blue-500 hover:text-blue-700"><ExternalLink className="w-3 h-3" /></a>
       </div>
     );
-
     return (
       <label className={`flex items-center gap-1.5 mt-1.5 cursor-pointer bg-slate-50 border border-dashed border-slate-300 hover:border-blue-400 hover:bg-blue-50 rounded-lg px-2 py-1 transition ${uploading?'opacity-50 pointer-events-none':''}`}>
         <Upload className="w-3 h-3 text-slate-400" />
-        <span className="text-[10px] text-slate-500 font-semibold">{uploading ? 'Subiendo...' : 'Subir ZIP a SharePoint'}</span>
+        <span className="text-[10px] text-slate-500 font-semibold">{uploading?'Subiendo...':'Subir ZIP a SharePoint'}</span>
         <input type="file" accept=".zip" className="hidden" onChange={handleZip} />
       </label>
     );
