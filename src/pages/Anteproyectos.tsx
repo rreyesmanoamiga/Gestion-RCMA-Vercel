@@ -1,6 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabaseClient';
+import { useSharePointUpload } from '@/hooks/useSharePointUpload';
 import { db } from '@/lib/db';
 import { FolderOpen, ChevronDown, Pencil, Trash2, X, Save, Calendar, Link2, FolderInput, TrendingUp, CheckCircle2, Clock, DollarSign } from 'lucide-react';
 import { format } from 'date-fns';
@@ -59,6 +60,8 @@ interface Anteproyecto {
   notas?:               string;
   fecha_solicitud?:     string | null;
   fecha_entrega?:       string | null;
+  zip_url?:             string;
+  zip_nombre?:          string;
   ruta_onedrive?:       string | null;
   fecha_actualizacion?: string;
   created_at?:          string;
@@ -451,6 +454,47 @@ export default function Anteproyectos() {
   const hasMore   = visibleCount < filtered.length;
   const remaining = filtered.length - visibleCount;
 
+  // ── ZIP Uploader ─────────────────────────────────────────────────────────
+  function ZipUploader({ ant }: { ant: any }) {
+    const qcZ = useQueryClient();
+    const { upload, uploading } = useSharePointUpload();
+
+    const handleZip = async (e: React.ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0];
+      if (!file) return;
+      if (!file.name.toLowerCase().endsWith('.zip')) { toast.error('Solo se permiten archivos .zip'); return; }
+      if (file.size > 500 * 1024 * 1024) { toast.error('Máximo 500MB'); return; }
+      const result = await upload(file, {
+        modulo: 'Anteproyectos',
+        colegio: ant.colegio,
+        territorio: ant.territorio,
+        referencia: ant.nombre_proyecto?.replace(/[^a-zA-Z0-9]/g,'_').slice(0,40) ?? ant.id,
+      });
+      if (result) {
+        await supabase.from('anteproyectos').update({ zip_url: result.webUrl, zip_nombre: result.fileName }).eq('id', ant.id);
+        qcZ.invalidateQueries({ queryKey: ['anteproyectos'] });
+      }
+    };
+
+    if (ant.zip_url) return (
+      <div className="flex items-center gap-1.5 mt-1.5 bg-blue-50 border border-blue-200 rounded-lg px-2 py-1">
+        <FileArchive className="w-3 h-3 text-blue-500 shrink-0" />
+        <span className="text-[10px] text-blue-700 font-semibold truncate max-w-[140px]">{ant.zip_nombre ?? 'Archivo ZIP'}</span>
+        <a href={ant.zip_url} target="_blank" rel="noreferrer" className="p-0.5 text-blue-500 hover:text-blue-700" title="Abrir en SharePoint">
+          <ExternalLink className="w-3 h-3" />
+        </a>
+      </div>
+    );
+
+    return (
+      <label className={`flex items-center gap-1.5 mt-1.5 cursor-pointer bg-slate-50 border border-dashed border-slate-300 hover:border-blue-400 hover:bg-blue-50 rounded-lg px-2 py-1 transition ${uploading?'opacity-50 pointer-events-none':''}`}>
+        <Upload className="w-3 h-3 text-slate-400" />
+        <span className="text-[10px] text-slate-500 font-semibold">{uploading ? 'Subiendo...' : 'Subir ZIP a SharePoint'}</span>
+        <input type="file" accept=".zip" className="hidden" onChange={handleZip} />
+      </label>
+    );
+  }
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center py-20">
@@ -587,6 +631,7 @@ export default function Anteproyectos() {
                   </div>
                   {a.fecha_solicitud && <p className="text-[10px] text-slate-400 flex items-center gap-1"><Calendar className="w-3 h-3"/>Sol: {format(new Date(a.fecha_solicitud),'dd MMM yyyy',{locale:es})}</p>}
                   {a.fecha_entrega && <p className="text-[10px] text-slate-400 flex items-center gap-1"><Calendar className="w-3 h-3"/>Ent: {format(new Date(a.fecha_entrega),'dd MMM yyyy',{locale:es})}</p>}
+                  <ZipUploader ant={a} />
                 </div>
                 {/* Desktop grid */}
                 <div className="hidden md:grid grid-cols-12 gap-2 items-start">

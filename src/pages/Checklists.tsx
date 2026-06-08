@@ -9,6 +9,7 @@ import {
 import { toast } from 'sonner';
 import { db } from '@/lib/db';
 import { supabase } from '@/lib/supabaseClient';
+import EvidenciaUploader from '@/components/EvidenciaUploader';
 import { TERRITORIOS, COLEGIOS } from '@/lib/colegios';
 import PageHeader from '@/components/shared/PageHeader';
 import EmptyState from '@/components/shared/EmptyState';
@@ -1464,6 +1465,14 @@ export default function Checklists() {
                                     <div className="flex-1 min-w-0">
                                       <p className="text-xs font-medium text-slate-800">{it.nombre}</p>
                                       {it.observacion && <p className="text-xs text-slate-500 mt-0.5 italic">{it.observacion}</p>}
+                                      <EvidenciaUploader
+                                        referenciaId={`${ev.id}-${it.id}`}
+                                        modulo="minimos"
+                                        territorio={ev.territorio}
+                                        colegio={ev.colegio}
+                                        label={it.nombre?.replace(/[^a-zA-Z0-9]/g,'_').slice(0,30)}
+                                        isAdmin={isAdmin}
+                                      />
                                       {/* Registro de verificación */}
                                       {it.verificado_por && it.fecha_verificacion && (
                                         <p className="text-[10px] text-green-700 font-semibold mt-0.5 flex items-center gap-1">

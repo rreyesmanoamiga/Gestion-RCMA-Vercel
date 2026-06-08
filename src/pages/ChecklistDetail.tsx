@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { ArrowLeft, Printer, Pencil, Trash2, MapPin, User, Calendar, ClipboardList } from 'lucide-react';
+import EvidenciaUploader from '@/components/EvidenciaUploader';
 import { toast } from 'sonner';
 import { db } from '@/lib/db';
 import ChecklistForm, { type ChecklistItem } from '@/components/checklists/ChecklistForm';
@@ -422,6 +423,14 @@ export default function ChecklistDetail() {
                   {item.observacion && (
                     <p className="text-xs text-slate-500 mt-0.5">{item.observacion}</p>
                   )}
+                  <EvidenciaUploader
+                    referenciaId={`${checklist.id}-item-${i}`}
+                    modulo="checklist"
+                    territorio={checklist.territorio}
+                    colegio={checklist.colegio}
+                    label={item.nombre?.replace(/[^a-zA-Z0-9]/g,'_').slice(0,30)}
+                    isAdmin={true}
+                  />
                 </div>
               </div>
             ))}
