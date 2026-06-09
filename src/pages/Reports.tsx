@@ -1106,12 +1106,10 @@ export default function Reports() {
             {/* SharePoint upload buttons */}
             <button className={`${btnOutline} ${spUploading ? 'opacity-50 pointer-events-none' : ''}`}
               onClick={handleUploadPDF}>
-              <Upload className="w-4 h-4 text-blue-600" />
               {spUploading ? 'Subiendo...' : '📤 PDF → SharePoint'}
             </button>
             <button className={`${btnOutline} ${spUploading ? 'opacity-50 pointer-events-none' : ''}`}
               onClick={handleUploadExcel}>
-              <Upload className="w-4 h-4 text-blue-600" />
               {spUploading ? 'Subiendo...' : '📤 Excel → SharePoint'}
             </button>
             {spPDFUrl && (
