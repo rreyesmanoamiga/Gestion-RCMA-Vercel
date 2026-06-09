@@ -593,7 +593,7 @@ export default function Anteproyectos() {
       ) : (
         <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
           {/* Cabecera */}
-          <div className="hidden md:grid grid-cols-12 gap-2 px-5 py-3 bg-slate-50 border-b border-slate-100 text-[10px] font-black text-slate-400 uppercase tracking-widest">
+          <div className="hidden md:grid grid-cols-11 gap-2 px-5 py-3 bg-slate-50 border-b border-slate-100 text-[10px] font-black text-slate-400 uppercase tracking-widest">
             <div className="col-span-1">Colegio</div>
             <div className="col-span-2">Proyecto</div>
             <div className="col-span-1">Tipo</div>
@@ -603,7 +603,6 @@ export default function Anteproyectos() {
             <div className="col-span-1">F. Solicitud</div>
             <div className="col-span-1">F. Entrega</div>
             <div className="col-span-1">Vinculado</div>
-            <div className="col-span-1">OneDrive</div>
             <div className="col-span-1">Acciones</div>
           </div>
 
@@ -633,7 +632,7 @@ export default function Anteproyectos() {
                   <ZipUploader ant={a} />
                 </div>
                 {/* Desktop grid */}
-                <div className="hidden md:grid grid-cols-12 gap-2 items-start">
+                <div className="hidden md:grid grid-cols-11 gap-2 items-start">
                 <div className="col-span-1">
                   <p className="text-xs font-bold text-slate-800">{a.colegio || '—'}</p>
                   <p className="text-[10px] text-slate-400">{a.territorio || ''}</p>
