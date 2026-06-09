@@ -133,7 +133,7 @@ export default function SolicitudesRecibidas() {
   const queryClient = useQueryClient();
 
   // Query cotizaciones by solicitud
-  const { data: cotizaciones = [], refetch: refetchCots } = useQuery({
+  const { data: cotizaciones = [] } = useQuery({
     queryKey: ['solicitud_cotizaciones', cotModal?.id],
     queryFn: async () => {
       if (!cotModal?.id) return [];
@@ -181,12 +181,11 @@ export default function SolicitudesRecibidas() {
       });
     },
     onSuccess: () => {
-      refetchCots();
       setCotFiles([]);
-      queryClient.invalidateQueries({ queryKey: ['solicitud_cotizaciones', cotModal?.id] });
-      alert('✅ Cotizaciones subidas y notificación enviada');
+      queryClient.invalidateQueries({ queryKey: ['solicitud_cotizaciones'] });
+      toast.success('Cotizaciones subidas y notificación enviada ✓');
     },
-    onError: () => alert('Error al subir cotizaciones'),
+    onError: () => toast.error('Error al subir cotizaciones'),
   });
 
   const recibirMutation = useMutation({
