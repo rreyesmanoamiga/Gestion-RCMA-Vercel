@@ -518,70 +518,68 @@ export default function SolicitudesRecibidas() {
       )}
     </div>
 
-
-  {/* ── Modal Cotizaciones ─────────────────────────────────────────────── */}
-  {cotModal && (
-    <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4"
-      onClick={e => { if (e.target === e.currentTarget) setCotModal(null); }}>
-      <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg flex flex-col max-h-[85vh]">
-        <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100 bg-slate-50 rounded-t-xl">
-          <div>
-            <h3 className="font-black text-slate-900 text-sm">📎 Cotizaciones</h3>
-            <p className="text-xs text-slate-500 mt-0.5">{cotModal.nombre_proyecto} — {cotModal.nombre_centro}</p>
-          </div>
-          <button onClick={() => setCotModal(null)} className="p-1 rounded hover:bg-slate-200">✕</button>
-        </div>
-        <div className="px-5 py-4 overflow-y-auto flex-1 space-y-4">
-          {/* Cotizaciones existentes */}
-          {cotizaciones.length > 0 && (
+    {/* ── Modal Cotizaciones ─────────────────────────────────────────────── */}
+    {cotModal && (
+      <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4"
+        onClick={e => { if (e.target === e.currentTarget) setCotModal(null); }}>
+        <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg flex flex-col max-h-[85vh]">
+          <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100 bg-slate-50 rounded-t-xl">
             <div>
-              <p className="text-xs font-bold text-slate-500 uppercase mb-2">Archivos subidos:</p>
-              <div className="space-y-2">
-                {cotizaciones.map((cot: any) => (
-                  <div key={cot.id} className="flex items-center gap-2 bg-blue-50 border border-blue-200 rounded-lg px-3 py-2">
-                    <span className="text-sm">📄</span>
-                    <span className="text-xs text-blue-700 font-semibold flex-1 truncate">{cot.nombre}</span>
-                    <a href={cot.web_url} target="_blank" rel="noreferrer"
-                      className="text-xs text-blue-600 font-bold hover:underline">Ver →</a>
-                  </div>
-                ))}
-              </div>
+              <h3 className="font-black text-slate-900 text-sm">📎 Cotizaciones</h3>
+              <p className="text-xs text-slate-500 mt-0.5">{cotModal.nombre_proyecto} — {cotModal.nombre_centro}</p>
             </div>
-          )}
-
-          {/* Subir nuevas */}
-          <div>
-            <p className="text-xs font-bold text-slate-500 uppercase mb-2">Subir cotizaciones:</p>
-            <label className={`flex items-center gap-2 cursor-pointer border-2 border-dashed rounded-lg px-4 py-3 transition ${spUploading ? 'opacity-50 pointer-events-none bg-slate-50' : 'border-teal-300 hover:bg-teal-50 bg-white'}`}>
-              <span className="text-xl">📎</span>
-              <span className="text-sm font-semibold text-teal-700">{spUploading ? 'Subiendo...' : 'Seleccionar archivos'}</span>
-              <input type="file" multiple accept=".pdf,.xlsx,.xls,.jpg,.jpeg,.png" className="hidden"
-                onChange={e => setCotFiles(prev => [...prev, ...Array.from(e.target.files ?? [])])} />
-            </label>
-            {cotFiles.length > 0 && (
-              <div className="mt-2 space-y-1">
-                {cotFiles.map((f, i) => (
-                  <div key={i} className="flex items-center gap-2 bg-slate-50 border rounded-lg px-3 py-1.5">
-                    <span className="text-xs text-slate-700 flex-1 truncate">📄 {f.name}</span>
-                    <button onClick={() => setCotFiles(prev => prev.filter((_,j) => j !== i))} className="text-red-400 text-xs font-bold">✕</button>
-                  </div>
-                ))}
+            <button onClick={() => setCotModal(null)} className="p-1 rounded hover:bg-slate-200">✕</button>
+          </div>
+          <div className="px-5 py-4 overflow-y-auto flex-1 space-y-4">
+            {cotizaciones.length > 0 && (
+              <div>
+                <p className="text-xs font-bold text-slate-500 uppercase mb-2">Archivos subidos:</p>
+                <div className="space-y-2">
+                  {cotizaciones.map((cot: any) => (
+                    <div key={cot.id} className="flex items-center gap-2 bg-blue-50 border border-blue-200 rounded-lg px-3 py-2">
+                      <span className="text-sm">📄</span>
+                      <span className="text-xs text-blue-700 font-semibold flex-1 truncate">{cot.nombre}</span>
+                      <a href={cot.web_url} target="_blank" rel="noreferrer"
+                        className="text-xs text-blue-600 font-bold hover:underline">Ver →</a>
+                    </div>
+                  ))}
+                </div>
               </div>
             )}
+            <div>
+              <p className="text-xs font-bold text-slate-500 uppercase mb-2">Subir cotizaciones:</p>
+              <label className={`flex items-center gap-2 cursor-pointer border-2 border-dashed rounded-lg px-4 py-3 transition ${spUploading ? 'opacity-50 pointer-events-none bg-slate-50' : 'border-teal-300 hover:bg-teal-50 bg-white'}`}>
+                <span className="text-xl">📎</span>
+                <span className="text-sm font-semibold text-teal-700">{spUploading ? 'Subiendo...' : 'Seleccionar archivos'}</span>
+                <input type="file" multiple accept=".pdf,.xlsx,.xls,.jpg,.jpeg,.png" className="hidden"
+                  onChange={e => setCotFiles(prev => [...prev, ...Array.from(e.target.files ?? [])])} />
+              </label>
+              {cotFiles.length > 0 && (
+                <div className="mt-2 space-y-1">
+                  {cotFiles.map((f, i) => (
+                    <div key={i} className="flex items-center gap-2 bg-slate-50 border rounded-lg px-3 py-1.5">
+                      <span className="text-xs text-slate-700 flex-1 truncate">📄 {f.name}</span>
+                      <button onClick={() => setCotFiles(prev => prev.filter((_,j) => j !== i))} className="text-red-400 text-xs font-bold">✕</button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+          <div className="px-5 py-4 border-t border-slate-100 flex gap-3">
+            <button onClick={() => setCotModal(null)}
+              className="flex-1 px-4 py-2 border border-slate-300 rounded-lg text-sm font-semibold text-slate-700 hover:bg-slate-100">
+              Cerrar
+            </button>
+            <button disabled={cotFiles.length === 0 || spUploading || uploadCotMutation.isPending}
+              onClick={() => uploadCotMutation.mutate(cotModal)}
+              className="flex-1 px-4 py-2 bg-teal-600 text-white rounded-lg text-sm font-semibold hover:bg-teal-700 disabled:opacity-40">
+              {uploadCotMutation.isPending ? 'Subiendo...' : 'Subir y Notificar'}
+            </button>
           </div>
         </div>
-        <div className="px-5 py-4 border-t border-slate-100 flex gap-3">
-          <button onClick={() => setCotModal(null)}
-            className="flex-1 px-4 py-2 border border-slate-300 rounded-lg text-sm font-semibold text-slate-700 hover:bg-slate-100">
-            Cerrar
-          </button>
-          <button disabled={cotFiles.length === 0 || spUploading || uploadCotMutation.isPending}
-            onClick={() => uploadCotMutation.mutate(cotModal)}
-            className="flex-1 px-4 py-2 bg-teal-600 text-white rounded-lg text-sm font-semibold hover:bg-teal-700 disabled:opacity-40">
-            {uploadCotMutation.isPending ? 'Subiendo...' : 'Subir y Notificar'}
-          </button>
-        </div>
       </div>
-    </div>
-  )}  );
+    )}
+
+  );
 }
