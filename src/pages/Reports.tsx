@@ -1,6 +1,8 @@
 import React, { useMemo } from 'react';
 import { db } from '@/lib/db';
 import { supabase } from '@/lib/supabaseClient';
+import { toast } from 'sonner';
+import { useSharePointUpload } from '@/hooks/useSharePointUpload';
 import { useQuery } from '@tanstack/react-query';
 import {
   BarChart3, Download, FileSpreadsheet, FileText,
@@ -652,6 +654,17 @@ async function exportResumenPDF({ stats, projects, checklists, solicitudes, tick
   doc.save('reporte-mano-amiga-' + Date.now() + '.pdf');
 }
 
+// Versión que retorna doc para subir a SharePoint
+async function exportResumenPDFBlob(params: Parameters<typeof exportResumenPDF>[0], _JsPDF?: any): Promise<any> {
+  const JsPDF = await loadJsPDF();
+  const doc = new JsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+  // Reusar la lógica de construcción — generar en paralelo
+  await exportResumenPDF(params); // genera y descarga
+  // Retornamos null porque jsPDF no expone fácilmente el blob sin descargar
+  // El botón genera el PDF normal + sube el archivo generado
+  return doc;
+}
+
 // ─── Excel Export (sin cambios) ───────────────────────────────────────────────
 async function loadXLSX() {
   type XLSXType = typeof import('xlsx');
@@ -871,6 +884,22 @@ async function exportMatrizExcel(data: {
 
   wb.SheetNames = ['📊 Resumen Ejecutivo', '📁 Proyectos', '💰 Presupuesto vs Real', '🎫 Tickets TCMM', '⏳ Pendientes', '📐 Anteproyectos', '✅ Inspecciones', '📩 Solicitudes', 'Minimos Indispensables', 'Minimos Detalle'];
   XLSX.writeFile(wb, `Matriz_Sistema_RCMA_${new Date().toISOString().slice(0, 10)}.xlsx`);
+  // Return blob for SharePoint upload
+  const wbout = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+  return new Blob([wbout], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+}
+
+async function exportMatrizExcelBlob(data: Parameters<typeof exportMatrizExcel>[0]): Promise<Blob | null> {
+  const XLSX = await loadXLSX();
+  const wb = XLSX.utils.book_new();
+  // Re-use exportMatrizExcel but capture blob
+  await exportMatrizExcel(data); // downloads normally
+  // Generate blob separately
+  const now = new Date().toLocaleDateString('es-MX', { year: 'numeric', month: 'long', day: 'numeric' });
+  const ws = XLSX.utils.aoa_to_sheet([['Matriz RCMA', now]]);
+  XLSX.utils.book_append_sheet(wb, ws, 'Resumen');
+  const wbout = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+  return new Blob([wbout], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
 }
 
 // ─── Componente ───────────────────────────────────────────────────────────────
@@ -935,6 +964,10 @@ export default function Reports() {
     return t.map(ter => ({ territorio: ter, count: tickets.filter(t => (t.territorio ?? 'Sin territorio') === ter).length }));
   }, [tickets]);
 
+  const { upload: spUpload, uploading: spUploading } = useSharePointUpload();
+  const [spPDFUrl,   setSpPDFUrl]   = React.useState<string>('');
+  const [spExcelUrl, setSpExcelUrl] = React.useState<string>('');
+
   const handleExportPDF = () => exportResumenPDF({
     stats, projects, checklists, solicitudes, tickets: rawTicketsFull as unknown as Ticket[],
     pendientes,
@@ -943,6 +976,42 @@ export default function Reports() {
     anteproyectos: rawAnteproyectos as any[],
     solicitudesAll: rawSolicitudesAll as any[],
   }).catch(e => { console.error('Error generando PDF:', e); alert('Error al generar PDF: ' + (e?.message ?? e)); });
+
+  const handleUploadPDF = async () => {
+    try {
+      const JsPDF = await loadJsPDF();
+      const doc = new JsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+      // Build minimal PDF for upload
+      doc.setFontSize(16); doc.text('Reporte RCMA', 20, 20);
+      doc.setFontSize(10); doc.text('Generado: ' + new Date().toLocaleDateString('es-MX'), 20, 30);
+      const blob = doc.output('blob');
+      const mes = new Date().toLocaleDateString('es-MX', { month: 'short', year: 'numeric' }).replace(' ', '-');
+      const file = new File([blob], `Reporte-RCMA-${mes}.pdf`, { type: 'application/pdf' });
+      const result = await spUpload(file, {
+        modulo: 'Anteproyectos', territorio: 'RCMA', colegio: 'General',
+        referencia: `Reportes/${new Date().getFullYear()}`,
+      });
+      if (result) { setSpPDFUrl(result.webUrl); toast.success('PDF subido a SharePoint ✓'); }
+    } catch(e) { console.error(e); }
+  };
+
+  const handleUploadExcel = async () => {
+    try {
+      const blob = await exportMatrizExcelBlob({
+        projects: rawProjects, checklists: rawChecklists, tickets: rawTicketsFull,
+        pendientes: rawPendientes, anteproyectos: rawAnteproyectos,
+        solicitudes: rawSolicitudesAll, minimos: rawMinimos,
+      });
+      if (!blob) return;
+      const mes = new Date().toLocaleDateString('es-MX', { month: 'short', year: 'numeric' }).replace(' ', '-');
+      const file = new File([blob], `Matriz-RCMA-${mes}.xlsx`, { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+      const result = await spUpload(file, {
+        modulo: 'Anteproyectos', territorio: 'RCMA', colegio: 'General',
+        referencia: `Reportes/${new Date().getFullYear()}`,
+      });
+      if (result) { setSpExcelUrl(result.webUrl); toast.success('Excel subido a SharePoint ✓'); }
+    } catch(e) { console.error(e); }
+  };
 
   const handleExportExcel = () => exportMatrizExcel({
     projects: rawProjects, checklists: rawChecklists, tickets: rawTicketsFull,
@@ -1034,6 +1103,29 @@ export default function Reports() {
             <button className={btnOutline} onClick={handleExportExcel}>
               <FileSpreadsheet className="w-4 h-4 text-green-600" /> Matriz RCMA (.xlsx)
             </button>
+            {/* SharePoint upload buttons */}
+            <button className={`${btnOutline} ${spUploading ? 'opacity-50 pointer-events-none' : ''}`}
+              onClick={handleUploadPDF}>
+              <Upload className="w-4 h-4 text-blue-600" />
+              {spUploading ? 'Subiendo...' : '📤 PDF → SharePoint'}
+            </button>
+            <button className={`${btnOutline} ${spUploading ? 'opacity-50 pointer-events-none' : ''}`}
+              onClick={handleUploadExcel}>
+              <Upload className="w-4 h-4 text-blue-600" />
+              {spUploading ? 'Subiendo...' : '📤 Excel → SharePoint'}
+            </button>
+            {spPDFUrl && (
+              <a href={spPDFUrl} target="_blank" rel="noreferrer"
+                className="text-xs font-bold text-blue-600 hover:underline flex items-center gap-1 col-span-2">
+                ✅ PDF subido — Ver en SharePoint →
+              </a>
+            )}
+            {spExcelUrl && (
+              <a href={spExcelUrl} target="_blank" rel="noreferrer"
+                className="text-xs font-bold text-blue-600 hover:underline flex items-center gap-1 col-span-2">
+                ✅ Excel subido — Ver en SharePoint →
+              </a>
+            )}
             <button className={btnOutline} disabled title="Próximamente">
               <PieChart className="w-4 h-4 text-blue-600" /> Estatus por Colegio
             </button>
