@@ -2,11 +2,9 @@ import React, { useMemo } from 'react';
 import { db } from '@/lib/db';
 import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
-import {
-  FolderKanban, ClipboardCheck, Wrench, AlertTriangle, ArrowRight,
+import {FolderKanban, ClipboardCheck, Wrench, AlertTriangle, ArrowRight,
   Building2, MapPin, TicketCheck, FolderOpen, CalendarDays, ClockAlert,
-  ChevronRight, Activity, type LucideIcon
-} from 'lucide-react';
+  ChevronRight, Activity, type LucideIcon, BookOpen } from 'lucide-react';
 import { supabase } from '@/lib/supabaseClient';
 import StatusBadge from '@/components/shared/StatusBadge';
 import { COLEGIOS, type Colegio } from '@/lib/colegios';
@@ -138,6 +136,20 @@ export default function Dashboard() {
         .select('*', { count: 'exact', head: true })
         .neq('estatus', 'completado');
       return count ?? 0;
+    },
+    refetchInterval: 60000,
+  });
+
+  const { data: nexusPendientes = [] } = useQuery({
+    queryKey: ['nexus_pendientes_dashboard'],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from('nexus_pendientes')
+        .select('id, titulo, prioridad, estatus, tipo, asignado_nombre, fecha_limite, colegio, territorio')
+        .neq('estatus', 'completado')
+        .order('created_at', { ascending: false })
+        .limit(5);
+      return data ?? [];
     },
     refetchInterval: 60000,
   });
@@ -389,6 +401,49 @@ export default function Dashboard() {
             <p className="text-[10px] text-slate-400 mt-2">🔴 Con alertas activas</p>
           </div>
         ))}
+      </div>
+
+      {/* ─── NEXUS Widget ──────────────────────────────────────────────────────── */}
+      <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100">
+          <h2 className="text-sm font-bold text-slate-800 uppercase tracking-tight flex items-center gap-2">
+            <BookOpen className="w-4 h-4 text-teal-600" /> NEXUS — Pendientes Activos
+          </h2>
+          <a href="/nexus" className="text-xs font-semibold text-teal-600 hover:text-teal-800 transition">Ver todos →</a>
+        </div>
+        {nexusPendientes.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-8 text-slate-400">
+            <BookOpen className="w-8 h-8 mb-2 opacity-30" />
+            <p className="text-sm font-semibold">¡Todo al día! Sin pendientes activos</p>
+          </div>
+        ) : (
+          <div className="divide-y divide-slate-100">
+            {(nexusPendientes as any[]).map((p: any) => {
+              const prioColors: Record<string,string> = { urgente:'bg-red-500', alta:'bg-orange-400', normal:'bg-blue-500', baja:'bg-slate-300' };
+              const prioLabels: Record<string,string> = { urgente:'Urgente', alta:'Alta', normal:'Normal', baja:'Baja' };
+              return (
+                <div key={p.id} className="flex items-start gap-3 px-5 py-3 hover:bg-slate-50 transition">
+                  <div className={`w-2 h-2 rounded-full mt-1.5 shrink-0 ${prioColors[p.prioridad] ?? 'bg-slate-300'}`} />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-semibold text-slate-800 truncate">{p.titulo}</p>
+                    <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+                      {p.tipo === 'compartido' && p.asignado_nombre && (
+                        <span className="text-[10px] text-teal-600 font-semibold">→ {p.asignado_nombre}</span>
+                      )}
+                      {p.colegio && <span className="text-[10px] text-slate-400">{p.colegio}</span>}
+                      {p.fecha_limite && (
+                        <span className="text-[10px] text-amber-600 font-semibold">📅 {p.fecha_limite}</span>
+                      )}
+                    </div>
+                  </div>
+                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full text-white shrink-0 ${prioColors[p.prioridad] ?? 'bg-slate-300'}`}>
+                    {prioLabels[p.prioridad] ?? p.prioridad}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        )}
       </div>
 
       {/* ─── Proyectos recientes + Actividad ──────────────────────────────────── */}
