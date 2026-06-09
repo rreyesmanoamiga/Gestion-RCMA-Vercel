@@ -87,6 +87,9 @@ export default function SolicitudProyecto() {
   const añoActual = new Date().getFullYear().toString();
   const [enviado, setEnviado]   = useState(false);
   const [loading, setLoading]   = useState(false);
+  const [tieneCotizaciones, setTieneCotizaciones] = useState(false);
+  const [cotizacionFiles, setCotizacionFiles]     = useState<File[]>([]);
+  const { upload: spUpload, uploading: spUploading } = useSharePointUpload();
 
   const [form, setForm] = useState({
     nombre_centro:          '',
@@ -163,6 +166,37 @@ export default function SolicitudProyecto() {
         monto_otras:            otrasMonto  || null,
       });
       if (error) throw error;
+
+      // Subir cotizaciones a SharePoint si las tienen
+      if (tieneCotizaciones && cotizacionFiles.length > 0) {
+        const solQuery = await supabase.from('solicitudes').select('id')
+          .eq('nombre_proyecto', form.nombre_proyecto)
+          .eq('correo_solicitante', form.correo_solicitante)
+          .order('created_at', { ascending: false }).limit(1).single();
+        const solicitudId = solQuery.data?.id ?? '';
+        if (solicitudId) {
+          const territorio = COLEGIO_TERRITORIO[form.nombre_centro] ?? '';
+          for (const file of cotizacionFiles) {
+            const result = await spUpload(file, {
+              modulo: 'Anteproyectos',
+              colegio: form.nombre_centro,
+              territorio,
+              referencia: 'Cotizaciones/' + form.nombre_proyecto.replace(/[^a-zA-Z0-9]/g,'_').slice(0,40),
+            });
+            if (result) {
+              await supabase.from('solicitud_cotizaciones').insert({
+                solicitud_id: solicitudId, nombre: result.fileName,
+                web_url: result.webUrl, subido_por: form.correo_solicitante,
+              });
+            }
+          }
+          await supabase.functions.invoke('notify-cotizacion-subida', {
+            body: { proyecto: form.nombre_proyecto, centro: form.nombre_centro, territorio,
+              archivos: cotizacionFiles.map(f => f.name), subido_por: form.correo_solicitante,
+              siteUrl: window.location.origin },
+          });
+        }
+      }
 
       // Notificar al admin que llegó una nueva solicitud (con copia al CAR)
       const territorioSolicitud = COLEGIO_TERRITORIO[form.nombre_centro] ?? '';
