@@ -164,10 +164,9 @@ export default function SolicitudesRecibidas() {
     mutationFn: async (sol: any) => {
       for (const file of cotFiles) {
         const result = await spUpload(file, {
-          modulo: 'Anteproyectos',
+          modulo: 'Cotizaciones',
           colegio: sol.nombre_centro,
-          territorio: sol.territorio ?? '',
-          referencia: 'Cotizaciones/' + sol.nombre_proyecto?.replace(/[^a-zA-Z0-9]/g,'_').slice(0,40),
+          referencia: sol.nombre_proyecto?.replace(/[^a-zA-Z0-9]/g,'_').slice(0,40),
         });
         if (result) {
           await supabase.from('solicitud_cotizaciones').insert({

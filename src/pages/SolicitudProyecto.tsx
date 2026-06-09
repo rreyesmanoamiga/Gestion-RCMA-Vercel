@@ -178,10 +178,9 @@ export default function SolicitudProyecto() {
           const territorio = COLEGIO_TERRITORIO[form.nombre_centro] ?? '';
           for (const file of cotizacionFiles) {
             const result = await spUpload(file, {
-              modulo: 'Anteproyectos',
+              modulo: 'Cotizaciones',
               colegio: form.nombre_centro,
-              territorio,
-              referencia: 'Cotizaciones/' + form.nombre_proyecto.replace(/[^a-zA-Z0-9]/g,'_').slice(0,40),
+              referencia: form.nombre_proyecto.replace(/[^a-zA-Z0-9]/g,'_').slice(0,40),
             });
             if (result) {
               await supabase.from('solicitud_cotizaciones').insert({

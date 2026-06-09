@@ -5,10 +5,10 @@ import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 
 interface UploadOptions {
-  modulo:    'Evidencias' | 'Insumos' | 'Anteproyectos';
+  modulo:      'Evidencias' | 'Insumos' | 'Anteproyectos' | 'Reportes' | 'Cotizaciones';
   territorio?: string;
   colegio?:    string;
-  referencia?: string; // folio REQ, ID checklist, nombre anteproyecto
+  referencia?: string;
 }
 
 interface UploadResult {
@@ -24,17 +24,21 @@ export function useSharePointUpload() {
     try {
       const mes    = format(new Date(), 'MMM yyyy', { locale: es });
       const fecha  = format(new Date(), 'yyyy-MM-dd_HH-mm-ss');
-      const ext    = file.name.split('.').pop() ?? '';
       const nombre = `${fecha}_${file.name}`;
+      const anio   = new Date().getFullYear();
 
-      // Construir ruta según módulo
       let carpeta = '';
+
       if (options.modulo === 'Evidencias') {
         carpeta = `Evidencias/${options.territorio ?? 'SIN_TERRITORIO'}/${options.colegio ?? 'SIN_COLEGIO'}/${options.referencia ?? 'General'}/${mes}`;
       } else if (options.modulo === 'Insumos') {
-        carpeta = `Insumos/${new Date().getFullYear()}/${options.referencia ?? 'SIN_FOLIO'}`;
+        carpeta = `Insumos/${anio}/${options.referencia ?? 'SIN_FOLIO'}`;
       } else if (options.modulo === 'Anteproyectos') {
-        carpeta = `Anteproyectos/${new Date().getFullYear()}/${options.colegio ?? 'SIN_COLEGIO'}/${options.referencia ?? 'SIN_NOMBRE'}`;
+        carpeta = `Anteproyectos/${anio}/${options.colegio ?? 'SIN_COLEGIO'}/${options.referencia ?? 'SIN_NOMBRE'}`;
+      } else if (options.modulo === 'Reportes') {
+        carpeta = `Reportes/${anio}`;
+      } else if (options.modulo === 'Cotizaciones') {
+        carpeta = `Cotizaciones/${options.colegio ?? 'SIN_COLEGIO'}/${options.referencia ?? 'SIN_PROYECTO'}`;
       }
 
       const form = new FormData();
@@ -42,9 +46,7 @@ export function useSharePointUpload() {
       form.append('carpeta',  carpeta);
       form.append('fileName', nombre);
 
-      const { data, error } = await supabase.functions.invoke('sharepoint-upload', {
-        body: form,
-      });
+      const { data, error } = await supabase.functions.invoke('sharepoint-upload', { body: form });
 
       if (error) throw error;
       if (!data?.webUrl) throw new Error('No se obtuvo URL del archivo');
