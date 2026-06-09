@@ -71,6 +71,11 @@ interface ChecklistFormProps {
 export default function ChecklistForm({ open, onClose, onSubmit, checklist = null }: ChecklistFormProps) {
   const [formData, setFormData] = useState<FormData>(INITIAL_FORM);
   const [errors, setErrors]     = useState<Record<string, string>>({});
+  const [itemPhotos, setItemPhotos] = useState<(File | null)[]>([null]);
+
+  const setItemPhoto = (index: number, file: File | null) => {
+    setItemPhotos(prev => { const arr = [...prev]; arr[index] = file; return arr; });
+  };
 
   useEffect(() => {
     if (checklist) {
@@ -89,6 +94,7 @@ export default function ChecklistForm({ open, onClose, onSubmit, checklist = nul
       });
     } else {
       setFormData({ ...INITIAL_FORM, fecha: new Date().toISOString().split('T')[0], items: [{ ...EMPTY_ITEM }] });
+      setItemPhotos([null]);
     }
     setErrors({});
   }, [checklist, open]);
@@ -106,9 +112,11 @@ export default function ChecklistForm({ open, onClose, onSubmit, checklist = nul
 
   const addItem = () =>
     setFormData(prev => ({ ...prev, items: [...prev.items, { ...EMPTY_ITEM }] }));
+    setItemPhotos(prev => [...prev, null]);
 
   const removeItem = (index: number) =>
     setFormData(prev => ({ ...prev, items: prev.items.filter((_, i) => i !== index) }));
+    setItemPhotos(prev => prev.filter((_, i) => i !== index));
 
   const updateItem = (index: number, field: keyof ChecklistItem, value: string) =>
     setFormData(prev => ({
@@ -315,6 +323,35 @@ export default function ChecklistForm({ open, onClose, onSubmit, checklist = nul
                       onChange={e => updateItem(index, 'observacion', e.target.value)}
                       placeholder="Observación del ítem (opcional)"
                     />
+                    {/* Evidencia fotográfica opcional */}
+                    <div className="flex items-center gap-2 pt-1">
+                      <span className="text-[10px] text-slate-400 font-semibold uppercase">Evidencia (opcional):</span>
+                      {/* Cámara */}
+                      <label className="flex items-center gap-1 px-2 py-1 bg-teal-50 border border-teal-200 text-teal-700 text-[10px] font-bold rounded-lg cursor-pointer hover:bg-teal-100 transition">
+                        <Camera className="w-3 h-3" /> Cámara
+                        <input type="file" accept="image/*" capture="environment" className="hidden"
+                          onChange={e => setItemPhoto(index, e.target.files?.[0] ?? null)} />
+                      </label>
+                      {/* Galería */}
+                      <label className="flex items-center gap-1 px-2 py-1 bg-slate-50 border border-slate-200 text-slate-600 text-[10px] font-bold rounded-lg cursor-pointer hover:bg-slate-100 transition">
+                        <ImagePlus className="w-3 h-3" /> Galería
+                        <input type="file" accept="image/*,image/heic,image/webp" className="hidden"
+                          onChange={e => setItemPhoto(index, e.target.files?.[0] ?? null)} />
+                      </label>
+                      {/* Preview si hay foto */}
+                      {itemPhotos[index] && (
+                        <div className="flex items-center gap-1 bg-emerald-50 border border-emerald-200 px-2 py-1 rounded-lg">
+                          <Image className="w-3 h-3 text-emerald-600" />
+                          <span className="text-[10px] text-emerald-700 font-semibold max-w-[100px] truncate">
+                            {itemPhotos[index]!.name}
+                          </span>
+                          <button type="button" onClick={() => setItemPhoto(index, null)}
+                            className="text-red-400 hover:text-red-600 ml-1">
+                            <X className="w-3 h-3" />
+                          </button>
+                        </div>
+                      )}
+                    </div>
                   </div>
                 ))}
               </div>
