@@ -313,6 +313,18 @@ export default function Nexus() {
 
   const deleteMutation = useMutation({ mutationFn:async({type,id}:{type:'nota'|'pendiente';id:string})=>{ if(type==='nota') await supabase.from('nexus_notas').delete().eq('id',id); else{ await supabase.from('nexus_comentarios').delete().eq('pendiente_id',id); await supabase.from('nexus_pendientes').delete().eq('id',id); } }, onSuccess:()=>{ qc.invalidateQueries({queryKey:['nexus_notas']}); qc.invalidateQueries({queryKey:['nexus_pendientes']}); toast.success('Eliminado'); setConfirmDel(null); } });
 
+  // Marcar comentarios como leídos cuando se abre el pendiente
+  const marcarComentariosLeidos = async (pendienteId: string) => {
+    await supabase
+      .from('nexus_comentarios')
+      .update({ leido: true })
+      .eq('pendiente_id', pendienteId)
+      .eq('leido', false)
+      .neq('autor_email', userEmail);
+    qc.invalidateQueries({ queryKey: ['nexus_comentarios_resumen'] });
+    qc.invalidateQueries({ queryKey: ['nexus_badge', userEmail] });
+  };
+
   const openNota = (n?:Nota)=>{ setEditNota(n??null); setNotaConColegio(!!(n?.colegio)); setNotaForm(n?{titulo:n.titulo,contenido:n.contenido,categoria:n.categoria,color:n.color,fijada:n.fijada,territorio:n.territorio??'',colegio:n.colegio??''}:{titulo:'',contenido:'',categoria:'General',color:'#0f172a',fijada:false,territorio:'',colegio:''}); setShowNota(true); };
 
   const openPend = (p?:Pendiente)=>{ setEditPend(p??null); setSinProyecto(!!(p&&!p.proyecto_id&&p.proyecto_nombre)); setPendForm(p?{titulo:p.titulo,descripcion:p.descripcion,tipo:p.tipo,asignado_a:p.asignado_a,asignado_nombre:p.asignado_nombre,asignado_cc:p.asignado_cc??'',asignado_cc_nombre:p.asignado_cc_nombre??'',prioridad:p.prioridad,fecha_limite:p.fecha_limite??'',estatus:p.estatus,proyecto_id:p.proyecto_id??'',proyecto_nombre:p.proyecto_nombre??'',ticket_id:p.ticket_id??'',ticket_folio:p.ticket_folio??'',colegio:p.colegio??'',territorio:p.territorio??''}:{titulo:'',descripcion:'',tipo:tab==='compartidos'?'compartido':'personal',asignado_a:'',asignado_nombre:'',asignado_cc:'',asignado_cc_nombre:'',prioridad:'normal',fecha_limite:'',estatus:'pendiente',proyecto_id:'',proyecto_nombre:'',ticket_id:'',ticket_folio:'',colegio:'',territorio:''}); setShowPend(true); };
@@ -331,7 +343,7 @@ export default function Nexus() {
     const coment = comentariosMap[p.id];
     const hasComents = coment && coment.count > 0;
     return (
-      <div onClick={() => setViewPend(p)}
+      <div onClick={() => { setViewPend(p); marcarComentariosLeidos(p.id); }}
         className={`bg-white rounded-xl border border-slate-200 border-t-4 border-l-4 ${eCfg?.cardBorder??'border-t-slate-300'} ${pCfg?.cardLeft??'border-l-slate-300'} shadow-sm overflow-hidden flex flex-col cursor-pointer hover:shadow-md transition`}>
         <div className="p-4 flex-1">
           <div className="flex items-start justify-between gap-2 mb-2">
@@ -494,7 +506,7 @@ export default function Nexus() {
 
       {/* Ver Pendiente */}
       {viewPend && (
-        <Modal title={viewPend.titulo} onClose={() => setViewPend(null)} wide>
+        <Modal title={viewPend.titulo} onClose={() => { setViewPend(null); }} wide>
           <div className="space-y-4">
             {/* Badges prioridad / estatus */}
             <div className="flex items-center gap-2 flex-wrap">
