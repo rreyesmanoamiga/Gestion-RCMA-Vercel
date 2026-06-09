@@ -3,7 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import {Search, ClipboardCheck, User, Calendar, ShieldCheck, Plus,
   X, FileDown, Trash2, ChevronDown, ChevronUp,
-  CheckCircle2, XCircle, Clock, MinusCircle, Camera, ImagePlus, Image } from 'lucide-react';
+  CheckCircle2, XCircle, Clock, MinusCircle } from 'lucide-react';
 import { toast } from 'sonner';
 import { db } from '@/lib/db';
 import { supabase } from '@/lib/supabaseClient';
@@ -1616,20 +1616,20 @@ export default function Checklists() {
                               {/* Evidencia fotográfica opcional */}
                               <div className="flex items-center gap-2 mt-2 flex-wrap">
                                 <label className="flex items-center gap-1 px-2 py-0.5 bg-teal-50 border border-teal-200 text-teal-700 text-[10px] font-bold rounded-lg cursor-pointer hover:bg-teal-100 transition">
-                                  <Camera className="w-3 h-3"/> Cámara
+                                  📷 Cámara
                                   <input type="file" accept="image/*" capture="environment" className="hidden"
                                     onChange={e => setMinimoFotos(prev => ({...prev, [item.id]: e.target.files?.[0] ?? null}))} />
                                 </label>
                                 <label className="flex items-center gap-1 px-2 py-0.5 bg-slate-50 border border-slate-200 text-slate-600 text-[10px] font-bold rounded-lg cursor-pointer hover:bg-slate-100 transition">
-                                  <ImagePlus className="w-3 h-3"/> Galería
+                                  🖼️ Galería
                                   <input type="file" accept="image/*" className="hidden"
                                     onChange={e => setMinimoFotos(prev => ({...prev, [item.id]: e.target.files?.[0] ?? null}))} />
                                 </label>
                                 {minimoFotos[item.id] && (
                                   <div className="flex items-center gap-1 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-lg">
-                                    <Image className="w-3 h-3 text-emerald-600"/>
+                                    📎
                                     <span className="text-[10px] text-emerald-700 font-semibold max-w-[90px] truncate">{minimoFotos[item.id]!.name}</span>
-                                    <button type="button" onClick={() => setMinimoFotos(prev => ({...prev, [item.id]: null}))}><X className="w-3 h-3 text-red-400"/></button>
+                                    <button type="button" onClick={() => setMinimoFotos(prev => ({...prev, [item.id]: null}))}>✕</button>
                                   </div>
                                 )}
                               </div>

@@ -328,20 +328,20 @@ export default function ChecklistForm({ open, onClose, onSubmit, checklist = nul
                       <span className="text-[10px] text-slate-400 font-semibold uppercase">Evidencia (opcional):</span>
                       {/* Cámara */}
                       <label className="flex items-center gap-1 px-2 py-1 bg-teal-50 border border-teal-200 text-teal-700 text-[10px] font-bold rounded-lg cursor-pointer hover:bg-teal-100 transition">
-                        <Camera className="w-3 h-3" /> Cámara
+                        📷 Cámara
                         <input type="file" accept="image/*" capture="environment" className="hidden"
                           onChange={e => setItemPhoto(index, e.target.files?.[0] ?? null)} />
                       </label>
                       {/* Galería */}
                       <label className="flex items-center gap-1 px-2 py-1 bg-slate-50 border border-slate-200 text-slate-600 text-[10px] font-bold rounded-lg cursor-pointer hover:bg-slate-100 transition">
-                        <ImagePlus className="w-3 h-3" /> Galería
+                        🖼️ Galería
                         <input type="file" accept="image/*,image/heic,image/webp" className="hidden"
                           onChange={e => setItemPhoto(index, e.target.files?.[0] ?? null)} />
                       </label>
                       {/* Preview si hay foto */}
                       {itemPhotos[index] && (
                         <div className="flex items-center gap-1 bg-emerald-50 border border-emerald-200 px-2 py-1 rounded-lg">
-                          <Image className="w-3 h-3 text-emerald-600" />
+                          📎
                           <span className="text-[10px] text-emerald-700 font-semibold max-w-[100px] truncate">
                             {itemPhotos[index]!.name}
                           </span>
