@@ -1,11 +1,18 @@
 import React, { useState, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabaseClient';
+import { useSharePointUpload } from '@/hooks/useSharePointUpload';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { ChevronDown, CheckCircle, Eye, X, Building2, User, Mail, Calendar, DollarSign, Printer, Trash2 } from 'lucide-react';
 import PageHeader from '@/components/shared/PageHeader';
+
+const CAR_CORREOS: Record<string, string> = {
+  NORTE:  'jalvarado@manoamiga.edu.mx',
+  MEXICO: 'gromero@manoamiga.edu.mx',
+  FMA:    'fguerra@manoamiga.edu.mx',
+};
 
 const PAGE_SIZE = 20;
 
@@ -125,6 +132,17 @@ export default function SolicitudesRecibidas() {
   const [deletingId, setDeletingId]       = useState<string | null>(null);
   const queryClient = useQueryClient();
 
+  // Query cotizaciones by solicitud
+  const { data: cotizaciones = [], refetch: refetchCots } = useQuery({
+    queryKey: ['solicitud_cotizaciones', cotModal?.id],
+    queryFn: async () => {
+      if (!cotModal?.id) return [];
+      const { data } = await supabase.from('solicitud_cotizaciones').select('*').eq('solicitud_id', cotModal.id).order('created_at');
+      return data ?? [];
+    },
+    enabled: !!cotModal?.id,
+  });
+
   const { data: raw = [], isLoading } = useQuery({
     queryKey: ['solicitudes'],
     queryFn: async () => {
@@ -138,6 +156,38 @@ export default function SolicitudesRecibidas() {
   });
 
   const solicitudes = raw as Solicitud[];
+
+  const uploadCotMutation = useMutation({
+    mutationFn: async (sol: any) => {
+      for (const file of cotFiles) {
+        const result = await spUpload(file, {
+          modulo: 'Anteproyectos',
+          colegio: sol.nombre_centro,
+          territorio: sol.territorio ?? '',
+          referencia: 'Cotizaciones/' + sol.nombre_proyecto?.replace(/[^a-zA-Z0-9]/g,'_').slice(0,40),
+        });
+        if (result) {
+          await supabase.from('solicitud_cotizaciones').insert({
+            solicitud_id: sol.id, nombre: result.fileName,
+            web_url: result.webUrl, subido_por: 'rreyes@manoamiga.edu.mx',
+          });
+        }
+      }
+      // Notificar
+      const territorio = sol.territorio ?? '';
+      await supabase.functions.invoke('notify-cotizacion-subida', {
+        body: { proyecto: sol.nombre_proyecto, centro: sol.nombre_centro, territorio,
+          archivos: cotFiles.map((f: File) => f.name), subido_por: 'Ricardo Reyes — Admin RCMA', siteUrl: window.location.origin },
+      });
+    },
+    onSuccess: () => {
+      refetchCots();
+      setCotFiles([]);
+      queryClient.invalidateQueries({ queryKey: ['solicitud_cotizaciones', cotModal?.id] });
+      alert('✅ Cotizaciones subidas y notificación enviada');
+    },
+    onError: () => alert('Error al subir cotizaciones'),
+  });
 
   const recibirMutation = useMutation({
     mutationFn: async (id: string) => {
@@ -298,6 +348,10 @@ export default function SolicitudesRecibidas() {
                   <button onClick={() => setViewing(s)}
                     className="flex items-center gap-1.5 px-3 py-2 border border-slate-300 rounded-md text-sm font-medium text-slate-700 hover:bg-slate-50 transition-colors">
                     <Eye className="w-4 h-4" /> Ver detalle
+                  </button>
+                  <button onClick={() => { setCotModal(s); setCotFiles([]); }}
+                    className="flex items-center gap-1.5 px-3 py-2 border border-teal-300 text-teal-700 rounded-md text-sm font-medium hover:bg-teal-50 transition-colors">
+                    📎 Cotizaciones
                   </button>
                   {s.estatus === 'pendiente' && (
                     <button onClick={() => recibirMutation.mutate(s.id)}
@@ -461,5 +515,71 @@ export default function SolicitudesRecibidas() {
         </div>
       )}
     </div>
-  );
+
+
+  {/* ── Modal Cotizaciones ─────────────────────────────────────────────── */}
+  {cotModal && (
+    <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4"
+      onClick={e => { if (e.target === e.currentTarget) setCotModal(null); }}>
+      <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg flex flex-col max-h-[85vh]">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100 bg-slate-50 rounded-t-xl">
+          <div>
+            <h3 className="font-black text-slate-900 text-sm">📎 Cotizaciones</h3>
+            <p className="text-xs text-slate-500 mt-0.5">{cotModal.nombre_proyecto} — {cotModal.nombre_centro}</p>
+          </div>
+          <button onClick={() => setCotModal(null)} className="p-1 rounded hover:bg-slate-200">✕</button>
+        </div>
+        <div className="px-5 py-4 overflow-y-auto flex-1 space-y-4">
+          {/* Cotizaciones existentes */}
+          {cotizaciones.length > 0 && (
+            <div>
+              <p className="text-xs font-bold text-slate-500 uppercase mb-2">Archivos subidos:</p>
+              <div className="space-y-2">
+                {cotizaciones.map((cot: any) => (
+                  <div key={cot.id} className="flex items-center gap-2 bg-blue-50 border border-blue-200 rounded-lg px-3 py-2">
+                    <span className="text-sm">📄</span>
+                    <span className="text-xs text-blue-700 font-semibold flex-1 truncate">{cot.nombre}</span>
+                    <a href={cot.web_url} target="_blank" rel="noreferrer"
+                      className="text-xs text-blue-600 font-bold hover:underline">Ver →</a>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Subir nuevas */}
+          <div>
+            <p className="text-xs font-bold text-slate-500 uppercase mb-2">Subir cotizaciones:</p>
+            <label className={`flex items-center gap-2 cursor-pointer border-2 border-dashed rounded-lg px-4 py-3 transition ${spUploading ? 'opacity-50 pointer-events-none bg-slate-50' : 'border-teal-300 hover:bg-teal-50 bg-white'}`}>
+              <span className="text-xl">📎</span>
+              <span className="text-sm font-semibold text-teal-700">{spUploading ? 'Subiendo...' : 'Seleccionar archivos'}</span>
+              <input type="file" multiple accept=".pdf,.xlsx,.xls,.jpg,.jpeg,.png" className="hidden"
+                onChange={e => setCotFiles(prev => [...prev, ...Array.from(e.target.files ?? [])])} />
+            </label>
+            {cotFiles.length > 0 && (
+              <div className="mt-2 space-y-1">
+                {cotFiles.map((f, i) => (
+                  <div key={i} className="flex items-center gap-2 bg-slate-50 border rounded-lg px-3 py-1.5">
+                    <span className="text-xs text-slate-700 flex-1 truncate">📄 {f.name}</span>
+                    <button onClick={() => setCotFiles(prev => prev.filter((_,j) => j !== i))} className="text-red-400 text-xs font-bold">✕</button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+        <div className="px-5 py-4 border-t border-slate-100 flex gap-3">
+          <button onClick={() => setCotModal(null)}
+            className="flex-1 px-4 py-2 border border-slate-300 rounded-lg text-sm font-semibold text-slate-700 hover:bg-slate-100">
+            Cerrar
+          </button>
+          <button disabled={cotFiles.length === 0 || spUploading || uploadCotMutation.isPending}
+            onClick={() => uploadCotMutation.mutate(cotModal)}
+            className="flex-1 px-4 py-2 bg-teal-600 text-white rounded-lg text-sm font-semibold hover:bg-teal-700 disabled:opacity-40">
+            {uploadCotMutation.isPending ? 'Subiendo...' : 'Subir y Notificar'}
+          </button>
+        </div>
+      </div>
+    </div>
+  )}  );
 }

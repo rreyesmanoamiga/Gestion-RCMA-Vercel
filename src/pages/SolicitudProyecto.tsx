@@ -1,5 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { supabase } from '@/lib/supabaseClient';
+import { useSharePointUpload } from '@/hooks/useSharePointUpload';
 import { toast } from 'sonner';
 import { Send, CheckCircle } from 'lucide-react';
 
@@ -106,7 +107,6 @@ export default function SolicitudProyecto() {
     monto_fbc:              '',
     monto_donativos:        '',
     monto_otras:            '',
-    sin_cotizacion:         '',   // 'true' si no tienen cotización aún
   });
 
   const set = (k: string, v: string) => setForm(p => ({ ...p, [k]: v }));
@@ -130,32 +130,14 @@ export default function SolicitudProyecto() {
   const totalMonto = opMonto + fbcMonto + donMonto + otrasMonto;
   const pct = (m: number) => costo > 0 ? ((m / costo) * 100).toFixed(0) + '%' : '0%';
 
-  // Tipos que no requieren costo
-  const TIPOS_EXENTOS = ['PORTAFOLIO', 'GARANTÍAS'];
-  const esExento      = TIPOS_EXENTOS.includes(form.tipo_iniciativa);
-  const sinCotizacion = form.sin_cotizacion === 'true';
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!form.nombre_centro)       { toast.error('Selecciona el nombre del centro'); return; }
     if (!form.correo_solicitante)  { toast.error('El correo es requerido'); return; }
     if (!form.nombre_proyecto)     { toast.error('El nombre del proyecto es requerido'); return; }
     if (!form.tipo_iniciativa)     { toast.error('Selecciona el tipo de iniciativa'); return; }
-
-    // Validaciones de costo — solo para tipos que NO son exentos
-    if (!esExento) {
-      if (!sinCotizacion && (!costo || costo <= 0)) {
-        toast.error('Ingresa el costo aproximado del proyecto o indica que aún no cuentas con cotización');
-        return;
-      }
-      if (costo > 0 && totalMonto === 0) {
-        toast.error('Debes indicar de qué fuente(s) se tomará el presupuesto (Operación, FBC, Donativos u Otras fuentes)');
-        return;
-      }
-      if (costo > 0 && Math.abs(totalMonto - costo) > 1) {
-        toast.error(`El financiamiento (${totalMonto.toLocaleString('es-MX', { style:'currency', currency:'MXN' })}) debe completar el 100% del costo total`);
-        return;
-      }
+    if (form.tipo_iniciativa !== 'GARANTÍAS' && (!costo || costo <= 0)) {
+      toast.error('Ingresa el costo aproximado del proyecto'); return;
     }
 
     setLoading(true);
@@ -174,12 +156,11 @@ export default function SolicitudProyecto() {
         resumen_proyecto:       form.resumen_proyecto,
         fecha_inicio_propuesta: form.fecha_inicio_propuesta || null,
         fecha_fin_propuesta:    form.fecha_fin_propuesta    || null,
-        costo_aproximado:       esExento ? null : (costo || null),
-        monto_operacion:        esExento ? null : (opMonto  || null),
-        monto_fbc:              esExento ? null : (fbcMonto || null),
-        monto_donativos:        esExento ? null : (donMonto || null),
-        monto_otras:            esExento ? null : (otrasMonto || null),
-        sin_cotizacion:         !esExento && sinCotizacion,
+        costo_aproximado:       costo       || null,
+        monto_operacion:        opMonto     || null,
+        monto_fbc:              fbcMonto    || null,
+        monto_donativos:        donMonto    || null,
+        monto_otras:            otrasMonto  || null,
       });
       if (error) throw error;
 
@@ -380,156 +361,96 @@ export default function SolicitudProyecto() {
             <div className="bg-slate-200 px-3 py-1.5 border-b border-slate-400">
               <span className="text-[11px] font-black uppercase tracking-widest text-slate-700">III. Plan de Financiamiento</span>
             </div>
-
-            {/* Tipos exentos de costo */}
-            {esExento ? (
-              <div className="px-4 py-4 bg-blue-50 flex items-center gap-3">
-                <span className="text-2xl">ℹ️</span>
-                <div>
-                  <p className="text-sm font-bold text-blue-800">
-                    Este tipo de iniciativa ({form.tipo_iniciativa}) no requiere presupuesto.
-                  </p>
-                  <p className="text-xs text-blue-600 mt-0.5">
-                    La sección de Plan de Financiamiento no aplica para {form.tipo_iniciativa === 'PORTAFOLIO' ? 'Portafolio' : 'Garantías'}.
-                  </p>
-                </div>
+            <div className="overflow-x-auto">
+            <table className="w-full border-collapse min-w-[400px]">
+              <thead>
+                <tr>
+                  <th className={thStyle + " w-48"}>Fuente</th>
+                  <th className={thStyle}>Monto (MXN)</th>
+                  <th className={thStyle + " w-24"}>% del Total</th>
+                </tr>
+              </thead>
+              <tbody>
+                {/* Costo total */}
+                <tr className="bg-slate-50">
+                  <td className="border border-slate-400 px-3 py-1.5 text-[11px] font-black text-slate-800 uppercase">
+                    Costo Aproximado Total {form.tipo_iniciativa !== 'GARANTÍAS' ? '*' : '(no requerido para Garantías)'}
+                  </td>
+                  <td className={tdInput}>
+                    <input type="text" className={inputClass + " text-right font-mono"}
+                      required={form.tipo_iniciativa !== 'GARANTÍAS'}
+                      value={formatMXN(form.costo_aproximado)}
+                      onChange={e => set('costo_aproximado', parseMXN(e.target.value))}
+                      placeholder={form.tipo_iniciativa === 'GARANTÍAS' ? '$0.00 (sin costo)' : '$0.00'} />
+                  </td>
+                  <td className={tdNum + " bg-slate-100 font-bold"}>100%</td>
+                </tr>
+                {/* Operación */}
+                <tr>
+                  <td className="border border-slate-400 px-3 py-1.5 text-[11px] font-bold text-slate-700 uppercase">Operación</td>
+                  <td className={tdInput}>
+                    <input type="text" className={inputClass + " text-right font-mono"}
+                      value={formatMXN(form.monto_operacion)}
+                      onChange={e => set('monto_operacion', parseMXN(e.target.value))}
+                      placeholder="$0.00" />
+                  </td>
+                  <td className={tdNum}>{pct(opMonto)}</td>
+                </tr>
+                {/* FBC */}
+                <tr>
+                  <td className="border border-slate-400 px-3 py-1.5 text-[11px] font-bold text-slate-700 uppercase">FBC (Fondo Bajo Custodia)</td>
+                  <td className={tdInput}>
+                    <input type="text" className={inputClass + " text-right font-mono"}
+                      value={formatMXN(form.monto_fbc)}
+                      onChange={e => set('monto_fbc', parseMXN(e.target.value))}
+                      placeholder="$0.00" />
+                  </td>
+                  <td className={tdNum}>{pct(fbcMonto)}</td>
+                </tr>
+                {/* Donativos */}
+                <tr>
+                  <td className="border border-slate-400 px-3 py-1.5 text-[11px] font-bold text-slate-700 uppercase">Donativos</td>
+                  <td className={tdInput}>
+                    <input type="text" className={inputClass + " text-right font-mono"}
+                      value={formatMXN(form.monto_donativos)}
+                      onChange={e => set('monto_donativos', parseMXN(e.target.value))}
+                      placeholder="$0.00" />
+                  </td>
+                  <td className={tdNum}>{pct(donMonto)}</td>
+                </tr>
+                {/* Otras */}
+                <tr>
+                  <td className="border border-slate-400 px-3 py-1.5 text-[11px] font-bold text-slate-700 uppercase">Otras Fuentes</td>
+                  <td className={tdInput}>
+                    <input type="text" className={inputClass + " text-right font-mono"}
+                      value={formatMXN(form.monto_otras)}
+                      onChange={e => set('monto_otras', parseMXN(e.target.value))}
+                      placeholder="$0.00" />
+                  </td>
+                  <td className={tdNum}>{pct(otrasMonto)}</td>
+                </tr>
+                {/* Total */}
+                <tr className="bg-slate-100">
+                  <td className="border border-slate-400 px-3 py-1.5 text-[11px] font-black text-slate-800 uppercase">Total Financiamiento</td>
+                  <td className={tdNum + " border border-slate-400 font-black text-slate-900"}>
+                    {totalMonto.toLocaleString('es-MX', { style: 'currency', currency: 'MXN' })}
+                  </td>
+                  <td className={`${tdNum} border border-slate-400 font-black ${
+                    costo > 0 && Math.abs(totalMonto - costo) < 1 ? 'text-emerald-700' : totalMonto > costo && costo > 0 ? 'text-red-600' : 'text-slate-700'
+                  }`}>
+                    {costo > 0 ? ((totalMonto / costo) * 100).toFixed(0) + '%' : '0%'}
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+            {costo > 0 && Math.abs(totalMonto - costo) > 1 && (
+              <div className="px-3 py-2 bg-amber-50 border-t border-amber-200">
+                <p className="text-xs text-amber-700 font-bold">
+                  ⚠ El total del financiamiento debe ser igual al costo aproximado. Diferencia: {(totalMonto - costo).toLocaleString('es-MX', { style: 'currency', currency: 'MXN' })}
+                </p>
               </div>
-            ) : (
-              <>
-                {/* Checkbox: sin cotización */}
-                <div className="px-4 py-3 border-b border-slate-200 bg-slate-50">
-                  <label className="flex items-center gap-3 cursor-pointer w-fit">
-                    <input
-                      type="checkbox"
-                      className="w-4 h-4 rounded"
-                      checked={sinCotizacion}
-                      onChange={e => {
-                        set('sin_cotizacion', e.target.checked ? 'true' : '');
-                        if (e.target.checked) {
-                          set('costo_aproximado', '');
-                          set('monto_operacion', '');
-                          set('monto_fbc', '');
-                          set('monto_donativos', '');
-                          set('monto_otras', '');
-                        }
-                      }}
-                    />
-                    <div>
-                      <p className="text-sm font-bold text-slate-700">Aún no contamos con cotización</p>
-                      <p className="text-xs text-slate-500">Selecciona esta opción si todavía no tienes el costo del proyecto</p>
-                    </div>
-                  </label>
-                </div>
-
-                {/* Tabla de financiamiento — solo si tienen cotización */}
-                {!sinCotizacion && (
-                  <div className="overflow-x-auto">
-                    <table className="w-full border-collapse min-w-[400px]">
-                      <thead>
-                        <tr>
-                          <th className={thStyle + " w-48"}>Fuente</th>
-                          <th className={thStyle}>Monto (MXN)</th>
-                          <th className={thStyle + " w-24"}>% del Total</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {/* Costo total */}
-                        <tr className="bg-slate-50">
-                          <td className="border border-slate-400 px-3 py-1.5 text-[11px] font-black text-slate-800 uppercase">
-                            Costo Aproximado Total *
-                          </td>
-                          <td className={tdInput}>
-                            <input type="text" className={inputClass + " text-right font-mono"}
-                              required
-                              value={formatMXN(form.costo_aproximado)}
-                              onChange={e => set('costo_aproximado', parseMXN(e.target.value))}
-                              placeholder="$0.00" />
-                          </td>
-                          <td className={tdNum + " bg-slate-100 font-bold"}>100%</td>
-                        </tr>
-                        {/* Operación */}
-                        <tr>
-                          <td className="border border-slate-400 px-3 py-1.5 text-[11px] font-bold text-slate-700 uppercase">Operación</td>
-                          <td className={tdInput}>
-                            <input type="text" className={inputClass + " text-right font-mono"}
-                              value={formatMXN(form.monto_operacion)}
-                              onChange={e => set('monto_operacion', parseMXN(e.target.value))}
-                              placeholder="$0.00" />
-                          </td>
-                          <td className={tdNum}>{pct(opMonto)}</td>
-                        </tr>
-                        {/* FBC */}
-                        <tr>
-                          <td className="border border-slate-400 px-3 py-1.5 text-[11px] font-bold text-slate-700 uppercase">FBC (Fondo Bajo Custodia)</td>
-                          <td className={tdInput}>
-                            <input type="text" className={inputClass + " text-right font-mono"}
-                              value={formatMXN(form.monto_fbc)}
-                              onChange={e => set('monto_fbc', parseMXN(e.target.value))}
-                              placeholder="$0.00" />
-                          </td>
-                          <td className={tdNum}>{pct(fbcMonto)}</td>
-                        </tr>
-                        {/* Donativos */}
-                        <tr>
-                          <td className="border border-slate-400 px-3 py-1.5 text-[11px] font-bold text-slate-700 uppercase">Donativos</td>
-                          <td className={tdInput}>
-                            <input type="text" className={inputClass + " text-right font-mono"}
-                              value={formatMXN(form.monto_donativos)}
-                              onChange={e => set('monto_donativos', parseMXN(e.target.value))}
-                              placeholder="$0.00" />
-                          </td>
-                          <td className={tdNum}>{pct(donMonto)}</td>
-                        </tr>
-                        {/* Otras */}
-                        <tr>
-                          <td className="border border-slate-400 px-3 py-1.5 text-[11px] font-bold text-slate-700 uppercase">Otras Fuentes</td>
-                          <td className={tdInput}>
-                            <input type="text" className={inputClass + " text-right font-mono"}
-                              value={formatMXN(form.monto_otras)}
-                              onChange={e => set('monto_otras', parseMXN(e.target.value))}
-                              placeholder="$0.00" />
-                          </td>
-                          <td className={tdNum}>{pct(otrasMonto)}</td>
-                        </tr>
-                        {/* Total */}
-                        <tr className="bg-slate-100">
-                          <td className="border border-slate-400 px-3 py-1.5 text-[11px] font-black text-slate-800 uppercase">Total Financiamiento</td>
-                          <td className={tdNum + " border border-slate-400 font-black text-slate-900"}>
-                            {totalMonto.toLocaleString('es-MX', { style: 'currency', currency: 'MXN' })}
-                          </td>
-                          <td className={`${tdNum} border border-slate-400 font-black ${
-                            costo > 0 && Math.abs(totalMonto - costo) < 1 ? 'text-emerald-700' : totalMonto > costo && costo > 0 ? 'text-red-600' : 'text-slate-700'
-                          }`}>
-                            {costo > 0 ? ((totalMonto / costo) * 100).toFixed(0) + '%' : '0%'}
-                          </td>
-                        </tr>
-                      </tbody>
-                    </table>
-
-                    {/* Alerta diferencia */}
-                    {costo > 0 && Math.abs(totalMonto - costo) > 1 && (
-                      <div className="px-3 py-2 bg-red-50 border-t border-red-200">
-                        <p className="text-xs text-red-700 font-bold">
-                          ⚠ El financiamiento debe completar el 100%. Diferencia: {(costo - totalMonto).toLocaleString('es-MX', { style: 'currency', currency: 'MXN' })} pendiente por asignar.
-                        </p>
-                      </div>
-                    )}
-                    {costo > 0 && Math.abs(totalMonto - costo) < 1 && totalMonto > 0 && (
-                      <div className="px-3 py-2 bg-emerald-50 border-t border-emerald-200">
-                        <p className="text-xs text-emerald-700 font-bold">✓ El financiamiento cubre el 100% del costo total.</p>
-                      </div>
-                    )}
-                    {costo > 0 && totalMonto === 0 && (
-                      <div className="px-3 py-2 bg-amber-50 border-t border-amber-200">
-                        <p className="text-xs text-amber-700 font-bold">
-                          ⚠ Debes indicar de qué fuente(s) se tomará el presupuesto para poder enviar la solicitud.
-                        </p>
-                      </div>
-                    )}
-                  </div>
-                )}
-              </>
             )}
+          </div>
           </div>
 
           {/* ── PIE DEL FORMATO ── */}
