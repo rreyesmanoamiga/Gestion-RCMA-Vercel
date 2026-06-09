@@ -257,6 +257,7 @@ export default function SolicitudesRecibidas() {
   );
 
   return (
+    <>
     <div className="space-y-6">
       <PageHeader
         title="Solicitudes Recibidas"
@@ -580,6 +581,6 @@ export default function SolicitudesRecibidas() {
         </div>
       </div>
     )}
-
+    </>
   );
 }
