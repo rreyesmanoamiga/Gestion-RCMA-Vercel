@@ -979,37 +979,48 @@ export default function Reports() {
 
   const handleUploadPDF = async () => {
     try {
+      // Interceptar doc.save — captura blob sin descargar
       const JsPDF = await loadJsPDF();
-      const doc = new JsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
-      // Build minimal PDF for upload
-      doc.setFontSize(16); doc.text('Reporte RCMA', 20, 20);
-      doc.setFontSize(10); doc.text('Generado: ' + new Date().toLocaleDateString('es-MX'), 20, 30);
-      const blob = doc.output('blob');
-      const mes = new Date().toLocaleDateString('es-MX', { month: 'short', year: 'numeric' }).replace(' ', '-');
-      const file = new File([blob], `Reporte-RCMA-${mes}.pdf`, { type: 'application/pdf' });
-      const result = await spUpload(file, {
-        modulo: 'Anteproyectos', territorio: 'RCMA', colegio: 'General',
-        referencia: `Reportes/${new Date().getFullYear()}`,
+      let captured: Blob | null = null;
+      const origSave = JsPDF.prototype.save;
+      JsPDF.prototype.save = function() { captured = this.output('blob'); };
+      await exportResumenPDF({
+        stats, projects, checklists, solicitudes,
+        tickets: rawTicketsFull as unknown as Ticket[],
+        pendientes, ticketsMas: rawTicketsMas as any[],
+        minimos: rawMinimos as any[], anteproyectos: rawAnteproyectos as any[],
+        solicitudesAll: rawSolicitudesAll as any[],
       });
-      if (result) { setSpPDFUrl(result.webUrl); toast.success('PDF subido a SharePoint ✓'); }
+      JsPDF.prototype.save = origSave;
+      if (!captured) { toast.error('No se pudo generar el PDF'); return; }
+      const mes = new Date().toLocaleDateString('es-MX', { month: 'short', year: 'numeric' }).replace(' ', '-');
+      const file = new File([captured], `Reporte-RCMA-${mes}.pdf`, { type: 'application/pdf' });
+      const result = await spUpload(file, { modulo: 'Reportes' });
+      if (result) setSpPDFUrl(result.webUrl);
     } catch(e) { console.error(e); }
   };
 
   const handleUploadExcel = async () => {
     try {
-      const blob = await exportMatrizExcelBlob({
+      // Interceptar XLSX.writeFile — captura blob sin abrir diálogo
+      const XLSX = await loadXLSX();
+      let captured: Blob | null = null;
+      const origWriteFile = (XLSX as any).writeFile;
+      (XLSX as any).writeFile = (wb: any) => {
+        const out = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+        captured = new Blob([out], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+      };
+      await exportMatrizExcel({
         projects: rawProjects, checklists: rawChecklists, tickets: rawTicketsFull,
         pendientes: rawPendientes, anteproyectos: rawAnteproyectos,
         solicitudes: rawSolicitudesAll, minimos: rawMinimos,
       });
-      if (!blob) return;
+      (XLSX as any).writeFile = origWriteFile;
+      if (!captured) { toast.error('No se pudo generar el Excel'); return; }
       const mes = new Date().toLocaleDateString('es-MX', { month: 'short', year: 'numeric' }).replace(' ', '-');
-      const file = new File([blob], `Matriz-RCMA-${mes}.xlsx`, { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
-      const result = await spUpload(file, {
-        modulo: 'Anteproyectos', territorio: 'RCMA', colegio: 'General',
-        referencia: `Reportes/${new Date().getFullYear()}`,
-      });
-      if (result) { setSpExcelUrl(result.webUrl); toast.success('Excel subido a SharePoint ✓'); }
+      const file = new File([captured], `Matriz-RCMA-${mes}.xlsx`, { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+      const result = await spUpload(file, { modulo: 'Reportes' });
+      if (result) setSpExcelUrl(result.webUrl);
     } catch(e) { console.error(e); }
   };
 
