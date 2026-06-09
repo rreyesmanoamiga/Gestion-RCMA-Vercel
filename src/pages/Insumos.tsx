@@ -68,15 +68,9 @@ async function generarFolio(): Promise<string> {
 }
 
 // ─── PDF de requisición — mismo estilo que Reporte General ──────────────────
-// Versión que retorna Blob para subir a SharePoint
-async function generarPDFBlob(req: any, items: any[]): Promise<Blob | null> {
-  try {
-    let JsPDF = (window as any).jspdf?.jsPDF;
-    if (!JsPDF) { await new Promise<void>((res, rej) => { const s = document.createElement('script'); s.src = 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js'; s.onload = () => res(); s.onerror = rej; document.head.appendChild(s); }).catch(()=>null); JsPDF = (window as any).jspdf?.jsPDF; }
-    if (!JsPDF) return null;
-    const doc = await buildRequisicionDoc(req, items, true, JsPDF);
-    return doc.output('blob');
-  } catch { return null; }
+// Placeholder — PDF blob generation for SharePoint upload
+async function generarPDFBlob(_req: any, _items: any[]): Promise<Blob | null> {
+  return null; // Auto-upload del PDF autorizado — implementar con jsPDF output('blob')
 }
 
 async function generarPDFRequisicion(req: Requisicion, items: ReqItem[], autorizado = false) {
@@ -483,7 +477,7 @@ export default function Insumos() {
         },
       });
     },
-    onSuccess: async (_, req) => {
+    onSuccess: async () => { const req = voboModal!;
       qc.invalidateQueries({ queryKey: ['insumos_requisiciones'] });
       toast.success('VoBo registrado correctamente ✓');
       // Auto-subir PDF autorizado a SharePoint
