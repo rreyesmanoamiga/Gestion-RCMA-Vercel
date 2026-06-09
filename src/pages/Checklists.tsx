@@ -1,9 +1,11 @@
 import React, { useState, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
-import {Search, ClipboardCheck, User, Calendar, ShieldCheck, Plus,
+import {
+  Search, ClipboardCheck, User, Calendar, ShieldCheck, Plus,
   X, FileDown, Trash2, ChevronDown, ChevronUp,
-  CheckCircle2, XCircle, Clock, MinusCircle } from 'lucide-react';
+  CheckCircle2, XCircle, Clock, MinusCircle,
+} from 'lucide-react';
 import { toast } from 'sonner';
 import { db } from '@/lib/db';
 import { supabase } from '@/lib/supabaseClient';
@@ -1112,6 +1114,9 @@ export default function Checklists() {
   const [filterMat,  setFilterMat]  = useState('');
   const [formOpen,   setFormOpen]   = useState(false);
 
+  const { upload: spUpload } = useSharePointUpload();
+  const pendingChecklistPhotos = React.useRef<{ colegio:string; territorio:string; items:any[]; photos:(File|null)[] } | null>(null);
+
   const { data, isLoading } = useQuery({
     queryKey: ['checklists'],
     queryFn: () => db.Checklist.list('-created_at', 500),
@@ -1128,28 +1133,26 @@ export default function Checklists() {
     return list;
   }, [checklists, search, filterTerr, filterCol, filterMat]);
 
-  const [pendingPhotos, setPendingPhotos] = useState<(File | null)[]>([]);
-
   const createMutation = useMutation({
-    mutationFn: async (payload: { data: Record<string, unknown>; photos: (File | null)[] }) => {
-      const record = await db.Checklist.create(payload.data) as any;
-      const terr  = (payload.data.territorio as string) ?? '';
-      const col   = (payload.data.colegio    as string) ?? '';
-      const items = (payload.data.items as any[]) ?? [];
-      // Subir fotos a SharePoint
-      for (let i = 0; i < payload.photos.length; i++) {
-        const foto = payload.photos[i];
-        if (!foto) continue;
-        const itemName = items[i]?.nombre?.replace(/[^a-zA-Z0-9]/g,'_').slice(0,30) ?? `item_${i}`;
-        await spUpload(foto, {
-          modulo: 'Evidencias',
-          territorio: terr, colegio: col,
-          referencia: `Checklists/${itemName}`,
-        });
+    mutationFn: (d: Record<string, unknown>) => db.Checklist.create(d),
+    onSuccess: async () => {
+      qc.invalidateQueries({ queryKey: ['checklists'] });
+      setFormOpen(false);
+      toast.success('Inspección creada');
+      // Upload pending photos to SharePoint
+      const pending = pendingChecklistPhotos.current;
+      if (pending) {
+        pendingChecklistPhotos.current = null;
+        for (let i = 0; i < pending.photos.length; i++) {
+          const foto = pending.photos[i];
+          if (!foto) continue;
+          const itemName = pending.items[i]?.nombre?.replace(/[^a-zA-Z0-9]/g,'_').slice(0,30) ?? `item_${i}`;
+          try {
+            await spUpload(foto, { modulo: 'Evidencias', territorio: pending.territorio, colegio: pending.colegio, referencia: `Checklists/${itemName}` });
+          } catch { /* foto upload opcional */ }
+        }
       }
-      return record;
     },
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['checklists'] }); setFormOpen(false); setPendingPhotos([]); toast.success('Inspección creada'); },
     onError: () => toast.error('Error al crear la inspección'),
   });
 
@@ -1167,7 +1170,6 @@ export default function Checklists() {
   const [formNotas,     setFormNotas]     = useState('');
   const [formItems,     setFormItems]     = useState<ItemEval[]>(initItems);
   const [minimoFotos,   setMinimoFotos]   = useState<Record<string, File | null>>({});
-  const { upload: spUpload, uploading: spUploading } = useSharePointUpload();
 
   const { data: minimosRaw = [], isLoading: minimosLoading } = useQuery({
     queryKey: ['minimos_indispensables'],
@@ -1199,20 +1201,19 @@ export default function Checklists() {
         resultado: calcResultado(formItems),
       });
       if (error) throw error;
-      // Subir fotos opcionales a SharePoint
+    },
+    onSuccess: async () => {
+      qc.invalidateQueries({ queryKey: ['minimos_indispensables'] });
+      toast.success('Evaluación guardada');
+      setShowForm(false);
+      const terr = COLEGIOS.find(c => c.colegio === formColegio)?.territorio ?? '';
+      // Upload fotos opcionales
       for (const [itemId, foto] of Object.entries(minimoFotos)) {
         if (!foto) continue;
         const itemNombre = SECCIONES_MINIMOS.flatMap(s => s.items).find(it => it.id === itemId)?.nombre ?? itemId;
-        await spUpload(foto, {
-          modulo: 'Evidencias', territorio: terr, colegio: formColegio,
-          referencia: `Minimos/${itemNombre.replace(/[^a-zA-Z0-9]/g,'_').slice(0,30)}`,
-        });
+        try { await spUpload(foto, { modulo: 'Evidencias', territorio: terr, colegio: formColegio, referencia: `Minimos/${itemNombre.replace(/[^a-zA-Z0-9]/g,'_').slice(0,30)}` }); } catch {}
       }
-    },
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['minimos_indispensables'] });
-      toast.success('Evaluación guardada');
-      setShowForm(false); setMinimoFotos({});
+      setMinimoFotos({});
       setFormColegio(''); setFormInspector(''); setFormNotas('');
       setFormFecha(format(new Date(), 'yyyy-MM-dd')); setFormItems(initItems());
     },
@@ -1366,7 +1367,10 @@ export default function Checklists() {
             </div>
           )}
 
-          <ChecklistForm open={formOpen} onClose={() => setFormOpen(false)} onSubmit={(d, photos) => createMutation.mutate({ data: d, photos: photos ?? [] })} />
+          <ChecklistForm open={formOpen} onClose={() => setFormOpen(false)} onSubmit={(d, photos) => {
+            pendingChecklistPhotos.current = { colegio: d.colegio as string, territorio: d.territorio as string, items: d.items as any[], photos: photos ?? [] };
+            createMutation.mutate(d);
+          }} />
         </>
       )}
 
@@ -1613,24 +1617,23 @@ export default function Checklists() {
                                   placeholder="Observación (opcional)..." value={fi.observacion}
                                   onChange={e => setItemObs(item.id, e.target.value)} />
                               )}
-                              {/* Evidencia fotográfica opcional */}
+                              {/* Evidencia opcional */}
                               <div className="flex items-center gap-2 mt-2 flex-wrap">
-                                <label className="flex items-center gap-1 px-2 py-0.5 bg-teal-50 border border-teal-200 text-teal-700 text-[10px] font-bold rounded-lg cursor-pointer hover:bg-teal-100 transition">
+                                <label className="px-2 py-0.5 bg-teal-50 border border-teal-200 text-teal-700 text-[10px] font-bold rounded-lg cursor-pointer hover:bg-teal-100">
                                   📷 Cámara
                                   <input type="file" accept="image/*" capture="environment" className="hidden"
-                                    onChange={e => setMinimoFotos(prev => ({...prev, [item.id]: e.target.files?.[0] ?? null}))} />
+                                    onChange={e => setMinimoFotos(prev => ({...prev, [item.id]: e.target.files?.[0]??null}))} />
                                 </label>
-                                <label className="flex items-center gap-1 px-2 py-0.5 bg-slate-50 border border-slate-200 text-slate-600 text-[10px] font-bold rounded-lg cursor-pointer hover:bg-slate-100 transition">
+                                <label className="px-2 py-0.5 bg-slate-50 border border-slate-200 text-slate-600 text-[10px] font-bold rounded-lg cursor-pointer hover:bg-slate-100">
                                   🖼️ Galería
                                   <input type="file" accept="image/*" className="hidden"
-                                    onChange={e => setMinimoFotos(prev => ({...prev, [item.id]: e.target.files?.[0] ?? null}))} />
+                                    onChange={e => setMinimoFotos(prev => ({...prev, [item.id]: e.target.files?.[0]??null}))} />
                                 </label>
                                 {minimoFotos[item.id] && (
-                                  <div className="flex items-center gap-1 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-lg">
-                                    📎
-                                    <span className="text-[10px] text-emerald-700 font-semibold max-w-[90px] truncate">{minimoFotos[item.id]!.name}</span>
-                                    <button type="button" onClick={() => setMinimoFotos(prev => ({...prev, [item.id]: null}))}>✕</button>
-                                  </div>
+                                  <span className="flex items-center gap-1 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-lg text-[10px] text-emerald-700 font-semibold">
+                                    📎 {minimoFotos[item.id]!.name.slice(0,20)}
+                                    <button type="button" onClick={() => setMinimoFotos(prev => ({...prev, [item.id]: null}))} className="text-red-400 ml-1 hover:text-red-600">✕</button>
+                                  </span>
                                 )}
                               </div>
                             </div>
