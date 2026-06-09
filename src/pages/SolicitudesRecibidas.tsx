@@ -130,6 +130,9 @@ export default function SolicitudesRecibidas() {
   const [visibleCount, setVisibleCount]   = useState(PAGE_SIZE);
   const [viewing, setViewing]             = useState<Solicitud | null>(null);
   const [deletingId, setDeletingId]       = useState<string | null>(null);
+  const [cotModal, setCotModal]           = useState<any>(null);
+  const [cotFiles, setCotFiles]           = useState<File[]>([]);
+  const { upload: spUpload, uploading: spUploading } = useSharePointUpload();
   const queryClient = useQueryClient();
 
   // Query cotizaciones by solicitud
