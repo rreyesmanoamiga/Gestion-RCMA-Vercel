@@ -477,16 +477,14 @@ export default function Insumos() {
         },
       });
     },
-    onSuccess: async () => { const req = voboModal!;
+    onSuccess: async (_data: void, req: Requisicion) => {
       qc.invalidateQueries({ queryKey: ['insumos_requisiciones'] });
       toast.success('VoBo registrado correctamente ✓');
-      // Auto-subir PDF autorizado a SharePoint
+      // Auto-subir PDF autorizado a SharePoint (opcional)
       try {
         const fresh = await supabase.from('insumos_requisiciones').select('*').eq('id', req.id).single();
         const freshItems = await supabase.from('insumos_items').select('*').eq('requisicion_id', req.id);
         if (fresh.data) {
-          toast.info('Subiendo PDF autorizado a SharePoint...');
-          // Generar PDF como blob
           const pdfBlob = await generarPDFBlob(fresh.data as any, (freshItems.data ?? []) as any);
           if (pdfBlob) {
             const pdfFile = new File([pdfBlob], `${req.folio}-AUTORIZADO.pdf`, { type: 'application/pdf' });
@@ -497,7 +495,7 @@ export default function Insumos() {
             }
           }
         }
-      } catch { /* PDF upload optional */ }
+      } catch { /* PDF upload opcional */ }
       setVoboModal(null);
     },
     onError: (e: any) => toast.error(e.message ?? 'Error'),
