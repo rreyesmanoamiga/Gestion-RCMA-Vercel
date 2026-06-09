@@ -672,6 +672,7 @@ export default function Anteproyectos() {
                       {format(new Date(a.fecha_entrega), 'dd MMM yyyy', { locale: es })}
                     </span>
                   ) : <span className="text-xs text-slate-400">—</span>}
+                  <ZipUploader ant={a} />
                 </div>
                 <div className="col-span-1">
                   {a.proyecto_id && projectMap[a.proyecto_id] ? (
