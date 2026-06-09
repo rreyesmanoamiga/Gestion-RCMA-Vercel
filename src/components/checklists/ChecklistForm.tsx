@@ -114,9 +114,10 @@ export default function ChecklistForm({ open, onClose, onSubmit, checklist = nul
     setFormData(prev => ({ ...prev, items: [...prev.items, { ...EMPTY_ITEM }] }));
     setItemPhotos(prev => [...prev, null]);
 
-  const removeItem = (index: number) =>
+  const removeItem = (index: number) => {
     setFormData(prev => ({ ...prev, items: prev.items.filter((_, i) => i !== index) }));
     setItemPhotos(prev => prev.filter((_, i) => i !== index));
+  };
 
   const updateItem = (index: number, field: keyof ChecklistItem, value: string) =>
     setFormData(prev => ({
