@@ -473,13 +473,18 @@ export default function Anteproyectos() {
         qcZ.invalidateQueries({ queryKey: ['anteproyectos'] });
       }
     };
-    if (ant.zip_url) return (
-      <div className="flex items-center gap-1.5 mt-1.5 bg-blue-50 border border-blue-200 rounded-lg px-2 py-1">
-        <FileArchive className="w-3 h-3 text-blue-500 shrink-0" />
-        <span className="text-[10px] text-blue-700 font-semibold truncate max-w-[140px]">{ant.zip_nombre ?? 'Archivo ZIP'}</span>
-        <a href={ant.zip_url} target="_blank" rel="noreferrer" className="p-0.5 text-blue-500 hover:text-blue-700"><ExternalLink className="w-3 h-3" /></a>
-      </div>
-    );
+    if (ant.zip_url) {
+      // Abrir carpeta padre en SharePoint (no el archivo directo que descarga)
+      const folderUrl = ant.zip_url.substring(0, ant.zip_url.lastIndexOf('/'));
+      return (
+        <a href={folderUrl} target="_blank" rel="noreferrer"
+          className="flex items-center gap-1.5 mt-1.5 bg-blue-50 border border-blue-200 rounded-lg px-2 py-1 hover:bg-blue-100 transition">
+          <FolderOpen className="w-3 h-3 text-blue-500 shrink-0" />
+          <span className="text-[10px] text-blue-700 font-semibold truncate max-w-[140px]">{ant.zip_nombre ?? 'Ver en SharePoint'}</span>
+          <ExternalLink className="w-3 h-3 text-blue-400 shrink-0" />
+        </a>
+      );
+    }
     return (
       <label className={`flex items-center gap-1.5 mt-1.5 cursor-pointer bg-slate-50 border border-dashed border-slate-300 hover:border-blue-400 hover:bg-blue-50 rounded-lg px-2 py-1 transition ${uploading?'opacity-50 pointer-events-none':''}`}>
         <Upload className="w-3 h-3 text-slate-400" />
@@ -684,14 +689,7 @@ export default function Anteproyectos() {
                     <span className="text-xs text-slate-400">Sin vincular</span>
                   )}
                 </div>
-                <div className="col-span-1">
-                  {a.ruta_onedrive ? (
-                    <span className="text-[10px] text-slate-500 flex items-center gap-1 truncate" title={a.ruta_onedrive}>
-                      <FolderInput className="w-3 h-3 flex-shrink-0 text-blue-500" />
-                      <span className="truncate">{a.ruta_onedrive}</span>
-                    </span>
-                  ) : <span className="text-xs text-slate-400">—</span>}
-                </div>
+
                 <div className="col-span-1 flex gap-2">
                   <button onClick={() => setEditingAnteproyecto(a)}
                     className="p-1.5 rounded-md border border-slate-200 text-slate-500 hover:bg-slate-100 transition-colors">
