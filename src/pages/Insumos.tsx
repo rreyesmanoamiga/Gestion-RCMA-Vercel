@@ -21,6 +21,7 @@ interface Requisicion { id: string; folio: string; proveedores_ids: string[]; pr
   // Nuevos campos
   fecha_requerida?: string; prioridad?: string; justificacion?: string; departamento?: string;
   iva_porcentaje?: number; total_con_iva?: number;
+  fecha_surtido?: string | null;
   cotizacion_sp_url?: string; cotizacion_sp_nombre?: string;
   pdf_sp_url?: string; pdf_sp_nombre?: string; }
 
@@ -633,6 +634,11 @@ export default function Insumos() {
                           {fmtMXN(req.total_con_iva)} c/IVA
                         </span>
                       )}
+                      {req.estatus === 'surtido' && req.fecha_surtido && (
+                        <span className="text-xs font-bold text-slate-600 bg-slate-100 border border-slate-200 px-2 py-0.5 rounded-full flex items-center gap-1">
+                          ✅ Surtido el {new Date(req.fecha_surtido).toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: 'numeric' })}
+                        </span>
+                      )}
                       {req.cotizacion_sp_url && (
                         <a href={req.cotizacion_sp_url} target="_blank" rel="noreferrer"
                           className="inline-flex items-center gap-1 text-xs font-bold text-blue-600 bg-blue-50 border border-blue-200 px-2 py-0.5 rounded-full hover:bg-blue-100 transition">
@@ -692,7 +698,7 @@ export default function Insumos() {
                     {/* Marcar surtido */}
                     {isAdmin && req.estatus === 'autorizado' && (
                       <button onClick={async () => {
-                        await supabase.from('insumos_requisiciones').update({ estatus: 'surtido', updated_at: new Date().toISOString() }).eq('id', req.id);
+                        await supabase.from('insumos_requisiciones').update({ estatus: 'surtido', fecha_surtido: new Date().toISOString(), updated_at: new Date().toISOString() }).eq('id', req.id);
                         qc.invalidateQueries({ queryKey: ['insumos_requisiciones'] });
                         toast.success('Marcado como surtido');
                       }} className="px-3 py-1.5 text-xs font-bold bg-slate-700 text-white rounded-lg hover:bg-slate-800 transition">
