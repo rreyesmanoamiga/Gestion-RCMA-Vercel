@@ -118,6 +118,8 @@ function AnteproyectoForm({
   projects?:      Project[];
 }) {
   const [formData, setFormData] = useState<FormData>(INITIAL_FORM);
+  const [zipFile, setZipFile]   = useState<File | null>(null);
+  const { upload: spUpload } = useSharePointUpload();
 
   React.useEffect(() => {
     if (anteproyecto) {
@@ -144,16 +146,29 @@ function AnteproyectoForm({
 
   if (!open) return null;
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    onSubmit({
+    const payload: any = {
       ...formData,
       presupuesto:     formData.presupuesto ? parseFloat(parseMXN(formData.presupuesto)) : null,
       proyecto_id:     formData.proyecto_id     || null,
       fecha_solicitud: formData.fecha_solicitud || null,
       fecha_entrega:   formData.fecha_entrega   || null,
-      ruta_onedrive:   formData.ruta_onedrive   || null,
-    });
+    };
+    // Subir ZIP a SharePoint si se seleccionó
+    if (zipFile) {
+      const result = await spUpload(zipFile, {
+        modulo: 'Anteproyectos',
+        colegio: formData.colegio,
+        territorio: formData.territorio,
+        referencia: formData.nombre_proyecto?.replace(/[^a-zA-Z0-9]/g,'_').slice(0,40) ?? 'SIN_NOMBRE',
+      });
+      if (result) {
+        payload.zip_url    = result.webUrl;
+        payload.zip_nombre = result.fileName;
+      }
+    }
+    onSubmit(payload);
   };
 
   return (
@@ -275,17 +290,24 @@ function AnteproyectoForm({
             <p className="text-[10px] text-slate-400 mt-1">Solo se muestran proyectos con folio TCMM asignado (formato TCMM-YYYY-NNN).</p>
           </div>
 
-          {/* Ruta OneDrive */}
+          {/* ZIP Anteproyecto */}
           <div>
-            <label className={labelClass}>
-              <span className="flex items-center gap-1.5">
-                <FolderInput className="w-3 h-3" /> Ruta OneDrive (opcional)
+            <label className={labelClass}>Archivo ZIP del anteproyecto (opcional)</label>
+            <label className={`flex items-center gap-2 cursor-pointer border-2 border-dashed rounded-lg px-4 py-3 transition
+              ${zipFile ? 'border-teal-400 bg-teal-50' : 'border-slate-200 hover:border-teal-300 hover:bg-slate-50'}`}>
+              <FileArchive className="w-4 h-4 text-teal-500 shrink-0" />
+              <span className="text-sm text-slate-600 truncate font-medium">
+                {zipFile ? zipFile.name : 'Seleccionar archivo .zip'}
               </span>
+              <input type="file" accept=".zip,.ZIP" className="hidden"
+                onChange={e => setZipFile(e.target.files?.[0] ?? null)} />
             </label>
-            <input type="text" className={inputClass} value={formData.ruta_onedrive}
-              onChange={e => setFormData(p => ({ ...p, ruta_onedrive: e.target.value }))}
-              placeholder="Ej. Colegios/MA CIM/Anteproyectos/Construcción Aula" />
-            <p className="text-[10px] text-slate-400 mt-1">Pega la ruta de la carpeta en OneDrive donde están los archivos del anteproyecto.</p>
+            {zipFile && (
+              <div className="flex items-center justify-between mt-1">
+                <p className="text-[10px] text-teal-600 font-semibold">✓ Se subirá a SharePoint al guardar</p>
+                <button type="button" onClick={() => setZipFile(null)} className="text-[10px] text-red-400 hover:text-red-600">✕ Quitar</button>
+              </div>
+            )}
           </div>
 
           {/* Notas */}
