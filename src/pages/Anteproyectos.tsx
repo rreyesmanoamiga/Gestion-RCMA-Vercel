@@ -122,6 +122,7 @@ function AnteproyectoForm({
   const { upload: spUpload } = useSharePointUpload();
 
   React.useEffect(() => {
+    setZipFile(null); // Siempre limpiar ZIP al abrir el modal
     if (anteproyecto) {
       setFormData({
         territorio:      String(anteproyecto.territorio      ?? ''),
@@ -437,6 +438,22 @@ export default function Anteproyectos() {
 
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
+      // Obtener datos del anteproyecto antes de eliminar
+      const { data: ant } = await supabase
+        .from('anteproyectos').select('zip_url, zip_nombre, colegio, nombre_proyecto').eq('id', id).single();
+
+      // Eliminar ZIP de SharePoint si existe (solo el archivo, no la carpeta)
+      if (ant?.zip_url && ant?.zip_nombre) {
+        try {
+          const anio = ant.zip_nombre.substring(0, 4);
+          const ref  = ant.nombre_proyecto?.replace(/[^a-zA-Z0-9]/g,'_').slice(0,40) ?? 'SIN_NOMBRE';
+          const carpeta = `Anteproyectos/${anio}/${ant.colegio}/${ref}`;
+          await supabase.functions.invoke('sharepoint-upload', {
+            body: { action: 'delete', carpeta, fileName: ant.zip_nombre },
+          });
+        } catch { /* Si falla el delete en SP no bloqueamos la eliminación */ }
+      }
+
       const { error } = await supabase.from('anteproyectos').delete().eq('id', id);
       if (error) throw error;
     },
