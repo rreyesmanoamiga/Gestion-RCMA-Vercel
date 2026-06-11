@@ -666,8 +666,8 @@ export default function Anteproyectos() {
                     {a.estatus && <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${ESTATUS_COLORS[a.estatus] ?? 'bg-slate-100 text-slate-600'}`}>{ESTATUS_LABELS[a.estatus] ?? a.estatus}</span>}
                     {a.presupuesto != null && <span className="text-xs font-semibold text-blue-600">{Number(a.presupuesto).toLocaleString('es-MX',{style:'currency',currency:'MXN'})}</span>}
                   </div>
-                  {a.fecha_solicitud && <p className="text-[10px] text-slate-400 flex items-center gap-1"><Calendar className="w-3 h-3"/>Sol: {format(new Date(a.fecha_solicitud + 'T12:00:00'),'dd MMM yyyy',{locale:es})}</p>}
-                  {a.fecha_entrega && <p className="text-[10px] text-slate-400 flex items-center gap-1"><Calendar className="w-3 h-3"/>Ent: {format(new Date(a.fecha_entrega + 'T12:00:00'),'dd MMM yyyy',{locale:es})}</p>}
+                  {a.fecha_solicitud && <p className="text-[10px] text-slate-400 flex items-center gap-1"><Calendar className="w-3 h-3"/>Sol: {format(new Date(a.fecha_solicitud.substring(0,10) + 'T12:00:00'),'dd MMM yyyy',{locale:es})}</p>}
+                  {a.fecha_entrega && <p className="text-[10px] text-slate-400 flex items-center gap-1"><Calendar className="w-3 h-3"/>Ent: {format(new Date(a.fecha_entrega.substring(0,10) + 'T12:00:00'),'dd MMM yyyy',{locale:es})}</p>}
                   <ZipUploader ant={a} />
                 </div>
                 {/* Desktop grid */}
@@ -704,7 +704,7 @@ export default function Anteproyectos() {
                   {a.fecha_solicitud ? (
                     <span className="text-xs text-slate-600 flex items-center gap-1">
                       <Calendar className="w-3 h-3 text-slate-400" />
-                      {format(new Date(a.fecha_solicitud + 'T12:00:00'), 'dd MMM yyyy', { locale: es })}
+                      {format(new Date(a.fecha_solicitud.substring(0,10) + 'T12:00:00'), 'dd MMM yyyy', { locale: es })}
                     </span>
                   ) : <span className="text-xs text-slate-400">—</span>}
                 </div>
@@ -712,7 +712,7 @@ export default function Anteproyectos() {
                   {a.fecha_entrega ? (
                     <span className="text-xs text-slate-600 flex items-center gap-1">
                       <Calendar className="w-3 h-3 text-slate-400" />
-                      {format(new Date(a.fecha_entrega + 'T12:00:00'), 'dd MMM yyyy', { locale: es })}
+                      {format(new Date(a.fecha_entrega.substring(0,10) + 'T12:00:00'), 'dd MMM yyyy', { locale: es })}
                     </span>
                   ) : <span className="text-xs text-slate-400">—</span>}
                   <ZipUploader ant={a} />
