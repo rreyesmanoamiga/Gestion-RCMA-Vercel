@@ -486,6 +486,61 @@ export default function SolicitudProyecto() {
           </div>
           </div>
 
+          {/* ── COTIZACIONES ── */}
+          <div className="border-b border-slate-400">
+            <div className="bg-slate-100 px-4 py-2 border-b border-slate-400">
+              <h3 className="text-[11px] font-black text-slate-700 uppercase tracking-widest">
+                COTIZACIONES (OPCIONAL)
+              </h3>
+            </div>
+            <div className="px-4 py-4 space-y-3">
+              {/* Toggle ¿Ya tienes cotizaciones? */}
+              <label className="flex items-center gap-3 cursor-pointer select-none">
+                <div
+                  onClick={() => { setTieneCotizaciones(!tieneCotizaciones); if (tieneCotizaciones) setCotizacionFiles([]); }}
+                  className={`relative w-10 h-5 rounded-full transition-colors cursor-pointer ${tieneCotizaciones ? 'bg-teal-500' : 'bg-slate-300'}`}>
+                  <span className={`absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform ${tieneCotizaciones ? 'translate-x-5' : 'translate-x-0'}`} />
+                </div>
+                <span className="text-sm font-semibold text-slate-700">¿Ya tienes cotizaciones para adjuntar?</span>
+              </label>
+
+              {tieneCotizaciones && (
+                <div className="space-y-3">
+                  <p className="text-xs text-slate-500">
+                    Adjunta tus cotizaciones (PDF, imágenes, Word, etc.). Se subirán a SharePoint automáticamente al enviar la solicitud.
+                  </p>
+                  <label className={`flex items-center gap-3 cursor-pointer border-2 border-dashed rounded-lg px-4 py-3 transition
+                    ${cotizacionFiles.length > 0 ? 'border-teal-400 bg-teal-50' : 'border-slate-300 hover:border-teal-400 hover:bg-slate-50'}`}>
+                    <svg className="w-5 h-5 text-teal-500 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                    </svg>
+                    <div className="flex-1 min-w-0">
+                      {cotizacionFiles.length === 0
+                        ? <span className="text-sm text-slate-500">Seleccionar archivos de cotización...</span>
+                        : <span className="text-sm text-teal-700 font-semibold">{cotizacionFiles.length} archivo{cotizacionFiles.length > 1 ? 's' : ''} seleccionado{cotizacionFiles.length > 1 ? 's' : ''}</span>
+                      }
+                    </div>
+                    <input type="file" multiple accept=".pdf,.doc,.docx,.xls,.xlsx,.jpg,.jpeg,.png,.zip"
+                      className="hidden"
+                      onChange={e => setCotizacionFiles(Array.from(e.target.files ?? []))} />
+                  </label>
+
+                  {cotizacionFiles.length > 0 && (
+                    <ul className="space-y-1">
+                      {cotizacionFiles.map((f, i) => (
+                        <li key={i} className="flex items-center justify-between bg-teal-50 border border-teal-200 rounded px-3 py-1.5">
+                          <span className="text-xs text-teal-800 font-medium truncate">{f.name}</span>
+                          <button type="button" onClick={() => setCotizacionFiles(prev => prev.filter((_, j) => j !== i))}
+                            className="text-red-400 hover:text-red-600 text-xs ml-2 shrink-0">✕</button>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+
           {/* ── PIE DEL FORMATO ── */}
           <div className="bg-slate-50 px-4 py-3 border-b border-slate-400">
             <p className="text-[10px] text-slate-500 italic text-center">
