@@ -234,13 +234,35 @@ serve(async (req) => {
       );
     }
 
-    // ── Verificar toggle del admin ──────────────────────────────────────────
-    const { data: settingData } = await supabase
+    // ── Leer configuración desde maintenance_settings ──────────────────────
+    const { data: allSettings } = await supabase
       .from('maintenance_settings')
-      .select('value')
-      .eq('key', 'admin_notif_activo')
-      .single();
-    const adminNotifActivo: boolean = settingData?.value ?? true;
+      .select('key, value')
+      .in('key', ['admin_notif_activo', 'notif_hora']);
+
+    const settingsMap: Record<string, string> = {};
+    for (const s of (allSettings ?? [])) settingsMap[s.key] = String(s.value);
+
+    // Toggle: solo es true si explícitamente dice 'true'
+    const adminNotifActivo: boolean = settingsMap['admin_notif_activo'] === 'true';
+
+    // Verificar que la hora actual coincida con la configurada
+    const horaConfig = parseInt(settingsMap['notif_hora'] ?? '7', 10);
+    const horaMexico = new Date().toLocaleString('en-US', { timeZone: 'America/Mexico_City', hour: 'numeric', hour12: false });
+    const horaActual = parseInt(horaMexico, 10);
+
+    if (horaActual !== horaConfig) {
+      return new Response(JSON.stringify({ skipped: true, reason: `Hora actual ${horaActual} != hora config ${horaConfig}` }), {
+        status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    // Si las notificaciones están desactivadas, salir sin enviar
+    if (!adminNotifActivo) {
+      return new Response(JSON.stringify({ skipped: true, reason: 'Notificaciones desactivadas' }), {
+        status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
 
     // ── Destinatarios con filtro de actividades ─────────────────────────────
     const { data: recipientsRaw = [] } = await supabase

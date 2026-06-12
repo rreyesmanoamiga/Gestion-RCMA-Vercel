@@ -192,13 +192,41 @@ export default function CalendarioMantenimiento() {
       return data;
     },
   });
-  const adminNotifActivo: boolean = adminNotifData?.value ?? true;
+  const adminNotifActivo: boolean = adminNotifData?.value === 'true' || adminNotifData?.value === true;
+
+  // ── Hora de notificación ───────────────────────────────────────────────────
+  const { data: notifHoraData } = useQuery({
+    queryKey: ['maintenanceNotifHora'],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from('maintenance_settings')
+        .select('value')
+        .eq('key', 'notif_hora')
+        .single();
+      return data;
+    },
+  });
+  const notifHora: number = parseInt(notifHoraData?.value ?? '7', 10);
+
+  const setNotifHoraMutation = useMutation({
+    mutationFn: async (hora: number) => {
+      const { error } = await supabase
+        .from('maintenance_settings')
+        .upsert({ key: 'notif_hora', value: String(hora) });
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['maintenanceNotifHora'] });
+      toast.success('Horario de notificación actualizado');
+    },
+    onError: () => toast.error('Error al actualizar horario'),
+  });
 
   const toggleAdminNotifMutation = useMutation({
     mutationFn: async (activo: boolean) => {
       const { error } = await supabase
         .from('maintenance_settings')
-        .upsert({ key: 'admin_notif_activo', value: activo });
+        .upsert({ key: 'admin_notif_activo', value: activo ? 'true' : 'false' });
       if (error) throw error;
     },
     onSuccess: () => {
@@ -620,6 +648,23 @@ export default function CalendarioMantenimiento() {
                 className={`relative w-11 h-6 rounded-full transition-colors ${adminNotifActivo ? 'bg-emerald-500' : 'bg-slate-300'}`}>
                 <span className={`absolute top-1 left-1 w-4 h-4 bg-white rounded-full shadow transition-transform ${adminNotifActivo ? 'translate-x-5' : 'translate-x-0'}`} />
               </button>
+            </div>
+
+            {/* Selector de hora */}
+            <div className="mx-5 mt-3 flex items-center justify-between bg-slate-50 border border-slate-200 rounded-lg px-4 py-3">
+              <div>
+                <p className="text-sm font-semibold text-slate-700">Horario de envío</p>
+                <p className="text-xs text-slate-500">Se enviará a esta hora todos los días</p>
+              </div>
+              <select
+                value={notifHora}
+                onChange={e => setNotifHoraMutation.mutate(Number(e.target.value))}
+                disabled={setNotifHoraMutation.isPending}
+                className="text-sm border border-slate-300 rounded-lg px-3 py-1.5 bg-white text-slate-700 font-semibold focus:ring-1 focus:ring-slate-400 focus:outline-none">
+                {[5,6,7,8,9,10,11,12].map(h => (
+                  <option key={h} value={h}>{h === 12 ? '12:00 pm' : `${h}:00 am`}</option>
+                ))}
+              </select>
             </div>
 
             {/* Info box */}
