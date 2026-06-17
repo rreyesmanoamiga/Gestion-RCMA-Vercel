@@ -237,10 +237,12 @@ export default function Sidebar({ isOpen, onToggle }) {
             <BookUser className="w-[18px] h-[18px]" />
             Directorio
           </Link>
-          <Link to="/levantamiento" onClick={handleNavClick} className={navLinkClass('/levantamiento')}>
-            <Layers className="w-[18px] h-[18px]" />
-            Levantamiento Nal.
-          </Link>
+          {(isAdmin || can('ver_levantamiento')) && (
+            <Link to="/levantamiento" onClick={handleNavClick} className={navLinkClass('/levantamiento')}>
+              <Layers className="w-[18px] h-[18px]" />
+              Levantamiento Nal.
+            </Link>
+          )}
 
           {/* 14 — Accesos */}
           {isAdmin && (
