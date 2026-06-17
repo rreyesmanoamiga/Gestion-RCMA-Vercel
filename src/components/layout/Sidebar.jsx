@@ -20,7 +20,7 @@ import {
   FileSignature,
   BarChart3,
   // --- ICONO AGREGADO ---
-  BookUser, Package,
+  BookUser, Package, Layers,
 } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 
@@ -236,6 +236,10 @@ export default function Sidebar({ isOpen, onToggle }) {
           <Link to="/directorio" onClick={handleNavClick} className={navLinkClass('/directorio')}>
             <BookUser className="w-[18px] h-[18px]" />
             Directorio
+          </Link>
+          <Link to="/levantamiento" onClick={handleNavClick} className={navLinkClass('/levantamiento')}>
+            <Layers className="w-[18px] h-[18px]" />
+            Levantamiento Nal.
           </Link>
 
           {/* 14 — Accesos */}
