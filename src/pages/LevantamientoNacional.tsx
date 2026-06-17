@@ -898,79 +898,140 @@ function TabComunicados({ comunicados, planteles, directorio, qc }: {
   );
 }
 
+
 // ══════════════════════════════════════════════════════════════════════════════
 // TAB: REPORTES DIARIOS
 // ══════════════════════════════════════════════════════════════════════════════
+async function spDelete(carpeta: string, fileName: string) {
+  const { data: sessionData } = await supabase.auth.getSession();
+  const token = sessionData?.session?.access_token ?? '';
+  const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL as string;
+  await fetch(`${SUPABASE_URL}/functions/v1/sharepoint-upload`, {
+    method: 'POST',
+    headers: { 'Authorization': `Bearer ${token}`, 'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY as string, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ action: 'delete', carpeta, fileName }),
+  });
+}
+
+async function spUpload(file: File, carpeta: string, fileName: string): Promise<string> {
+  const formData = new FormData();
+  formData.append('file', file);
+  formData.append('carpeta', carpeta);
+  formData.append('fileName', fileName);
+  const { data: sessionData } = await supabase.auth.getSession();
+  const token = sessionData?.session?.access_token ?? '';
+  const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL as string;
+  const res = await fetch(`${SUPABASE_URL}/functions/v1/sharepoint-upload`, {
+    method: 'POST',
+    headers: { 'Authorization': `Bearer ${token}`, 'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY as string },
+    body: formData,
+  });
+  const result = await res.json();
+  if (!res.ok) throw new Error(result.error ?? 'Error al subir');
+  return result.webUrl ?? '';
+}
+
+function carpetaDesde(fecha: string) {
+  const d = new Date(fecha + 'T12:00:00');
+  const mes = d.toLocaleDateString('es-MX', { month: 'long' }).toUpperCase();
+  return `Levantamiento Nacional/${d.getFullYear()}/${mes}`;
+}
+
 function TabReportes({ reportes, planteles, qc }: { reportes: Reporte[]; planteles: Plantel[]; qc: any }) {
-  const [showForm, setShowForm] = useState(false);
-  const [form, setForm] = useState({ plantel_id: '', fecha_reporte: new Date().toISOString().substring(0, 10), notas: '' });
-  const [file, setFile] = useState<File | null>(null);
+  const hoy = new Date().toISOString().substring(0, 10);
+  const [showForm, setShowForm]   = useState(false);
+  const [editItem, setEditItem]   = useState<Reporte | null>(null);
+  const [form, setForm]           = useState({ plantel_id: '', fecha_reporte: hoy, notas: '' });
+  const [file, setFile]           = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
   const set = (k: string, v: string) => setForm(f => ({ ...f, [k]: v }));
 
+  const openNew = () => {
+    setEditItem(null); setFile(null);
+    setForm({ plantel_id: '', fecha_reporte: hoy, notas: '' });
+    setShowForm(true);
+  };
+
+  const openEdit = (r: Reporte) => {
+    setEditItem(r); setFile(null);
+    setForm({ plantel_id: r.plantel_id ?? '', fecha_reporte: r.fecha_reporte, notas: r.notas ?? '' });
+    setShowForm(true);
+  };
+
   const saveMut = useMutation({
     mutationFn: async () => {
-      if (!file) throw new Error('Selecciona un archivo PDF');
       setUploading(true);
       try {
-        const fecha = new Date(form.fecha_reporte + 'T12:00:00');
-        const anio = fecha.getFullYear();
-        const mes = fecha.toLocaleDateString('es-MX', { month: 'long' }).toUpperCase();
-        const carpeta = `Levantamiento Nacional/${anio}/${mes}`;
-        const fileName = `${form.fecha_reporte}_${file.name}`;
+        const nuevaCarpeta = carpetaDesde(form.fecha_reporte);
 
-        const formData = new FormData();
-        formData.append('file', file);
-        formData.append('carpeta', carpeta);
-        formData.append('fileName', fileName);
+        if (editItem) {
+          const carpetaVieja   = editItem.onedrive_path ?? '';
+          const carpetaCambia  = carpetaVieja !== nuevaCarpeta;
+          let webUrl           = editItem.onedrive_url ?? null;
+          let archivoNombre    = editItem.archivo_nombre;
 
-        const { data: sessionData } = await supabase.auth.getSession();
-        const token = sessionData?.session?.access_token ?? '';
-        const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL as string;
+          if (file) {
+            // Nuevo archivo: borra viejo en OneDrive y sube en la nueva ruta
+            if (carpetaVieja && editItem.archivo_nombre) {
+              await spDelete(carpetaVieja, editItem.archivo_nombre);
+            }
+            archivoNombre = `${form.fecha_reporte}_${file.name}`;
+            webUrl = await spUpload(file, nuevaCarpeta, archivoNombre);
+          } else if (carpetaCambia) {
+            // Solo cambió la fecha (mes/año diferente) sin nuevo archivo
+            toast.warning('La carpeta cambió. Sube el archivo nuevamente para moverlo en OneDrive.');
+          }
 
-        const res = await fetch(`${SUPABASE_URL}/functions/v1/sharepoint-upload`, {
-          method: 'POST',
-          headers: { 'Authorization': `Bearer ${token}`, 'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY as string },
-          body: formData,
-        });
+          const { error } = await supabase.from('levantamiento_reportes').update({
+            plantel_id:     form.plantel_id || null,
+            fecha_reporte:  form.fecha_reporte,
+            archivo_nombre: archivoNombre,
+            onedrive_url:   webUrl,
+            onedrive_path:  (file || carpetaCambia) ? nuevaCarpeta : carpetaVieja,
+            notas:          form.notas || null,
+          }).eq('id', editItem.id);
+          if (error) throw error;
 
-        const result = await res.json();
-        if (!res.ok) throw new Error(result.error ?? 'Error al subir');
-
-        const { error } = await supabase.from('levantamiento_reportes').insert({
-          plantel_id: form.plantel_id || null,
-          fecha_reporte: form.fecha_reporte,
-          archivo_nombre: fileName,
-          onedrive_url: result.webUrl ?? null,
-          onedrive_path: carpeta,
-          notas: form.notas || null,
-        });
-        if (error) throw error;
+        } else {
+          // NUEVO reporte
+          if (!file) throw new Error('Selecciona un archivo PDF');
+          const fileName = `${form.fecha_reporte}_${file.name}`;
+          const webUrl   = await spUpload(file, nuevaCarpeta, fileName);
+          const { error } = await supabase.from('levantamiento_reportes').insert({
+            plantel_id:     form.plantel_id || null,
+            fecha_reporte:  form.fecha_reporte,
+            archivo_nombre: fileName,
+            onedrive_url:   webUrl,
+            onedrive_path:  nuevaCarpeta,
+            notas:          form.notas || null,
+          });
+          if (error) throw error;
+        }
       } finally {
         setUploading(false);
       }
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['lev_reportes'] });
-      toast.success('Reporte subido a OneDrive ✓');
-      setShowForm(false);
-      setFile(null);
-      setForm({ plantel_id: '', fecha_reporte: new Date().toISOString().substring(0, 10), notas: '' });
+      toast.success(editItem ? 'Reporte actualizado ✓' : 'Reporte subido a OneDrive ✓');
+      setShowForm(false); setFile(null);
     },
     onError: (e: any) => toast.error(e.message),
   });
 
+  const carpetaPreview = carpetaDesde(form.fecha_reporte);
+
   return (
     <div className="space-y-4">
       <div className="flex justify-end">
-        <button onClick={() => setShowForm(true)} className={btnPrimary}><Upload className="w-4 h-4" />Subir Reporte</button>
+        <button onClick={openNew} className={btnPrimary}><Upload className="w-4 h-4" />Subir Reporte</button>
       </div>
 
       {showForm && (
         <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md">
             <div className="flex items-center justify-between p-5 border-b border-slate-100">
-              <h3 className="font-bold text-slate-900">Subir Reporte Diario</h3>
+              <h3 className="font-bold text-slate-900">{editItem ? 'Editar Reporte' : 'Subir Reporte Diario'}</h3>
               <button onClick={() => setShowForm(false)}><X className="w-5 h-5 text-slate-400" /></button>
             </div>
             <div className="p-5 space-y-3">
@@ -986,18 +1047,30 @@ function TabReportes({ reportes, planteles, qc }: { reportes: Reporte[]; plantel
                 <input type="date" className={inputCls} value={form.fecha_reporte} onChange={e => set('fecha_reporte', e.target.value)} />
               </div>
               <div>
-                <label className="text-xs font-bold text-slate-500 uppercase block mb-1">Archivo PDF</label>
+                <label className="text-xs font-bold text-slate-500 uppercase block mb-1">
+                  {editItem ? 'Reemplazar archivo PDF (opcional)' : 'Archivo PDF'}
+                </label>
                 <input type="file" accept=".pdf" className={inputCls}
                   onChange={e => setFile(e.target.files?.[0] ?? null)} />
               </div>
+              {editItem && !file && (
+                <div className="bg-slate-50 rounded-lg p-2 text-xs text-slate-500 flex items-center gap-2">
+                  <FileText className="w-4 h-4 text-slate-300" />
+                  Archivo actual: {editItem.archivo_nombre}
+                </div>
+              )}
               {file && (
                 <div className="bg-slate-50 rounded-lg p-2 text-xs text-slate-600 flex items-center gap-2">
                   <FileText className="w-4 h-4 text-slate-400" />
                   {file.name} — {(file.size / 1024 / 1024).toFixed(2)} MB
                 </div>
               )}
-              <div className="bg-blue-50 rounded-lg p-3 text-xs text-blue-700">
-                📁 Se guardará en: <strong>Levantamiento Nacional / {new Date(form.fecha_reporte + 'T12:00:00').getFullYear()} / {new Date(form.fecha_reporte + 'T12:00:00').toLocaleDateString('es-MX', { month: 'long' }).toUpperCase()}</strong>
+              <div className={`rounded-lg p-3 text-xs ${file || !editItem ? 'bg-blue-50 text-blue-700' : 'bg-amber-50 text-amber-700'}`}>
+                📁 {file || !editItem ? 'Se guardará en' : 'Ruta actual'}:{' '}
+                <strong>{carpetaPreview}</strong>
+                {editItem && editItem.onedrive_path !== carpetaPreview && editItem.onedrive_path && (
+                  <span className="block mt-1 text-red-600">⚠ La carpeta cambió desde <em>{editItem.onedrive_path}</em> — sube el archivo para moverlo en OneDrive.</span>
+                )}
               </div>
               <div>
                 <label className="text-xs font-bold text-slate-500 uppercase block mb-1">Notas</label>
@@ -1006,9 +1079,12 @@ function TabReportes({ reportes, planteles, qc }: { reportes: Reporte[]; plantel
             </div>
             <div className="flex justify-end gap-2 p-5 border-t border-slate-100">
               <button onClick={() => setShowForm(false)} className={btnSecondary}>Cancelar</button>
-              <button onClick={() => saveMut.mutate()} disabled={saveMut.isPending || !file || uploading} className={btnPrimary}>
-                {(saveMut.isPending || uploading) ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
-                Subir
+              <button
+                onClick={() => saveMut.mutate()}
+                disabled={saveMut.isPending || uploading || (!editItem && !file)}
+                className={btnPrimary}>
+                {(saveMut.isPending || uploading) ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                {editItem ? 'Guardar cambios' : 'Subir'}
               </button>
             </div>
           </div>
@@ -1041,11 +1117,16 @@ function TabReportes({ reportes, planteles, qc }: { reportes: Reporte[]; plantel
                   <td className="px-4 py-3 text-slate-600 text-xs">{r.archivo_nombre}</td>
                   <td className="px-4 py-3 text-slate-400 text-xs">{r.onedrive_path ?? '—'}</td>
                   <td className="px-4 py-3">
-                    {r.onedrive_url && (
-                      <a href={r.onedrive_url} target="_blank" rel="noreferrer" className="text-[#0C3B6E] hover:underline">
-                        <Eye className="w-4 h-4" />
-                      </a>
-                    )}
+                    <div className="flex items-center gap-2">
+                      {r.onedrive_url && (
+                        <a href={r.onedrive_url} target="_blank" rel="noreferrer" className="text-slate-400 hover:text-[#0C3B6E]">
+                          <Eye className="w-4 h-4" />
+                        </a>
+                      )}
+                      <button onClick={() => openEdit(r)} className="text-slate-400 hover:text-[#0C3B6E]">
+                        <Edit2 className="w-4 h-4" />
+                      </button>
+                    </div>
                   </td>
                 </tr>
               );
@@ -1057,7 +1138,6 @@ function TabReportes({ reportes, planteles, qc }: { reportes: Reporte[]; plantel
   );
 }
 
-// ══════════════════════════════════════════════════════════════════════════════
 // TAB: ENTREGABLES (Checklist)
 // ══════════════════════════════════════════════════════════════════════════════
 function TabEntregables({ entregables, planteles, qc }: { entregables: Entregable[]; planteles: Plantel[]; qc: any }) {
