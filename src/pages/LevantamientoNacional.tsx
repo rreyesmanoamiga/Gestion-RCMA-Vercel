@@ -2,6 +2,35 @@ import React, { useState, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import ColegioSelector from '@/components/shared/ColegioSelector';
 import { COLEGIOS } from '@/lib/colegios';
+
+// Mapa de código corto → datos del colegio (fuente: TicketMAS)
+const DATOS_COLEGIO: Record<string, { nombre: string; director: string; admin: string }> = {
+  ACA: { nombre: 'Mano Amiga Acapulco',         director: 'Guadalupe García Gaspar',           admin: 'Noemi Ignacio Garzón'            },
+  AGS: { nombre: 'Mano Amiga Aguascalientes',    director: 'María del Pilar Gómez Cañizo',      admin: 'Gabriela García Pérez'           },
+  CAN: { nombre: 'Mano Amiga Cancún',            director: 'Francisco Paul Martínez Contreras', admin: 'ÁNGEL MARTÍN KU UUH'             },
+  CHA: { nombre: 'Mano Amiga Chalco',            director: 'José Manuel Fierro Partida',        admin: 'Elizabeth Reyes Rivas'           },
+  CIM: { nombre: 'Mano Amiga La Cima',           director: 'Daniel Garcia de la Torre',         admin: 'Juan Carlos Cepeda Scott'        },
+  CON: { nombre: 'Mano Amiga Conkal',            director: 'Carolina Rodriguez Galván',         admin: 'Margarita Pech Rodriguez'        },
+  GDL: { nombre: 'Mano Amiga Guadalajara',       director: 'Lorena López Taymani',              admin: 'Jose Ramon Iturbero Apecechea'   },
+  LEO: { nombre: 'Mano Amiga León',              director: 'Víctor Hugo Martínez Guerrero',     admin: 'José Antonio Ávalos Ortega'      },
+  LER: { nombre: 'Mano Amiga Lerma',             director: 'Alejandro de la Garza Ransom',      admin: 'María Candelaria Morones'        },
+  MOR: { nombre: 'Mano Amiga Morelia',           director: 'César Augusto González Rodríguez',  admin: 'Rodrigo Vargas Hernández'        },
+  MTY: { nombre: 'Mano Amiga Monterrey',         director: 'Adriana Gómez Díaz',                admin: 'Claudia Nelly Rojas Hernández'   },
+  PIE: { nombre: 'Mano Amiga Piedras Negras',    director: 'Paolo René Oscos Snowball',         admin: 'Ana Gabriela Gauna López'        },
+  PUE: { nombre: 'Mano Amiga Puebla',            director: 'Juan Francisco Serrano Garcia',     admin: 'Erika Iliana Aguilar Tlapanco'   },
+  QRO: { nombre: 'Mano Amiga Querétaro',         director: 'Justino Gómez Pedraza',             admin: 'Claudia Janett Arreola Camacho'  },
+  SCA: { nombre: 'Mano Amiga Santa Catarina',    director: 'Jesús Gerardo Castillo Oliva',      admin: 'Alma Nelly Blanco Lopez'         },
+  TAP: { nombre: 'Mano Amiga Tapachula',         director: 'José Octavio Ramos Martínez',       admin: 'Eliabet Salas Escobar'           },
+  TIJ: { nombre: 'Mano Amiga Tijuana',           director: 'Francisco Daniel Robles Noriega',   admin: 'Juana Rosa Cornejo Ledesma'      },
+  TOR: { nombre: 'Mano Amiga Torreón',           director: 'Ma. Teresa Robles Limones',         admin: 'Maria Alicia Vilchis Esquivel'   },
+  VSJ: { nombre: 'Mano Amiga Villa de Santiago', director: '',                                   admin: ''                                },
+  ZOM: { nombre: 'Mano Amiga Zompopa',           director: '',                                   admin: ''                                },
+};
+
+// Extrae el código corto de la clave: 'MA QRO' → 'QRO'
+function codigoCorto(clave: string): string {
+  return clave.replace(/^MA\s+/, '').trim();
+}
 import { supabase } from '@/lib/supabaseClient';
 import { toast } from 'sonner';
 import {
@@ -305,8 +334,8 @@ function TabPlanteles({ planteles, loading, qc, directorio }: {
   const set = (k: string, v: string) => setForm(f => ({ ...f, [k]: v }));
 
   // Datos automáticos al seleccionar colegio
-  const colegioInfo    = COLEGIOS.find(c => c.colegio === colegio);
-  const directorioItem = directorio.find(d => d.codigo === colegio);
+  const colegioInfo = COLEGIOS.find(c => c.colegio === colegio);
+  const datosColegio = colegio ? DATOS_COLEGIO[codigoCorto(colegio)] : undefined;
 
   const colegiosFiltrados = useMemo(() =>
     territorio ? COLEGIOS.filter(c => c.territorio === territorio) : COLEGIOS,
@@ -339,10 +368,11 @@ function TabPlanteles({ planteles, loading, qc, directorio }: {
   const saveMut = useMutation({
     mutationFn: async () => {
       if (!colegio) throw new Error('Selecciona un colegio');
-      const info = COLEGIOS.find(c => c.colegio === colegio);
+      const info  = COLEGIOS.find(c => c.colegio === colegio);
+      const datos = DATOS_COLEGIO[codigoCorto(colegio)];
       const payload = {
         colegio_clave:  colegio,
-        colegio_nombre: directorioItem?.nombre ?? colegio,
+        colegio_nombre: datos?.nombre ?? colegio,
         zona:           info?.territorio ?? territorio,
         eco_nombre:     info?.eco ?? null,
         asignacion:     form.asignacion || null,
@@ -401,7 +431,7 @@ function TabPlanteles({ planteles, loading, qc, directorio }: {
                   <div className="grid grid-cols-2 gap-2">
                     <div>
                       <p className="text-[10px] font-bold text-slate-400 uppercase">Nombre Oficial</p>
-                      <p className="text-slate-700 font-medium">{directorioItem?.nombre ?? '—'}</p>
+                      <p className="text-slate-700 font-medium">{datosColegio?.nombre ?? colegio}</p>
                     </div>
                     <div>
                       <p className="text-[10px] font-bold text-slate-400 uppercase">Territorio</p>
@@ -413,7 +443,11 @@ function TabPlanteles({ planteles, loading, qc, directorio }: {
                     </div>
                     <div>
                       <p className="text-[10px] font-bold text-slate-400 uppercase">Director</p>
-                      <p className="text-slate-700">{directorioItem?.dir_nombre ?? '—'}</p>
+                      <p className="text-slate-700">{datosColegio?.director || '—'}</p>
+                    </div>
+                    <div>
+                      <p className="text-[10px] font-bold text-slate-400 uppercase">Administrador</p>
+                      <p className="text-slate-700">{datosColegio?.admin || '—'}</p>
                     </div>
                   </div>
                 </div>
@@ -739,7 +773,7 @@ function TabComunicados({ comunicados, planteles, directorio, qc }: {
   const set = (k: string, v: string) => setForm(f => ({ ...f, [k]: v }));
 
   const plantelSeleccionado = planteles.find(p => p.id === form.plantel_id);
-  const dirItem = directorio.find(d => d.codigo === plantelSeleccionado?.colegio_clave || d.nombre === plantelSeleccionado?.colegio_nombre);
+  const datosCom = plantelSeleccionado ? DATOS_COLEGIO[codigoCorto(plantelSeleccionado.colegio_clave)] : undefined;
 
   const saveMut = useMutation({
     mutationFn: async () => {
@@ -747,8 +781,8 @@ function TabComunicados({ comunicados, planteles, directorio, qc }: {
         plantel_id: form.plantel_id,
         fecha_emision: form.fecha_emision,
         fecha_visita: form.fecha_visita || null,
-        director_nombre: dirItem?.dir_nombre ?? null,
-        director_correo: dirItem?.dir_correo ?? null,
+        director_nombre: datosCom?.director ?? null,
+        director_correo: null,
         notas: form.notas || null,
       });
       if (error) throw error;
@@ -760,7 +794,8 @@ function TabComunicados({ comunicados, planteles, directorio, qc }: {
   const handleGenerar = (c: Comunicado) => {
     const plantel = planteles.find(p => p.id === c.plantel_id);
     if (!plantel) { toast.error('Plantel no encontrado'); return; }
-    const dirNombre = c.director_nombre ?? '';
+    const datos = DATOS_COLEGIO[codigoCorto(plantel.colegio_clave)];
+    const dirNombre = c.director_nombre ?? datos?.director ?? '';
     generarComunicadoPDF(plantel, c, dirNombre);
   };
 
@@ -785,15 +820,15 @@ function TabComunicados({ comunicados, planteles, directorio, qc }: {
                   {planteles.map(p => <option key={p.id} value={p.id}>{p.colegio_nombre}</option>)}
                 </select>
               </div>
-              {dirItem && (
+              {datosCom && (
                 <div className="bg-blue-50 rounded-lg p-3 text-xs text-blue-800">
-                  <strong>Director:</strong> {dirItem.dir_nombre}<br />
-                  <strong>Correo:</strong> {dirItem.dir_correo}
+                  <strong>Director:</strong> {datosCom.director || '—'}<br />
+                  <strong>Administrador:</strong> {datosCom.admin || '—'}
                 </div>
               )}
-              {form.plantel_id && !dirItem && (
+              {form.plantel_id && !datosCom && (
                 <div className="bg-amber-50 rounded-lg p-3 text-xs text-amber-800">
-                  No se encontró director en el directorio para este plantel.
+                  No se encontraron datos para este plantel.
                 </div>
               )}
               <div className="grid grid-cols-2 gap-3">
