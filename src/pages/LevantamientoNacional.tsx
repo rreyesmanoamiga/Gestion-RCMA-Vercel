@@ -1,5 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import ColegioSelector from '@/components/shared/ColegioSelector';
+import { COLEGIOS } from '@/lib/colegios';
 import { supabase } from '@/lib/supabaseClient';
 import { toast } from 'sonner';
 import {
@@ -293,44 +295,62 @@ export default function LevantamientoNacional() {
 function TabPlanteles({ planteles, loading, qc, directorio }: {
   planteles: Plantel[]; loading: boolean; qc: any; directorio: DirectorioItem[];
 }) {
-  const [showForm, setShowForm] = useState(false);
-  const [editItem, setEditItem] = useState<Plantel | null>(null);
+  const [showForm, setShowForm]   = useState(false);
+  const [editItem, setEditItem]   = useState<Plantel | null>(null);
+  const [territorio, setTerritorio] = useState('');
+  const [colegio, setColegio]     = useState('');
   const [form, setForm] = useState({
-    colegio_clave: '', colegio_nombre: '', zona: 'MEXICO', eco_nombre: '',
     asignacion: 'PROVEEDOR', fase: 'COMUNICADO', fecha_inicio: '', fecha_termino: '', notas: ''
   });
-
   const set = (k: string, v: string) => setForm(f => ({ ...f, [k]: v }));
+
+  // Datos automáticos al seleccionar colegio
+  const colegioInfo    = COLEGIOS.find(c => c.colegio === colegio);
+  const directorioItem = directorio.find(d => d.codigo === colegio);
+
+  const colegiosFiltrados = useMemo(() =>
+    territorio ? COLEGIOS.filter(c => c.territorio === territorio) : COLEGIOS,
+    [territorio]
+  );
 
   const openNew = () => {
     setEditItem(null);
-    setForm({ colegio_clave: '', colegio_nombre: '', zona: 'MEXICO', eco_nombre: '', asignacion: 'PROVEEDOR', fase: 'COMUNICADO', fecha_inicio: '', fecha_termino: '', notas: '' });
+    setTerritorio(''); setColegio('');
+    setForm({ asignacion: 'PROVEEDOR', fase: 'COMUNICADO', fecha_inicio: '', fecha_termino: '', notas: '' });
     setShowForm(true);
   };
 
   const openEdit = (p: Plantel) => {
     setEditItem(p);
+    // Restaurar territorio y colegio desde colegios.ts
+    const info = COLEGIOS.find(c => c.colegio === p.colegio_clave);
+    setTerritorio(info?.territorio ?? p.zona ?? '');
+    setColegio(p.colegio_clave);
     setForm({
-      colegio_clave: p.colegio_clave, colegio_nombre: p.colegio_nombre, zona: p.zona,
-      eco_nombre: p.eco_nombre ?? '', asignacion: p.asignacion ?? '', fase: p.fase,
-      fecha_inicio: p.fecha_inicio ?? '', fecha_termino: p.fecha_termino ?? '', notas: p.notas ?? ''
+      asignacion: p.asignacion ?? 'PROVEEDOR',
+      fase: p.fase,
+      fecha_inicio: p.fecha_inicio ?? '',
+      fecha_termino: p.fecha_termino ?? '',
+      notas: p.notas ?? '',
     });
     setShowForm(true);
   };
 
   const saveMut = useMutation({
     mutationFn: async () => {
+      if (!colegio) throw new Error('Selecciona un colegio');
+      const info = COLEGIOS.find(c => c.colegio === colegio);
       const payload = {
-        colegio_clave: form.colegio_clave,
-        colegio_nombre: form.colegio_nombre,
-        zona: form.zona,
-        eco_nombre: form.eco_nombre || null,
-        asignacion: form.asignacion || null,
-        fase: form.fase,
-        fecha_inicio: form.fecha_inicio || null,
-        fecha_termino: form.fecha_termino || null,
-        notas: form.notas || null,
-        updated_at: new Date().toISOString(),
+        colegio_clave:  colegio,
+        colegio_nombre: directorioItem?.nombre ?? colegio,
+        zona:           info?.territorio ?? territorio,
+        eco_nombre:     info?.eco ?? null,
+        asignacion:     form.asignacion || null,
+        fase:           form.fase,
+        fecha_inicio:   form.fecha_inicio || null,
+        fecha_termino:  form.fecha_termino || null,
+        notas:          form.notas || null,
+        updated_at:     new Date().toISOString(),
       };
       if (editItem) {
         const { error } = await supabase.from('levantamiento_planteles').update(payload).eq('id', editItem.id);
@@ -338,7 +358,6 @@ function TabPlanteles({ planteles, loading, qc, directorio }: {
       } else {
         const { error } = await supabase.from('levantamiento_planteles').insert(payload);
         if (error) throw error;
-        // Crear checklist de entregables vacío
       }
     },
     onSuccess: () => {
@@ -348,11 +367,6 @@ function TabPlanteles({ planteles, loading, qc, directorio }: {
     },
     onError: (e: any) => toast.error(e.message),
   });
-
-  const onSelectDir = (id: string) => {
-    const d = directorio.find(x => x.id === id);
-    if (d) set('colegio_nombre', d.nombre);
-  };
 
   if (loading) return <div className="text-slate-400 text-sm py-8 text-center">Cargando…</div>;
 
@@ -365,29 +379,47 @@ function TabPlanteles({ planteles, loading, qc, directorio }: {
       {/* Modal */}
       {showForm && (
         <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between p-5 border-b border-slate-100">
               <h3 className="font-bold text-slate-900">{editItem ? 'Editar Plantel' : 'Nuevo Plantel'}</h3>
               <button onClick={() => setShowForm(false)}><X className="w-5 h-5 text-slate-400" /></button>
             </div>
-            <div className="p-5 space-y-3">
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="text-xs font-bold text-slate-500 uppercase block mb-1">Clave</label>
-                  <input className={inputCls} value={form.colegio_clave} onChange={e => set('colegio_clave', e.target.value)} placeholder="MA QRO" />
+            <div className="p-5 space-y-4">
+
+              {/* Territorio + Colegio — igual que el resto del sistema */}
+              <ColegioSelector
+                territorio={territorio}
+                colegio={colegio}
+                onTerritorioChange={val => { setTerritorio(val); setColegio(''); }}
+                onColegioChange={val => setColegio(val)}
+                required
+              />
+
+              {/* Info automática al seleccionar colegio */}
+              {colegio && (
+                <div className="bg-slate-50 border border-slate-200 rounded-xl p-3 space-y-2 text-sm">
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <p className="text-[10px] font-bold text-slate-400 uppercase">Nombre Oficial</p>
+                      <p className="text-slate-700 font-medium">{directorioItem?.nombre ?? '—'}</p>
+                    </div>
+                    <div>
+                      <p className="text-[10px] font-bold text-slate-400 uppercase">Territorio</p>
+                      <p className="text-slate-700">{colegioInfo?.territorio ?? territorio}</p>
+                    </div>
+                    <div>
+                      <p className="text-[10px] font-bold text-slate-400 uppercase">ECO / Líder de Proyecto</p>
+                      <p className="text-slate-700">{colegioInfo?.eco ?? '—'}</p>
+                    </div>
+                    <div>
+                      <p className="text-[10px] font-bold text-slate-400 uppercase">Director</p>
+                      <p className="text-slate-700">{directorioItem?.dir_nombre ?? '—'}</p>
+                    </div>
+                  </div>
                 </div>
-                <div>
-                  <label className="text-xs font-bold text-slate-500 uppercase block mb-1">Zona</label>
-                  <select className={inputCls} value={form.zona} onChange={e => set('zona', e.target.value)}>
-                    <option value="MEXICO">MEXICO</option>
-                    <option value="NORTE">NORTE</option>
-                  </select>
-                </div>
-              </div>
-              <div>
-                <label className="text-xs font-bold text-slate-500 uppercase block mb-1">Nombre del Colegio</label>
-                <input className={inputCls} value={form.colegio_nombre} onChange={e => set('colegio_nombre', e.target.value)} placeholder="MA Querétaro" />
-              </div>
+              )}
+
+              {/* Asignación + Fase */}
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="text-xs font-bold text-slate-500 uppercase block mb-1">Asignación</label>
@@ -404,20 +436,20 @@ function TabPlanteles({ planteles, loading, qc, directorio }: {
                   </select>
                 </div>
               </div>
-              <div>
-                <label className="text-xs font-bold text-slate-500 uppercase block mb-1">ECO Asignado</label>
-                <input className={inputCls} value={form.eco_nombre} onChange={e => set('eco_nombre', e.target.value)} placeholder="Arq. Nombre" />
-              </div>
+
+              {/* Fechas */}
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="text-xs font-bold text-slate-500 uppercase block mb-1">Fecha Inicio</label>
                   <input type="date" className={inputCls} value={form.fecha_inicio} onChange={e => set('fecha_inicio', e.target.value)} />
                 </div>
                 <div>
-                  <label className="text-xs font-bold text-slate-500 uppercase block mb-1">Fecha Término</label>
+                  <label className="text-xs font-bold text-slate-500 uppercase block mb-1">Fecha Cierre</label>
                   <input type="date" className={inputCls} value={form.fecha_termino} onChange={e => set('fecha_termino', e.target.value)} />
                 </div>
               </div>
+
+              {/* Notas */}
               <div>
                 <label className="text-xs font-bold text-slate-500 uppercase block mb-1">Notas</label>
                 <textarea className={inputCls} rows={2} value={form.notas} onChange={e => set('notas', e.target.value)} />
@@ -425,7 +457,7 @@ function TabPlanteles({ planteles, loading, qc, directorio }: {
             </div>
             <div className="flex justify-end gap-2 p-5 border-t border-slate-100">
               <button onClick={() => setShowForm(false)} className={btnSecondary}>Cancelar</button>
-              <button onClick={() => saveMut.mutate()} disabled={saveMut.isPending || !form.colegio_nombre} className={btnPrimary}>
+              <button onClick={() => saveMut.mutate()} disabled={saveMut.isPending || !colegio} className={btnPrimary}>
                 {saveMut.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
                 Guardar
               </button>
@@ -434,23 +466,24 @@ function TabPlanteles({ planteles, loading, qc, directorio }: {
         </div>
       )}
 
-      {/* Lista */}
+      {/* Tabla */}
       <div className="bg-white border border-slate-200 rounded-xl overflow-hidden">
         <table className="w-full text-sm">
           <thead className="bg-slate-50 text-slate-500 text-xs uppercase">
             <tr>
               <th className="text-left px-4 py-3">Colegio</th>
-              <th className="text-left px-4 py-3">Zona</th>
+              <th className="text-left px-4 py-3">Territorio</th>
+              <th className="text-left px-4 py-3">ECO / Líder</th>
               <th className="text-left px-4 py-3">Asignación</th>
-              <th className="text-left px-4 py-3">ECO</th>
               <th className="text-left px-4 py-3">Fase</th>
               <th className="text-left px-4 py-3">Inicio</th>
+              <th className="text-left px-4 py-3">Cierre</th>
               <th className="px-4 py-3"></th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
             {planteles.length === 0 && (
-              <tr><td colSpan={7} className="text-center py-8 text-slate-400">Sin planteles registrados</td></tr>
+              <tr><td colSpan={8} className="text-center py-8 text-slate-400">Sin planteles registrados</td></tr>
             )}
             {planteles.map(p => (
               <tr key={p.id} className="hover:bg-slate-50">
@@ -458,9 +491,9 @@ function TabPlanteles({ planteles, loading, qc, directorio }: {
                   <div>{p.colegio_nombre}</div>
                   <div className="text-xs text-slate-400">{p.colegio_clave}</div>
                 </td>
-                <td className="px-4 py-3 text-slate-500">{p.zona}</td>
-                <td className="px-4 py-3 text-slate-500">{p.asignacion}</td>
-                <td className="px-4 py-3 text-slate-500 text-xs">{p.eco_nombre}</td>
+                <td className="px-4 py-3 text-slate-500 text-xs">{p.zona}</td>
+                <td className="px-4 py-3 text-slate-500 text-xs">{p.eco_nombre ?? '—'}</td>
+                <td className="px-4 py-3 text-slate-500 text-xs">{p.asignacion}</td>
                 <td className="px-4 py-3">
                   <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${faseColor(p.fase)}`}>
                     {faseLabel(p.fase)}
@@ -468,6 +501,9 @@ function TabPlanteles({ planteles, loading, qc, directorio }: {
                 </td>
                 <td className="px-4 py-3 text-slate-400 text-xs">
                   {p.fecha_inicio ? new Date(p.fecha_inicio + 'T12:00:00').toLocaleDateString('es-MX') : '—'}
+                </td>
+                <td className="px-4 py-3 text-slate-400 text-xs">
+                  {p.fecha_termino ? new Date(p.fecha_termino + 'T12:00:00').toLocaleDateString('es-MX') : '—'}
                 </td>
                 <td className="px-4 py-3">
                   <button onClick={() => openEdit(p)} className="text-slate-400 hover:text-[#0C3B6E]">
