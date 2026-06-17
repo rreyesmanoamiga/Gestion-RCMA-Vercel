@@ -63,6 +63,10 @@ interface Entregable {
   levant_instalaciones: boolean;
   levant_conjunto: boolean;
   observaciones: string | null;
+  acta_cierre_url: string | null;
+  acta_cierre_nombre: string | null;
+  acta_firmada: boolean;
+  entregables_completos: boolean;
 }
 
 interface Pago {
@@ -1155,10 +1159,22 @@ function TabReportes({ reportes, planteles, qc }: { reportes: Reporte[]; plantel
 // TAB: ENTREGABLES (Checklist)
 // ══════════════════════════════════════════════════════════════════════════════
 function TabEntregables({ entregables, planteles, qc }: { entregables: Entregable[]; planteles: Plantel[]; qc: any }) {
+  const [actaModal, setActaModal]   = useState<{ entId: string; plantelNombre: string } | null>(null);
+  const [actaFile, setActaFile]     = useState<File | null>(null);
+  const [actaUploading, setActaUploading] = useState(false);
+
+  const CHECKS = [
+    { field: 'mecanica_suelos',       label: 'Mecánica de Suelos'        },
+    { field: 'levant_arq',            label: 'Levant. Arquitectónico'     },
+    { field: 'levant_estructural',    label: 'Levant. Estructural'        },
+    { field: 'levant_instalaciones',  label: 'Levant. Instalaciones'      },
+    { field: 'levant_conjunto',       label: 'Planta de Conjunto'         },
+  ];
 
   const updateMut = useMutation({
     mutationFn: async ({ id, field, value }: { id: string; field: string; value: boolean }) => {
-      const { error } = await supabase.from('levantamiento_entregables').update({ [field]: value, updated_at: new Date().toISOString() }).eq('id', id);
+      const { error } = await supabase.from('levantamiento_entregables')
+        .update({ [field]: value, updated_at: new Date().toISOString() }).eq('id', id);
       if (error) throw error;
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ['lev_entregables'] }),
@@ -1174,34 +1190,110 @@ function TabEntregables({ entregables, planteles, qc }: { entregables: Entregabl
     onError: (e: any) => toast.error(e.message),
   });
 
-  const CHECKS = [
-    { field: 'mecanica_suelos',       label: 'Mecánica de Suelos'         },
-    { field: 'levant_arq',            label: 'Levant. Arquitectónico'      },
-    { field: 'levant_estructural',    label: 'Levant. Estructural'         },
-    { field: 'levant_instalaciones',  label: 'Levant. Instalaciones'       },
-    { field: 'levant_conjunto',       label: 'Planta de Conjunto'          },
-  ];
+  const actaMut = useMutation({
+    mutationFn: async () => {
+      if (!actaModal) return;
+      setActaUploading(true);
+      try {
+        let webUrl: string | null = null;
+        let fileName: string | null = null;
+
+        if (actaFile) {
+          fileName = `Acta_Cierre_${actaModal.plantelNombre.replace(/\s+/g, '_')}_${new Date().toISOString().substring(0,10)}.pdf`;
+          webUrl = await spUpload(actaFile, 'Levantamiento Nacional/Actas de Cierre', fileName);
+        }
+
+        const updatePayload: any = { acta_firmada: true, updated_at: new Date().toISOString() };
+        if (fileName)  updatePayload.acta_cierre_nombre = fileName;
+        if (webUrl)    updatePayload.acta_cierre_url    = webUrl;
+
+        const { error } = await supabase.from('levantamiento_entregables')
+          .update(updatePayload).eq('id', actaModal.entId);
+        if (error) throw error;
+      } finally {
+        setActaUploading(false);
+      }
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['lev_entregables'] });
+      toast.success('Acta de cierre registrada ✓');
+      setActaModal(null); setActaFile(null);
+    },
+    onError: (e: any) => toast.error(e.message),
+  });
 
   return (
     <div className="space-y-3">
       {planteles.length === 0 && (
         <div className="text-center py-8 text-slate-400 text-sm">Agrega planteles primero en la pestaña Planteles</div>
       )}
+
+      {/* Modal Acta de Cierre */}
+      {actaModal && (
+        <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md">
+            <div className="flex items-center justify-between p-5 border-b border-slate-100">
+              <h3 className="font-bold text-slate-900">Acta de Cierre — {actaModal.plantelNombre}</h3>
+              <button onClick={() => { setActaModal(null); setActaFile(null); }}><X className="w-5 h-5 text-slate-400" /></button>
+            </div>
+            <div className="p-5 space-y-3">
+              <p className="text-sm text-slate-600">Sube el PDF del acta firmada. Quedará guardada en OneDrive bajo <strong>Levantamiento Nacional / Actas de Cierre</strong>.</p>
+              <div>
+                <label className="text-xs font-bold text-slate-500 uppercase block mb-1">Archivo PDF (opcional)</label>
+                <input type="file" accept=".pdf" className={inputCls} onChange={e => setActaFile(e.target.files?.[0] ?? null)} />
+              </div>
+              {actaFile && (
+                <div className="bg-slate-50 rounded-lg p-2 text-xs text-slate-600 flex items-center gap-2">
+                  <FileText className="w-4 h-4 text-slate-400" />
+                  {actaFile.name} — {(actaFile.size / 1024 / 1024).toFixed(2)} MB
+                </div>
+              )}
+              <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-xs text-amber-800">
+                ⚠ Al confirmar se marcará como <strong>Acta Firmada</strong>. Podrás actualizar el estado de entregables por separado.
+              </div>
+            </div>
+            <div className="flex justify-end gap-2 p-5 border-t border-slate-100">
+              <button onClick={() => { setActaModal(null); setActaFile(null); }} className={btnSecondary}>Cancelar</button>
+              <button onClick={() => actaMut.mutate()} disabled={actaMut.isPending || actaUploading} className={btnPrimary}>
+                {(actaMut.isPending || actaUploading) ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                Confirmar Firma
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {planteles.map(plantel => {
-        const ent = entregables.find(e => e.plantel_id === plantel.id);
+        const ent   = entregables.find(e => e.plantel_id === plantel.id);
         const total = ent ? CHECKS.filter(c => (ent as any)[c.field]).length : 0;
+        const todosCompletos = total === 5;
+
+        // Estado del acta y entregables
+        const actaFirmada          = ent?.acta_firmada ?? false;
+        const entregablesCompletos = ent?.entregables_completos ?? false;
+
+        let estadoBadge = null;
+        if (actaFirmada && todosCompletos && entregablesCompletos) {
+          estadoBadge = <span className="flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-emerald-100 text-emerald-700"><CheckCircle2 className="w-3.5 h-3.5" />Cierre Completo</span>;
+        } else if (actaFirmada && !entregablesCompletos) {
+          estadoBadge = <span className="flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-700"><Circle className="w-3.5 h-3.5" />Acta Firmada — Entregables Pendientes</span>;
+        } else if (actaFirmada) {
+          estadoBadge = <span className="flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-700"><CheckCircle2 className="w-3.5 h-3.5" />Acta Firmada</span>;
+        }
+
         return (
-          <div key={plantel.id} className="bg-white border border-slate-200 rounded-xl p-4">
+          <div key={plantel.id} className={`bg-white border rounded-xl p-4 ${actaFirmada && !entregablesCompletos ? 'border-amber-200' : actaFirmada && entregablesCompletos ? 'border-emerald-200' : 'border-slate-200'}`}>
+            {/* Header */}
             <div className="flex items-center justify-between mb-3">
               <div>
                 <h4 className="font-bold text-slate-900">{plantel.colegio_nombre}</h4>
                 <p className="text-xs text-slate-400">{plantel.colegio_clave} · {plantel.zona}</p>
               </div>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 flex-wrap justify-end">
                 <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${faseColor(plantel.fase)}`}>
                   {faseLabel(plantel.fase)}
                 </span>
-                <span className="text-xs text-slate-500">{total}/5</span>
+                <span className="text-xs text-slate-500 font-medium">{total}/5</span>
                 {!ent && (
                   <button onClick={() => createMut.mutate(plantel.id)} className="text-xs text-[#0C3B6E] hover:underline">
                     Iniciar checklist
@@ -1209,26 +1301,68 @@ function TabEntregables({ entregables, planteles, qc }: { entregables: Entregabl
                 )}
               </div>
             </div>
+
+            {/* Checklist */}
             {ent ? (
-              <div className="flex flex-wrap gap-3">
-                {CHECKS.map(c => {
-                  const checked = (ent as any)[c.field] as boolean;
-                  return (
-                    <button key={c.field}
-                      onClick={() => updateMut.mutate({ id: ent.id, field: c.field, value: !checked })}
-                      className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border text-sm transition-all ${
-                        checked
-                          ? 'bg-emerald-50 border-emerald-200 text-emerald-700'
-                          : 'bg-slate-50 border-slate-200 text-slate-500 hover:border-slate-300'
-                      }`}>
-                      {checked
-                        ? <CheckCircle2 className="w-4 h-4 text-emerald-500" />
-                        : <Circle className="w-4 h-4 text-slate-300" />}
-                      {c.label}
-                    </button>
-                  );
-                })}
-              </div>
+              <>
+                <div className="flex flex-wrap gap-2 mb-4">
+                  {CHECKS.map(c => {
+                    const checked = (ent as any)[c.field] as boolean;
+                    return (
+                      <button key={c.field}
+                        onClick={() => updateMut.mutate({ id: ent.id, field: c.field, value: !checked })}
+                        className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border text-sm transition-all ${
+                          checked ? 'bg-emerald-50 border-emerald-200 text-emerald-700' : 'bg-slate-50 border-slate-200 text-slate-500 hover:border-slate-300'
+                        }`}>
+                        {checked ? <CheckCircle2 className="w-4 h-4 text-emerald-500" /> : <Circle className="w-4 h-4 text-slate-300" />}
+                        {c.label}
+                      </button>
+                    );
+                  })}
+                </div>
+
+                {/* Barra inferior — Acta de Cierre */}
+                <div className="border-t border-slate-100 pt-3 flex items-center justify-between flex-wrap gap-2">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    {estadoBadge}
+                    {actaFirmada && ent.acta_cierre_url && (
+                      <a href={ent.acta_cierre_url} target="_blank" rel="noreferrer"
+                        className="flex items-center gap-1 text-xs text-[#0C3B6E] hover:underline">
+                        <Eye className="w-3.5 h-3.5" />Ver acta
+                      </a>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    {/* Toggle entregables completos — solo si el acta está firmada */}
+                    {actaFirmada && (
+                      <button
+                        onClick={() => updateMut.mutate({ id: ent.id, field: 'entregables_completos', value: !entregablesCompletos })}
+                        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-medium transition-all ${
+                          entregablesCompletos
+                            ? 'bg-emerald-50 border-emerald-200 text-emerald-700'
+                            : 'bg-amber-50 border-amber-200 text-amber-700 hover:border-amber-300'
+                        }`}>
+                        {entregablesCompletos ? <CheckCircle2 className="w-3.5 h-3.5" /> : <Circle className="w-3.5 h-3.5" />}
+                        {entregablesCompletos ? 'Entregables Completos' : 'Entregables Pendientes'}
+                      </button>
+                    )}
+                    {/* Botón Acta de Cierre */}
+                    {!actaFirmada ? (
+                      <button
+                        onClick={() => setActaModal({ entId: ent.id, plantelNombre: plantel.colegio_nombre })}
+                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-[#0C3B6E] text-xs font-medium text-[#0C3B6E] hover:bg-blue-50 transition-all">
+                        <Upload className="w-3.5 h-3.5" />Registrar Acta de Cierre
+                      </button>
+                    ) : (
+                      <button
+                        onClick={() => setActaModal({ entId: ent.id, plantelNombre: plantel.colegio_nombre })}
+                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-200 text-xs text-slate-400 hover:border-slate-300 transition-all">
+                        <Upload className="w-3.5 h-3.5" />Reemplazar acta
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </>
             ) : (
               <p className="text-xs text-slate-400">Sin checklist iniciado</p>
             )}
