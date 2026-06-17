@@ -941,20 +941,20 @@ function TabReportes({ reportes, planteles, qc }: { reportes: Reporte[]; plantel
   const hoy = new Date().toISOString().substring(0, 10);
   const [showForm, setShowForm]   = useState(false);
   const [editItem, setEditItem]   = useState<Reporte | null>(null);
-  const [form, setForm]           = useState({ plantel_id: '', fecha_reporte: hoy, notas: '' });
+  const [form, setForm]           = useState({ plantel_id: '', plantel_id_2: '', fecha_reporte: hoy, notas: '' });
   const [file, setFile]           = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
   const set = (k: string, v: string) => setForm(f => ({ ...f, [k]: v }));
 
   const openNew = () => {
     setEditItem(null); setFile(null);
-    setForm({ plantel_id: '', fecha_reporte: hoy, notas: '' });
+    setForm({ plantel_id: '', plantel_id_2: '', fecha_reporte: hoy, notas: '' });
     setShowForm(true);
   };
 
   const openEdit = (r: Reporte) => {
     setEditItem(r); setFile(null);
-    setForm({ plantel_id: r.plantel_id ?? '', fecha_reporte: r.fecha_reporte, notas: r.notas ?? '' });
+    setForm({ plantel_id: r.plantel_id ?? '', plantel_id_2: r.plantel_id_2 ?? '', fecha_reporte: r.fecha_reporte, notas: r.notas ?? '' });
     setShowForm(true);
   };
 
@@ -984,6 +984,7 @@ function TabReportes({ reportes, planteles, qc }: { reportes: Reporte[]; plantel
 
           const { error } = await supabase.from('levantamiento_reportes').update({
             plantel_id:     form.plantel_id || null,
+            plantel_id_2:   form.plantel_id_2 || null,
             fecha_reporte:  form.fecha_reporte,
             archivo_nombre: archivoNombre,
             onedrive_url:   webUrl,
@@ -999,6 +1000,7 @@ function TabReportes({ reportes, planteles, qc }: { reportes: Reporte[]; plantel
           const webUrl   = await spUpload(file, nuevaCarpeta, fileName);
           const { error } = await supabase.from('levantamiento_reportes').insert({
             plantel_id:     form.plantel_id || null,
+            plantel_id_2:   form.plantel_id_2 || null,
             fecha_reporte:  form.fecha_reporte,
             archivo_nombre: fileName,
             onedrive_url:   webUrl,
@@ -1035,12 +1037,21 @@ function TabReportes({ reportes, planteles, qc }: { reportes: Reporte[]; plantel
               <button onClick={() => setShowForm(false)}><X className="w-5 h-5 text-slate-400" /></button>
             </div>
             <div className="p-5 space-y-3">
-              <div>
-                <label className="text-xs font-bold text-slate-500 uppercase block mb-1">Plantel (opcional)</label>
-                <select className={inputCls} value={form.plantel_id} onChange={e => set('plantel_id', e.target.value)}>
-                  <option value="">General / Sin asignar</option>
-                  {planteles.map(p => <option key={p.id} value={p.id}>{p.colegio_nombre}</option>)}
-                </select>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs font-bold text-slate-500 uppercase block mb-1">Plantel 1</label>
+                  <select className={inputCls} value={form.plantel_id} onChange={e => set('plantel_id', e.target.value)}>
+                    <option value="">Sin asignar</option>
+                    {planteles.map(p => <option key={p.id} value={p.id}>{p.colegio_nombre}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className="text-xs font-bold text-slate-500 uppercase block mb-1">Plantel 2 (opcional)</label>
+                  <select className={inputCls} value={form.plantel_id_2} onChange={e => set('plantel_id_2', e.target.value)}>
+                    <option value="">—</option>
+                    {planteles.filter(p => p.id !== form.plantel_id).map(p => <option key={p.id} value={p.id}>{p.colegio_nombre}</option>)}
+                  </select>
+                </div>
               </div>
               <div>
                 <label className="text-xs font-bold text-slate-500 uppercase block mb-1">Fecha del Reporte</label>
@@ -1113,7 +1124,10 @@ function TabReportes({ reportes, planteles, qc }: { reportes: Reporte[]; plantel
                   <td className="px-4 py-3 text-slate-700 font-medium">
                     {r.fecha_reporte ? new Date(r.fecha_reporte + 'T12:00:00').toLocaleDateString('es-MX') : '—'}
                   </td>
-                  <td className="px-4 py-3 text-slate-500 text-xs">{plantel?.colegio_nombre ?? 'General'}</td>
+                  <td className="px-4 py-3 text-slate-500 text-xs">
+                    <div>{plantel?.colegio_nombre ?? 'General'}</div>
+                    {(() => { const p2 = planteles.find(p => p.id === r.plantel_id_2); return p2 ? <div className="text-slate-400">{p2.colegio_nombre}</div> : null; })()}
+                  </td>
                   <td className="px-4 py-3 text-slate-600 text-xs">{r.archivo_nombre}</td>
                   <td className="px-4 py-3 text-slate-400 text-xs">{r.onedrive_path ?? '—'}</td>
                   <td className="px-4 py-3">
