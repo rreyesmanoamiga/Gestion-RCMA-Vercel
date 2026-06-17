@@ -1268,21 +1268,20 @@ function TabEntregables({ entregables, planteles, qc }: { entregables: Entregabl
         const total = ent ? CHECKS.filter(c => (ent as any)[c.field]).length : 0;
         const todosCompletos = total === 5;
 
-        // Estado del acta y entregables
-        const actaFirmada          = ent?.acta_firmada ?? false;
-        const entregablesCompletos = ent?.entregables_completos ?? false;
+        // Estado del acta — entregables se derivan del checklist
+        const actaFirmada = ent?.acta_firmada ?? false;
 
         let estadoBadge = null;
-        if (actaFirmada && todosCompletos && entregablesCompletos) {
+        if (actaFirmada && todosCompletos) {
           estadoBadge = <span className="flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-emerald-100 text-emerald-700"><CheckCircle2 className="w-3.5 h-3.5" />Cierre Completo</span>;
-        } else if (actaFirmada && !entregablesCompletos) {
+        } else if (actaFirmada && !todosCompletos) {
           estadoBadge = <span className="flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-700"><Circle className="w-3.5 h-3.5" />Acta Firmada — Entregables Pendientes</span>;
         } else if (actaFirmada) {
           estadoBadge = <span className="flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-700"><CheckCircle2 className="w-3.5 h-3.5" />Acta Firmada</span>;
         }
 
         return (
-          <div key={plantel.id} className={`bg-white border rounded-xl p-4 ${actaFirmada && !entregablesCompletos ? 'border-amber-200' : actaFirmada && entregablesCompletos ? 'border-emerald-200' : 'border-slate-200'}`}>
+          <div key={plantel.id} className={`bg-white border rounded-xl p-4 ${actaFirmada && !todosCompletos ? 'border-amber-200' : actaFirmada && todosCompletos ? 'border-emerald-200' : 'border-slate-200'}`}>
             {/* Header */}
             <div className="flex items-center justify-between mb-3">
               <div>
@@ -1333,17 +1332,15 @@ function TabEntregables({ entregables, planteles, qc }: { entregables: Entregabl
                     )}
                   </div>
                   <div className="flex items-center gap-2 flex-wrap">
-                    {/* Toggle entregables completos — siempre visible */}
-                    <button
-                      onClick={() => updateMut.mutate({ id: ent.id, field: 'entregables_completos', value: !entregablesCompletos })}
-                      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-medium transition-all ${
-                        entregablesCompletos
-                          ? 'bg-emerald-50 border-emerald-200 text-emerald-700'
-                          : 'bg-amber-50 border-amber-200 text-amber-700 hover:border-amber-300'
-                      }`}>
-                      {entregablesCompletos ? <CheckCircle2 className="w-3.5 h-3.5" /> : <Circle className="w-3.5 h-3.5" />}
-                      {entregablesCompletos ? 'Entregables Completos' : 'Entregables Pendientes por Entrega'}
-                    </button>
+                    {/* Estado entregables — automático según checklist */}
+                    <span className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-medium ${
+                      todosCompletos
+                        ? 'bg-emerald-50 border-emerald-200 text-emerald-700'
+                        : 'bg-amber-50 border-amber-200 text-amber-700'
+                    }`}>
+                      {todosCompletos ? <CheckCircle2 className="w-3.5 h-3.5" /> : <Circle className="w-3.5 h-3.5" />}
+                      {todosCompletos ? 'Entregables Completos' : 'Entregables Pendientes por Entrega'}
+                    </span>
                     {/* Botón Acta de Cierre */}
                     {!actaFirmada ? (
                       <button
