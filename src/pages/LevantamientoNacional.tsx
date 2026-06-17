@@ -1333,19 +1333,17 @@ function TabEntregables({ entregables, planteles, qc }: { entregables: Entregabl
                     )}
                   </div>
                   <div className="flex items-center gap-2 flex-wrap">
-                    {/* Toggle entregables completos — solo si el acta está firmada */}
-                    {actaFirmada && (
-                      <button
-                        onClick={() => updateMut.mutate({ id: ent.id, field: 'entregables_completos', value: !entregablesCompletos })}
-                        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-medium transition-all ${
-                          entregablesCompletos
-                            ? 'bg-emerald-50 border-emerald-200 text-emerald-700'
-                            : 'bg-amber-50 border-amber-200 text-amber-700 hover:border-amber-300'
-                        }`}>
-                        {entregablesCompletos ? <CheckCircle2 className="w-3.5 h-3.5" /> : <Circle className="w-3.5 h-3.5" />}
-                        {entregablesCompletos ? 'Entregables Completos' : 'Entregables Pendientes'}
-                      </button>
-                    )}
+                    {/* Toggle entregables completos — siempre visible */}
+                    <button
+                      onClick={() => updateMut.mutate({ id: ent.id, field: 'entregables_completos', value: !entregablesCompletos })}
+                      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-medium transition-all ${
+                        entregablesCompletos
+                          ? 'bg-emerald-50 border-emerald-200 text-emerald-700'
+                          : 'bg-amber-50 border-amber-200 text-amber-700 hover:border-amber-300'
+                      }`}>
+                      {entregablesCompletos ? <CheckCircle2 className="w-3.5 h-3.5" /> : <Circle className="w-3.5 h-3.5" />}
+                      {entregablesCompletos ? 'Entregables Completos' : 'Entregables Pendientes por Entrega'}
+                    </button>
                     {/* Botón Acta de Cierre */}
                     {!actaFirmada ? (
                       <button
