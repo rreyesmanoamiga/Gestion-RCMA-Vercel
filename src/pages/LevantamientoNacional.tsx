@@ -90,6 +90,9 @@ interface Comunicado {
   director_nombre: string | null;
   director_correo: string | null;
   notas: string | null;
+  onedrive_url: string | null;
+  onedrive_path: string | null;
+  archivo_nombre: string | null;
 }
 
 interface Reporte {
@@ -772,36 +775,158 @@ function TabPagos({ pagos, planteles, qc }: { pagos: Pago[]; planteles: Plantel[
 function TabComunicados({ comunicados, planteles, directorio, qc }: {
   comunicados: Comunicado[]; planteles: Plantel[]; directorio: DirectorioItem[]; qc: any;
 }) {
-  const [showForm, setShowForm] = useState(false);
-  const [form, setForm] = useState({ plantel_id: '', fecha_emision: new Date().toISOString().substring(0, 10), fecha_visita: '', notas: '' });
+  const [showForm, setShowForm]     = useState(false);
+  const [previewCom, setPreviewCom] = useState<Comunicado | null>(null);
+  const [deleteCom, setDeleteCom]   = useState<Comunicado | null>(null);
+  const [form, setForm] = useState({
+    plantel_id: '', fecha_emision: new Date().toISOString().substring(0, 10), fecha_visita: '', notas: ''
+  });
+  const [saving, setSaving] = useState(false);
   const set = (k: string, v: string) => setForm(f => ({ ...f, [k]: v }));
 
-  const plantelSeleccionado = planteles.find(p => p.id === form.plantel_id);
-  const datosCom = plantelSeleccionado ? DATOS_COLEGIO[codigoCorto(plantelSeleccionado.colegio_clave)] : undefined;
+  const plantelSel  = planteles.find(p => p.id === form.plantel_id);
+  const datosCom    = plantelSel ? DATOS_COLEGIO[codigoCorto(plantelSel.colegio_clave)] : undefined;
+
+  // Genera el HTML del comunicado como string para vista previa y subida
+  const buildHTML = (plantel: Plantel, c: { fecha_emision: string; fecha_visita: string | null; director_nombre: string | null }) => {
+    const dirNombre  = c.director_nombre ?? '';
+    const datos      = DATOS_COLEGIO[codigoCorto(plantel.colegio_clave)];
+    const fechaEmision = c.fecha_emision
+      ? new Date(c.fecha_emision + 'T12:00:00').toLocaleDateString('es-MX', { day: 'numeric', month: 'long', year: 'numeric' })
+      : '';
+    const fechaVisita = c.fecha_visita
+      ? new Date(c.fecha_visita + 'T12:00:00').toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: '2-digit' })
+      : '(por confirmar)';
+
+    return `<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8">
+<style>
+  body { font-family: Arial, sans-serif; font-size: 13px; color: #222; margin: 40px; line-height: 1.6; }
+  .fecha { text-align: right; margin-bottom: 24px; }
+  table { width: 100%; border-collapse: collapse; margin: 16px 0; }
+  th, td { border: 1px solid #ccc; padding: 8px 12px; text-align: left; font-size: 13px; }
+  th { background: #f0f0f0; font-weight: bold; }
+  ul { margin: 8px 0 16px 24px; } li { margin-bottom: 4px; }
+  .firma { margin-top: 40px; } .pie { margin-top: 4px; color: #555; }
+  .footer { margin-top: 60px; font-size: 11px; color: #888; text-align: center; border-top: 1px solid #ddd; padding-top: 8px; }
+</style></head><body>
+<div class="fecha">${fechaEmision}</div>
+<div><strong>Asunto: Inicio de Proyectos de Levantamientos y Estudios.</strong></div><br>
+<div>Estimado/a <strong>${dirNombre || datos?.director || ''}.</strong></div><br>
+<div>Por medio del presente, el Departamento de Coordinación de Obras y Mantenimiento RCMA tiene el placer de informarle sobre el inicio de un importante proyecto de <strong>levantamientos y estudios técnicos</strong> en las instalaciones de <strong>${plantel.colegio_nombre}</strong>.</div><br>
+<div>Este proyecto es fundamental para el desarrollo de futuras iniciativas de mejora y mantenimiento de nuestra infraestructura a nivel institucional.</div>
+<strong>Detalles de la Visita</strong>
+<table>
+  <tr><th>Proveedor a Cargo</th><td>Navarro y Cal y Mayor Asociados S.A de C.V.</td></tr>
+  <tr><th>Fecha de Ingreso</th><td>${fechaVisita}</td></tr>
+</table>
+<strong>Alcance de los Trabajos a Realizar</strong>
+<p>Los trabajos técnicos que se llevarán a cabo incluyen:</p>
+<ul>
+  <li>Estudio de Mecánica de Suelos.</li><li>Levantamientos Arquitectónicos.</li>
+  <li>Levantamientos Estructurales.</li><li>Levantamientos de Instalaciones (Eléctricas, Hidráulicas, Sanitarias, etc.).</li>
+  <li>Levantamiento de Planta de Conjunto.</li>
+</ul>
+<strong>Contacto del Proveedor</strong>
+<table>
+  <tr><th>Rol</th><th>Nombre</th><th>Correo Electrónico</th><th>Teléfono</th></tr>
+  <tr><td>Líder de Proyecto</td><td>Arq. Fátima Vázquez</td><td>fvazquez@navarrocym.com.mx</td><td>(55) 5182 1276</td></tr>
+</table>
+<p>Agradecemos de antemano todas las facilidades y el apoyo que se brinden al equipo de trabajo para asegurar el desarrollo eficiente de estas labores, minimizando cualquier posible afectación a las actividades cotidianas del colegio/clínica.</p>
+<p>Quedamos a su disposición para cualquier duda o aclaración.</p>
+<div class="firma">
+  <p>Atentamente,</p><br>
+  <p><strong>Ing. Ricardo Joanathan Reyes Medina</strong></p>
+  <p class="pie">Coordinador de Obras y Mantenimiento RCMA.</p>
+  <p class="pie">Coordinación de Obras y Mantenimiento RCMA</p>
+</div>
+<div class="footer">Coordinación de Obras y Mantenimiento RCMA</div>
+</body></html>`;
+  };
 
   const saveMut = useMutation({
     mutationFn: async () => {
-      const { error } = await supabase.from('levantamiento_comunicados').insert({
-        plantel_id: form.plantel_id,
-        fecha_emision: form.fecha_emision,
-        fecha_visita: form.fecha_visita || null,
-        director_nombre: datosCom?.director ?? null,
-        director_correo: null,
-        notas: form.notas || null,
-      });
-      if (error) throw error;
+      setSaving(true);
+      try {
+        const plantel = planteles.find(p => p.id === form.plantel_id);
+        if (!plantel) throw new Error('Selecciona un plantel');
+
+        const dirNombre = datosCom?.director ?? null;
+        const html = buildHTML(plantel, { fecha_emision: form.fecha_emision, fecha_visita: form.fecha_visita || null, director_nombre: dirNombre });
+
+        // Convertir HTML a Blob PDF-like (se sube como HTML, se abre como documento)
+        const blob = new Blob([html], { type: 'text/html' });
+        const fecha = new Date(form.fecha_emision + 'T12:00:00');
+        const anio  = fecha.getFullYear();
+        const mes   = fecha.toLocaleDateString('es-MX', { month: 'long' }).toUpperCase();
+        const carpeta   = `Levantamiento Nacional/Comunicados/${anio}/${mes}`;
+        const fileName  = `Comunicado_${plantel.colegio_clave}_${form.fecha_emision}.html`;
+        const fileObj   = new File([blob], fileName, { type: 'text/html' });
+
+        const webUrl = await spUpload(fileObj, carpeta, fileName);
+
+        const { error } = await supabase.from('levantamiento_comunicados').insert({
+          plantel_id:      form.plantel_id,
+          fecha_emision:   form.fecha_emision,
+          fecha_visita:    form.fecha_visita || null,
+          director_nombre: dirNombre,
+          director_correo: null,
+          notas:           form.notas || null,
+          onedrive_url:    webUrl || null,
+          onedrive_path:   carpeta,
+          archivo_nombre:  fileName,
+        });
+        if (error) throw error;
+      } finally {
+        setSaving(false);
+      }
     },
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['lev_comunicados'] }); toast.success('Comunicado registrado'); setShowForm(false); },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['lev_comunicados'] });
+      toast.success('Comunicado guardado y subido a OneDrive ✓');
+      setShowForm(false);
+      setForm({ plantel_id: '', fecha_emision: new Date().toISOString().substring(0, 10), fecha_visita: '', notas: '' });
+    },
     onError: (e: any) => toast.error(e.message),
   });
 
-  const handleGenerar = (c: Comunicado) => {
+  const deleteMut = useMutation({
+    mutationFn: async (c: Comunicado) => {
+      // Borrar de OneDrive si existe
+      if (c.onedrive_path && c.archivo_nombre) {
+        await spDelete(c.onedrive_path, c.archivo_nombre);
+      }
+      const { error } = await supabase.from('levantamiento_comunicados').delete().eq('id', c.id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['lev_comunicados'] });
+      toast.success('Comunicado eliminado');
+      setDeleteCom(null);
+    },
+    onError: (e: any) => toast.error(e.message),
+  });
+
+  const handlePreview = (c: Comunicado) => {
     const plantel = planteles.find(p => p.id === c.plantel_id);
     if (!plantel) { toast.error('Plantel no encontrado'); return; }
-    const datos = DATOS_COLEGIO[codigoCorto(plantel.colegio_clave)];
-    const dirNombre = c.director_nombre ?? datos?.director ?? '';
-    generarComunicadoPDF(plantel, c, dirNombre);
+    setPreviewCom(c);
   };
+
+  const handlePrint = (c: Comunicado) => {
+    const plantel = planteles.find(p => p.id === c.plantel_id);
+    if (!plantel) return;
+    const html = buildHTML(plantel, c);
+    const win = window.open('', '_blank');
+    if (!win) { toast.error('Permite ventanas emergentes'); return; }
+    win.document.write(html);
+    win.document.close();
+    setTimeout(() => win.print(), 600);
+  };
+
+  // HTML para vista previa inline
+  const previewHTML = previewCom
+    ? (() => { const pl = planteles.find(p => p.id === previewCom.plantel_id); return pl ? buildHTML(pl, previewCom) : ''; })()
+    : '';
 
   return (
     <div className="space-y-4">
@@ -809,6 +934,7 @@ function TabComunicados({ comunicados, planteles, directorio, qc }: {
         <button onClick={() => setShowForm(true)} className={btnPrimary}><Plus className="w-4 h-4" />Nuevo Comunicado</button>
       </div>
 
+      {/* Modal Nuevo Comunicado */}
       {showForm && (
         <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md">
@@ -831,9 +957,7 @@ function TabComunicados({ comunicados, planteles, directorio, qc }: {
                 </div>
               )}
               {form.plantel_id && !datosCom && (
-                <div className="bg-amber-50 rounded-lg p-3 text-xs text-amber-800">
-                  No se encontraron datos para este plantel.
-                </div>
+                <div className="bg-amber-50 rounded-lg p-3 text-xs text-amber-800">No se encontraron datos para este plantel.</div>
               )}
               <div className="grid grid-cols-2 gap-3">
                 <div>
@@ -849,17 +973,65 @@ function TabComunicados({ comunicados, planteles, directorio, qc }: {
                 <label className="text-xs font-bold text-slate-500 uppercase block mb-1">Notas</label>
                 <textarea className={inputCls} rows={2} value={form.notas} onChange={e => set('notas', e.target.value)} />
               </div>
+              <div className="bg-blue-50 rounded-lg p-2 text-xs text-blue-700">
+                📁 Se guardará en: <strong>Levantamiento Nacional / Comunicados / {new Date(form.fecha_emision + 'T12:00:00').getFullYear()} / {new Date(form.fecha_emision + 'T12:00:00').toLocaleDateString('es-MX', { month: 'long' }).toUpperCase()}</strong>
+              </div>
             </div>
             <div className="flex justify-end gap-2 p-5 border-t border-slate-100">
               <button onClick={() => setShowForm(false)} className={btnSecondary}>Cancelar</button>
-              <button onClick={() => saveMut.mutate()} disabled={saveMut.isPending || !form.plantel_id} className={btnPrimary}>
-                {saveMut.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}Guardar
+              <button onClick={() => saveMut.mutate()} disabled={saveMut.isPending || saving || !form.plantel_id} className={btnPrimary}>
+                {(saveMut.isPending || saving) ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}Guardar
               </button>
             </div>
           </div>
         </div>
       )}
 
+      {/* Modal Vista Previa */}
+      {previewCom && (
+        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-3xl max-h-[90vh] flex flex-col">
+            <div className="flex items-center justify-between p-4 border-b border-slate-100">
+              <h3 className="font-bold text-slate-900">Vista Previa — Comunicado</h3>
+              <div className="flex items-center gap-2">
+                <button onClick={() => handlePrint(previewCom)} className={btnPrimary}>
+                  <Download className="w-4 h-4" />Imprimir / PDF
+                </button>
+                <button onClick={() => setPreviewCom(null)}><X className="w-5 h-5 text-slate-400" /></button>
+              </div>
+            </div>
+            <div className="flex-1 overflow-auto p-2">
+              <iframe
+                srcDoc={previewHTML}
+                className="w-full h-full min-h-[600px] border-0"
+                title="Vista previa comunicado"
+              />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Confirmar Eliminar */}
+      {deleteCom && (
+        <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 space-y-4">
+            <h3 className="font-bold text-slate-900">¿Eliminar comunicado?</h3>
+            <p className="text-sm text-slate-600">
+              Se eliminará el comunicado de <strong>{planteles.find(p => p.id === deleteCom.plantel_id)?.colegio_nombre}</strong> del sistema
+              {deleteCom.onedrive_path ? ' y del OneDrive' : ''}.
+            </p>
+            <div className="flex justify-end gap-2">
+              <button onClick={() => setDeleteCom(null)} className={btnSecondary}>Cancelar</button>
+              <button onClick={() => deleteMut.mutate(deleteCom)} disabled={deleteMut.isPending} className="px-4 py-2 bg-red-600 text-white rounded-lg text-sm font-medium hover:bg-red-700 flex items-center gap-2 disabled:opacity-50">
+                {deleteMut.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
+                Eliminar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Tabla */}
       <div className="bg-white border border-slate-200 rounded-xl overflow-hidden">
         <table className="w-full text-sm">
           <thead className="bg-slate-50 text-slate-500 text-xs uppercase">
@@ -868,12 +1040,13 @@ function TabComunicados({ comunicados, planteles, directorio, qc }: {
               <th className="text-left px-4 py-3">Director</th>
               <th className="text-left px-4 py-3">Fecha Emisión</th>
               <th className="text-left px-4 py-3">Fecha Visita</th>
+              <th className="text-left px-4 py-3">OneDrive</th>
               <th className="px-4 py-3"></th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
             {comunicados.length === 0 && (
-              <tr><td colSpan={5} className="text-center py-8 text-slate-400">Sin comunicados registrados</td></tr>
+              <tr><td colSpan={6} className="text-center py-8 text-slate-400">Sin comunicados registrados</td></tr>
             )}
             {comunicados.map(c => {
               const plantel = planteles.find(p => p.id === c.plantel_id);
@@ -888,9 +1061,22 @@ function TabComunicados({ comunicados, planteles, directorio, qc }: {
                     {c.fecha_visita ? new Date(c.fecha_visita + 'T12:00:00').toLocaleDateString('es-MX') : '—'}
                   </td>
                   <td className="px-4 py-3">
-                    <button onClick={() => handleGenerar(c)} className="flex items-center gap-1 text-xs text-[#0C3B6E] hover:underline">
-                      <Download className="w-3.5 h-3.5" />PDF
-                    </button>
+                    {c.onedrive_url
+                      ? <a href={c.onedrive_url} target="_blank" rel="noreferrer" className="text-xs text-[#0C3B6E] hover:underline flex items-center gap-1"><Eye className="w-3.5 h-3.5" />Ver en Drive</a>
+                      : <span className="text-xs text-slate-300">—</span>}
+                  </td>
+                  <td className="px-4 py-3">
+                    <div className="flex items-center gap-2">
+                      <button onClick={() => handlePreview(c)} className="text-slate-400 hover:text-[#0C3B6E]" title="Vista previa">
+                        <Eye className="w-4 h-4" />
+                      </button>
+                      <button onClick={() => handlePrint(c)} className="text-slate-400 hover:text-[#0C3B6E]" title="Imprimir / PDF">
+                        <Download className="w-4 h-4" />
+                      </button>
+                      <button onClick={() => setDeleteCom(c)} className="text-slate-400 hover:text-red-500" title="Eliminar">
+                        <X className="w-4 h-4" />
+                      </button>
+                    </div>
                   </td>
                 </tr>
               );
@@ -902,8 +1088,6 @@ function TabComunicados({ comunicados, planteles, directorio, qc }: {
   );
 }
 
-
-// ══════════════════════════════════════════════════════════════════════════════
 // TAB: REPORTES DIARIOS
 // ══════════════════════════════════════════════════════════════════════════════
 async function spDelete(carpeta: string, fileName: string) {
