@@ -831,7 +831,7 @@ function TabComunicados({ comunicados, planteles, directorio, qc }: {
 
     const drawHeader = () => {
       doc.setFillColor(12, 59, 110); doc.rect(0, 0, PW, 34, 'F');
-      doc.setFillColor(249, 168, 37); doc.rect(0, 0, 5, 34, 'F');
+      doc.setFillColor(232, 119, 34); doc.rect(0, 0, 5, 34, 'F');  // Naranja institucional Mano Amiga
       doc.setFontSize(16); setBold(); doc.setTextColor(255, 255, 255);
       doc.text('Comunicado Institucional', ML, 13);
       doc.setFontSize(9); doc.setFont('helvetica', 'normal'); doc.setTextColor(180, 200, 220);
@@ -1004,7 +1004,7 @@ function TabComunicados({ comunicados, planteles, directorio, qc }: {
       html,body{width:100%;background:#e8e8e8;}
       body{font-family:Arial,sans-serif;font-size:12.5px;color:#222;line-height:1.55;}
       .wrap{width:680px;margin:0 auto;background:#fff;}
-      .hdr{background:#0C3B6E;border-left:6px solid #F9A825;padding:16px 28px;display:flex;justify-content:space-between;align-items:center;}
+      .hdr{background:#0C3B6E;border-left:6px solid #E87722;padding:16px 28px;display:flex;justify-content:space-between;align-items:center;}
       .hdr h1{color:#fff;font-size:15px;margin:0;} .hdr p{color:#b0c4de;font-size:10px;margin:3px 0 0;}
       .hdr img{height:42px;width:auto;}
       .body{padding:24px 28px 28px;}
