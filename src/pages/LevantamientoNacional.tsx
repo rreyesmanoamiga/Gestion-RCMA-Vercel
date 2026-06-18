@@ -585,25 +585,25 @@ function TabPagos({ pagos, planteles, qc }: { pagos: Pago[]; planteles: Plantel[
 
   // Tabla precargada del contrato — datos fijos del Word
   const MESES_CONTRATO = [
-    { etiqueta: 'ANTICIPO', mes: 0,  subtotal: 891635.90,  iva: 142661.74,  total: 1034297.65,  fact_cons: 1  },
-    { etiqueta: 'MES 1',    mes: 1,  subtotal: 520631.57,  iva: 83301.05,   total: 603932.62,   fact_cons: 2  },
-    { etiqueta: 'MES 2',    mes: 2,  subtotal: 333716.57,  iva: 53394.65,   total: 387111.22,   fact_cons: 3  },
-    { etiqueta: 'MES 3',    mes: 3,  subtotal: 410276.57,  iva: 65644.25,   total: 475920.82,   fact_cons: 4  },
-    { etiqueta: 'MES 4',    mes: 4,  subtotal: 371306.57,  iva: 59409.05,   total: 430715.62,   fact_cons: 5  },
-    { etiqueta: 'MES 5',    mes: 5,  subtotal: 276941.57,  iva: 44310.65,   total: 321252.22,   fact_cons: 6  },
-    { etiqueta: 'MES 6',    mes: 6,  subtotal: 486911.57,  iva: 77905.85,   total: 564817.42,   fact_cons: 7  },
-    { etiqueta: 'MES 7',    mes: 7,  subtotal: 291674.57,  iva: 46667.93,   total: 338342.50,   fact_cons: null },
-    { etiqueta: 'MES 8',    mes: 8,  subtotal: 438212.57,  iva: 70114.01,   total: 508326.58,   fact_cons: null },
-    { etiqueta: 'MES 9',    mes: 9,  subtotal: 461102.48,  iva: 73776.40,   total: 534878.88,   fact_cons: null },
-    { etiqueta: 'MES 10',   mes: 10, subtotal: 383432.15,  iva: 61349.14,   total: 444781.29,   fact_cons: null },
-    { etiqueta: 'MES 11',   mes: 11, subtotal: 293254.07,  iva: 46920.65,   total: 340174.72,   fact_cons: null },
-    { etiqueta: 'MES 12',   mes: 12, subtotal: 487502.19,  iva: 78000.35,   total: 565502.54,   fact_cons: null },
-    { etiqueta: 'MES 13',   mes: 13, subtotal: 769365.32,  iva: 123098.45,  total: 892463.77,   fact_cons: null },
-    { etiqueta: 'MES 14',   mes: 14, subtotal: 492019.07,  iva: 78723.05,   total: 570742.12,   fact_cons: null },
-    { etiqueta: 'MES 15',   mes: 15, subtotal: 710696.57,  iva: 113711.45,  total: 824408.02,   fact_cons: null },
-    { etiqueta: 'MES 16',   mes: 16, subtotal: 529459.07,  iva: 84713.45,   total: 614172.52,   fact_cons: null },
-    { etiqueta: 'MES 17',   mes: 17, subtotal: 623396.57,  iva: 99743.45,   total: 723140.02,   fact_cons: null },
-    { etiqueta: 'MES 18',   mes: 18, subtotal: 144824.14,  iva: 23171.86,   total: 167996.00,   fact_cons: null },
+    { etiqueta: 'ANTICIPO', mes: 0,  subtotal: 891635.90,  iva: 142661.74,  total: 1034297.65},
+    { etiqueta: 'MES 1',    mes: 1,  subtotal: 520631.57,  iva: 83301.05,   total: 603932.62},
+    { etiqueta: 'MES 2',    mes: 2,  subtotal: 333716.57,  iva: 53394.65,   total: 387111.22},
+    { etiqueta: 'MES 3',    mes: 3,  subtotal: 410276.57,  iva: 65644.25,   total: 475920.82},
+    { etiqueta: 'MES 4',    mes: 4,  subtotal: 371306.57,  iva: 59409.05,   total: 430715.62},
+    { etiqueta: 'MES 5',    mes: 5,  subtotal: 276941.57,  iva: 44310.65,   total: 321252.22},
+    { etiqueta: 'MES 6',    mes: 6,  subtotal: 486911.57,  iva: 77905.85,   total: 564817.42},
+    { etiqueta: 'MES 7',    mes: 7,  subtotal: 291674.57,  iva: 46667.93,   total: 338342.50},
+    { etiqueta: 'MES 8',    mes: 8,  subtotal: 438212.57,  iva: 70114.01,   total: 508326.58},
+    { etiqueta: 'MES 9',    mes: 9,  subtotal: 461102.48,  iva: 73776.40,   total: 534878.88},
+    { etiqueta: 'MES 10',   mes: 10, subtotal: 383432.15,  iva: 61349.14,   total: 444781.29},
+    { etiqueta: 'MES 11',   mes: 11, subtotal: 293254.07,  iva: 46920.65,   total: 340174.72},
+    { etiqueta: 'MES 12',   mes: 12, subtotal: 487502.19,  iva: 78000.35,   total: 565502.54},
+    { etiqueta: 'MES 13',   mes: 13, subtotal: 769365.32,  iva: 123098.45,  total: 892463.77},
+    { etiqueta: 'MES 14',   mes: 14, subtotal: 492019.07,  iva: 78723.05,   total: 570742.12},
+    { etiqueta: 'MES 15',   mes: 15, subtotal: 710696.57,  iva: 113711.45,  total: 824408.02},
+    { etiqueta: 'MES 16',   mes: 16, subtotal: 529459.07,  iva: 84713.45,   total: 614172.52},
+    { etiqueta: 'MES 17',   mes: 17, subtotal: 623396.57,  iva: 99743.45,   total: 723140.02},
+    { etiqueta: 'MES 18',   mes: 18, subtotal: 144824.14,  iva: 23171.86,   total: 167996.00},
   ];
 
   const TOTAL_CONTRATO = 10342976.48;
@@ -739,7 +739,6 @@ function TabPagos({ pagos, planteles, qc }: { pagos: Pago[]; planteles: Plantel[
               <th className="text-right px-3 py-3">Subtotal</th>
               <th className="text-right px-3 py-3">IVA</th>
               <th className="text-right px-3 py-3">Total</th>
-              <th className="text-center px-3 py-3">Fact. Cons.</th>
               <th className="text-left px-3 py-3">Fecha de Pago</th>
               <th className="text-left px-3 py-3">Folio</th>
               <th className="text-right px-3 py-3">Monto Real</th>
@@ -750,7 +749,7 @@ function TabPagos({ pagos, planteles, qc }: { pagos: Pago[]; planteles: Plantel[
             {MESES_CONTRATO.map(m => {
               const pago = getPago(m.etiqueta);
               const isPagado = !!pago;
-              const factCons = pago?.factura_consecutivo ?? (m.fact_cons ? String(m.fact_cons) : '—');
+              const factCons = pago?.factura_consecutivo ?? '—';
               const folio    = pago?.folio_factura ?? '—';
 
               return (
@@ -759,7 +758,6 @@ function TabPagos({ pagos, planteles, qc }: { pagos: Pago[]; planteles: Plantel[
                   <td className="px-3 py-3 text-right text-slate-600">{fmt(m.subtotal)}</td>
                   <td className="px-3 py-3 text-right text-slate-500">{fmt(m.iva)}</td>
                   <td className="px-3 py-3 text-right font-medium text-slate-700">{fmt(m.total)}</td>
-                  <td className="px-3 py-3 text-center text-slate-500">{m.fact_cons ?? '—'}</td>
                   <td className="px-3 py-3 text-slate-600">
                     {pago?.fecha_pago ? new Date(pago.fecha_pago + 'T12:00:00').toLocaleDateString('es-MX') : '—'}
                   </td>
