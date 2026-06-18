@@ -826,7 +826,7 @@ function TabComunicados({ comunicados, planteles, directorio, qc }: {
     const YLIMIT = 272; // max y antes de footer
 
     // ── helpers ─────────────────────────────────────────────────────────────
-    const setBody = () => { doc.setFont('helvetica', 'normal'); doc.setFontSize(9.5); doc.setTextColor(30, 30, 30); };
+    const setBody = () => { doc.setFont('helvetica', 'normal'); doc.setFontSize(11); doc.setTextColor(30, 30, 30); };
     const setBold = () => { doc.setFont('helvetica', 'bold'); };
 
     const drawHeader = () => {
@@ -928,7 +928,8 @@ function TabComunicados({ comunicados, planteles, directorio, qc }: {
     });
     y += 5;
 
-    // ── CONTACTO PROVEEDOR ────────────────────────────────────────────────────
+    // ── CONTACTO PROVEEDOR — siempre en página 2 ─────────────────────────────
+    drawFooter(); doc.addPage(); drawHeader(); y = 42;
     secTitle('Contacto del Proveedor');
     para('El equipo de Navarro y Cal y Mayor Asociados S.A de C.V estará coordinado por la siguiente persona, quien será el contacto directo para cualquier asunto operativo o logístico relacionado con su visita:');
 
@@ -956,6 +957,7 @@ function TabComunicados({ comunicados, planteles, directorio, qc }: {
 
     // ── CIERRE ───────────────────────────────────────────────────────────────
     para('Agradecemos de antemano todas las facilidades y el apoyo que se brinden al equipo de trabajo para asegurar el desarrollo eficiente de estas labores, minimizando cualquier posible afectación a las actividades cotidianas del colegio/clínica.');
+    doc.setTextColor(30, 30, 30); doc.setFont('helvetica', 'normal'); doc.setFontSize(11);
     para('Quedamos a su disposición para cualquier duda o aclaración.', 12);
 
     // ── FIRMA ────────────────────────────────────────────────────────────────
