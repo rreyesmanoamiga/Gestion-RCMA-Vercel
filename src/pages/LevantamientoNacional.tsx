@@ -1012,7 +1012,7 @@ function TabComunicados({ comunicados, planteles, directorio, qc }: {
       li{margin-bottom:3px;word-break:break-word;}
       .firma{margin-top:24px;padding-top:12px;border-top:1px solid #dde3ea;}
       .footer{background:#0C3B6E;color:#b0c4de;text-align:center;font-size:10px;padding:7px;}
-      @media print{body{background:#fff;}.wrap{width:100%;box-shadow:none;margin:0;}}
+      @media print{*{-webkit-print-color-adjust:exact;print-color-adjust:exact;}body{background:#fff;}.wrap{width:100%;max-width:100%;box-shadow:none;margin:0;}.hdr{-webkit-print-color-adjust:exact;}.footer{-webkit-print-color-adjust:exact;}}
     </style></head><body>
     <div class="wrap">
       <div class="hdr">
@@ -1070,13 +1070,15 @@ function TabComunicados({ comunicados, planteles, directorio, qc }: {
         if (!plantel) throw new Error('Selecciona un plantel');
 
         const dirNombre = datosCom?.director ?? null;
-        const blob = await buildPDFBlob(plantel, { fecha_emision: form.fecha_emision, fecha_visita: form.fecha_visita || null, director_nombre: dirNombre });
+        // Usamos el mismo HTML de la vista previa — mismo resultado que se imprime
+        const html = buildPreviewHTML(plantel, { fecha_emision: form.fecha_emision, fecha_visita: form.fecha_visita || null, director_nombre: dirNombre });
+        const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
         const fecha = new Date(form.fecha_emision + 'T12:00:00');
         const anio  = fecha.getFullYear();
         const mes   = fecha.toLocaleDateString('es-MX', { month: 'long' }).toUpperCase();
         const carpeta   = `Levantamiento Nacional/Comunicados/${anio}/${mes}`;
-        const fileName  = `Comunicado_${plantel.colegio_clave}_${form.fecha_emision}.pdf`;
-        const fileObj   = new File([blob], fileName, { type: 'application/pdf' });
+        const fileName  = `Comunicado_${plantel.colegio_clave}_${form.fecha_emision}.html`;
+        const fileObj   = new File([blob], fileName, { type: 'text/html;charset=utf-8' });
 
         const webUrl = await spUpload(fileObj, carpeta, fileName);
 
