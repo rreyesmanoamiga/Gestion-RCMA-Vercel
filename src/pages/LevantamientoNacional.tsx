@@ -2069,3 +2069,5 @@ function TabReporteGeneral({ reportesGenerales, planteles, pagos, comunicados, e
   );
 }
 
+
+}
