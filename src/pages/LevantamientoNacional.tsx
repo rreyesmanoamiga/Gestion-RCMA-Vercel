@@ -817,139 +817,155 @@ function TabComunicados({ comunicados, planteles, directorio, qc }: {
       ? new Date(c.fecha_visita + 'T12:00:00').toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: '2-digit' })
       : '(por confirmar)';
 
-    const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'letter' });
-    const W            = 215.9; // letter width en mm
-    const marginX      = 25;
-    const maxLineWidth = 165;
+    const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+    const PW  = 210;   // page width
+    const PH  = 297;   // page height
+    const ML  = 20;    // margin left
+    const MR  = 20;    // margin right
+    const TW  = PW - ML - MR;  // 170mm text width
+    const YLIMIT = 272; // max y antes de footer
 
-    // ── HEADER INSTITUCIONAL ──────────────────────────────────────────────
-    doc.setFillColor(12, 59, 110); doc.rect(0, 0, W, 32, 'F');
-    doc.setFillColor(249, 168, 37); doc.rect(0, 0, 5, 32, 'F');
-    doc.setFontSize(15); doc.setFont('Helvetica', 'bold'); doc.setTextColor(255, 255, 255);
-    doc.text('Comunicado Institucional', marginX, 12);
-    doc.setFontSize(9); doc.setFont('Helvetica', 'normal'); doc.setTextColor(180, 200, 220);
-    doc.text('Coordinación de Obras y Mantenimiento RCMA  ·  ' + fechaEmision, marginX, 20);
-    doc.setFontSize(8); doc.setTextColor(130, 160, 190);
-    doc.text('Documento interno — Mano Amiga', marginX, 27);
+    // ── helpers ─────────────────────────────────────────────────────────────
+    const setBody = () => { doc.setFont('helvetica', 'normal'); doc.setFontSize(9.5); doc.setTextColor(30, 30, 30); };
+    const setBold = () => { doc.setFont('helvetica', 'bold'); };
 
-    // Logo
+    const drawHeader = () => {
+      doc.setFillColor(12, 59, 110); doc.rect(0, 0, PW, 34, 'F');
+      doc.setFillColor(249, 168, 37); doc.rect(0, 0, 5, 34, 'F');
+      doc.setFontSize(16); setBold(); doc.setTextColor(255, 255, 255);
+      doc.text('Comunicado Institucional', ML, 13);
+      doc.setFontSize(9); doc.setFont('helvetica', 'normal'); doc.setTextColor(180, 200, 220);
+      doc.text('Coordinación de Obras y Mantenimiento RCMA  ·  ' + fechaEmision, ML, 21);
+      doc.setFontSize(8); doc.setTextColor(130, 160, 190);
+      doc.text('Documento interno — Mano Amiga', ML, 28);
+    };
+
+    const drawFooter = () => {
+      doc.setFillColor(12, 59, 110); doc.rect(0, PH - 12, PW, 12, 'F');
+      doc.setFontSize(7.5); doc.setFont('helvetica', 'normal'); doc.setTextColor(180, 200, 220);
+      doc.text('Coordinación de Obras y Mantenimiento RCMA  —  Sistema RCMA', PW / 2, PH - 5, { align: 'center' });
+    };
+
+    const checkY = (need: number) => {
+      if (y + need > YLIMIT) { drawFooter(); doc.addPage(); drawHeader(); y = 42; }
+    };
+
+    const para = (txt: string, gap = 6) => {
+      setBody();
+      const lines = doc.splitTextToSize(txt, TW);
+      checkY(lines.length * 5.5 + gap);
+      doc.text(lines, ML, y);
+      y += lines.length * 5.5 + gap;
+    };
+
+    const secTitle = (txt: string) => {
+      checkY(12);
+      setBold(); doc.setFontSize(10); doc.setTextColor(12, 59, 110);
+      doc.text(txt, ML, y); y += 3.5;
+      doc.setDrawColor(200, 210, 220); doc.setLineWidth(0.3);
+      doc.line(ML, y, PW - MR, y); y += 5;
+    };
+
+    // ── Logo ────────────────────────────────────────────────────────────────
+    drawHeader();
     try {
       const logoImg = await new Promise<string>((res, rej) => {
         const img = new Image(); img.crossOrigin = 'anonymous';
         img.onload = () => { const cv = document.createElement('canvas'); cv.width = img.width; cv.height = img.height; cv.getContext('2d')!.drawImage(img, 0, 0); res(cv.toDataURL('image/png')); };
         img.onerror = rej; img.src = '/logo.png';
       });
-      doc.addImage(logoImg, 'PNG', W - 35, 4, 20, 20);
+      doc.addImage(logoImg, 'PNG', PW - 37, 4, 22, 22);
     } catch { /* sin logo */ }
 
-    // ── FOOTER función reutilizable ───────────────────────────────────────
-    const drawFooter = () => {
-      doc.setFontSize(9); doc.setDrawColor(220, 220, 220);
-      doc.setFillColor(12, 59, 110); doc.rect(0, 252, W, 8, 'F');
-      doc.setFont('Helvetica', 'normal'); doc.setTextColor(180, 200, 220);
-      doc.text('Coordinación de Obras y Mantenimiento RCMA', W / 2, 257, { align: 'center' });
-    };
+    let y = 44;
 
-    doc.setFont('Helvetica', 'normal');
-    doc.setFontSize(11);
-    doc.setTextColor(30, 30, 30);
-    let yPos = 42;
+    // ── ASUNTO ──────────────────────────────────────────────────────────────
+    setBold(); doc.setFontSize(10); doc.setTextColor(12, 59, 110);
+    doc.text('Asunto: Inicio de Proyectos de Levantamientos y Estudios.', ML, y); y += 9;
 
-    // Fecha alineada a la derecha
-    doc.text(fechaEmision, W - marginX, yPos, { align: 'right' });
-    yPos += 12;
+    // ── SALUDO ──────────────────────────────────────────────────────────────
+    setBody();
+    doc.text('Estimado/a ', ML, y);
+    setBold(); doc.text(dirNombre + '.', ML + doc.getTextWidth('Estimado/a '), y);
+    y += 9;
 
-    // Asunto
-    doc.setFont('Helvetica', 'bold');
-    doc.text('Asunto: Inicio de Proyectos de Levantamientos y Estudios.', marginX, yPos);
-    yPos += 12;
+    // ── CUERPO ──────────────────────────────────────────────────────────────
+    para(`Por medio del presente, el Departamento de Coordinación de Obras y Mantenimiento RCMA tiene el placer de informarle sobre el inicio de un importante proyecto de levantamientos y estudios técnicos en las instalaciones de ${plantel.colegio_nombre}.`);
+    para('Este proyecto es fundamental para el desarrollo de futuras iniciativas de mejora y mantenimiento de nuestra infraestructura a nivel institucional.', 10);
 
-    // Saludo
-    doc.setFont('Helvetica', 'normal');
-    doc.text('Estimado/a ', marginX, yPos);
-    doc.setFont('Helvetica', 'bold');
-    doc.text(dirNombre + '.', marginX + doc.getTextWidth('Estimado/a '), yPos);
-    yPos += 12;
+    // ── DETALLES VISITA ──────────────────────────────────────────────────────
+    secTitle('Detalles de la Visita');
+    const ROW = 9; const C1 = 68;
+    // fila 1
+    checkY(ROW);
+    doc.setFillColor(241, 245, 249); doc.rect(ML, y - 3, TW, ROW, 'F');
+    doc.setDrawColor(220, 225, 230); doc.setLineWidth(0.2); doc.rect(ML, y - 3, TW, ROW, 'D');
+    setBold(); doc.setFontSize(9); doc.setTextColor(50, 50, 50);
+    doc.text('Proveedor a Cargo', ML + 3, y + 3);
+    setBody(); doc.setFontSize(9);
+    doc.text('Navarro y Cal y Mayor Asociados S.A de C.V.', ML + C1, y + 3);
+    y += ROW + 1;
+    // fila 2
+    checkY(ROW);
+    doc.setFillColor(255, 255, 255); doc.rect(ML, y - 3, TW, ROW, 'F');
+    doc.rect(ML, y - 3, TW, ROW, 'D');
+    setBold(); doc.setFontSize(9); doc.setTextColor(50, 50, 50);
+    doc.text('Fecha de Ingreso', ML + 3, y + 3);
+    setBody(); doc.setFontSize(9);
+    doc.text(fechaVisita, ML + C1, y + 3);
+    y += ROW + 8;
 
-    // Cuerpo
-    doc.setFont('Helvetica', 'normal');
-    const cuerpoTexto = `Por medio del presente, el Departamento de Coordinación de Obras y Mantenimiento RCMA tiene el placer de informarle sobre el inicio de un importante proyecto de levantamientos y estudios técnicos en las instalaciones de ${plantel.colegio_nombre}.
-
-Este proyecto es fundamental para el desarrollo de futuras iniciativas de mejora y mantenimiento de nuestra infraestructura a nivel institucional.`;
-    const lineasCuerpo = doc.splitTextToSize(cuerpoTexto, maxLineWidth);
-    doc.text(lineasCuerpo, marginX, yPos);
-    yPos += lineasCuerpo.length * 6 + 4;
-
-    // Detalles de la Visita
-    doc.setFont('Helvetica', 'bold');
-    doc.text('Detalles de la Visita', marginX, yPos);
-    yPos += 6;
-    doc.setFillColor(240, 240, 240);
-    doc.rect(marginX, yPos, maxLineWidth, 8, 'F');
-    doc.setFont('Helvetica', 'bold');
-    doc.text('Proveedor a Cargo:', marginX + 4, yPos + 5.5);
-    doc.setFont('Helvetica', 'normal');
-    doc.text('Navarro y Cal y Mayor Asociados S.A de C.V.', marginX + 50, yPos + 5.5);
-    yPos += 8;
-    doc.rect(marginX, yPos, maxLineWidth, 8, 'F');
-    doc.setFont('Helvetica', 'bold');
-    doc.text('Fecha de Ingreso:', marginX + 4, yPos + 5.5);
-    doc.setFont('Helvetica', 'normal');
-    doc.text(fechaVisita, marginX + 50, yPos + 5.5);
-    yPos += 14;
-
-    // Alcance
-    doc.setFont('Helvetica', 'bold');
-    doc.text('Alcance de los Trabajos a Realizar', marginX, yPos);
-    yPos += 6;
-    doc.setFont('Helvetica', 'normal');
-    doc.text('Los trabajos técnicos que se llevarán a cabo incluyen:', marginX, yPos);
-    yPos += 6;
-    ['- Estudio de Mecánica de Suelos.', '- Levantamientos Arquitectónicos.', '- Levantamientos Estructurales.', '- Levantamientos de Instalaciones (Eléctricas, Hidráulicas, Sanitarias, etc.).', '- Levantamiento de Planta de Conjunto.'].forEach(p => {
-      doc.text(p, marginX + 5, yPos); yPos += 5.5;
+    // ── ALCANCE ──────────────────────────────────────────────────────────────
+    secTitle('Alcance de los Trabajos a Realizar');
+    para('Los trabajos técnicos que se llevarán a cabo incluyen:', 5);
+    ['Estudio de Mecánica de Suelos.', 'Levantamientos Arquitectónicos.', 'Levantamientos Estructurales.', 'Levantamientos de Instalaciones (Eléctricas, Hidráulicas, Sanitarias, etc.).', 'Levantamiento de Planta de Conjunto.'].forEach(item => {
+      const ls = doc.splitTextToSize(item, TW - 8);
+      checkY(ls.length * 5.5 + 2);
+      setBody();
+      doc.setFillColor(12, 59, 110); doc.circle(ML + 3, y - 1, 0.9, 'F');
+      doc.text(ls, ML + 8, y);
+      y += ls.length * 5.5 + 2;
     });
-    yPos += 4;
+    y += 5;
 
-    // Contacto del Proveedor
-    doc.setFont('Helvetica', 'bold');
-    doc.text('Contacto del Proveedor', marginX, yPos);
-    yPos += 6;
-    doc.setFont('Helvetica', 'normal');
-    const provTexto = 'El equipo de Navarro y Cal y Mayor Asociados S.A de C.V estará coordinado por la siguiente persona, quien será el contacto directo para cualquier asunto operativo o logístico relacionado con su visita:';
-    const lineasProv = doc.splitTextToSize(provTexto, maxLineWidth);
-    doc.text(lineasProv, marginX, yPos);
-    yPos += lineasProv.length * 6 + 4;
+    // ── CONTACTO PROVEEDOR ────────────────────────────────────────────────────
+    secTitle('Contacto del Proveedor');
+    para('El equipo de Navarro y Cal y Mayor Asociados S.A de C.V estará coordinado por la siguiente persona, quien será el contacto directo para cualquier asunto operativo o logístico relacionado con su visita:');
 
-    // Tabla contacto
-    doc.setFillColor(230, 230, 230);
-    doc.rect(marginX, yPos, maxLineWidth, 6, 'F');
-    doc.setFont('Helvetica', 'bold'); doc.setFontSize(10);
-    doc.text('Rol',               marginX + 2,  yPos + 4.5);
-    doc.text('Nombre',            marginX + 35, yPos + 4.5);
-    doc.text('Correo Electrónico',marginX + 80, yPos + 4.5);
-    doc.text('Teléfono',          marginX + 135,yPos + 4.5);
-    yPos += 6;
-    doc.setFont('Helvetica', 'normal');
-    doc.text('Líder Proyecto',             marginX + 2,  yPos + 4.5);
-    doc.text('Arq. Fátima Vázquez',        marginX + 35, yPos + 4.5);
-    doc.text('fvazquez@navarrocym.com.mx', marginX + 80, yPos + 4.5);
-    doc.text('(55) 5182 1276',             marginX + 135,yPos + 4.5);
-    yPos += 12;
+    // Tabla contacto — anchos fijos que no se salen
+    const tc1 = 36; const tc2 = 42; const tc3 = 56; const tc4 = TW - tc1 - tc2 - tc3;
+    checkY(20);
+    // header
+    doc.setFillColor(12, 59, 110); doc.rect(ML, y - 3, TW, 8, 'F');
+    setBold(); doc.setFontSize(8); doc.setTextColor(255, 255, 255);
+    doc.text('Rol',      ML + 2,               y + 2);
+    doc.text('Nombre',   ML + tc1 + 2,         y + 2);
+    doc.text('Correo',   ML + tc1 + tc2 + 2,   y + 2);
+    doc.text('Teléfono', ML + tc1 + tc2 + tc3 + 2, y + 2);
+    y += 9;
+    // fila datos
+    checkY(9);
+    doc.setFillColor(241, 245, 249); doc.rect(ML, y - 3, TW, 8, 'F');
+    doc.setDrawColor(220, 225, 230); doc.rect(ML, y - 3, TW, 8, 'D');
+    setBody(); doc.setFontSize(8);
+    doc.text('Líder de Proyecto',           ML + 2,               y + 2);
+    doc.text('Arq. Fátima Vázquez',         ML + tc1 + 2,         y + 2);
+    doc.text('fvazquez@navarrocym.com.mx',  ML + tc1 + tc2 + 2,   y + 2);
+    doc.text('(55) 5182 1276',              ML + tc1 + tc2 + tc3 + 2, y + 2);
+    y += 11;
 
-    // Cierre
-    doc.setFontSize(11);
-    const lineasCierre1 = doc.splitTextToSize('Agradecemos de antemano todas las facilidades y el apoyo que se brinden al equipo de trabajo para asegurar el desarrollo eficiente de estas labores, minimizando cualquier posible afectación a las actividades cotidianas del colegio/clínica.', maxLineWidth);
-    doc.text(lineasCierre1, marginX, yPos);
-    yPos += lineasCierre1.length * 6 + 5;
-    doc.text('Quedamos a su disposición para cualquier duda o aclaración.', marginX, yPos);
-    yPos += 12;
+    // ── CIERRE ───────────────────────────────────────────────────────────────
+    para('Agradecemos de antemano todas las facilidades y el apoyo que se brinden al equipo de trabajo para asegurar el desarrollo eficiente de estas labores, minimizando cualquier posible afectación a las actividades cotidianas del colegio/clínica.');
+    para('Quedamos a su disposición para cualquier duda o aclaración.', 12);
 
-    // Firma
-    doc.text('Atentamente,', marginX, yPos); yPos += 14;
-    doc.setFont('Helvetica', 'bold');
-    doc.text('Ing. Ricardo Joanathan Reyes Medina', marginX, yPos); yPos += 5;
-    doc.setFont('Helvetica', 'normal'); doc.setFontSize(10);
-    doc.text('Coordinador de Obras y Mantenimiento RCMA.', marginX, yPos);
+    // ── FIRMA ────────────────────────────────────────────────────────────────
+    checkY(24);
+    setBody(); doc.setFontSize(9.5);
+    doc.text('Atentamente,', ML, y); y += 14;
+    setBold(); doc.setFontSize(10); doc.setTextColor(12, 59, 110);
+    doc.text('Ing. Ricardo Joanathan Reyes Medina', ML, y); y += 5.5;
+    setBody(); doc.setFontSize(9);
+    doc.text('Coordinador de Obras y Mantenimiento RCMA', ML, y);
 
     drawFooter();
     return doc.output('blob') as Blob;
