@@ -959,6 +959,132 @@ function TabComunicados({ comunicados, planteles, directorio, qc }: {
     return doc.output('blob') as Blob;
   };
 
+  const buildPreviewHTML = (plantel: Plantel, c: { fecha_emision: string; fecha_visita: string | null; director_nombre: string | null }) => {
+    const datos     = DATOS_COLEGIO[codigoCorto(plantel.colegio_clave)];
+    const dirNombre = c.director_nombre ?? datos?.director ?? '';
+    const fechaEmision = c.fecha_emision
+      ? new Date(c.fecha_emision + 'T12:00:00').toLocaleDateString('es-MX', { day: 'numeric', month: 'long', year: 'numeric' })
+      : '';
+    const fechaVisita = c.fecha_visita
+      ? new Date(c.fecha_visita + 'T12:00:00').toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: 'numeric' })
+      : '(por confirmar)';
+    return `<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <style>
+      *{box-sizing:border-box;margin:0;padding:0;}
+      html,body{width:100%;background:#e8e8e8;}
+      body{font-family:Arial,sans-serif;font-size:12.5px;color:#222;line-height:1.55;}
+      .wrap{width:680px;margin:0 auto;background:#fff;}
+      .hdr{background:#0C3B6E;border-left:6px solid #F9A825;padding:16px 28px;display:flex;justify-content:space-between;align-items:center;}
+      .hdr h1{color:#fff;font-size:15px;margin:0;} .hdr p{color:#b0c4de;font-size:10px;margin:3px 0 0;}
+      .hdr img{height:42px;width:auto;}
+      .body{padding:24px 28px 28px;}
+      .asunto{font-weight:bold;color:#0C3B6E;margin-bottom:12px;}
+      p{margin:0 0 10px;word-break:break-word;}
+      .stitle{font-weight:bold;color:#0C3B6E;margin:16px 0 3px;}
+      .hr{border:none;border-top:1px solid #dde3ea;margin:0 0 10px;}
+      table.info{width:100%;border-collapse:collapse;margin:8px 0;}
+      table.info th{background:#f1f5f9;width:38%;padding:6px 9px;font-size:12px;border-bottom:1px solid #dde3ea;text-align:left;}
+      table.info td{padding:6px 9px;font-size:12px;border-bottom:1px solid #dde3ea;word-break:break-word;}
+      table.contact{width:100%;border-collapse:collapse;margin:8px 0;table-layout:fixed;}
+      table.contact th{background:#0C3B6E;color:#fff;padding:6px 8px;font-size:11px;text-align:left;}
+      table.contact td{padding:6px 8px;font-size:11px;border-bottom:1px solid #dde3ea;word-break:break-word;}
+      table.contact th:nth-child(1),table.contact td:nth-child(1){width:20%;}
+      table.contact th:nth-child(2),table.contact td:nth-child(2){width:24%;}
+      table.contact th:nth-child(3),table.contact td:nth-child(3){width:35%;}
+      table.contact th:nth-child(4),table.contact td:nth-child(4){width:21%;}
+      ul{margin:6px 0 10px 20px;} li{margin-bottom:3px;}
+      .firma{margin-top:24px;padding-top:12px;border-top:1px solid #dde3ea;}
+      .footer{background:#0C3B6E;color:#b0c4de;text-align:center;font-size:10px;padding:7px;}
+      @media print{*{-webkit-print-color-adjust:exact;print-color-adjust:exact;}body{background:#fff;}.wrap{width:100%;box-shadow:none;margin:0;}}
+    </style></head><body>
+    <div class="wrap">
+      <div class="hdr">
+        <div><h1>Comunicado Institucional</h1><p>Coordinación de Obras y Mantenimiento RCMA &nbsp;·&nbsp; ${fechaEmision}</p><p style="margin-top:1px;font-size:9px;color:#8facc8;">Documento interno — Mano Amiga</p></div>
+        <img src="/logo.png" alt="" onerror="this.style.display='none'">
+      </div>
+      <div class="body">
+        <div class="asunto">Asunto: Inicio de Proyectos de Levantamientos y Estudios.</div>
+        <p>Estimado/a <strong>${dirNombre}</strong>.</p>
+        <p>Por medio del presente, el Departamento de Coordinación de Obras y Mantenimiento RCMA tiene el placer de informarle sobre el inicio de un importante proyecto de <strong>levantamientos y estudios técnicos</strong> en las instalaciones de <strong>${plantel.colegio_nombre}</strong>.</p>
+        <p>Este proyecto es fundamental para el desarrollo de futuras iniciativas de mejora y mantenimiento de nuestra infraestructura a nivel institucional.</p>
+        <div class="stitle">Detalles de la Visita</div><div class="hr"></div>
+        <table class="info"><tr><th>Proveedor a Cargo</th><td>Navarro y Cal y Mayor Asociados S.A de C.V.</td></tr><tr><th>Fecha de Ingreso</th><td>${fechaVisita}</td></tr></table>
+        <div class="stitle">Alcance de los Trabajos a Realizar</div><div class="hr"></div>
+        <p>Los trabajos técnicos que se llevarán a cabo incluyen:</p>
+        <ul><li>Estudio de Mecánica de Suelos.</li><li>Levantamientos Arquitectónicos.</li><li>Levantamientos Estructurales.</li><li>Levantamientos de Instalaciones (Eléctricas, Hidráulicas, Sanitarias, etc.).</li><li>Levantamiento de Planta de Conjunto.</li></ul>
+        <div class="stitle">Contacto del Proveedor</div><div class="hr"></div>
+        <p>El equipo de Navarro y Cal y Mayor Asociados S.A de C.V estará coordinado por la siguiente persona, quien será el contacto directo para cualquier asunto operativo o logístico relacionado con su visita:</p>
+        <table class="contact"><tr><th>Rol</th><th>Nombre</th><th>Correo</th><th>Teléfono</th></tr><tr><td>Líder de Proyecto</td><td>Arq. Fátima Vázquez</td><td>fvazquez@navarrocym.com.mx</td><td>(55) 5182 1276</td></tr></table>
+        <p>Agradecemos de antemano todas las facilidades y el apoyo que se brinden al equipo de trabajo para asegurar el desarrollo eficiente de estas labores, minimizando cualquier posible afectación a las actividades cotidianas del colegio/clínica.</p>
+        <p>Quedamos a su disposición para cualquier duda o aclaración.</p>
+        <div class="firma"><p>Atentamente,</p><br><br><strong>Ing. Ricardo Joanathan Reyes Medina</strong><p style="font-size:11.5px;color:#555;margin-top:3px;">Coordinador de Obras y Mantenimiento RCMA</p></div>
+      </div>
+      <div class="footer">Coordinación de Obras y Mantenimiento RCMA — Sistema RCMA</div>
+    </div></body></html>`;
+  };
+
+  const saveMut = useMutation({
+    mutationFn: async () => {
+      setSaving(true);
+      try {
+        const plantel = planteles.find(p => p.id === form.plantel_id);
+        if (!plantel) throw new Error('Selecciona un plantel');
+        const dirNombre = datosCom?.director ?? null;
+        const blob = await buildPDFBlob(plantel, { fecha_emision: form.fecha_emision, fecha_visita: form.fecha_visita || null, director_nombre: dirNombre });
+        const fecha = new Date(form.fecha_emision + 'T12:00:00');
+        const anio  = fecha.getFullYear();
+        const mes   = fecha.toLocaleDateString('es-MX', { month: 'long' }).toUpperCase();
+        const carpeta  = `Levantamiento Nacional/Comunicados/${anio}/${mes}`;
+        const fileName = `Comunicado_${plantel.colegio_clave}_${form.fecha_emision}.pdf`;
+        const fileObj  = new File([blob], fileName, { type: 'application/pdf' });
+        const webUrl   = await spUpload(fileObj, carpeta, fileName);
+        const { error } = await supabase.from('levantamiento_comunicados').insert({
+          plantel_id: form.plantel_id, fecha_emision: form.fecha_emision,
+          fecha_visita: form.fecha_visita || null, director_nombre: dirNombre,
+          director_correo: null, notas: form.notas || null,
+          onedrive_url: webUrl || null, onedrive_path: carpeta, archivo_nombre: fileName,
+        });
+        if (error) throw error;
+      } finally { setSaving(false); }
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['lev_comunicados'] });
+      toast.success('Comunicado guardado y subido a OneDrive ✓');
+      setShowForm(false);
+      setForm({ plantel_id: '', fecha_emision: hoyLocal(), fecha_visita: '', notas: '' });
+    },
+    onError: (e: any) => toast.error(e.message),
+  });
+
+  const deleteMut = useMutation({
+    mutationFn: async (c: Comunicado) => {
+      if (c.onedrive_path && c.archivo_nombre) await spDelete(c.onedrive_path, c.archivo_nombre);
+      const { error } = await supabase.from('levantamiento_comunicados').delete().eq('id', c.id);
+      if (error) throw error;
+    },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['lev_comunicados'] }); toast.success('Comunicado eliminado'); setDeleteCom(null); },
+    onError: (e: any) => toast.error(e.message),
+  });
+
+  const handlePreview = (c: Comunicado) => {
+    const plantel = planteles.find(p => p.id === c.plantel_id);
+    if (!plantel) { toast.error('Plantel no encontrado'); return; }
+    setPreviewCom(c);
+  };
+
+  const handlePrint = (c: Comunicado) => {
+    const plantel = planteles.find(p => p.id === c.plantel_id);
+    if (!plantel) return;
+    const html = buildPreviewHTML(plantel, c);
+    const win = window.open('', '_blank');
+    if (!win) { toast.error('Permite ventanas emergentes'); return; }
+    win.document.write(html);
+    win.document.close();
+    win.focus();
+    setTimeout(() => win.print(), 800);
+  };
+
   // HTML para vista previa inline en iframe
   const previewHTML = previewCom
     ? (() => { const pl = planteles.find(p => p.id === previewCom.plantel_id); return pl ? buildPreviewHTML(pl, previewCom) : ''; })()
