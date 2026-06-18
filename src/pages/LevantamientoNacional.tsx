@@ -820,66 +820,82 @@ function TabComunicados({ comunicados, planteles, directorio, qc }: {
       : '(por confirmar)';
 
     const doc = new JsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
-    const W = 210;
+    const W  = 210;
+    const ML = 18;   // margen izquierdo
+    const MR = 18;   // margen derecho
+    const TW = W - ML - MR;  // ancho útil: 174mm
     let y = 0;
 
     // ── HEADER ────────────────────────────────────────────────────────────
-    doc.setFillColor(12, 59, 110); doc.rect(0, 0, W, 32, 'F');
-    doc.setFillColor(249, 168, 37); doc.rect(0, 0, 4, 32, 'F');
+    doc.setFillColor(12, 59, 110); doc.rect(0, 0, W, 34, 'F');
+    doc.setFillColor(249, 168, 37); doc.rect(0, 0, 5, 34, 'F');
     doc.setFontSize(15); doc.setFont('helvetica', 'bold'); doc.setTextColor(255, 255, 255);
-    doc.text('Comunicado Institucional', 14, 13);
+    doc.text('Comunicado Institucional', ML, 13);
     doc.setFontSize(8.5); doc.setFont('helvetica', 'normal'); doc.setTextColor(180, 200, 220);
-    doc.text('Coordinación de Obras y Mantenimiento RCMA  ·  ' + fechaEmision, 14, 21);
+    doc.text('Coordinación de Obras y Mantenimiento RCMA  ·  ' + fechaEmision, ML, 21);
     doc.setFontSize(7.5); doc.setTextColor(130, 160, 190);
-    doc.text('Documento interno — Mano Amiga', 14, 28);
-    y = 42;
+    doc.text('Documento interno — Mano Amiga', ML, 29);
+
+    // Logo Mano Amiga (igual que Insumos)
+    try {
+      const logoImg = await new Promise<string>((res, rej) => {
+        const img = new Image(); img.crossOrigin = 'anonymous';
+        img.onload = () => { const cv = document.createElement('canvas'); cv.width = img.width; cv.height = img.height; cv.getContext('2d')!.drawImage(img, 0, 0); res(cv.toDataURL('image/png')); };
+        img.onerror = rej; img.src = '/logo.png';
+      });
+      doc.addImage(logoImg, 'PNG', W - 36, 3, 24, 24);
+    } catch { /* sin logo */ }
+
+    y = 44;
 
     // ── ASUNTO ────────────────────────────────────────────────────────────
     doc.setFontSize(9); doc.setFont('helvetica', 'bold'); doc.setTextColor(12, 59, 110);
-    doc.text('Asunto: Inicio de Proyectos de Levantamientos y Estudios.', 14, y); y += 8;
+    doc.text('Asunto: Inicio de Proyectos de Levantamientos y Estudios.', ML, y); y += 8;
 
     // ── SALUDO ────────────────────────────────────────────────────────────
     doc.setFontSize(9.5); doc.setFont('helvetica', 'normal'); doc.setTextColor(30, 30, 30);
-    doc.text('Estimado/a ' + dirNombre + '.', 14, y); y += 10;
+    doc.text('Estimado/a ' + dirNombre + '.', ML, y); y += 10;
 
     // ── CUERPO ────────────────────────────────────────────────────────────
     const bodyLines = doc.splitTextToSize(
       'Por medio del presente, el Departamento de Coordinación de Obras y Mantenimiento RCMA tiene el placer de informarle sobre el inicio de un importante proyecto de levantamientos y estudios técnicos en las instalaciones de ' + plantel.colegio_nombre + '.',
-      W - 28
+      TW
     );
-    doc.setFontSize(9); doc.text(bodyLines, 14, y); y += bodyLines.length * 5.5 + 4;
+    doc.setFontSize(9); doc.text(bodyLines, ML, y); y += bodyLines.length * 5.5 + 4;
 
     const body2 = doc.splitTextToSize(
       'Este proyecto es fundamental para el desarrollo de futuras iniciativas de mejora y mantenimiento de nuestra infraestructura a nivel institucional.',
-      W - 28
+      TW
     );
-    doc.text(body2, 14, y); y += body2.length * 5.5 + 8;
+    doc.text(body2, ML, y); y += body2.length * 5.5 + 8;
 
     // ── TABLA DETALLES VISITA ─────────────────────────────────────────────
     doc.setFontSize(9); doc.setFont('helvetica', 'bold'); doc.setTextColor(12, 59, 110);
-    doc.text('Detalles de la Visita', 14, y); y += 5;
-    doc.setDrawColor(200, 210, 220); doc.setLineWidth(0.3); doc.line(14, y, W - 14, y); y += 4;
+    doc.text('Detalles de la Visita', ML, y); y += 5;
+    doc.setDrawColor(200, 210, 220); doc.setLineWidth(0.3); doc.line(ML, y, W - MR, y); y += 4;
 
+    const col1W = 70;
     // fila 1
-    doc.setFillColor(241, 245, 249); doc.rect(14, y - 3, 68, 8, 'F');
+    doc.setFillColor(241, 245, 249); doc.rect(ML, y - 3, col1W, 8, 'F');
     doc.setFontSize(8); doc.setFont('helvetica', 'bold'); doc.setTextColor(50, 50, 50);
-    doc.text('Proveedor a Cargo', 16, y + 2);
+    doc.text('Proveedor a Cargo', ML + 2, y + 2);
     doc.setFont('helvetica', 'normal'); doc.setTextColor(30, 30, 30);
-    doc.text('Navarro y Cal y Mayor Asociados S.A de C.V.', 84, y + 2); y += 10;
+    const prov = doc.splitTextToSize('Navarro y Cal y Mayor Asociados S.A de C.V.', TW - col1W - 2);
+    doc.text(prov, ML + col1W + 2, y + 2); y += 10;
 
     // fila 2
-    doc.setFillColor(241, 245, 249); doc.rect(14, y - 3, 68, 8, 'F');
+    doc.setFillColor(241, 245, 249); doc.rect(ML, y - 3, col1W, 8, 'F');
     doc.setFont('helvetica', 'bold'); doc.setTextColor(50, 50, 50);
-    doc.text('Fecha de Ingreso', 16, y + 2);
+    doc.text('Fecha de Ingreso', ML + 2, y + 2);
     doc.setFont('helvetica', 'normal'); doc.setTextColor(30, 30, 30);
-    doc.text(fechaVisita, 84, y + 2); y += 14;
+    doc.text(fechaVisita, ML + col1W + 2, y + 2); y += 14;
 
     // ── ALCANCE ───────────────────────────────────────────────────────────
     doc.setFontSize(9); doc.setFont('helvetica', 'bold'); doc.setTextColor(12, 59, 110);
-    doc.text('Alcance de los Trabajos a Realizar', 14, y); y += 5;
-    doc.setDrawColor(200, 210, 220); doc.line(14, y, W - 14, y); y += 5;
+    doc.text('Alcance de los Trabajos a Realizar', ML, y); y += 5;
+    doc.setDrawColor(200, 210, 220); doc.line(ML, y, W - MR, y); y += 5;
     doc.setFontSize(9); doc.setFont('helvetica', 'normal'); doc.setTextColor(30, 30, 30);
-    doc.text('Los trabajos técnicos que se llevarán a cabo incluyen:', 14, y); y += 7;
+    doc.text('Los trabajos técnicos que se llevarán a cabo incluyen:', ML, y); y += 7;
 
     const alcance = [
       'Estudio de Mecánica de Suelos.',
@@ -889,48 +905,58 @@ function TabComunicados({ comunicados, planteles, directorio, qc }: {
       'Levantamiento de Planta de Conjunto.',
     ];
     alcance.forEach(item => {
-      doc.setFillColor(12, 59, 110); doc.circle(17, y - 1.5, 0.8, 'F');
-      doc.text(item, 20, y); y += 6;
+      doc.setFillColor(12, 59, 110); doc.circle(ML + 3, y - 1.5, 0.8, 'F');
+      const lines = doc.splitTextToSize(item, TW - 8);
+      doc.text(lines, ML + 7, y); y += lines.length * 5.5 + 1;
     });
-    y += 6;
+    y += 5;
 
     // ── CONTACTO PROVEEDOR ────────────────────────────────────────────────
     doc.setFontSize(9); doc.setFont('helvetica', 'bold'); doc.setTextColor(12, 59, 110);
-    doc.text('Contacto del Proveedor', 14, y); y += 5;
-    doc.setDrawColor(200, 210, 220); doc.line(14, y, W - 14, y); y += 4;
+    doc.text('Contacto del Proveedor', ML, y); y += 5;
+    doc.setDrawColor(200, 210, 220); doc.line(ML, y, W - MR, y); y += 5;
 
-    // Encabezado tabla
-    doc.setFillColor(12, 59, 110); doc.rect(14, y - 3, W - 28, 8, 'F');
+    // Párrafo introductorio (faltaba en versión anterior)
+    const contactoIntro = doc.splitTextToSize(
+      'El equipo de Navarro y Cal y Mayor Asociados S.A de C.V estará coordinado por la siguiente persona, quien será el contacto directo para cualquier asunto operativo o logístico relacionado con su visita:',
+      TW
+    );
+    doc.setFontSize(9); doc.setFont('helvetica', 'normal'); doc.setTextColor(30, 30, 30);
+    doc.text(contactoIntro, ML, y); y += contactoIntro.length * 5.5 + 5;
+
+    // Encabezado tabla — columnas proporcionadas al ancho útil
+    const c1 = 38; const c2 = 42; const c3 = 62; const c4 = TW - c1 - c2 - c3;
+    doc.setFillColor(12, 59, 110); doc.rect(ML, y - 3, TW, 8, 'F');
     doc.setFontSize(7.5); doc.setFont('helvetica', 'bold'); doc.setTextColor(255, 255, 255);
-    doc.text('Rol', 16, y + 2);
-    doc.text('Nombre', 58, y + 2);
-    doc.text('Correo Electrónico', 108, y + 2);
-    doc.text('Teléfono', 168, y + 2); y += 10;
+    doc.text('Rol',                ML + 2,           y + 2);
+    doc.text('Nombre',             ML + c1 + 2,      y + 2);
+    doc.text('Correo Electrónico', ML + c1 + c2 + 2, y + 2);
+    doc.text('Teléfono',           ML + c1 + c2 + c3 + 2, y + 2); y += 10;
 
-    doc.setFillColor(241, 245, 249); doc.rect(14, y - 4, W - 28, 8, 'F');
+    doc.setFillColor(241, 245, 249); doc.rect(ML, y - 4, TW, 8, 'F');
     doc.setFont('helvetica', 'normal'); doc.setTextColor(30, 30, 30); doc.setFontSize(8);
-    doc.text('Líder de Proyecto', 16, y + 1);
-    doc.text('Arq. Fátima Vázquez', 58, y + 1);
-    doc.text('fvazquez@navarrocym.com.mx', 108, y + 1);
-    doc.text('(55) 5182 1276', 168, y + 1); y += 12;
+    doc.text('Líder de Proyecto',           ML + 2,           y + 1);
+    doc.text('Arq. Fátima Vázquez',         ML + c1 + 2,      y + 1);
+    doc.text('fvazquez@navarrocym.com.mx',  ML + c1 + c2 + 2, y + 1);
+    doc.text('(55) 5182 1276',              ML + c1 + c2 + c3 + 2, y + 1); y += 12;
 
     // ── CIERRE ────────────────────────────────────────────────────────────
     const cierre1 = doc.splitTextToSize(
       'Agradecemos de antemano todas las facilidades y el apoyo que se brinden al equipo de trabajo para asegurar el desarrollo eficiente de estas labores, minimizando cualquier posible afectación a las actividades cotidianas del colegio/clínica.',
-      W - 28
+      TW
     );
     doc.setFontSize(9); doc.setTextColor(30, 30, 30);
-    doc.text(cierre1, 14, y); y += cierre1.length * 5.5 + 5;
-    doc.text('Quedamos a su disposición para cualquier duda o aclaración.', 14, y); y += 14;
+    doc.text(cierre1, ML, y); y += cierre1.length * 5.5 + 5;
+    doc.text('Quedamos a su disposición para cualquier duda o aclaración.', ML, y); y += 14;
 
     // ── FIRMA ─────────────────────────────────────────────────────────────
-    doc.text('Atentamente,', 14, y); y += 12;
-    doc.setDrawColor(100, 120, 140); doc.setLineWidth(0.3); doc.line(14, y, 100, y); y += 5;
+    doc.text('Atentamente,', ML, y); y += 12;
+    doc.setDrawColor(100, 120, 140); doc.setLineWidth(0.3); doc.line(ML, y, ML + 80, y); y += 5;
     doc.setFontSize(9); doc.setFont('helvetica', 'bold'); doc.setTextColor(12, 59, 110);
-    doc.text('Ing. Ricardo Joanathan Reyes Medina', 14, y); y += 5;
+    doc.text('Ing. Ricardo Joanathan Reyes Medina', ML, y); y += 5;
     doc.setFont('helvetica', 'normal'); doc.setTextColor(80, 80, 80); doc.setFontSize(8);
-    doc.text('Coordinador de Obras y Mantenimiento RCMA', 14, y); y += 4;
-    doc.text('Coordinación de Obras y Mantenimiento RCMA', 14, y);
+    doc.text('Coordinador de Obras y Mantenimiento RCMA', ML, y); y += 4;
+    doc.text('Coordinación de Obras y Mantenimiento RCMA', ML, y);
 
     // ── FOOTER ────────────────────────────────────────────────────────────
     doc.setFillColor(12, 59, 110); doc.rect(0, 287, W, 10, 'F');
