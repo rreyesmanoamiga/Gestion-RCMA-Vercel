@@ -909,12 +909,11 @@ Este proyecto es fundamental para el desarrollo de futuras iniciativas de mejora
 
     // Cierre
     doc.setFontSize(11);
-    const cierreTexto = 'Agradecemos de antemano todas las facilidades y el apoyo que se brinden al equipo de trabajo para asegurar el desarrollo eficiente de estas labores, minimizando cualquier posible afectación a las actividades cotidianas del colegio/clínica.
-
-Quedamos a su disposición para cualquier duda o aclaración.';
-    const lineasCierre = doc.splitTextToSize(cierreTexto, maxLineWidth);
-    doc.text(lineasCierre, marginX, yPos);
-    yPos += lineasCierre.length * 6 + 12;
+    const lineasCierre1 = doc.splitTextToSize('Agradecemos de antemano todas las facilidades y el apoyo que se brinden al equipo de trabajo para asegurar el desarrollo eficiente de estas labores, minimizando cualquier posible afectación a las actividades cotidianas del colegio/clínica.', maxLineWidth);
+    doc.text(lineasCierre1, marginX, yPos);
+    yPos += lineasCierre1.length * 6 + 5;
+    doc.text('Quedamos a su disposición para cualquier duda o aclaración.', marginX, yPos);
+    yPos += 12;
 
     // Firma
     doc.text('Atentamente,', marginX, yPos); yPos += 14;
