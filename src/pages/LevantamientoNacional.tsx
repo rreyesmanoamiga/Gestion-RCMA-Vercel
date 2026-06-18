@@ -114,6 +114,9 @@ interface DirectorioItem {
   dir_correo: string;
 }
 
+// Fecha local sin desfase de timezone
+const hoyLocal = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; };
+
 // ─── Constants ────────────────────────────────────────────────────────────────
 const FASES = [
   { key: 'COMUNICADO', label: 'Comunicado',    color: 'bg-slate-100 text-slate-700'   },
@@ -779,7 +782,7 @@ function TabComunicados({ comunicados, planteles, directorio, qc }: {
   const [previewCom, setPreviewCom] = useState<Comunicado | null>(null);
   const [deleteCom, setDeleteCom]   = useState<Comunicado | null>(null);
   const [form, setForm] = useState({
-    plantel_id: '', fecha_emision: new Date().toISOString().substring(0, 10), fecha_visita: '', notas: ''
+    plantel_id: '', fecha_emision: hoyLocal(), fecha_visita: '', notas: ''
   });
   const [saving, setSaving] = useState(false);
   const set = (k: string, v: string) => setForm(f => ({ ...f, [k]: v }));
@@ -1020,7 +1023,7 @@ function TabComunicados({ comunicados, planteles, directorio, qc }: {
       qc.invalidateQueries({ queryKey: ['lev_comunicados'] });
       toast.success('Comunicado guardado y subido a OneDrive ✓');
       setShowForm(false);
-      setForm({ plantel_id: '', fecha_emision: new Date().toISOString().substring(0, 10), fecha_visita: '', notas: '' });
+      setForm({ plantel_id: '', fecha_emision: hoyLocal(), fecha_visita: '', notas: '' });
     },
     onError: (e: any) => toast.error(e.message),
   });
@@ -1265,7 +1268,7 @@ function carpetaDesde(fecha: string) {
 }
 
 function TabReportes({ reportes, planteles, qc }: { reportes: Reporte[]; planteles: Plantel[]; qc: any }) {
-  const hoy = new Date().toISOString().substring(0, 10);
+  const hoy = hoyLocal();
   const [showForm, setShowForm]   = useState(false);
   const [editItem, setEditItem]   = useState<Reporte | null>(null);
   const [form, setForm]           = useState({ plantel_id: '', plantel_id_2: '', fecha_reporte: hoy, notas: '' });
@@ -1522,7 +1525,7 @@ function TabEntregables({ entregables, planteles, qc }: { entregables: Entregabl
         let fileName: string | null = null;
 
         if (actaFile) {
-          fileName = `Acta_Cierre_${actaModal.plantelNombre.replace(/\s+/g, '_')}_${new Date().toISOString().substring(0,10)}.pdf`;
+          fileName = `Acta_Cierre_${actaModal.plantelNombre.replace(/\s+/g, '_')}_${hoyLocal()}.pdf`;
           webUrl = await spUpload(actaFile, 'Levantamiento Nacional/Actas de Cierre', fileName);
         }
 
