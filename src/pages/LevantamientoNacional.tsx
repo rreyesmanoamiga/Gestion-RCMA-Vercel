@@ -921,21 +921,29 @@ function TabComunicados({ comunicados, planteles, directorio, qc }: {
     doc.setFontSize(9); doc.setFont('helvetica', 'normal'); doc.setTextColor(30, 30, 30);
     doc.text(contactoIntro, ML, y); y += contactoIntro.length * 5.5 + 5;
 
-    // Encabezado tabla — columnas proporcionadas al ancho útil
-    const c1 = 38; const c2 = 42; const c3 = 62; const c4 = TW - c1 - c2 - c3;
+    // Tabla contacto — anchos en % del TW para no salirse nunca
+    // TW = 174mm. Distribución: Rol 22%, Nombre 26%, Correo 34%, Tel 18%
+    const c1 = Math.floor(TW * 0.22);
+    const c2 = Math.floor(TW * 0.26);
+    const c3 = Math.floor(TW * 0.34);
+    const c4 = TW - c1 - c2 - c3;
+
+    // Header fila
     doc.setFillColor(12, 59, 110); doc.rect(ML, y - 3, TW, 8, 'F');
-    doc.setFontSize(7.5); doc.setFont('helvetica', 'bold'); doc.setTextColor(255, 255, 255);
+    doc.setFontSize(7); doc.setFont('helvetica', 'bold'); doc.setTextColor(255, 255, 255);
     doc.text('Rol',                ML + 2,           y + 2);
     doc.text('Nombre',             ML + c1 + 2,      y + 2);
-    doc.text('Correo Electrónico', ML + c1 + c2 + 2, y + 2);
+    doc.text('Correo',             ML + c1 + c2 + 2, y + 2);
     doc.text('Teléfono',           ML + c1 + c2 + c3 + 2, y + 2); y += 10;
 
-    doc.setFillColor(241, 245, 249); doc.rect(ML, y - 4, TW, 8, 'F');
-    doc.setFont('helvetica', 'normal'); doc.setTextColor(30, 30, 30); doc.setFontSize(8);
-    doc.text('Líder de Proyecto',           ML + 2,           y + 1);
-    doc.text('Arq. Fátima Vázquez',         ML + c1 + 2,      y + 1);
-    doc.text('fvazquez@navarrocym.com.mx',  ML + c1 + c2 + 2, y + 1);
-    doc.text('(55) 5182 1276',              ML + c1 + c2 + c3 + 2, y + 1); y += 12;
+    // Datos fila — cada celda con splitTextToSize dentro de su columna
+    doc.setFillColor(241, 245, 249); doc.rect(ML, y - 4, TW, 9, 'F');
+    doc.setFont('helvetica', 'normal'); doc.setTextColor(30, 30, 30); doc.setFontSize(7.5);
+    doc.text(doc.splitTextToSize('Líder de Proyecto',          c1 - 3), ML + 2,           y + 1);
+    doc.text(doc.splitTextToSize('Arq. Fátima Vázquez',        c2 - 3), ML + c1 + 2,      y + 1);
+    doc.text(doc.splitTextToSize('fvazquez@navarrocym.com.mx', c3 - 3), ML + c1 + c2 + 2, y + 1);
+    doc.text(doc.splitTextToSize('(55) 5182 1276',             c4 - 3), ML + c1 + c2 + c3 + 2, y + 1);
+    y += 13;
 
     // ── CIERRE ────────────────────────────────────────────────────────────
     const cierre1 = doc.splitTextToSize(
