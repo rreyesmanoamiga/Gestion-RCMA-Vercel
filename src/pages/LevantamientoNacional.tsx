@@ -896,30 +896,15 @@ function TabComunicados({ comunicados, planteles, directorio, qc }: {
     y += 9;
 
     // ── CUERPO ──────────────────────────────────────────────────────────────
-    // Párrafo 1 — texto completo, colegio en negritas al final
+    // Párrafo 1 — colegio en negritas en línea propia al final
     setBody();
-    const txtAntes = 'Por medio del presente, el Departamento de Coordinación de Obras y Mantenimiento RCMA tiene el placer de informarle sobre el inicio de un importante proyecto de levantamientos y estudios técnicos en las instalaciones de ';
-    const txtColegio = plantel.colegio_nombre + '.';
-    // Calcular cuántas líneas ocupa el texto antes del nombre
-    const linesAntes = doc.splitTextToSize(txtAntes, TW);
-    const anchoUltimaLinea = doc.getTextWidth(linesAntes[linesAntes.length - 1]);
-    // Ver si el nombre cabe en la misma línea que el último fragmento
-    setBold();
-    const anchoColegio = doc.getTextWidth(txtColegio);
-    setBody();
-    let totalLines = linesAntes.length;
-    if (anchoUltimaLinea + anchoColegio > TW) totalLines += 1;
-    checkY(totalLines * 5.5 + 6);
-    doc.text(linesAntes, ML, y);
-    const yUltima = y + (linesAntes.length - 1) * 5.5;
+    const linea1 = doc.splitTextToSize('Por medio del presente, el Departamento de Coordinación de Obras y Mantenimiento RCMA tiene el placer de informarle sobre el inicio de un importante proyecto de levantamientos y estudios técnicos en las instalaciones de:', TW);
+    checkY(linea1.length * 5.5 + 8);
+    doc.text(linea1, ML, y);
+    y += linea1.length * 5.5 + 1;
     setBold(); doc.setFontSize(10);
-    if (anchoUltimaLinea + anchoColegio <= TW) {
-      doc.text(txtColegio, ML + anchoUltimaLinea, yUltima);
-      y += linesAntes.length * 5.5 + 4;
-    } else {
-      doc.text(txtColegio, ML, yUltima + 5.5);
-      y += (linesAntes.length + 1) * 5.5 + 4;
-    }
+    doc.text(plantel.colegio_nombre + '.', ML, y);
+    y += 5.5 + 5;
     setBody();
     para('Este proyecto es fundamental para el desarrollo de futuras iniciativas de mejora y mantenimiento de nuestra infraestructura a nivel institucional.', 10);
 
