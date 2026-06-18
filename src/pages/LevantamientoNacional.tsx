@@ -826,7 +826,7 @@ function TabComunicados({ comunicados, planteles, directorio, qc }: {
     const YLIMIT = 272; // max y antes de footer
 
     // ── helpers ─────────────────────────────────────────────────────────────
-    const setBody = () => { doc.setFont('helvetica', 'normal'); doc.setFontSize(11); doc.setTextColor(30, 30, 30); };
+    const setBody = () => { doc.setFont('helvetica', 'normal'); doc.setFontSize(10); doc.setTextColor(30, 30, 30); };
     const setBold = () => { doc.setFont('helvetica', 'bold'); };
 
     const drawHeader = () => {
@@ -847,7 +847,7 @@ function TabComunicados({ comunicados, planteles, directorio, qc }: {
     };
 
     const checkY = (need: number) => {
-      if (y + need > YLIMIT) { drawFooter(); doc.addPage(); drawHeader(); y = 42; }
+      if (y + need > YLIMIT) { drawFooter(); doc.addPage(); drawHeaderWithLogo(); y = 42; }
     };
 
     const para = (txt: string, gap = 6) => {
@@ -866,16 +866,22 @@ function TabComunicados({ comunicados, planteles, directorio, qc }: {
       doc.line(ML, y, PW - MR, y); y += 5;
     };
 
-    // ── Logo ────────────────────────────────────────────────────────────────
-    drawHeader();
+    // ── Logo — cargar antes para usarlo en todas las páginas ───────────────
+    let logoImg = '';
     try {
-      const logoImg = await new Promise<string>((res, rej) => {
+      logoImg = await new Promise<string>((res, rej) => {
         const img = new Image(); img.crossOrigin = 'anonymous';
         img.onload = () => { const cv = document.createElement('canvas'); cv.width = img.width; cv.height = img.height; cv.getContext('2d')!.drawImage(img, 0, 0); res(cv.toDataURL('image/png')); };
         img.onerror = rej; img.src = '/logo.png';
       });
-      doc.addImage(logoImg, 'PNG', PW - 37, 4, 22, 22);
     } catch { /* sin logo */ }
+
+    const drawHeaderWithLogo = () => {
+      drawHeader();
+      if (logoImg) doc.addImage(logoImg, 'PNG', PW - 37, 4, 22, 22);
+    };
+
+    drawHeaderWithLogo();
 
     let y = 44;
 
@@ -890,26 +896,31 @@ function TabComunicados({ comunicados, planteles, directorio, qc }: {
     y += 9;
 
     // ── CUERPO ──────────────────────────────────────────────────────────────
-    // Párrafo 1 — colegio en negritas
+    // Párrafo 1 — texto completo, colegio en negritas al final
     setBody();
-    const p1a = 'Por medio del presente, el Departamento de Coordinación de Obras y Mantenimiento RCMA tiene el placer de informarle sobre el inicio de un importante proyecto de levantamientos y estudios técnicos en las instalaciones de ';
-    const p1b = plantel.colegio_nombre + '.';
-    const p1aLines = doc.splitTextToSize(p1a, TW);
-    checkY(p1aLines.length * 6 + 8);
-    // Calcular posición donde termina el texto normal para poner el nombre en bold
-    doc.text(p1aLines, ML, y);
-    const lastLineWidth = doc.getTextWidth(p1aLines[p1aLines.length - 1]);
-    const lastLineY = y + (p1aLines.length - 1) * 6;
+    const txtAntes = 'Por medio del presente, el Departamento de Coordinación de Obras y Mantenimiento RCMA tiene el placer de informarle sobre el inicio de un importante proyecto de levantamientos y estudios técnicos en las instalaciones de ';
+    const txtColegio = plantel.colegio_nombre + '.';
+    // Calcular cuántas líneas ocupa el texto antes del nombre
+    const linesAntes = doc.splitTextToSize(txtAntes, TW);
+    const anchoUltimaLinea = doc.getTextWidth(linesAntes[linesAntes.length - 1]);
+    // Ver si el nombre cabe en la misma línea que el último fragmento
     setBold();
-    // Si el nombre cabe en la misma línea
-    if (lastLineWidth + doc.getTextWidth(p1b) <= TW) {
-      doc.text(p1b, ML + lastLineWidth, lastLineY);
+    const anchoColegio = doc.getTextWidth(txtColegio);
+    setBody();
+    let totalLines = linesAntes.length;
+    if (anchoUltimaLinea + anchoColegio > TW) totalLines += 1;
+    checkY(totalLines * 5.5 + 6);
+    doc.text(linesAntes, ML, y);
+    const yUltima = y + (linesAntes.length - 1) * 5.5;
+    setBold(); doc.setFontSize(10);
+    if (anchoUltimaLinea + anchoColegio <= TW) {
+      doc.text(txtColegio, ML + anchoUltimaLinea, yUltima);
+      y += linesAntes.length * 5.5 + 4;
     } else {
-      // Si no cabe, nueva línea en bold
-      doc.text(p1b, ML, lastLineY + 6);
-      y += 6;
+      doc.text(txtColegio, ML, yUltima + 5.5);
+      y += (linesAntes.length + 1) * 5.5 + 4;
     }
-    y += p1aLines.length * 6 + 4;
+    setBody();
     para('Este proyecto es fundamental para el desarrollo de futuras iniciativas de mejora y mantenimiento de nuestra infraestructura a nivel institucional.', 10);
 
     // ── DETALLES VISITA ──────────────────────────────────────────────────────
@@ -948,7 +959,7 @@ function TabComunicados({ comunicados, planteles, directorio, qc }: {
     y += 5;
 
     // ── CONTACTO PROVEEDOR — siempre en página 2 ─────────────────────────────
-    drawFooter(); doc.addPage(); drawHeader(); y = 42;
+    drawFooter(); doc.addPage(); drawHeaderWithLogo(); y = 42;
     secTitle('Contacto del Proveedor');
     para('El equipo de Navarro y Cal y Mayor Asociados S.A de C.V estará coordinado por la siguiente persona, quien será el contacto directo para cualquier asunto operativo o logístico relacionado con su visita:');
 
@@ -983,7 +994,7 @@ function TabComunicados({ comunicados, planteles, directorio, qc }: {
     checkY(28);
     setBody();
     doc.text('Atentamente,', ML, y); y += 16;
-    setBold(); doc.setFontSize(11); doc.setTextColor(12, 59, 110);
+    setBold(); doc.setFontSize(10); doc.setTextColor(12, 59, 110);
     doc.text('Ing. Ricardo Joanathan Reyes Medina', ML, y); y += 6;
     setBody();
     doc.text('Coordinador de Obras y Mantenimiento RCMA', ML, y);
