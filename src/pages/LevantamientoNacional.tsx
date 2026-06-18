@@ -787,60 +787,199 @@ function TabComunicados({ comunicados, planteles, directorio, qc }: {
   const plantelSel  = planteles.find(p => p.id === form.plantel_id);
   const datosCom    = plantelSel ? DATOS_COLEGIO[codigoCorto(plantelSel.colegio_clave)] : undefined;
 
-  // Genera el HTML del comunicado como string para vista previa y subida
-  const buildHTML = (plantel: Plantel, c: { fecha_emision: string; fecha_visita: string | null; director_nombre: string | null }) => {
-    const dirNombre  = c.director_nombre ?? '';
+  // Carga jsPDF dinámicamente (igual que Insumos/Reports)
+  const loadJsPDF = async () => {
+    let JsPDF = (window as any).jspdf?.jsPDF;
+    if (!JsPDF) {
+      await new Promise<void>((res, rej) => {
+        const s = document.createElement('script');
+        s.src = 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js';
+        s.onload = () => res(); s.onerror = () => rej(new Error('No se pudo cargar jsPDF'));
+        document.head.appendChild(s);
+      });
+      JsPDF = (window as any).jspdf?.jsPDF;
+    }
+    return JsPDF;
+  };
+
+  // Genera PDF con jsPDF — devuelve Blob para subir a OneDrive
+  const buildPDFBlob = async (plantel: Plantel, c: { fecha_emision: string; fecha_visita: string | null; director_nombre: string | null }): Promise<Blob> => {
+    const JsPDF = await loadJsPDF();
+    if (!JsPDF) throw new Error('No se pudo cargar el generador de PDF');
+
     const datos      = DATOS_COLEGIO[codigoCorto(plantel.colegio_clave)];
+    const dirNombre  = c.director_nombre ?? datos?.director ?? '';
     const fechaEmision = c.fecha_emision
       ? new Date(c.fecha_emision + 'T12:00:00').toLocaleDateString('es-MX', { day: 'numeric', month: 'long', year: 'numeric' })
       : '';
     const fechaVisita = c.fecha_visita
-      ? new Date(c.fecha_visita + 'T12:00:00').toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: '2-digit' })
+      ? new Date(c.fecha_visita + 'T12:00:00').toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: 'numeric' })
       : '(por confirmar)';
 
-    return `<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8">
-<style>
-  body { font-family: Arial, sans-serif; font-size: 13px; color: #222; margin: 40px; line-height: 1.6; }
-  .fecha { text-align: right; margin-bottom: 24px; }
-  table { width: 100%; border-collapse: collapse; margin: 16px 0; }
-  th, td { border: 1px solid #ccc; padding: 8px 12px; text-align: left; font-size: 13px; }
-  th { background: #f0f0f0; font-weight: bold; }
-  ul { margin: 8px 0 16px 24px; } li { margin-bottom: 4px; }
-  .firma { margin-top: 40px; } .pie { margin-top: 4px; color: #555; }
-  .footer { margin-top: 60px; font-size: 11px; color: #888; text-align: center; border-top: 1px solid #ddd; padding-top: 8px; }
-</style></head><body>
-<div class="fecha">${fechaEmision}</div>
-<div><strong>Asunto: Inicio de Proyectos de Levantamientos y Estudios.</strong></div><br>
-<div>Estimado/a <strong>${dirNombre || datos?.director || ''}.</strong></div><br>
-<div>Por medio del presente, el Departamento de Coordinación de Obras y Mantenimiento RCMA tiene el placer de informarle sobre el inicio de un importante proyecto de <strong>levantamientos y estudios técnicos</strong> en las instalaciones de <strong>${plantel.colegio_nombre}</strong>.</div><br>
-<div>Este proyecto es fundamental para el desarrollo de futuras iniciativas de mejora y mantenimiento de nuestra infraestructura a nivel institucional.</div>
-<strong>Detalles de la Visita</strong>
-<table>
-  <tr><th>Proveedor a Cargo</th><td>Navarro y Cal y Mayor Asociados S.A de C.V.</td></tr>
-  <tr><th>Fecha de Ingreso</th><td>${fechaVisita}</td></tr>
-</table>
-<strong>Alcance de los Trabajos a Realizar</strong>
-<p>Los trabajos técnicos que se llevarán a cabo incluyen:</p>
-<ul>
-  <li>Estudio de Mecánica de Suelos.</li><li>Levantamientos Arquitectónicos.</li>
-  <li>Levantamientos Estructurales.</li><li>Levantamientos de Instalaciones (Eléctricas, Hidráulicas, Sanitarias, etc.).</li>
-  <li>Levantamiento de Planta de Conjunto.</li>
-</ul>
-<strong>Contacto del Proveedor</strong>
-<table>
-  <tr><th>Rol</th><th>Nombre</th><th>Correo Electrónico</th><th>Teléfono</th></tr>
-  <tr><td>Líder de Proyecto</td><td>Arq. Fátima Vázquez</td><td>fvazquez@navarrocym.com.mx</td><td>(55) 5182 1276</td></tr>
-</table>
-<p>Agradecemos de antemano todas las facilidades y el apoyo que se brinden al equipo de trabajo para asegurar el desarrollo eficiente de estas labores, minimizando cualquier posible afectación a las actividades cotidianas del colegio/clínica.</p>
-<p>Quedamos a su disposición para cualquier duda o aclaración.</p>
-<div class="firma">
-  <p>Atentamente,</p><br>
-  <p><strong>Ing. Ricardo Joanathan Reyes Medina</strong></p>
-  <p class="pie">Coordinador de Obras y Mantenimiento RCMA.</p>
-  <p class="pie">Coordinación de Obras y Mantenimiento RCMA</p>
-</div>
-<div class="footer">Coordinación de Obras y Mantenimiento RCMA</div>
-</body></html>`;
+    const doc = new JsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+    const W = 210;
+    let y = 0;
+
+    // ── HEADER ────────────────────────────────────────────────────────────
+    doc.setFillColor(12, 59, 110); doc.rect(0, 0, W, 32, 'F');
+    doc.setFillColor(249, 168, 37); doc.rect(0, 0, 4, 32, 'F');
+    doc.setFontSize(15); doc.setFont('helvetica', 'bold'); doc.setTextColor(255, 255, 255);
+    doc.text('Comunicado Institucional', 14, 13);
+    doc.setFontSize(8.5); doc.setFont('helvetica', 'normal'); doc.setTextColor(180, 200, 220);
+    doc.text('Coordinación de Obras y Mantenimiento RCMA  ·  ' + fechaEmision, 14, 21);
+    doc.setFontSize(7.5); doc.setTextColor(130, 160, 190);
+    doc.text('Documento interno — Mano Amiga', 14, 28);
+    y = 42;
+
+    // ── ASUNTO ────────────────────────────────────────────────────────────
+    doc.setFontSize(9); doc.setFont('helvetica', 'bold'); doc.setTextColor(12, 59, 110);
+    doc.text('Asunto: Inicio de Proyectos de Levantamientos y Estudios.', 14, y); y += 8;
+
+    // ── SALUDO ────────────────────────────────────────────────────────────
+    doc.setFontSize(9.5); doc.setFont('helvetica', 'normal'); doc.setTextColor(30, 30, 30);
+    doc.text('Estimado/a ' + dirNombre + '.', 14, y); y += 10;
+
+    // ── CUERPO ────────────────────────────────────────────────────────────
+    const bodyLines = doc.splitTextToSize(
+      'Por medio del presente, el Departamento de Coordinación de Obras y Mantenimiento RCMA tiene el placer de informarle sobre el inicio de un importante proyecto de levantamientos y estudios técnicos en las instalaciones de ' + plantel.colegio_nombre + '.',
+      W - 28
+    );
+    doc.setFontSize(9); doc.text(bodyLines, 14, y); y += bodyLines.length * 5.5 + 4;
+
+    const body2 = doc.splitTextToSize(
+      'Este proyecto es fundamental para el desarrollo de futuras iniciativas de mejora y mantenimiento de nuestra infraestructura a nivel institucional.',
+      W - 28
+    );
+    doc.text(body2, 14, y); y += body2.length * 5.5 + 8;
+
+    // ── TABLA DETALLES VISITA ─────────────────────────────────────────────
+    doc.setFontSize(9); doc.setFont('helvetica', 'bold'); doc.setTextColor(12, 59, 110);
+    doc.text('Detalles de la Visita', 14, y); y += 5;
+    doc.setDrawColor(200, 210, 220); doc.setLineWidth(0.3); doc.line(14, y, W - 14, y); y += 4;
+
+    // fila 1
+    doc.setFillColor(241, 245, 249); doc.rect(14, y - 3, 68, 8, 'F');
+    doc.setFontSize(8); doc.setFont('helvetica', 'bold'); doc.setTextColor(50, 50, 50);
+    doc.text('Proveedor a Cargo', 16, y + 2);
+    doc.setFont('helvetica', 'normal'); doc.setTextColor(30, 30, 30);
+    doc.text('Navarro y Cal y Mayor Asociados S.A de C.V.', 84, y + 2); y += 10;
+
+    // fila 2
+    doc.setFillColor(241, 245, 249); doc.rect(14, y - 3, 68, 8, 'F');
+    doc.setFont('helvetica', 'bold'); doc.setTextColor(50, 50, 50);
+    doc.text('Fecha de Ingreso', 16, y + 2);
+    doc.setFont('helvetica', 'normal'); doc.setTextColor(30, 30, 30);
+    doc.text(fechaVisita, 84, y + 2); y += 14;
+
+    // ── ALCANCE ───────────────────────────────────────────────────────────
+    doc.setFontSize(9); doc.setFont('helvetica', 'bold'); doc.setTextColor(12, 59, 110);
+    doc.text('Alcance de los Trabajos a Realizar', 14, y); y += 5;
+    doc.setDrawColor(200, 210, 220); doc.line(14, y, W - 14, y); y += 5;
+    doc.setFontSize(9); doc.setFont('helvetica', 'normal'); doc.setTextColor(30, 30, 30);
+    doc.text('Los trabajos técnicos que se llevarán a cabo incluyen:', 14, y); y += 7;
+
+    const alcance = [
+      'Estudio de Mecánica de Suelos.',
+      'Levantamientos Arquitectónicos.',
+      'Levantamientos Estructurales.',
+      'Levantamientos de Instalaciones (Eléctricas, Hidráulicas, Sanitarias, etc.).',
+      'Levantamiento de Planta de Conjunto.',
+    ];
+    alcance.forEach(item => {
+      doc.setFillColor(12, 59, 110); doc.circle(17, y - 1.5, 0.8, 'F');
+      doc.text(item, 20, y); y += 6;
+    });
+    y += 6;
+
+    // ── CONTACTO PROVEEDOR ────────────────────────────────────────────────
+    doc.setFontSize(9); doc.setFont('helvetica', 'bold'); doc.setTextColor(12, 59, 110);
+    doc.text('Contacto del Proveedor', 14, y); y += 5;
+    doc.setDrawColor(200, 210, 220); doc.line(14, y, W - 14, y); y += 4;
+
+    // Encabezado tabla
+    doc.setFillColor(12, 59, 110); doc.rect(14, y - 3, W - 28, 8, 'F');
+    doc.setFontSize(7.5); doc.setFont('helvetica', 'bold'); doc.setTextColor(255, 255, 255);
+    doc.text('Rol', 16, y + 2);
+    doc.text('Nombre', 58, y + 2);
+    doc.text('Correo Electrónico', 108, y + 2);
+    doc.text('Teléfono', 168, y + 2); y += 10;
+
+    doc.setFillColor(241, 245, 249); doc.rect(14, y - 4, W - 28, 8, 'F');
+    doc.setFont('helvetica', 'normal'); doc.setTextColor(30, 30, 30); doc.setFontSize(8);
+    doc.text('Líder de Proyecto', 16, y + 1);
+    doc.text('Arq. Fátima Vázquez', 58, y + 1);
+    doc.text('fvazquez@navarrocym.com.mx', 108, y + 1);
+    doc.text('(55) 5182 1276', 168, y + 1); y += 12;
+
+    // ── CIERRE ────────────────────────────────────────────────────────────
+    const cierre1 = doc.splitTextToSize(
+      'Agradecemos de antemano todas las facilidades y el apoyo que se brinden al equipo de trabajo para asegurar el desarrollo eficiente de estas labores, minimizando cualquier posible afectación a las actividades cotidianas del colegio/clínica.',
+      W - 28
+    );
+    doc.setFontSize(9); doc.setTextColor(30, 30, 30);
+    doc.text(cierre1, 14, y); y += cierre1.length * 5.5 + 5;
+    doc.text('Quedamos a su disposición para cualquier duda o aclaración.', 14, y); y += 14;
+
+    // ── FIRMA ─────────────────────────────────────────────────────────────
+    doc.text('Atentamente,', 14, y); y += 12;
+    doc.setDrawColor(100, 120, 140); doc.setLineWidth(0.3); doc.line(14, y, 100, y); y += 5;
+    doc.setFontSize(9); doc.setFont('helvetica', 'bold'); doc.setTextColor(12, 59, 110);
+    doc.text('Ing. Ricardo Joanathan Reyes Medina', 14, y); y += 5;
+    doc.setFont('helvetica', 'normal'); doc.setTextColor(80, 80, 80); doc.setFontSize(8);
+    doc.text('Coordinador de Obras y Mantenimiento RCMA', 14, y); y += 4;
+    doc.text('Coordinación de Obras y Mantenimiento RCMA', 14, y);
+
+    // ── FOOTER ────────────────────────────────────────────────────────────
+    doc.setFillColor(12, 59, 110); doc.rect(0, 287, W, 10, 'F');
+    doc.setFontSize(7); doc.setFont('helvetica', 'normal'); doc.setTextColor(180, 200, 220);
+    doc.text('Coordinación de Obras y Mantenimiento RCMA  —  Sistema RCMA', W / 2, 293, { align: 'center' });
+
+    return doc.output('blob') as Blob;
+  };
+
+  // HTML para vista previa inline (iframe)
+  const buildPreviewHTML = (plantel: Plantel, c: { fecha_emision: string; fecha_visita: string | null; director_nombre: string | null }) => {
+    const datos      = DATOS_COLEGIO[codigoCorto(plantel.colegio_clave)];
+    const dirNombre  = c.director_nombre ?? datos?.director ?? '';
+    const fechaEmision = c.fecha_emision
+      ? new Date(c.fecha_emision + 'T12:00:00').toLocaleDateString('es-MX', { day: 'numeric', month: 'long', year: 'numeric' })
+      : '';
+    const fechaVisita = c.fecha_visita
+      ? new Date(c.fecha_visita + 'T12:00:00').toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: 'numeric' })
+      : '(por confirmar)';
+    return `<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8"><style>
+      body{font-family:Arial,sans-serif;font-size:13px;color:#222;margin:0;padding:0;}
+      .header{background:#0C3B6E;color:#fff;padding:20px 30px 16px;border-left:6px solid #F9A825;}
+      .header h1{margin:0;font-size:17px;} .header p{margin:4px 0 0;font-size:11px;color:#b0c4de;}
+      .body{padding:24px 30px;}
+      .asunto{font-weight:bold;color:#0C3B6E;margin-bottom:12px;}
+      table{width:100%;border-collapse:collapse;margin:12px 0;}
+      th{background:#0C3B6E;color:#fff;padding:7px 10px;text-align:left;font-size:12px;}
+      td{padding:7px 10px;font-size:12px;border-bottom:1px solid #e2e8f0;}
+      tr:nth-child(even) td{background:#f8fafc;}
+      ul{margin:6px 0 12px 20px;} li{margin-bottom:3px;}
+      .firma{margin-top:30px;padding-top:16px;border-top:1px solid #e2e8f0;}
+      .footer{background:#0C3B6E;color:#b0c4de;text-align:center;font-size:10px;padding:8px;margin-top:30px;}
+    </style></head><body>
+    <div class="header"><h1>Comunicado Institucional</h1><p>Coordinación de Obras y Mantenimiento RCMA &nbsp;·&nbsp; ${fechaEmision}</p></div>
+    <div class="body">
+      <div class="asunto">Asunto: Inicio de Proyectos de Levantamientos y Estudios.</div>
+      <p>Estimado/a <strong>${dirNombre}</strong>.</p>
+      <p>Por medio del presente, el Departamento de Coordinación de Obras y Mantenimiento RCMA tiene el placer de informarle sobre el inicio de un importante proyecto de <strong>levantamientos y estudios técnicos</strong> en las instalaciones de <strong>${plantel.colegio_nombre}</strong>.</p>
+      <p>Este proyecto es fundamental para el desarrollo de futuras iniciativas de mejora y mantenimiento de nuestra infraestructura a nivel institucional.</p>
+      <strong>Detalles de la Visita</strong>
+      <table><tr><th>Proveedor a Cargo</th><td>Navarro y Cal y Mayor Asociados S.A de C.V.</td></tr><tr><th>Fecha de Ingreso</th><td>${fechaVisita}</td></tr></table>
+      <strong>Alcance de los Trabajos a Realizar</strong>
+      <p>Los trabajos técnicos que se llevarán a cabo incluyen:</p>
+      <ul><li>Estudio de Mecánica de Suelos.</li><li>Levantamientos Arquitectónicos.</li><li>Levantamientos Estructurales.</li><li>Levantamientos de Instalaciones (Eléctricas, Hidráulicas, Sanitarias, etc.).</li><li>Levantamiento de Planta de Conjunto.</li></ul>
+      <strong>Contacto del Proveedor</strong>
+      <table><tr><th>Rol</th><th>Nombre</th><th>Correo Electrónico</th><th>Teléfono</th></tr><tr><td>Líder de Proyecto</td><td>Arq. Fátima Vázquez</td><td>fvazquez@navarrocym.com.mx</td><td>(55) 5182 1276</td></tr></table>
+      <p>Agradecemos de antemano todas las facilidades y el apoyo que se brinden al equipo de trabajo para asegurar el desarrollo eficiente de estas labores, minimizando cualquier posible afectación a las actividades cotidianas del colegio/clínica.</p>
+      <p>Quedamos a su disposición para cualquier duda o aclaración.</p>
+      <div class="firma"><p>Atentamente,</p><br><strong>Ing. Ricardo Joanathan Reyes Medina</strong><p style="color:#555;font-size:12px;">Coordinador de Obras y Mantenimiento RCMA</p></div>
+    </div>
+    <div class="footer">Coordinación de Obras y Mantenimiento RCMA — Sistema RCMA</div>
+    </body></html>`;
   };
 
   const saveMut = useMutation({
@@ -851,16 +990,13 @@ function TabComunicados({ comunicados, planteles, directorio, qc }: {
         if (!plantel) throw new Error('Selecciona un plantel');
 
         const dirNombre = datosCom?.director ?? null;
-        const html = buildHTML(plantel, { fecha_emision: form.fecha_emision, fecha_visita: form.fecha_visita || null, director_nombre: dirNombre });
-
-        // Convertir HTML a Blob PDF-like (se sube como HTML, se abre como documento)
-        const blob = new Blob([html], { type: 'text/html' });
+        const blob = await buildPDFBlob(plantel, { fecha_emision: form.fecha_emision, fecha_visita: form.fecha_visita || null, director_nombre: dirNombre });
         const fecha = new Date(form.fecha_emision + 'T12:00:00');
         const anio  = fecha.getFullYear();
         const mes   = fecha.toLocaleDateString('es-MX', { month: 'long' }).toUpperCase();
         const carpeta   = `Levantamiento Nacional/Comunicados/${anio}/${mes}`;
-        const fileName  = `Comunicado_${plantel.colegio_clave}_${form.fecha_emision}.html`;
-        const fileObj   = new File([blob], fileName, { type: 'text/html' });
+        const fileName  = `Comunicado_${plantel.colegio_clave}_${form.fecha_emision}.pdf`;
+        const fileObj   = new File([blob], fileName, { type: 'application/pdf' });
 
         const webUrl = await spUpload(fileObj, carpeta, fileName);
 
@@ -912,20 +1048,23 @@ function TabComunicados({ comunicados, planteles, directorio, qc }: {
     setPreviewCom(c);
   };
 
-  const handlePrint = (c: Comunicado) => {
+  const handlePrint = async (c: Comunicado) => {
     const plantel = planteles.find(p => p.id === c.plantel_id);
     if (!plantel) return;
-    const html = buildHTML(plantel, c);
-    const win = window.open('', '_blank');
-    if (!win) { toast.error('Permite ventanas emergentes'); return; }
-    win.document.write(html);
-    win.document.close();
-    setTimeout(() => win.print(), 600);
+    try {
+      const blob = await buildPDFBlob(plantel, c);
+      const url  = URL.createObjectURL(blob);
+      const win  = window.open(url, '_blank');
+      if (!win) { toast.error('Permite ventanas emergentes'); return; }
+      setTimeout(() => URL.revokeObjectURL(url), 30000);
+    } catch (e: any) {
+      toast.error('Error generando PDF: ' + e.message);
+    }
   };
 
-  // HTML para vista previa inline
+  // HTML para vista previa inline en iframe
   const previewHTML = previewCom
-    ? (() => { const pl = planteles.find(p => p.id === previewCom.plantel_id); return pl ? buildHTML(pl, previewCom) : ''; })()
+    ? (() => { const pl = planteles.find(p => p.id === previewCom.plantel_id); return pl ? buildPreviewHTML(pl, previewCom) : ''; })()
     : '';
 
   return (
