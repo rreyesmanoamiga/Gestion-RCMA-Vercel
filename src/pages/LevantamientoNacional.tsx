@@ -859,14 +859,12 @@ function TabComunicados({ comunicados, planteles, directorio, qc }: {
     // ── CUERPO ────────────────────────────────────────────────────────────
     const bodyLines = doc.splitTextToSize(
       'Por medio del presente, el Departamento de Coordinación de Obras y Mantenimiento RCMA tiene el placer de informarle sobre el inicio de un importante proyecto de levantamientos y estudios técnicos en las instalaciones de ' + plantel.colegio_nombre + '.',
-      TW
-    );
+      TW - 6);
     doc.setFontSize(9); doc.text(bodyLines, ML, y); y += bodyLines.length * 5.5 + 4;
 
     const body2 = doc.splitTextToSize(
       'Este proyecto es fundamental para el desarrollo de futuras iniciativas de mejora y mantenimiento de nuestra infraestructura a nivel institucional.',
-      TW
-    );
+      TW - 6);
     doc.text(body2, ML, y); y += body2.length * 5.5 + 8;
 
     // ── TABLA DETALLES VISITA ─────────────────────────────────────────────
@@ -919,8 +917,7 @@ function TabComunicados({ comunicados, planteles, directorio, qc }: {
     // Párrafo introductorio (faltaba en versión anterior)
     const contactoIntro = doc.splitTextToSize(
       'El equipo de Navarro y Cal y Mayor Asociados S.A de C.V estará coordinado por la siguiente persona, quien será el contacto directo para cualquier asunto operativo o logístico relacionado con su visita:',
-      TW
-    );
+      TW - 6);
     doc.setFontSize(9); doc.setFont('helvetica', 'normal'); doc.setTextColor(30, 30, 30);
     doc.text(contactoIntro, ML, y); y += contactoIntro.length * 5.5 + 5;
 
@@ -943,11 +940,15 @@ function TabComunicados({ comunicados, planteles, directorio, qc }: {
     // ── CIERRE ────────────────────────────────────────────────────────────
     const cierre1 = doc.splitTextToSize(
       'Agradecemos de antemano todas las facilidades y el apoyo que se brinden al equipo de trabajo para asegurar el desarrollo eficiente de estas labores, minimizando cualquier posible afectación a las actividades cotidianas del colegio/clínica.',
-      TW
+      TW - 6
+    );
+    const cierre2 = doc.splitTextToSize(
+      'Quedamos a su disposición para cualquier duda o aclaración.',
+      TW - 6
     );
     doc.setFontSize(9); doc.setTextColor(30, 30, 30);
     doc.text(cierre1, ML, y); y += cierre1.length * 5.5 + 5;
-    doc.text('Quedamos a su disposición para cualquier duda o aclaración.', ML, y); y += 14;
+    doc.text(cierre2, ML, y); y += cierre2.length * 5.5 + 9;
 
     // ── FIRMA ─────────────────────────────────────────────────────────────
     doc.text('Atentamente,', ML, y); y += 12;
