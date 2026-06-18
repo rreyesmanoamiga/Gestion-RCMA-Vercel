@@ -1012,6 +1012,7 @@ function TabComunicados({ comunicados, planteles, directorio, qc }: {
       li{margin-bottom:3px;word-break:break-word;}
       .firma{margin-top:24px;padding-top:12px;border-top:1px solid #dde3ea;}
       .footer{background:#0C3B6E;color:#b0c4de;text-align:center;font-size:10px;padding:7px;}
+      @media print{body{background:#fff;}.wrap{width:100%;box-shadow:none;margin:0;}}
     </style></head><body>
     <div class="wrap">
       <div class="hdr">
@@ -1054,7 +1055,6 @@ function TabComunicados({ comunicados, planteles, directorio, qc }: {
           <br><br>
           <strong>Ing. Ricardo Joanathan Reyes Medina</strong>
           <p style="font-size:11.5px;color:#555;margin-top:3px;">Coordinador de Obras y Mantenimiento RCMA</p>
-          <p style="font-size:11.5px;color:#555;">Coordinación de Obras y Mantenimiento RCMA</p>
         </div>
       </div>
       <div class="footer">Coordinación de Obras y Mantenimiento RCMA — Sistema RCMA</div>
@@ -1128,18 +1128,16 @@ function TabComunicados({ comunicados, planteles, directorio, qc }: {
     setPreviewCom(c);
   };
 
-  const handlePrint = async (c: Comunicado) => {
+  const handlePrint = (c: Comunicado) => {
     const plantel = planteles.find(p => p.id === c.plantel_id);
     if (!plantel) return;
-    try {
-      const blob = await buildPDFBlob(plantel, c);
-      const url  = URL.createObjectURL(blob);
-      const win  = window.open(url, '_blank');
-      if (!win) { toast.error('Permite ventanas emergentes'); return; }
-      setTimeout(() => URL.revokeObjectURL(url), 30000);
-    } catch (e: any) {
-      toast.error('Error generando PDF: ' + e.message);
-    }
+    const html = buildPreviewHTML(plantel, c);
+    const win = window.open('', '_blank');
+    if (!win) { toast.error('Permite ventanas emergentes para imprimir'); return; }
+    win.document.write(html);
+    win.document.close();
+    win.focus();
+    setTimeout(() => win.print(), 800);
   };
 
   // HTML para vista previa inline en iframe
