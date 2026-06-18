@@ -28,7 +28,7 @@ async function sendEmail(to: string, subject: string, html: string) {
 serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
   try {
-    const { destinatario_email, destinatario_nombre, titulo, descripcion, prioridad, fecha_limite, asignado_por, siteUrl } = await req.json();
+    const { destinatario_email, destinatario_nombre, titulo, descripcion, prioridad, fecha_limite, asignado_por, siteUrl, es_directo, responsable_nombre } = await req.json();
     const appUrl = siteUrl ?? Deno.env.get('SITE_URL') ?? '';
     const adminEmail = Deno.env.get('ADMIN_EMAIL') ?? 'rreyes@manoamiga.edu.mx';
     const PRIO_COLOR: Record<string,string> = { urgente:'#dc2626', alta:'#ea580c', normal:'#2563eb', baja:'#64748b' };
@@ -41,7 +41,12 @@ serve(async (req) => {
       <h1 style="color:#fff;font-size:17px;font-weight:700;margin:0;">Tienes un nuevo pendiente asignado</h1>
     </div>
     <div style="padding:24px 28px;">
-      <p style="color:#334155;font-size:14px;margin:0 0 20px;">Hola <strong>${destinatario_nombre}</strong>, <strong>${asignado_por}</strong> te ha asignado el siguiente pendiente:</p>
+      <p style="color:#334155;font-size:14px;margin:0 0 20px;">
+        ${es_directo === false
+          ? `Hola <strong>${destinatario_nombre}</strong>, <strong>${asignado_por}</strong> asignó el siguiente pendiente a <strong>${responsable_nombre}</strong>. Quedas en copia para tu conocimiento.`
+          : `Hola <strong>${destinatario_nombre}</strong>, <strong>${asignado_por}</strong> te ha asignado el siguiente pendiente:`
+        }
+      </p>
       <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:18px;margin-bottom:20px;">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
           <h2 style="font-size:16px;font-weight:700;color:#0f172a;margin:0;">${titulo}</h2>
@@ -59,7 +64,7 @@ serve(async (req) => {
     </div>
   </div>
 </body></html>`;
-    await sendEmail(destinatario_email, `📌 Nuevo pendiente asignado: ${titulo}`, html);
+    await sendEmail(destinatario_email, es_directo === false ? `📋 Para tu conocimiento: ${titulo}` : `📌 Nuevo pendiente asignado: ${titulo}`, html);
     return new Response(JSON.stringify({ success: true }), { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
   } catch (err) {
     return new Response(JSON.stringify({ error: err instanceof Error ? err.message : 'Error' }), { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
