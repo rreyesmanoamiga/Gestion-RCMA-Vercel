@@ -807,8 +807,7 @@ function TabComunicados({ comunicados, planteles, directorio, qc }: {
   };
 
   // Genera PDF con jsPDF — devuelve Blob para subir a OneDrive
-  // Genera PDF usando doc.html() — convierte el HTML de vista previa directamente
-  const buildPDFBlob = (plantel: Plantel, c: { fecha_emision: string; fecha_visita: string | null; director_nombre: string | null }): Blob => {
+  const buildPDFBlob = async (plantel: Plantel, c: { fecha_emision: string; fecha_visita: string | null; director_nombre: string | null }): Promise<Blob> => {
     const datos      = DATOS_COLEGIO[codigoCorto(plantel.colegio_clave)];
     const dirNombre  = c.director_nombre ?? datos?.director ?? '';
     const fechaEmision = c.fecha_emision
@@ -819,16 +818,46 @@ function TabComunicados({ comunicados, planteles, directorio, qc }: {
       : '(por confirmar)';
 
     const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'letter' });
-    let yPos = 25;
+    const W            = 215.9; // letter width en mm
     const marginX      = 25;
     const maxLineWidth = 165;
 
+    // ── HEADER INSTITUCIONAL ──────────────────────────────────────────────
+    doc.setFillColor(12, 59, 110); doc.rect(0, 0, W, 32, 'F');
+    doc.setFillColor(249, 168, 37); doc.rect(0, 0, 5, 32, 'F');
+    doc.setFontSize(15); doc.setFont('Helvetica', 'bold'); doc.setTextColor(255, 255, 255);
+    doc.text('Comunicado Institucional', marginX, 12);
+    doc.setFontSize(9); doc.setFont('Helvetica', 'normal'); doc.setTextColor(180, 200, 220);
+    doc.text('Coordinación de Obras y Mantenimiento RCMA  ·  ' + fechaEmision, marginX, 20);
+    doc.setFontSize(8); doc.setTextColor(130, 160, 190);
+    doc.text('Documento interno — Mano Amiga', marginX, 27);
+
+    // Logo
+    try {
+      const logoImg = await new Promise<string>((res, rej) => {
+        const img = new Image(); img.crossOrigin = 'anonymous';
+        img.onload = () => { const cv = document.createElement('canvas'); cv.width = img.width; cv.height = img.height; cv.getContext('2d')!.drawImage(img, 0, 0); res(cv.toDataURL('image/png')); };
+        img.onerror = rej; img.src = '/logo.png';
+      });
+      doc.addImage(logoImg, 'PNG', W - 35, 4, 20, 20);
+    } catch { /* sin logo */ }
+
+    // ── FOOTER función reutilizable ───────────────────────────────────────
+    const drawFooter = () => {
+      doc.setFontSize(9); doc.setDrawColor(220, 220, 220);
+      doc.setFillColor(12, 59, 110); doc.rect(0, 252, W, 8, 'F');
+      doc.setFont('Helvetica', 'normal'); doc.setTextColor(180, 200, 220);
+      doc.text('Coordinación de Obras y Mantenimiento RCMA', W / 2, 257, { align: 'center' });
+    };
+
     doc.setFont('Helvetica', 'normal');
     doc.setFontSize(11);
+    doc.setTextColor(30, 30, 30);
+    let yPos = 42;
 
     // Fecha alineada a la derecha
-    doc.text(fechaEmision, 190, yPos, { align: 'right' });
-    yPos += 15;
+    doc.text(fechaEmision, W - marginX, yPos, { align: 'right' });
+    yPos += 12;
 
     // Asunto
     doc.setFont('Helvetica', 'bold');
@@ -922,12 +951,7 @@ Este proyecto es fundamental para el desarrollo de futuras iniciativas de mejora
     doc.setFont('Helvetica', 'normal'); doc.setFontSize(10);
     doc.text('Coordinador de Obras y Mantenimiento RCMA.', marginX, yPos);
 
-    // Footer
-    doc.setFontSize(9);
-    doc.setDrawColor(220, 220, 220);
-    doc.line(marginX, 262, 190, 262);
-    doc.text('Coordinación de Obras y Mantenimiento RCMA', 105, 267, { align: 'center' });
-
+    drawFooter();
     return doc.output('blob') as Blob;
   };
 
@@ -1003,7 +1027,7 @@ Este proyecto es fundamental para el desarrollo de futuras iniciativas de mejora
         const plantel = planteles.find(p => p.id === form.plantel_id);
         if (!plantel) throw new Error('Selecciona un plantel');
         const dirNombre = datosCom?.director ?? null;
-        const blob = buildPDFBlob(plantel, { fecha_emision: form.fecha_emision, fecha_visita: form.fecha_visita || null, director_nombre: dirNombre });
+        const blob = await buildPDFBlob(plantel, { fecha_emision: form.fecha_emision, fecha_visita: form.fecha_visita || null, director_nombre: dirNombre });
         const fecha = new Date(form.fecha_emision + 'T12:00:00');
         const anio  = fecha.getFullYear();
         const mes   = fecha.toLocaleDateString('es-MX', { month: 'long' }).toUpperCase();
@@ -1048,12 +1072,11 @@ Este proyecto es fundamental para el desarrollo de futuras iniciativas de mejora
   const handlePrint = (c: Comunicado) => {
     const plantel = planteles.find(p => p.id === c.plantel_id);
     if (!plantel) return;
-    try {
-      const blob = buildPDFBlob(plantel, c);
-      const url  = URL.createObjectURL(blob);
+    buildPDFBlob(plantel, c).then(blob => {
+      const url = URL.createObjectURL(blob);
       window.open(url, '_blank');
       setTimeout(() => URL.revokeObjectURL(url), 30000);
-    } catch (e: any) { toast.error('Error generando PDF: ' + e.message); }
+    }).catch((e: any) => toast.error('Error generando PDF: ' + e.message));
   };
 
   // HTML para vista previa inline en iframe
