@@ -580,7 +580,7 @@ function TabPlanteles({ planteles, loading, qc, directorio }: {
 // ══════════════════════════════════════════════════════════════════════════════
 function TabPagos({ pagos, planteles, qc }: { pagos: Pago[]; planteles: Plantel[]; qc: any }) {
   const [showAdd, setShowAdd] = useState(false);
-  const [form, setForm] = useState({ mes_etiqueta: '', fecha_pago: '', factura_consecutivo: '', folio_factura: '', monto_pagado: '', observaciones: '' });
+  const [form, setForm] = useState({ mes_etiqueta: '', fecha_pago: '', folio_factura: '', monto_pagado: '', observaciones: '' });
   const set = (k: string, v: string) => setForm(f => ({ ...f, [k]: v }));
 
   // Tabla precargada del contrato — datos fijos del Word
@@ -631,7 +631,7 @@ function TabPagos({ pagos, planteles, qc }: { pagos: Pago[]; planteles: Plantel[
         monto_pagado:        parseFloat(form.monto_pagado) || null,
         fecha_pago:          form.fecha_pago || null,
         pagado:              true,
-        factura_consecutivo: form.factura_consecutivo || null,
+        factura_consecutivo: String(pagos.length + 1),
         folio_factura:       form.folio_factura || null,
         notas:               form.observaciones || null,
         plantel_id:          null,
@@ -642,7 +642,7 @@ function TabPagos({ pagos, planteles, qc }: { pagos: Pago[]; planteles: Plantel[
       qc.invalidateQueries({ queryKey: ['lev_pagos'] });
       toast.success('Pago registrado ✓');
       setShowAdd(false);
-      setForm({ mes_etiqueta: '', fecha_pago: '', factura_consecutivo: '', folio_factura: '', monto_pagado: '', observaciones: '' });
+      setForm({ mes_etiqueta: '', fecha_pago: '', folio_factura: '', monto_pagado: '', observaciones: '' });
     },
     onError: (e: any) => toast.error(e.message),
   });
@@ -703,15 +703,9 @@ function TabPagos({ pagos, planteles, qc }: { pagos: Pago[]; planteles: Plantel[
                   </div>
                 ) : null;
               })()}
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="text-xs font-bold text-slate-500 uppercase block mb-1">Factura # Consecutivo</label>
-                  <input className={inputCls} value={form.factura_consecutivo} onChange={e => set('factura_consecutivo', e.target.value)} placeholder="Ej: 1" />
-                </div>
-                <div>
-                  <label className="text-xs font-bold text-slate-500 uppercase block mb-1">Folio Factura</label>
-                  <input className={inputCls} value={form.folio_factura} onChange={e => set('folio_factura', e.target.value)} placeholder="Ej: A-001" />
-                </div>
+              <div>
+                <label className="text-xs font-bold text-slate-500 uppercase block mb-1">Folio Factura</label>
+                <input className={inputCls} value={form.folio_factura} onChange={e => set('folio_factura', e.target.value)} placeholder="Ej: A-001" />
               </div>
               <div>
                 <label className="text-xs font-bold text-slate-500 uppercase block mb-1">Fecha de Pago</label>
