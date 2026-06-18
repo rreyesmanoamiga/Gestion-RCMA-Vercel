@@ -142,6 +142,7 @@ const TABS = [
   { key: 'comunicados',  label: 'Comunicados',  icon: FileText      },
   { key: 'reportes',     label: 'Reportes',     icon: Upload        },
   { key: 'entregables',  label: 'Entregables',  icon: ClipboardList },
+  { key: 'reporte',      label: 'Reporte',      icon: FileText        },
 ];
 
 // ─── PDF Generator ─────────────────────────────────────────────────────────────
@@ -260,6 +261,15 @@ export default function LevantamientoNacional() {
     },
   });
 
+  const { data: reportesGenerales = [] } = useQuery<ReporteGeneral[]>({
+    queryKey: ['lev_reportes_generales'],
+    queryFn: async () => {
+      const { data, error } = await supabase.from('levantamiento_reportes_generales').select('*').order('fecha_reporte', { ascending: false });
+      if (error) throw error;
+      return data;
+    },
+  });
+
   const { data: reportes = [] } = useQuery<Reporte[]>({
     queryKey: ['lev_reportes'],
     queryFn: async () => {
@@ -325,6 +335,7 @@ export default function LevantamientoNacional() {
       {tab === 'comunicados' && <TabComunicados comunicados={comunicados} planteles={planteles} directorio={directorio} qc={qc} />}
       {tab === 'reportes'    && <TabReportes reportes={reportes} planteles={planteles} qc={qc} />}
       {tab === 'entregables' && <TabEntregables entregables={entregables} planteles={planteles} qc={qc} />}
+      {tab === 'reporte'      && <TabReporteGeneral reportesGenerales={reportesGenerales} planteles={planteles} pagos={pagos} comunicados={comunicados} entregables={entregables} qc={qc} />}
     </div>
   );
 }
@@ -568,122 +579,156 @@ function TabPlanteles({ planteles, loading, qc, directorio }: {
 // TAB: PAGOS (Flujograma)
 // ══════════════════════════════════════════════════════════════════════════════
 function TabPagos({ pagos, planteles, qc }: { pagos: Pago[]; planteles: Plantel[]; qc: any }) {
-  const [selectedPlantel, setSelectedPlantel] = useState('');
-  const [editingPago, setEditingPago] = useState<string | null>(null);
-  const [editForm, setEditForm] = useState({ monto_pagado: '', fecha_pago: '', pagado: false, notas: '' });
   const [showAdd, setShowAdd] = useState(false);
-  const [addForm, setAddForm] = useState({ mes_numero: '', mes_etiqueta: '', concepto: 'Mecánica de Suelos', monto_programado: '', plantel_id: '' });
+  const [form, setForm] = useState({ mes_etiqueta: '', fecha_pago: '', factura_consecutivo: '', folio_factura: '', monto_pagado: '', observaciones: '' });
+  const set = (k: string, v: string) => setForm(f => ({ ...f, [k]: v }));
 
-  const pagosFiltrados = selectedPlantel ? pagos.filter(p => p.plantel_id === selectedPlantel) : pagos;
+  // Tabla precargada del contrato — datos fijos del Word
+  const MESES_CONTRATO = [
+    { etiqueta: 'ANTICIPO', mes: 0,  subtotal: 891635.90,  iva: 142661.74,  total: 1034297.65,  fact_cons: 1  },
+    { etiqueta: 'MES 1',    mes: 1,  subtotal: 520631.57,  iva: 83301.05,   total: 603932.62,   fact_cons: 2  },
+    { etiqueta: 'MES 2',    mes: 2,  subtotal: 333716.57,  iva: 53394.65,   total: 387111.22,   fact_cons: 3  },
+    { etiqueta: 'MES 3',    mes: 3,  subtotal: 410276.57,  iva: 65644.25,   total: 475920.82,   fact_cons: 4  },
+    { etiqueta: 'MES 4',    mes: 4,  subtotal: 371306.57,  iva: 59409.05,   total: 430715.62,   fact_cons: 5  },
+    { etiqueta: 'MES 5',    mes: 5,  subtotal: 276941.57,  iva: 44310.65,   total: 321252.22,   fact_cons: 6  },
+    { etiqueta: 'MES 6',    mes: 6,  subtotal: 486911.57,  iva: 77905.85,   total: 564817.42,   fact_cons: 7  },
+    { etiqueta: 'MES 7',    mes: 7,  subtotal: 291674.57,  iva: 46667.93,   total: 338342.50,   fact_cons: null },
+    { etiqueta: 'MES 8',    mes: 8,  subtotal: 438212.57,  iva: 70114.01,   total: 508326.58,   fact_cons: null },
+    { etiqueta: 'MES 9',    mes: 9,  subtotal: 461102.48,  iva: 73776.40,   total: 534878.88,   fact_cons: null },
+    { etiqueta: 'MES 10',   mes: 10, subtotal: 383432.15,  iva: 61349.14,   total: 444781.29,   fact_cons: null },
+    { etiqueta: 'MES 11',   mes: 11, subtotal: 293254.07,  iva: 46920.65,   total: 340174.72,   fact_cons: null },
+    { etiqueta: 'MES 12',   mes: 12, subtotal: 487502.19,  iva: 78000.35,   total: 565502.54,   fact_cons: null },
+    { etiqueta: 'MES 13',   mes: 13, subtotal: 769365.32,  iva: 123098.45,  total: 892463.77,   fact_cons: null },
+    { etiqueta: 'MES 14',   mes: 14, subtotal: 492019.07,  iva: 78723.05,   total: 570742.12,   fact_cons: null },
+    { etiqueta: 'MES 15',   mes: 15, subtotal: 710696.57,  iva: 113711.45,  total: 824408.02,   fact_cons: null },
+    { etiqueta: 'MES 16',   mes: 16, subtotal: 529459.07,  iva: 84713.45,   total: 614172.52,   fact_cons: null },
+    { etiqueta: 'MES 17',   mes: 17, subtotal: 623396.57,  iva: 99743.45,   total: 723140.02,   fact_cons: null },
+    { etiqueta: 'MES 18',   mes: 18, subtotal: 144824.14,  iva: 23171.86,   total: 167996.00,   fact_cons: null },
+  ];
 
-  const updateMut = useMutation({
-    mutationFn: async (id: string) => {
-      const { error } = await supabase.from('levantamiento_pagos').update({
-        monto_pagado: editForm.monto_pagado ? parseFloat(editForm.monto_pagado) : null,
-        fecha_pago: editForm.fecha_pago || null,
-        pagado: editForm.pagado,
-        notas: editForm.notas || null,
-        updated_at: new Date().toISOString(),
-      }).eq('id', id);
-      if (error) throw error;
-    },
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['lev_pagos'] }); setEditingPago(null); toast.success('Pago actualizado'); },
-    onError: (e: any) => toast.error(e.message),
-  });
+  const TOTAL_CONTRATO = 10342976.48;
+
+  // Obtener pago registrado por mes_etiqueta
+  const getPago = (etiqueta: string) => pagos.find(p => p.mes_etiqueta === etiqueta);
+
+  // Meses que ya tienen pago registrado (para excluirlos del modal)
+  const mesesPagados = new Set(pagos.map(p => p.mes_etiqueta));
+  const mesesDisponibles = MESES_CONTRATO.filter(m => !mesesPagados.has(m.etiqueta));
+
+  // KPIs reales
+  const totalPagado   = pagos.reduce((s, p) => s + (p.monto_pagado ?? 0), 0);
+  const totalPendiente = TOTAL_CONTRATO - totalPagado;
 
   const addMut = useMutation({
     mutationFn: async () => {
+      if (!form.mes_etiqueta) throw new Error('Selecciona el mes');
+      const mesData = MESES_CONTRATO.find(m => m.etiqueta === form.mes_etiqueta);
       const { error } = await supabase.from('levantamiento_pagos').insert({
-        plantel_id: addForm.plantel_id,
-        mes_numero: parseInt(addForm.mes_numero),
-        mes_etiqueta: addForm.mes_etiqueta,
-        concepto: addForm.concepto,
-        monto_programado: parseFloat(addForm.monto_programado) || 0,
+        mes_numero:          mesData?.mes ?? 0,
+        mes_etiqueta:        form.mes_etiqueta,
+        concepto:            form.mes_etiqueta,
+        monto_programado:    mesData?.total ?? 0,
+        monto_pagado:        parseFloat(form.monto_pagado) || null,
+        fecha_pago:          form.fecha_pago || null,
+        pagado:              true,
+        factura_consecutivo: form.factura_consecutivo || null,
+        folio_factura:       form.folio_factura || null,
+        notas:               form.observaciones || null,
+        plantel_id:          null,
       });
       if (error) throw error;
     },
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['lev_pagos'] }); setShowAdd(false); toast.success('Pago agregado'); },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['lev_pagos'] });
+      toast.success('Pago registrado ✓');
+      setShowAdd(false);
+      setForm({ mes_etiqueta: '', fecha_pago: '', factura_consecutivo: '', folio_factura: '', monto_pagado: '', observaciones: '' });
+    },
     onError: (e: any) => toast.error(e.message),
   });
 
-  const startEdit = (p: Pago) => {
-    setEditingPago(p.id);
-    setEditForm({ monto_pagado: p.monto_pagado?.toString() ?? '', fecha_pago: p.fecha_pago ?? '', pagado: p.pagado, notas: p.notas ?? '' });
-  };
-
-  const totalProg = pagosFiltrados.reduce((s, p) => s + p.monto_programado, 0);
-  const totalPag = pagosFiltrados.filter(p => p.pagado).reduce((s, p) => s + (p.monto_pagado ?? p.monto_programado), 0);
+  const fmt = (n: number) => '$' + n.toLocaleString('es-MX', { minimumFractionDigits: 2 });
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center gap-3 flex-wrap">
-        <select className={`${inputCls} w-64`} value={selectedPlantel} onChange={e => setSelectedPlantel(e.target.value)}>
-          <option value="">Todos los planteles</option>
-          {planteles.map(p => <option key={p.id} value={p.id}>{p.colegio_nombre}</option>)}
-        </select>
-        <button onClick={() => setShowAdd(true)} className={btnPrimary}><Plus className="w-4 h-4" />Agregar Pago</button>
-      </div>
-
-      {/* Totales */}
+      {/* KPIs */}
       <div className="grid grid-cols-3 gap-3">
-        <div className="bg-slate-50 rounded-xl p-3 text-center">
-          <p className="text-xs text-slate-500">Programado</p>
-          <p className="text-lg font-black text-slate-700">${totalProg.toLocaleString('es-MX', { minimumFractionDigits: 2 })}</p>
+        <div className="bg-slate-50 rounded-xl p-4 text-center">
+          <p className="text-xs text-slate-500 uppercase tracking-wide">Contrato Total</p>
+          <p className="text-xl font-black text-slate-700 mt-1">{fmt(TOTAL_CONTRATO)}</p>
         </div>
-        <div className="bg-emerald-50 rounded-xl p-3 text-center">
-          <p className="text-xs text-emerald-600">Pagado</p>
-          <p className="text-lg font-black text-emerald-700">${totalPag.toLocaleString('es-MX', { minimumFractionDigits: 2 })}</p>
+        <div className="bg-emerald-50 rounded-xl p-4 text-center">
+          <p className="text-xs text-emerald-600 uppercase tracking-wide">Total Pagado</p>
+          <p className="text-xl font-black text-emerald-700 mt-1">{fmt(totalPagado)}</p>
         </div>
-        <div className="bg-amber-50 rounded-xl p-3 text-center">
-          <p className="text-xs text-amber-600">Pendiente</p>
-          <p className="text-lg font-black text-amber-700">${(totalProg - totalPag).toLocaleString('es-MX', { minimumFractionDigits: 2 })}</p>
+        <div className="bg-amber-50 rounded-xl p-4 text-center">
+          <p className="text-xs text-amber-600 uppercase tracking-wide">Total Pendiente</p>
+          <p className="text-xl font-black text-amber-700 mt-1">{fmt(totalPendiente)}</p>
         </div>
       </div>
 
-      {/* Modal agregar */}
+      <div className="flex justify-end">
+        <button onClick={() => setShowAdd(true)} disabled={mesesDisponibles.length === 0} className={btnPrimary}>
+          <Plus className="w-4 h-4" />Registrar Pago
+        </button>
+      </div>
+
+      {/* Modal registrar pago */}
       {showAdd && (
         <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md">
             <div className="flex items-center justify-between p-5 border-b border-slate-100">
-              <h3 className="font-bold text-slate-900">Agregar Pago</h3>
+              <h3 className="font-bold text-slate-900">Registrar Pago</h3>
               <button onClick={() => setShowAdd(false)}><X className="w-5 h-5 text-slate-400" /></button>
             </div>
             <div className="p-5 space-y-3">
               <div>
-                <label className="text-xs font-bold text-slate-500 uppercase block mb-1">Plantel</label>
-                <select className={inputCls} value={addForm.plantel_id} onChange={e => setAddForm(f => ({ ...f, plantel_id: e.target.value }))}>
+                <label className="text-xs font-bold text-slate-500 uppercase block mb-1">Mes</label>
+                <select className={inputCls} value={form.mes_etiqueta} onChange={e => set('mes_etiqueta', e.target.value)}>
                   <option value="">Seleccionar…</option>
-                  {planteles.map(p => <option key={p.id} value={p.id}>{p.colegio_nombre}</option>)}
+                  {mesesDisponibles.map(m => (
+                    <option key={m.etiqueta} value={m.etiqueta}>
+                      {m.etiqueta} — {fmt(m.total)}
+                    </option>
+                  ))}
                 </select>
               </div>
+              {form.mes_etiqueta && (() => {
+                const m = MESES_CONTRATO.find(x => x.etiqueta === form.mes_etiqueta);
+                return m ? (
+                  <div className="bg-slate-50 rounded-lg p-3 text-xs text-slate-600 grid grid-cols-3 gap-2">
+                    <div><p className="text-slate-400">Subtotal</p><p className="font-bold">{fmt(m.subtotal)}</p></div>
+                    <div><p className="text-slate-400">IVA</p><p className="font-bold">{fmt(m.iva)}</p></div>
+                    <div><p className="text-slate-400">Total</p><p className="font-bold text-[#0C3B6E]">{fmt(m.total)}</p></div>
+                  </div>
+                ) : null;
+              })()}
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="text-xs font-bold text-slate-500 uppercase block mb-1">Mes #</label>
-                  <input type="number" className={inputCls} value={addForm.mes_numero} onChange={e => setAddForm(f => ({ ...f, mes_numero: e.target.value }))} placeholder="0 = anticipo" />
+                  <label className="text-xs font-bold text-slate-500 uppercase block mb-1">Factura # Consecutivo</label>
+                  <input className={inputCls} value={form.factura_consecutivo} onChange={e => set('factura_consecutivo', e.target.value)} placeholder="Ej: 1" />
                 </div>
                 <div>
-                  <label className="text-xs font-bold text-slate-500 uppercase block mb-1">Etiqueta</label>
-                  <input className={inputCls} value={addForm.mes_etiqueta} onChange={e => setAddForm(f => ({ ...f, mes_etiqueta: e.target.value }))} placeholder="MES 1" />
+                  <label className="text-xs font-bold text-slate-500 uppercase block mb-1">Folio Factura</label>
+                  <input className={inputCls} value={form.folio_factura} onChange={e => set('folio_factura', e.target.value)} placeholder="Ej: A-001" />
                 </div>
               </div>
               <div>
-                <label className="text-xs font-bold text-slate-500 uppercase block mb-1">Concepto</label>
-                <select className={inputCls} value={addForm.concepto} onChange={e => setAddForm(f => ({ ...f, concepto: e.target.value }))}>
-                  <option>Mecánica de Suelos</option>
-                  <option>Cala Estructural</option>
-                  <option>Levantamiento General</option>
-                  <option>Anticipo</option>
-                  <option>Otros</option>
-                </select>
+                <label className="text-xs font-bold text-slate-500 uppercase block mb-1">Fecha de Pago</label>
+                <input type="date" className={inputCls} value={form.fecha_pago} onChange={e => set('fecha_pago', e.target.value)} />
               </div>
               <div>
-                <label className="text-xs font-bold text-slate-500 uppercase block mb-1">Monto Programado</label>
-                <input type="number" className={inputCls} value={addForm.monto_programado} onChange={e => setAddForm(f => ({ ...f, monto_programado: e.target.value }))} />
+                <label className="text-xs font-bold text-slate-500 uppercase block mb-1">Monto Real $</label>
+                <input type="number" className={inputCls} value={form.monto_pagado} onChange={e => set('monto_pagado', e.target.value)} placeholder="Monto efectivamente pagado" />
+              </div>
+              <div>
+                <label className="text-xs font-bold text-slate-500 uppercase block mb-1">Observaciones</label>
+                <textarea className={inputCls} rows={2} value={form.observaciones} onChange={e => set('observaciones', e.target.value)} />
               </div>
             </div>
             <div className="flex justify-end gap-2 p-5 border-t border-slate-100">
               <button onClick={() => setShowAdd(false)} className={btnSecondary}>Cancelar</button>
-              <button onClick={() => addMut.mutate()} disabled={addMut.isPending || !addForm.plantel_id} className={btnPrimary}>
+              <button onClick={() => addMut.mutate()} disabled={addMut.isPending || !form.mes_etiqueta} className={btnPrimary}>
                 {addMut.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}Guardar
               </button>
             </div>
@@ -691,81 +736,63 @@ function TabPagos({ pagos, planteles, qc }: { pagos: Pago[]; planteles: Plantel[
         </div>
       )}
 
-      {/* Tabla */}
-      <div className="bg-white border border-slate-200 rounded-xl overflow-hidden">
+      {/* Tabla principal */}
+      <div className="bg-white border border-slate-200 rounded-xl overflow-x-auto">
         <table className="w-full text-sm">
-          <thead className="bg-slate-50 text-slate-500 text-xs uppercase">
+          <thead className="bg-[#0C3B6E] text-white text-xs uppercase">
             <tr>
-              <th className="text-left px-4 py-3">Plantel</th>
-              <th className="text-left px-4 py-3">Mes</th>
-              <th className="text-left px-4 py-3">Concepto</th>
-              <th className="text-right px-4 py-3">Programado</th>
-              <th className="text-right px-4 py-3">Pagado</th>
-              <th className="text-left px-4 py-3">Fecha Pago</th>
-              <th className="text-center px-4 py-3">Estado</th>
-              <th className="px-4 py-3"></th>
+              <th className="text-left px-3 py-3">Meses</th>
+              <th className="text-right px-3 py-3">Subtotal</th>
+              <th className="text-right px-3 py-3">IVA</th>
+              <th className="text-right px-3 py-3">Total</th>
+              <th className="text-center px-3 py-3">Fact. Cons.</th>
+              <th className="text-left px-3 py-3">Fecha de Pago</th>
+              <th className="text-left px-3 py-3">Folio</th>
+              <th className="text-right px-3 py-3">Monto Real</th>
+              <th className="text-center px-3 py-3">Estado</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
-            {pagosFiltrados.length === 0 && (
-              <tr><td colSpan={8} className="text-center py-8 text-slate-400">Sin pagos registrados</td></tr>
-            )}
-            {pagosFiltrados.map(p => {
-              const plantelNombre = planteles.find(pl => pl.id === p.plantel_id)?.colegio_nombre ?? '—';
-              const editing = editingPago === p.id;
+            {MESES_CONTRATO.map(m => {
+              const pago = getPago(m.etiqueta);
+              const isPagado = !!pago;
+              const factCons = pago?.factura_consecutivo ?? (m.fact_cons ? String(m.fact_cons) : '—');
+              const folio    = pago?.folio_factura ?? '—';
+
               return (
-                <tr key={p.id} className={`hover:bg-slate-50 ${p.pagado ? 'bg-emerald-50/30' : ''}`}>
-                  <td className="px-4 py-3 text-slate-700 font-medium">{plantelNombre}</td>
-                  <td className="px-4 py-3 text-slate-500 text-xs">{p.mes_etiqueta || `MES ${p.mes_numero}`}</td>
-                  <td className="px-4 py-3 text-slate-600 text-xs">{p.concepto}</td>
-                  <td className="px-4 py-3 text-right text-slate-700">${p.monto_programado.toLocaleString('es-MX', { minimumFractionDigits: 2 })}</td>
-                  <td className="px-4 py-3 text-right">
-                    {editing ? (
-                      <input type="number" className="w-28 px-2 py-1 border border-slate-300 rounded text-sm text-right"
-                        value={editForm.monto_pagado} onChange={e => setEditForm(f => ({ ...f, monto_pagado: e.target.value }))} />
-                    ) : (
-                      <span className={p.pagado ? 'text-emerald-700 font-medium' : 'text-slate-400'}>
-                        {p.monto_pagado != null ? `$${p.monto_pagado.toLocaleString('es-MX', { minimumFractionDigits: 2 })}` : '—'}
-                      </span>
-                    )}
+                <tr key={m.etiqueta} className={isPagado ? 'bg-emerald-50' : 'hover:bg-slate-50'}>
+                  <td className="px-3 py-3 font-bold text-slate-800">{m.etiqueta}</td>
+                  <td className="px-3 py-3 text-right text-slate-600">{fmt(m.subtotal)}</td>
+                  <td className="px-3 py-3 text-right text-slate-500">{fmt(m.iva)}</td>
+                  <td className="px-3 py-3 text-right font-medium text-slate-700">{fmt(m.total)}</td>
+                  <td className="px-3 py-3 text-center text-slate-500">{m.fact_cons ?? '—'}</td>
+                  <td className="px-3 py-3 text-slate-600">
+                    {pago?.fecha_pago ? new Date(pago.fecha_pago + 'T12:00:00').toLocaleDateString('es-MX') : '—'}
                   </td>
-                  <td className="px-4 py-3 text-slate-500 text-xs">
-                    {editing ? (
-                      <input type="date" className="px-2 py-1 border border-slate-300 rounded text-sm"
-                        value={editForm.fecha_pago} onChange={e => setEditForm(f => ({ ...f, fecha_pago: e.target.value }))} />
-                    ) : (
-                      p.fecha_pago ? new Date(p.fecha_pago + 'T12:00:00').toLocaleDateString('es-MX') : '—'
-                    )}
+                  <td className="px-3 py-3 text-slate-500 text-xs">{isPagado ? folio : '—'}</td>
+                  <td className="px-3 py-3 text-right font-medium">
+                    {isPagado && pago.monto_pagado != null
+                      ? <span className="text-emerald-700">{fmt(pago.monto_pagado)}</span>
+                      : <span className="text-slate-300">—</span>}
                   </td>
-                  <td className="px-4 py-3 text-center">
-                    {editing ? (
-                      <input type="checkbox" checked={editForm.pagado} onChange={e => setEditForm(f => ({ ...f, pagado: e.target.checked }))}
-                        className="w-4 h-4 accent-emerald-600" />
-                    ) : (
-                      <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${p.pagado ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-500'}`}>
-                        {p.pagado ? 'Pagado' : 'Pendiente'}
-                      </span>
-                    )}
-                  </td>
-                  <td className="px-4 py-3">
-                    {editing ? (
-                      <div className="flex gap-1">
-                        <button onClick={() => updateMut.mutate(p.id)} className="text-emerald-600 hover:text-emerald-800">
-                          <Save className="w-4 h-4" />
-                        </button>
-                        <button onClick={() => setEditingPago(null)} className="text-slate-400 hover:text-slate-600">
-                          <X className="w-4 h-4" />
-                        </button>
-                      </div>
-                    ) : (
-                      <button onClick={() => startEdit(p)} className="text-slate-400 hover:text-[#0C3B6E]">
-                        <Edit2 className="w-4 h-4" />
-                      </button>
-                    )}
+                  <td className="px-3 py-3 text-center">
+                    {isPagado
+                      ? <span className="px-2 py-0.5 rounded-full text-xs font-bold bg-emerald-200 text-emerald-800">✓ Pagado</span>
+                      : <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-700">Pendiente</span>}
                   </td>
                 </tr>
               );
             })}
+            {/* Fila de totales */}
+            <tr className="bg-slate-100 font-bold">
+              <td className="px-3 py-3 text-slate-700">TOTALES</td>
+              <td className="px-3 py-3 text-right text-slate-700">{fmt(8916359.04)}</td>
+              <td className="px-3 py-3 text-right text-slate-700">{fmt(1426617.45)}</td>
+              <td className="px-3 py-3 text-right text-slate-700">{fmt(10342976.48)}</td>
+              <td colSpan={3} />
+              <td className="px-3 py-3 text-right text-emerald-700">{fmt(totalPagado)}</td>
+              <td />
+            </tr>
           </tbody>
         </table>
       </div>
@@ -773,9 +800,6 @@ function TabPagos({ pagos, planteles, qc }: { pagos: Pago[]; planteles: Plantel[
   );
 }
 
-// ══════════════════════════════════════════════════════════════════════════════
-// TAB: COMUNICADOS
-// ══════════════════════════════════════════════════════════════════════════════
 function TabComunicados({ comunicados, planteles, directorio, qc }: {
   comunicados: Comunicado[]; planteles: Plantel[]; directorio: DirectorioItem[]; qc: any;
 }) {
@@ -1739,4 +1763,309 @@ function TabEntregables({ entregables, planteles, qc }: { entregables: Entregabl
       })}
     </div>
   );
+
+// ══════════════════════════════════════════════════════════════════════════════
+// TAB: REPORTE GENERAL
+// ══════════════════════════════════════════════════════════════════════════════
+function TabReporteGeneral({ reportesGenerales, planteles, pagos, comunicados, entregables, qc }: {
+  reportesGenerales: ReporteGeneral[];
+  planteles: Plantel[];
+  pagos: Pago[];
+  comunicados: Comunicado[];
+  entregables: Entregable[];
+  qc: any;
+}) {
+  const [generating, setGenerating] = useState(false);
+
+  const MESES_CONTRATO = [
+    { etiqueta: 'ANTICIPO', total: 1034297.65 },
+    { etiqueta: 'MES 1',    total: 603932.62  }, { etiqueta: 'MES 2',  total: 387111.22  },
+    { etiqueta: 'MES 3',    total: 475920.82  }, { etiqueta: 'MES 4',  total: 430715.62  },
+    { etiqueta: 'MES 5',    total: 321252.22  }, { etiqueta: 'MES 6',  total: 564817.42  },
+    { etiqueta: 'MES 7',    total: 338342.50  }, { etiqueta: 'MES 8',  total: 508326.58  },
+    { etiqueta: 'MES 9',    total: 534878.88  }, { etiqueta: 'MES 10', total: 444781.29  },
+    { etiqueta: 'MES 11',   total: 340174.72  }, { etiqueta: 'MES 12', total: 565502.54  },
+    { etiqueta: 'MES 13',   total: 892463.77  }, { etiqueta: 'MES 14', total: 570742.12  },
+    { etiqueta: 'MES 15',   total: 824408.02  }, { etiqueta: 'MES 16', total: 614172.52  },
+    { etiqueta: 'MES 17',   total: 723140.02  }, { etiqueta: 'MES 18', total: 167996.00  },
+  ];
+
+  const fmt = (n: number) => '$' + n.toLocaleString('es-MX', { minimumFractionDigits: 2 });
+  const totalPagado = pagos.reduce((s, p) => s + (p.monto_pagado ?? 0), 0);
+  const totalContrato = 10342976.48;
+
+  const CHECKS = [
+    { field: 'mecanica_suelos', label: 'Mecánica de Suelos' },
+    { field: 'levant_arq', label: 'Levant. Arq.' },
+    { field: 'levant_estructural', label: 'Levant. Estructural' },
+    { field: 'levant_instalaciones', label: 'Levant. Instalaciones' },
+    { field: 'levant_conjunto', label: 'Planta de Conjunto' },
+  ];
+
+  const generarReporte = async () => {
+    setGenerating(true);
+    try {
+      let JsPDF = (window as any).jspdf?.jsPDF;
+      if (!JsPDF) {
+        await new Promise<void>((res, rej) => {
+          const s = document.createElement('script');
+          s.src = 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js';
+          s.onload = () => res(); s.onerror = () => rej();
+          document.head.appendChild(s);
+        });
+        JsPDF = (window as any).jspdf?.jsPDF;
+      }
+
+      const doc = new JsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+      const W = 210; const ML = 14; const TW = 182;
+      let y = 0;
+      const fecha = hoyLocal();
+      const fechaLabel = new Date(fecha + 'T12:00:00').toLocaleDateString('es-MX', { day: 'numeric', month: 'long', year: 'numeric' });
+
+      const drawHeader = (logoImg = '') => {
+        doc.setFillColor(12, 59, 110); doc.rect(0, 0, W, 32, 'F');
+        doc.setFillColor(232, 119, 34); doc.rect(0, 0, 5, 32, 'F');
+        doc.setFontSize(15); doc.setFont('helvetica', 'bold'); doc.setTextColor(255, 255, 255);
+        doc.text('Reporte General — Levantamiento Nacional', ML, 13);
+        doc.setFontSize(8.5); doc.setFont('helvetica', 'normal'); doc.setTextColor(180, 200, 220);
+        doc.text('Coordinación de Obras y Mantenimiento RCMA  ·  ' + fechaLabel, ML, 21);
+        doc.setFontSize(7.5); doc.setTextColor(130, 160, 190);
+        doc.text('Contrato 110-057-MANO_AMIGA', ML, 28);
+        if (logoImg) doc.addImage(logoImg, 'PNG', W - 36, 4, 22, 22);
+      };
+
+      const drawFooter = () => {
+        doc.setFillColor(12, 59, 110); doc.rect(0, 285, W, 12, 'F');
+        doc.setFontSize(7); doc.setFont('helvetica', 'normal'); doc.setTextColor(180, 200, 220);
+        doc.text('Coordinación de Obras y Mantenimiento RCMA  —  Sistema RCMA', W / 2, 292, { align: 'center' });
+      };
+
+      const np = (need = 10) => {
+        if (y + need > 272) { drawFooter(); doc.addPage(); drawHeader(logoData); y = 40; }
+      };
+
+      const seccion = (titulo: string) => {
+        np(14);
+        doc.setFontSize(10); doc.setFont('helvetica', 'bold'); doc.setTextColor(12, 59, 110);
+        doc.text(titulo, ML, y); y += 3;
+        doc.setDrawColor(200, 210, 220); doc.setLineWidth(0.3); doc.line(ML, y, W - ML, y); y += 5;
+      };
+
+      // Logo
+      let logoData = '';
+      try {
+        logoData = await new Promise<string>((res, rej) => {
+          const img = new Image(); img.crossOrigin = 'anonymous';
+          img.onload = () => { const cv = document.createElement('canvas'); cv.width = img.width; cv.height = img.height; cv.getContext('2d')!.drawImage(img, 0, 0); res(cv.toDataURL('image/png')); };
+          img.onerror = rej; img.src = '/logo.png';
+        });
+      } catch { /* sin logo */ }
+
+      drawHeader(logoData);
+      y = 40;
+
+      // ── SECCIÓN 1: PLANTELES ───────────────────────────────────────────
+      seccion('1. Planteles');
+      const faseLabels: Record<string, string> = {
+        COMUNICADO: 'Comunicado', FASE1: 'Fase 1 – Campo', FASE2: 'Fase 2 – Gabinete',
+        FASE3: 'Fase 3 – Revisión', FASE4: 'Fase 4 – ECO', FASE5: 'Fase 5 – Cierre',
+      };
+
+      // Header tabla planteles
+      np(10);
+      doc.setFillColor(12, 59, 110); doc.rect(ML, y - 3, TW, 7, 'F');
+      doc.setFontSize(7.5); doc.setFont('helvetica', 'bold'); doc.setTextColor(255, 255, 255);
+      doc.text('Colegio', ML + 2, y + 1.5);
+      doc.text('Territorio', ML + 80, y + 1.5);
+      doc.text('Asignación', ML + 115, y + 1.5);
+      doc.text('Fase', ML + 148, y + 1.5); y += 8;
+
+      planteles.forEach((p, i) => {
+        np(7);
+        if (i % 2 === 0) { doc.setFillColor(248, 250, 252); doc.rect(ML, y - 3, TW, 7, 'F'); }
+        doc.setFont('helvetica', 'normal'); doc.setFontSize(8); doc.setTextColor(30, 30, 30);
+        doc.text((p.colegio_nombre || '').slice(0, 38), ML + 2, y + 1);
+        doc.text((p.zona || '').slice(0, 18), ML + 80, y + 1);
+        doc.text((p.asignacion || '').slice(0, 18), ML + 115, y + 1);
+        doc.text(faseLabels[p.fase] || p.fase, ML + 148, y + 1); y += 7;
+      });
+      if (planteles.length === 0) { doc.setFontSize(8); doc.setTextColor(150, 150, 150); doc.text('Sin planteles registrados', ML + 2, y); y += 7; }
+      y += 6;
+
+      // ── SECCIÓN 2: PAGOS ──────────────────────────────────────────────
+      seccion('2. Flujograma de Pagos');
+      np(10);
+      doc.setFillColor(12, 59, 110); doc.rect(ML, y - 3, TW, 7, 'F');
+      doc.setFontSize(7.5); doc.setFont('helvetica', 'bold'); doc.setTextColor(255, 255, 255);
+      doc.text('Mes', ML + 2, y + 1.5);
+      doc.text('Total Contrato', ML + 35, y + 1.5);
+      doc.text('Fact. Cons.', ML + 80, y + 1.5);
+      doc.text('Fecha Pago', ML + 108, y + 1.5);
+      doc.text('Folio', ML + 138, y + 1.5);
+      doc.text('Monto Real', ML + 158, y + 1.5); y += 8;
+
+      MESES_CONTRATO.forEach((m, i) => {
+        const pago = pagos.find(p => p.mes_etiqueta === m.etiqueta);
+        np(7);
+        if (pago) { doc.setFillColor(236, 253, 245); doc.rect(ML, y - 3, TW, 7, 'F'); }
+        else if (i % 2 === 0) { doc.setFillColor(248, 250, 252); doc.rect(ML, y - 3, TW, 7, 'F'); }
+        doc.setFont('helvetica', pago ? 'bold' : 'normal'); doc.setFontSize(8); doc.setTextColor(30, 30, 30);
+        doc.text(m.etiqueta, ML + 2, y + 1);
+        doc.text(fmt(m.total), ML + 35, y + 1);
+        doc.text(pago?.factura_consecutivo ?? '—', ML + 80, y + 1);
+        doc.text(pago?.fecha_pago ? new Date(pago.fecha_pago + 'T12:00:00').toLocaleDateString('es-MX') : '—', ML + 108, y + 1);
+        doc.text(pago?.folio_factura ?? '—', ML + 138, y + 1);
+        if (pago?.monto_pagado) { doc.setTextColor(22, 163, 74); doc.text(fmt(pago.monto_pagado), ML + 158, y + 1); doc.setTextColor(30, 30, 30); }
+        else doc.text('—', ML + 158, y + 1);
+        y += 7;
+      });
+      // Totales
+      np(10);
+      doc.setFillColor(220, 230, 245); doc.rect(ML, y - 3, TW, 8, 'F');
+      doc.setFont('helvetica', 'bold'); doc.setFontSize(8.5); doc.setTextColor(12, 59, 110);
+      doc.text('TOTAL CONTRATO', ML + 2, y + 2);
+      doc.text(fmt(totalContrato), ML + 35, y + 2);
+      doc.text('TOTAL PAGADO', ML + 108, y + 2);
+      doc.setTextColor(22, 163, 74); doc.text(fmt(totalPagado), ML + 158, y + 2); y += 12;
+
+      // ── SECCIÓN 3: COMUNICADOS ────────────────────────────────────────
+      seccion('3. Comunicados Enviados');
+      np(10);
+      doc.setFillColor(12, 59, 110); doc.rect(ML, y - 3, TW, 7, 'F');
+      doc.setFontSize(7.5); doc.setFont('helvetica', 'bold'); doc.setTextColor(255, 255, 255);
+      doc.text('Plantel', ML + 2, y + 1.5);
+      doc.text('Director', ML + 80, y + 1.5);
+      doc.text('F. Emisión', ML + 135, y + 1.5);
+      doc.text('F. Visita', ML + 162, y + 1.5); y += 8;
+
+      comunicados.forEach((c, i) => {
+        const pl = planteles.find(p => p.id === c.plantel_id);
+        np(7);
+        if (i % 2 === 0) { doc.setFillColor(248, 250, 252); doc.rect(ML, y - 3, TW, 7, 'F'); }
+        doc.setFont('helvetica', 'normal'); doc.setFontSize(8); doc.setTextColor(30, 30, 30);
+        doc.text((pl?.colegio_nombre || '—').slice(0, 38), ML + 2, y + 1);
+        doc.text((c.director_nombre || '—').slice(0, 28), ML + 80, y + 1);
+        doc.text(c.fecha_emision ? new Date(c.fecha_emision + 'T12:00:00').toLocaleDateString('es-MX') : '—', ML + 135, y + 1);
+        doc.text(c.fecha_visita ? new Date(c.fecha_visita + 'T12:00:00').toLocaleDateString('es-MX') : '—', ML + 162, y + 1);
+        y += 7;
+      });
+      if (comunicados.length === 0) { doc.setFontSize(8); doc.setTextColor(150, 150, 150); doc.text('Sin comunicados registrados', ML + 2, y); y += 7; }
+      y += 6;
+
+      // ── SECCIÓN 4: ENTREGABLES ─────────────────────────────────────────
+      seccion('4. Estatus de Entregables por Plantel');
+      np(10);
+      doc.setFillColor(12, 59, 110); doc.rect(ML, y - 3, TW, 7, 'F');
+      doc.setFontSize(7); doc.setFont('helvetica', 'bold'); doc.setTextColor(255, 255, 255);
+      doc.text('Plantel', ML + 2, y + 1.5);
+      doc.text('Mec.', ML + 80, y + 1.5);
+      doc.text('Arq.', ML + 97, y + 1.5);
+      doc.text('Estr.', ML + 112, y + 1.5);
+      doc.text('Inst.', ML + 128, y + 1.5);
+      doc.text('Conj.', ML + 143, y + 1.5);
+      doc.text('Acta', ML + 158, y + 1.5);
+      doc.text('Fase', ML + 170, y + 1.5); y += 8;
+
+      planteles.forEach((p, i) => {
+        const ent = entregables.find(e => e.plantel_id === p.id);
+        np(7);
+        if (i % 2 === 0) { doc.setFillColor(248, 250, 252); doc.rect(ML, y - 3, TW, 7, 'F'); }
+        doc.setFont('helvetica', 'normal'); doc.setFontSize(7.5); doc.setTextColor(30, 30, 30);
+        doc.text((p.colegio_nombre || '').slice(0, 36), ML + 2, y + 1);
+        const ok = (field: string) => ent && (ent as any)[field] ? '✓' : '—';
+        doc.setTextColor(ent?.mecanica_suelos ? 22 : 150, ent?.mecanica_suelos ? 163 : 150, ent?.mecanica_suelos ? 74 : 150);
+        doc.text(ok('mecanica_suelos'), ML + 82, y + 1);
+        doc.setTextColor(ent?.levant_arq ? 22 : 150, ent?.levant_arq ? 163 : 150, ent?.levant_arq ? 74 : 150);
+        doc.text(ok('levant_arq'), ML + 99, y + 1);
+        doc.setTextColor(ent?.levant_estructural ? 22 : 150, ent?.levant_estructural ? 163 : 150, ent?.levant_estructural ? 74 : 150);
+        doc.text(ok('levant_estructural'), ML + 114, y + 1);
+        doc.setTextColor(ent?.levant_instalaciones ? 22 : 150, ent?.levant_instalaciones ? 163 : 150, ent?.levant_instalaciones ? 74 : 150);
+        doc.text(ok('levant_instalaciones'), ML + 130, y + 1);
+        doc.setTextColor(ent?.levant_conjunto ? 22 : 150, ent?.levant_conjunto ? 163 : 150, ent?.levant_conjunto ? 74 : 150);
+        doc.text(ok('levant_conjunto'), ML + 145, y + 1);
+        doc.setTextColor(ent?.acta_firmada ? 22 : 150, ent?.acta_firmada ? 163 : 150, ent?.acta_firmada ? 74 : 150);
+        doc.text(ent?.acta_firmada ? '✓' : '—', ML + 160, y + 1);
+        doc.setTextColor(30, 30, 30);
+        doc.text((faseLabels[p.fase] || p.fase).slice(0, 14), ML + 168, y + 1);
+        y += 7;
+      });
+      if (planteles.length === 0) { doc.setFontSize(8); doc.setTextColor(150, 150, 150); doc.text('Sin planteles registrados', ML + 2, y); y += 7; }
+
+      drawFooter();
+
+      // Subir a OneDrive
+      const blob = doc.output('blob') as Blob;
+      const fechaArchivo = hoyLocal();
+      const anio = new Date(fechaArchivo + 'T12:00:00').getFullYear();
+      const mes  = new Date(fechaArchivo + 'T12:00:00').toLocaleDateString('es-MX', { month: 'long' }).toUpperCase();
+      const carpeta  = `Levantamiento Nacional/Reportes Generales/${anio}/${mes}`;
+      const fileName = `Reporte_General_Levantamiento_${fechaArchivo}.pdf`;
+      const fileObj  = new File([blob], fileName, { type: 'application/pdf' });
+      const webUrl   = await spUpload(fileObj, carpeta, fileName);
+
+      const { error } = await supabase.from('levantamiento_reportes_generales').insert({
+        fecha_reporte: fechaArchivo, archivo_nombre: fileName,
+        onedrive_url: webUrl || null, onedrive_path: carpeta,
+      });
+      if (error) throw error;
+
+      qc.invalidateQueries({ queryKey: ['lev_reportes_generales'] });
+      toast.success('Reporte generado y guardado en OneDrive ✓');
+
+    } catch (e: any) {
+      toast.error('Error generando reporte: ' + e.message);
+    } finally {
+      setGenerating(false);
+    }
+  };
+
+  const faseLabels: Record<string, string> = {
+    COMUNICADO: 'Comunicado', FASE1: 'Fase 1 – Campo', FASE2: 'Fase 2 – Gabinete',
+    FASE3: 'Fase 3 – Revisión', FASE4: 'Fase 4 – ECO', FASE5: 'Fase 5 – Cierre',
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <p className="text-sm text-slate-500">Genera un reporte PDF con el estado actual de planteles, pagos, comunicados y entregables.</p>
+        <button onClick={generarReporte} disabled={generating} className={btnPrimary}>
+          {generating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
+          {generating ? 'Generando…' : 'Generar Reporte'}
+        </button>
+      </div>
+
+      <div className="bg-white border border-slate-200 rounded-xl overflow-hidden">
+        <table className="w-full text-sm">
+          <thead className="bg-slate-50 text-slate-500 text-xs uppercase">
+            <tr>
+              <th className="text-left px-4 py-3">Fecha</th>
+              <th className="text-left px-4 py-3">Archivo</th>
+              <th className="px-4 py-3"></th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-slate-100">
+            {reportesGenerales.length === 0 && (
+              <tr><td colSpan={3} className="text-center py-8 text-slate-400">Sin reportes generados</td></tr>
+            )}
+            {reportesGenerales.map(r => (
+              <tr key={r.id} className="hover:bg-slate-50">
+                <td className="px-4 py-3 text-slate-700 font-medium">
+                  {r.fecha_reporte ? new Date(r.fecha_reporte + 'T12:00:00').toLocaleDateString('es-MX') : '—'}
+                </td>
+                <td className="px-4 py-3 text-slate-500 text-xs">{r.archivo_nombre}</td>
+                <td className="px-4 py-3">
+                  {r.onedrive_url && (
+                    <a href={r.onedrive_url} target="_blank" rel="noreferrer" className="text-[#0C3B6E] hover:underline flex items-center gap-1 text-xs">
+                      <Eye className="w-3.5 h-3.5" />Ver PDF
+                    </a>
+                  )}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
 }
+
