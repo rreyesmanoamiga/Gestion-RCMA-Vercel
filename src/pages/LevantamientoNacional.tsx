@@ -890,7 +890,26 @@ function TabComunicados({ comunicados, planteles, directorio, qc }: {
     y += 9;
 
     // ── CUERPO ──────────────────────────────────────────────────────────────
-    para(`Por medio del presente, el Departamento de Coordinación de Obras y Mantenimiento RCMA tiene el placer de informarle sobre el inicio de un importante proyecto de levantamientos y estudios técnicos en las instalaciones de ${plantel.colegio_nombre}.`);
+    // Párrafo 1 — colegio en negritas
+    setBody();
+    const p1a = 'Por medio del presente, el Departamento de Coordinación de Obras y Mantenimiento RCMA tiene el placer de informarle sobre el inicio de un importante proyecto de levantamientos y estudios técnicos en las instalaciones de ';
+    const p1b = plantel.colegio_nombre + '.';
+    const p1aLines = doc.splitTextToSize(p1a, TW);
+    checkY(p1aLines.length * 6 + 8);
+    // Calcular posición donde termina el texto normal para poner el nombre en bold
+    doc.text(p1aLines, ML, y);
+    const lastLineWidth = doc.getTextWidth(p1aLines[p1aLines.length - 1]);
+    const lastLineY = y + (p1aLines.length - 1) * 6;
+    setBold();
+    // Si el nombre cabe en la misma línea
+    if (lastLineWidth + doc.getTextWidth(p1b) <= TW) {
+      doc.text(p1b, ML + lastLineWidth, lastLineY);
+    } else {
+      // Si no cabe, nueva línea en bold
+      doc.text(p1b, ML, lastLineY + 6);
+      y += 6;
+    }
+    y += p1aLines.length * 6 + 4;
     para('Este proyecto es fundamental para el desarrollo de futuras iniciativas de mejora y mantenimiento de nuestra infraestructura a nivel institucional.', 10);
 
     // ── DETALLES VISITA ──────────────────────────────────────────────────────
@@ -961,12 +980,12 @@ function TabComunicados({ comunicados, planteles, directorio, qc }: {
     para('Quedamos a su disposición para cualquier duda o aclaración.', 12);
 
     // ── FIRMA ────────────────────────────────────────────────────────────────
-    checkY(24);
-    setBody(); doc.setFontSize(9.5);
-    doc.text('Atentamente,', ML, y); y += 14;
-    setBold(); doc.setFontSize(10); doc.setTextColor(12, 59, 110);
-    doc.text('Ing. Ricardo Joanathan Reyes Medina', ML, y); y += 5.5;
-    setBody(); doc.setFontSize(9);
+    checkY(28);
+    setBody();
+    doc.text('Atentamente,', ML, y); y += 16;
+    setBold(); doc.setFontSize(11); doc.setTextColor(12, 59, 110);
+    doc.text('Ing. Ricardo Joanathan Reyes Medina', ML, y); y += 6;
+    setBody();
     doc.text('Coordinador de Obras y Mantenimiento RCMA', ML, y);
 
     drawFooter();
