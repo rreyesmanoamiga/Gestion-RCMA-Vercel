@@ -976,38 +976,79 @@ function TabComunicados({ comunicados, planteles, directorio, qc }: {
     const fechaVisita = c.fecha_visita
       ? new Date(c.fecha_visita + 'T12:00:00').toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: 'numeric' })
       : '(por confirmar)';
-    return `<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8"><style>
-      body{font-family:Arial,sans-serif;font-size:13px;color:#222;margin:0;padding:0;}
-      .header{background:#0C3B6E;color:#fff;padding:20px 30px 16px;border-left:6px solid #F9A825;}
-      .header h1{margin:0;font-size:17px;} .header p{margin:4px 0 0;font-size:11px;color:#b0c4de;}
-      .body{padding:24px 30px;}
-      .asunto{font-weight:bold;color:#0C3B6E;margin-bottom:12px;}
-      table{width:100%;border-collapse:collapse;margin:12px 0;}
-      th{background:#0C3B6E;color:#fff;padding:7px 10px;text-align:left;font-size:12px;}
-      td{padding:7px 10px;font-size:12px;border-bottom:1px solid #e2e8f0;}
+    return `<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <style>
+      *{box-sizing:border-box;}
+      html,body{margin:0;padding:0;width:100%;overflow-x:hidden;}
+      body{font-family:Arial,sans-serif;font-size:13px;color:#222;line-height:1.6;background:#f0f0f0;}
+      .page{background:#fff;max-width:760px;margin:0 auto;box-shadow:0 2px 8px rgba(0,0,0,0.12);}
+      .header{background:#0C3B6E;color:#fff;padding:18px 32px 14px;border-left:6px solid #F9A825;display:flex;justify-content:space-between;align-items:center;}
+      .header-text h1{margin:0;font-size:16px;} .header-text p{margin:3px 0 0;font-size:10px;color:#b0c4de;}
+      .header img{height:44px;width:auto;flex-shrink:0;}
+      .body{padding:28px 32px;}
+      .asunto{font-weight:bold;color:#0C3B6E;margin-bottom:14px;font-size:13px;}
+      p{margin:0 0 12px;word-wrap:break-word;overflow-wrap:break-word;}
+      .section-title{font-weight:bold;color:#0C3B6E;font-size:13px;margin:18px 0 4px;}
+      hr{border:none;border-top:1px solid #e2e8f0;margin:0 0 10px;}
+      table{width:100%;border-collapse:collapse;margin:10px 0;table-layout:fixed;}
+      th{background:#0C3B6E;color:#fff;padding:7px 10px;text-align:left;font-size:11.5px;word-wrap:break-word;}
+      td{padding:7px 10px;font-size:11.5px;border-bottom:1px solid #e2e8f0;word-wrap:break-word;overflow-wrap:break-word;}
       tr:nth-child(even) td{background:#f8fafc;}
-      ul{margin:6px 0 12px 20px;} li{margin-bottom:3px;}
-      .firma{margin-top:30px;padding-top:16px;border-top:1px solid #e2e8f0;}
-      .footer{background:#0C3B6E;color:#b0c4de;text-align:center;font-size:10px;padding:8px;margin-top:30px;}
+      .table-visita th{width:38%;}
+      .table-contacto th:nth-child(1){width:18%;}
+      .table-contacto th:nth-child(2){width:22%;}
+      .table-contacto th:nth-child(3){width:38%;}
+      .table-contacto th:nth-child(4){width:22%;}
+      ul{margin:6px 0 12px 22px;padding:0;} li{margin-bottom:4px;word-wrap:break-word;}
+      .firma{margin-top:28px;padding-top:14px;border-top:1px solid #e2e8f0;}
+      .footer{background:#0C3B6E;color:#b0c4de;text-align:center;font-size:10px;padding:8px 32px;}
     </style></head><body>
-    <div class="header"><h1>Comunicado Institucional</h1><p>Coordinación de Obras y Mantenimiento RCMA &nbsp;·&nbsp; ${fechaEmision}</p></div>
-    <div class="body">
-      <div class="asunto">Asunto: Inicio de Proyectos de Levantamientos y Estudios.</div>
-      <p>Estimado/a <strong>${dirNombre}</strong>.</p>
-      <p>Por medio del presente, el Departamento de Coordinación de Obras y Mantenimiento RCMA tiene el placer de informarle sobre el inicio de un importante proyecto de <strong>levantamientos y estudios técnicos</strong> en las instalaciones de <strong>${plantel.colegio_nombre}</strong>.</p>
-      <p>Este proyecto es fundamental para el desarrollo de futuras iniciativas de mejora y mantenimiento de nuestra infraestructura a nivel institucional.</p>
-      <strong>Detalles de la Visita</strong>
-      <table><tr><th>Proveedor a Cargo</th><td>Navarro y Cal y Mayor Asociados S.A de C.V.</td></tr><tr><th>Fecha de Ingreso</th><td>${fechaVisita}</td></tr></table>
-      <strong>Alcance de los Trabajos a Realizar</strong>
-      <p>Los trabajos técnicos que se llevarán a cabo incluyen:</p>
-      <ul><li>Estudio de Mecánica de Suelos.</li><li>Levantamientos Arquitectónicos.</li><li>Levantamientos Estructurales.</li><li>Levantamientos de Instalaciones (Eléctricas, Hidráulicas, Sanitarias, etc.).</li><li>Levantamiento de Planta de Conjunto.</li></ul>
-      <strong>Contacto del Proveedor</strong>
-      <table><tr><th>Rol</th><th>Nombre</th><th>Correo Electrónico</th><th>Teléfono</th></tr><tr><td>Líder de Proyecto</td><td>Arq. Fátima Vázquez</td><td>fvazquez@navarrocym.com.mx</td><td>(55) 5182 1276</td></tr></table>
-      <p>Agradecemos de antemano todas las facilidades y el apoyo que se brinden al equipo de trabajo para asegurar el desarrollo eficiente de estas labores, minimizando cualquier posible afectación a las actividades cotidianas del colegio/clínica.</p>
-      <p>Quedamos a su disposición para cualquier duda o aclaración.</p>
-      <div class="firma"><p>Atentamente,</p><br><strong>Ing. Ricardo Joanathan Reyes Medina</strong><p style="color:#555;font-size:12px;">Coordinador de Obras y Mantenimiento RCMA</p></div>
+    <div class="page">
+      <div class="header">
+        <div class="header-text">
+          <h1>Comunicado Institucional</h1>
+          <p>Coordinación de Obras y Mantenimiento RCMA &nbsp;·&nbsp; ${fechaEmision}</p>
+          <p style="margin-top:2px;font-size:9px;color:#8facc8;">Documento interno — Mano Amiga</p>
+        </div>
+        <img src="/logo.png" alt="Mano Amiga" onerror="this.style.display='none'">
+      </div>
+      <div class="body">
+        <div class="asunto">Asunto: Inicio de Proyectos de Levantamientos y Estudios.</div>
+        <p>Estimado/a <strong>${dirNombre}</strong>.</p>
+        <p>Por medio del presente, el Departamento de Coordinación de Obras y Mantenimiento RCMA tiene el placer de informarle sobre el inicio de un importante proyecto de <strong>levantamientos y estudios técnicos</strong> en las instalaciones de <strong>${plantel.colegio_nombre}</strong>.</p>
+        <p>Este proyecto es fundamental para el desarrollo de futuras iniciativas de mejora y mantenimiento de nuestra infraestructura a nivel institucional.</p>
+        <div class="section-title">Detalles de la Visita</div><hr>
+        <table class="table-visita">
+          <tr><th>Proveedor a Cargo</th><td>Navarro y Cal y Mayor Asociados S.A de C.V.</td></tr>
+          <tr><th>Fecha de Ingreso</th><td>${fechaVisita}</td></tr>
+        </table>
+        <div class="section-title">Alcance de los Trabajos a Realizar</div><hr>
+        <p>Los trabajos técnicos que se llevarán a cabo incluyen:</p>
+        <ul>
+          <li>Estudio de Mecánica de Suelos.</li>
+          <li>Levantamientos Arquitectónicos.</li>
+          <li>Levantamientos Estructurales.</li>
+          <li>Levantamientos de Instalaciones (Eléctricas, Hidráulicas, Sanitarias, etc.).</li>
+          <li>Levantamiento de Planta de Conjunto.</li>
+        </ul>
+        <div class="section-title">Contacto del Proveedor</div><hr>
+        <p>El equipo de Navarro y Cal y Mayor Asociados S.A de C.V estará coordinado por la siguiente persona, quien será el contacto directo para cualquier asunto operativo o logístico relacionado con su visita:</p>
+        <table class="table-contacto">
+          <tr><th>Rol</th><th>Nombre</th><th>Correo Electrónico</th><th>Teléfono</th></tr>
+          <tr><td>Líder de Proyecto</td><td>Arq. Fátima Vázquez</td><td>fvazquez@navarrocym.com.mx</td><td>(55) 5182 1276</td></tr>
+        </table>
+        <p>Agradecemos de antemano todas las facilidades y el apoyo que se brinden al equipo de trabajo para asegurar el desarrollo eficiente de estas labores, minimizando cualquier posible afectación a las actividades cotidianas del colegio/clínica.</p>
+        <p>Quedamos a su disposición para cualquier duda o aclaración.</p>
+        <div class="firma">
+          <p>Atentamente,</p><br>
+          <strong>Ing. Ricardo Joanathan Reyes Medina</strong>
+          <p style="color:#555;font-size:12px;margin:2px 0 0;">Coordinador de Obras y Mantenimiento RCMA</p>
+          <p style="color:#555;font-size:12px;margin:2px 0 0;">Coordinación de Obras y Mantenimiento RCMA</p>
+        </div>
+      </div>
+      <div class="footer">Coordinación de Obras y Mantenimiento RCMA — Sistema RCMA</div>
     </div>
-    <div class="footer">Coordinación de Obras y Mantenimiento RCMA — Sistema RCMA</div>
     </body></html>`;
   };
 
