@@ -1,4 +1,5 @@
 import React, { useState, useMemo } from 'react';
+import { jsPDF } from 'jspdf';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import ColegioSelector from '@/components/shared/ColegioSelector';
 import { COLEGIOS } from '@/lib/colegios';
@@ -39,9 +40,6 @@ import {
   Plus, X, Edit2, Save, Download, Eye, Loader2
 } from 'lucide-react';
 import PageHeader from '@/components/shared/PageHeader';
-
-// Necesitaremos la importación de jsPDF para la generación limpia de archivos con márgenes fijos.
-import { jsPDF } from 'jspdf';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 interface Plantel {
@@ -146,7 +144,7 @@ const TABS = [
   { key: 'entregables',  label: 'Entregables',  icon: ClipboardList },
 ];
 
-// ─── PDF Generator (Actualizado usando jsPDF con Márgenes Precisos) ───────────
+// ─── PDF Generator ─────────────────────────────────────────────────────────────
 function generarComunicadoPDF(plantel: Plantel, comunicado: Comunicado, dirNombre: string) {
   const fechaEmision = comunicado.fecha_emision
     ? new Date(comunicado.fecha_emision + 'T12:00:00').toLocaleDateString('es-MX', { day: 'numeric', month: 'long', year: 'numeric' })
@@ -155,138 +153,67 @@ function generarComunicadoPDF(plantel: Plantel, comunicado: Comunicado, dirNombr
     ? new Date(comunicado.fecha_visita + 'T12:00:00').toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: '2-digit' })
     : '(por confirmar)';
 
-  const doc = new jsPDF({
-    orientation: 'portrait',
-    unit: 'mm',
-    format: 'letter'
-  });
+  const html = `<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8">
+<style>
+  body { font-family: Arial, sans-serif; font-size: 13px; color: #222; margin: 40px; line-height: 1.6; }
+  .fecha { text-align: right; margin-bottom: 24px; }
+  .asunto { margin-bottom: 12px; }
+  .saludo { margin-bottom: 20px; }
+  .intro { margin-bottom: 20px; }
+  table { width: 100%; border-collapse: collapse; margin: 16px 0; }
+  th, td { border: 1px solid #ccc; padding: 8px 12px; text-align: left; font-size: 13px; }
+  th { background: #f0f0f0; font-weight: bold; }
+  ul { margin: 8px 0 16px 24px; }
+  li { margin-bottom: 4px; }
+  .firma { margin-top: 40px; }
+  .pie { margin-top: 4px; color: #555; }
+  .footer { margin-top: 60px; font-size: 11px; color: #888; text-align: center; border-top: 1px solid #ddd; padding-top: 8px; }
+</style></head><body>
+<div class="fecha">${fechaEmision}</div>
+<div class="asunto"><strong>Asunto: Inicio de Proyectos de Levantamientos y Estudios.</strong></div>
+<div class="saludo">Estimado/a <strong>${dirNombre || comunicado.director_nombre || ''}.</strong></div>
+<div class="intro">
+Por medio del presente, el Departamento de Coordinación de Obras y Mantenimiento RCMA tiene el placer de informarle sobre el inicio de un importante proyecto de <strong>levantamientos y estudios técnicos</strong> en las instalaciones de <strong>${plantel.colegio_nombre}</strong>.<br><br>
+Este proyecto es fundamental para el desarrollo de futuras iniciativas de mejora y mantenimiento de nuestra infraestructura a nivel institucional.
+</div>
+<strong>Detalles de la Visita</strong>
+<table>
+  <tr><th>Proveedor a Cargo</th><td>Navarro y Cal y Mayor Asociados S.A de C.V.</td></tr>
+  <tr><th>Fecha de Ingreso</th><td>${fechaVisita}</td></tr>
+</table>
+<strong>Alcance de los Trabajos a Realizar</strong>
+<p>Los trabajos técnicos que se llevarán a cabo incluyen:</p>
+<ul>
+  <li>Estudio de Mecánica de Suelos.</li>
+  <li>Levantamientos Arquitectónicos.</li>
+  <li>Levantamientos Estructurales.</li>
+  <li>Levantamientos de Instalaciones (Eléctricas, Hidráulicas, Sanitarias, etc.).</li>
+  <li>Levantamiento de Planta de Conjunto.</li>
+</ul>
+<strong>Contacto del Proveedor</strong>
+<p>El equipo de Navarro y Cal y Mayor Asociados S.A de C.V estará coordinado por la siguiente persona, quien será el contacto directo para cualquier asunto operativo o logístico relacionado con su visita:</p>
+<table>
+  <tr><th>Rol</th><th>Nombre</th><th>Correo Electrónico</th><th>Teléfono</th></tr>
+  <tr><td>Líder de Proyecto</td><td>Arq. Fátima Vázquez</td><td>fvazquez@navarrocym.com.mx</td><td>(55) 5182 1276</td></tr>
+</table>
+<p>Agradecemos de antemano todas las facilidades y el apoyo que se brinden al equipo de trabajo para asegurar el desarrollo eficiente de estas labores, minimizando cualquier posible afectación a las actividades cotidianas del colegio/clínica.</p>
+<p>Quedamos a su disposición para cualquier duda o aclaración.</p>
+<div class="firma">
+  <p>Atentamente,</p>
+  <br>
+  <p><strong>Ing. Ricardo Joanathan Reyes Medina</strong></p>
+  <p class="pie">Coordinador de Obras y Mantenimiento RCMA.</p>
+  <p class="pie">Coordinación de Obras y Mantenimiento RCMA</p>
+</div>
+<div class="footer">Coordinación de Obras y Mantenimiento RCMA</div>
+</body></html>`;
 
-  // Configuración de márgenes e impresión limpia
-  let yPos = 25;
-  const marginX = 25;
-  const maxLineWidth = 165;
-
-  doc.setFont('Helvetica', 'normal');
-  doc.setFontSize(11);
-
-  // Fecha (Alineada a la derecha)
-  doc.text(fechaEmision, 190, yPos, { align: 'right' });
-  yPos += 15;
-
-  // Asunto
-  doc.setFont('Helvetica', 'bold');
-  doc.text('Asunto: Inicio de Proyectos de Levantamientos y Estudios.', marginX, yPos);
-  yPos += 12;
-
-  // Saludo
-  doc.setFont('Helvetica', 'normal');
-  doc.text('Estimado/a ', marginX, yPos);
-  doc.setFont('Helvetica', 'bold');
-  const dirTexto = `${dirNombre || comunicado.director_nombre || ''}.`;
-  doc.text(dirTexto, marginX + doc.getTextWidth('Estimado/a '), yPos);
-  yPos += 12;
-
-  // Cuerpo del mensaje
-  doc.setFont('Helvetica', 'normal');
-  const cuerpoTexto = `Por medio del presente, el Departamento de Coordinación de Obras y Mantenimiento RCMA tiene el placer de informarle sobre el inicio de un importante proyecto de levantamientos y estudios técnicos en las instalaciones de ${plantel.colegio_nombre}.\n\nEste proyecto es fundamental para el desarrollo de futuras iniciativas de mejora y mantenimiento de nuestra infraestructura a nivel institucional.`;
-  const lineasCuerpo = doc.splitTextToSize(cuerpoTexto, maxLineWidth);
-  doc.text(lineasCuerpo, marginX, yPos);
-  yPos += (lineasCuerpo.length * 6) + 4;
-
-  // Detalles de la Visita (Tabla simulada limpia)
-  doc.setFont('Helvetica', 'bold');
-  doc.text('Detalles de la Visita', marginX, yPos);
-  yPos += 6;
-  
-  doc.setFillColor(240, 240, 240);
-  doc.rect(marginX, yPos, maxLineWidth, 8, 'F');
-  doc.setFont('Helvetica', 'bold');
-  doc.text('Proveedor a Cargo:', marginX + 4, yPos + 5.5);
-  doc.setFont('Helvetica', 'normal');
-  doc.text('Navarro y Cal y Mayor Asociados S.A de C.V.', marginX + 50, yPos + 5.5);
-  yPos += 8;
-
-  doc.rect(marginX, yPos, maxLineWidth, 8, 'F');
-  doc.setFont('Helvetica', 'bold');
-  doc.text('Fecha de Ingreso:', marginX + 4, yPos + 5.5);
-  doc.setFont('Helvetica', 'normal');
-  doc.text(fechaVisita, marginX + 50, yPos + 5.5);
-  yPos += 14;
-
-  // Alcance de los Trabajos
-  doc.setFont('Helvetica', 'bold');
-  doc.text('Alcance de los Trabajos a Realizar', marginX, yPos);
-  yPos += 6;
-  doc.setFont('Helvetica', 'normal');
-  doc.text('Los trabajos técnicos que se llevarán a cabo incluyen:', marginX, yPos);
-  yPos += 6;
-
-  const puntosAlcance = [
-    '- Estudio de Mecánica de Suelos.',
-    '- Levantamientos Arquitectónicos.',
-    '- Levantamientos Estructurales.',
-    '- Levantamientos de Instalaciones (Eléctricas, Hidráulicas, Sanitarias, etc.).',
-    '- Levantamiento de Planta de Conjunto.'
-  ];
-  puntosAlcance.forEach(punto => {
-    doc.text(punto, marginX + 5, yPos);
-    yPos += 5.5;
-  });
-  yPos += 4;
-
-  // Contacto del Proveedor
-  doc.setFont('Helvetica', 'bold');
-  doc.text('Contacto del Proveedor', marginX, yPos);
-  yPos += 6;
-  doc.setFont('Helvetica', 'normal');
-  const provTexto = 'El equipo de Navarro y Cal y Mayor Asociados S.A de C.V estará coordinado por la siguiente persona, quien será el contacto directo para cualquier asunto operativo o logístico relacionado con su visita:';
-  const lineasProv = doc.splitTextToSize(provTexto, maxLineWidth);
-  doc.text(lineasProv, marginX, yPos);
-  yPos += (lineasProv.length * 6) + 4;
-
-  // Tabla de contacto reducida
-  doc.setFillColor(230, 230, 230);
-  doc.rect(marginX, yPos, maxLineWidth, 6, 'F');
-  doc.setFont('Helvetica', 'bold');
-  doc.setFontSize(10);
-  doc.text('Rol', marginX + 2, yPos + 4.5);
-  doc.text('Nombre', marginX + 35, yPos + 4.5);
-  doc.text('Correo Electrónico', marginX + 80, yPos + 4.5);
-  doc.text('Teléfono', marginX + 135, yPos + 4.5);
-  yPos += 6;
-
-  doc.setFont('Helvetica', 'normal');
-  doc.text('Líder Proyecto', marginX + 2, yPos + 4.5);
-  doc.text('Arq. Fátima Vázquez', marginX + 35, yPos + 4.5);
-  doc.text('fvazquez@navarrocym.com.mx', marginX + 80, yPos + 4.5);
-  doc.text('(55) 5182 1276', marginX + 135, yPos + 4.5);
-  yPos += 12;
-
-  doc.setFontSize(11);
-  const cierreTexto = 'Agradecemos de antemano todas las facilidades y el apoyo que se brinden al equipo de trabajo para asegurar el desarrollo eficiente de estas labores. Quedamos a su disposición.';
-  const lineasCierre = doc.splitTextToSize(cierreTexto, maxLineWidth);
-  doc.text(lineasCierre, marginX, yPos);
-  yPos += (lineasCierre.length * 6) + 12;
-
-  // Firma
-  doc.text('Atentamente,', marginX, yPos);
-  yPos += 14;
-  doc.setFont('Helvetica', 'bold');
-  doc.text('Ing. Ricardo Joanathan Reyes Medina', marginX, yPos);
-  yPos += 5;
-  doc.setFont('Helvetica', 'normal');
-  doc.setFontSize(10);
-  doc.text('Coordinador de Obras y Mantenimiento RCMA.', marginX, yPos);
-
-  // Footer institucional fijo al final de la página
-  doc.setFontSize(9);
-  doc.setDrawColor(220, 220, 220);
-  doc.line(marginX, 262, 190, 262);
-  doc.text('Coordinación de Obras y Mantenimiento RCMA', 105, 267, { align: 'center' });
-
-  // Guardar de forma directa
-  doc.save(`Comunicado_${plantel.colegio_clave}.pdf`);
-  toast.success('PDF generado exitosamente con jsPDF');
+  const win = window.open('', '_blank');
+  if (!win) { toast.error('Permite ventanas emergentes para generar el PDF'); return; }
+  win.document.write(html);
+  win.document.close();
+  win.focus();
+  setTimeout(() => win.print(), 600);
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -417,6 +344,7 @@ function TabPlanteles({ planteles, loading, qc, directorio }: {
   });
   const set = (k: string, v: string) => setForm(f => ({ ...f, [k]: v }));
 
+  // Datos automáticos al seleccionar colegio
   const colegioInfo = COLEGIOS.find(c => c.colegio === colegio);
   const datosColegio = colegio ? DATOS_COLEGIO[codigoCorto(colegio)] : undefined;
 
@@ -434,6 +362,7 @@ function TabPlanteles({ planteles, loading, qc, directorio }: {
 
   const openEdit = (p: Plantel) => {
     setEditItem(p);
+    // Restaurar territorio y colegio desde colegios.ts
     const info = COLEGIOS.find(c => c.colegio === p.colegio_clave);
     setTerritorio(info?.territorio ?? p.zona ?? '');
     setColegio(p.colegio_clave);
@@ -442,7 +371,7 @@ function TabPlanteles({ planteles, loading, qc, directorio }: {
       fase: p.fase,
       fecha_inicio: p.fecha_inicio ?? '',
       fecha_termino: p.fecha_termino ?? '',
-      notas: p.notas ?? '', // 👈 ¡REPARADO AQUÍ! Corregido de p.notes a p.notas
+      notas: p.notas ?? '',
     });
     setShowForm(true);
   };
@@ -461,7 +390,7 @@ function TabPlanteles({ planteles, loading, qc, directorio }: {
         fase:           form.fase,
         fecha_inicio:   form.fecha_inicio || null,
         fecha_termino:  form.fecha_termino || null,
-        notas:          form.notas || null, // 👈 ¡REPARADO AQUÍ! Corregido de form.notes a form.notas
+        notas:          form.notas || null,
         updated_at:     new Date().toISOString(),
       };
       if (editItem) {
@@ -488,6 +417,7 @@ function TabPlanteles({ planteles, loading, qc, directorio }: {
         <button onClick={openNew} className={btnPrimary}><Plus className="w-4 h-4" />Agregar Plantel</button>
       </div>
 
+      {/* Modal */}
       {showForm && (
         <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
@@ -496,6 +426,8 @@ function TabPlanteles({ planteles, loading, qc, directorio }: {
               <button onClick={() => setShowForm(false)}><X className="w-5 h-5 text-slate-400" /></button>
             </div>
             <div className="p-5 space-y-4">
+
+              {/* Territorio + Colegio — igual que el resto del sistema */}
               <ColegioSelector
                 territorio={territorio}
                 colegio={colegio}
@@ -503,6 +435,8 @@ function TabPlanteles({ planteles, loading, qc, directorio }: {
                 onColegioChange={val => setColegio(val)}
                 required
               />
+
+              {/* Info automática al seleccionar colegio */}
               {colegio && (
                 <div className="bg-slate-50 border border-slate-200 rounded-xl p-3 space-y-2 text-sm">
                   <div className="grid grid-cols-2 gap-2">
@@ -529,6 +463,8 @@ function TabPlanteles({ planteles, loading, qc, directorio }: {
                   </div>
                 </div>
               )}
+
+              {/* Asignación + Fase */}
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="text-xs font-bold text-slate-500 uppercase block mb-1">Asignación</label>
@@ -545,6 +481,8 @@ function TabPlanteles({ planteles, loading, qc, directorio }: {
                   </select>
                 </div>
               </div>
+
+              {/* Fechas */}
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="text-xs font-bold text-slate-500 uppercase block mb-1">Fecha Inicio</label>
@@ -555,6 +493,8 @@ function TabPlanteles({ planteles, loading, qc, directorio }: {
                   <input type="date" className={inputCls} value={form.fecha_termino} onChange={e => set('fecha_termino', e.target.value)} />
                 </div>
               </div>
+
+              {/* Notas */}
               <div>
                 <label className="text-xs font-bold text-slate-500 uppercase block mb-1">Notas</label>
                 <textarea className={inputCls} rows={2} value={form.notas} onChange={e => set('notas', e.target.value)} />
@@ -571,6 +511,7 @@ function TabPlanteles({ planteles, loading, qc, directorio }: {
         </div>
       )}
 
+      {/* Tabla */}
       <div className="bg-white border border-slate-200 rounded-xl overflow-hidden">
         <table className="w-full text-sm">
           <thead className="bg-slate-50 text-slate-500 text-xs uppercase">
@@ -624,7 +565,7 @@ function TabPlanteles({ planteles, loading, qc, directorio }: {
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
-// TAB: PAGOS 
+// TAB: PAGOS (Flujograma)
 // ══════════════════════════════════════════════════════════════════════════════
 function TabPagos({ pagos, planteles, qc }: { pagos: Pago[]; planteles: Plantel[]; qc: any }) {
   const [selectedPlantel, setSelectedPlantel] = useState('');
@@ -683,6 +624,7 @@ function TabPagos({ pagos, planteles, qc }: { pagos: Pago[]; planteles: Plantel[
         <button onClick={() => setShowAdd(true)} className={btnPrimary}><Plus className="w-4 h-4" />Agregar Pago</button>
       </div>
 
+      {/* Totales */}
       <div className="grid grid-cols-3 gap-3">
         <div className="bg-slate-50 rounded-xl p-3 text-center">
           <p className="text-xs text-slate-500">Programado</p>
@@ -698,6 +640,7 @@ function TabPagos({ pagos, planteles, qc }: { pagos: Pago[]; planteles: Plantel[
         </div>
       </div>
 
+      {/* Modal agregar */}
       {showAdd && (
         <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md">
@@ -716,4 +659,1029 @@ function TabPagos({ pagos, planteles, qc }: { pagos: Pago[]; planteles: Plantel[
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="text-xs font-bold text-slate-500 uppercase block mb-1">Mes #</label>
-                  <input type="number" className={inputCls} value={
+                  <input type="number" className={inputCls} value={addForm.mes_numero} onChange={e => setAddForm(f => ({ ...f, mes_numero: e.target.value }))} placeholder="0 = anticipo" />
+                </div>
+                <div>
+                  <label className="text-xs font-bold text-slate-500 uppercase block mb-1">Etiqueta</label>
+                  <input className={inputCls} value={addForm.mes_etiqueta} onChange={e => setAddForm(f => ({ ...f, mes_etiqueta: e.target.value }))} placeholder="MES 1" />
+                </div>
+              </div>
+              <div>
+                <label className="text-xs font-bold text-slate-500 uppercase block mb-1">Concepto</label>
+                <select className={inputCls} value={addForm.concepto} onChange={e => setAddForm(f => ({ ...f, concepto: e.target.value }))}>
+                  <option>Mecánica de Suelos</option>
+                  <option>Cala Estructural</option>
+                  <option>Levantamiento General</option>
+                  <option>Anticipo</option>
+                  <option>Otros</option>
+                </select>
+              </div>
+              <div>
+                <label className="text-xs font-bold text-slate-500 uppercase block mb-1">Monto Programado</label>
+                <input type="number" className={inputCls} value={addForm.monto_programado} onChange={e => setAddForm(f => ({ ...f, monto_programado: e.target.value }))} />
+              </div>
+            </div>
+            <div className="flex justify-end gap-2 p-5 border-t border-slate-100">
+              <button onClick={() => setShowAdd(false)} className={btnSecondary}>Cancelar</button>
+              <button onClick={() => addMut.mutate()} disabled={addMut.isPending || !addForm.plantel_id} className={btnPrimary}>
+                {addMut.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}Guardar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Tabla */}
+      <div className="bg-white border border-slate-200 rounded-xl overflow-hidden">
+        <table className="w-full text-sm">
+          <thead className="bg-slate-50 text-slate-500 text-xs uppercase">
+            <tr>
+              <th className="text-left px-4 py-3">Plantel</th>
+              <th className="text-left px-4 py-3">Mes</th>
+              <th className="text-left px-4 py-3">Concepto</th>
+              <th className="text-right px-4 py-3">Programado</th>
+              <th className="text-right px-4 py-3">Pagado</th>
+              <th className="text-left px-4 py-3">Fecha Pago</th>
+              <th className="text-center px-4 py-3">Estado</th>
+              <th className="px-4 py-3"></th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-slate-100">
+            {pagosFiltrados.length === 0 && (
+              <tr><td colSpan={8} className="text-center py-8 text-slate-400">Sin pagos registrados</td></tr>
+            )}
+            {pagosFiltrados.map(p => {
+              const plantelNombre = planteles.find(pl => pl.id === p.plantel_id)?.colegio_nombre ?? '—';
+              const editing = editingPago === p.id;
+              return (
+                <tr key={p.id} className={`hover:bg-slate-50 ${p.pagado ? 'bg-emerald-50/30' : ''}`}>
+                  <td className="px-4 py-3 text-slate-700 font-medium">{plantelNombre}</td>
+                  <td className="px-4 py-3 text-slate-500 text-xs">{p.mes_etiqueta || `MES ${p.mes_numero}`}</td>
+                  <td className="px-4 py-3 text-slate-600 text-xs">{p.concepto}</td>
+                  <td className="px-4 py-3 text-right text-slate-700">${p.monto_programado.toLocaleString('es-MX', { minimumFractionDigits: 2 })}</td>
+                  <td className="px-4 py-3 text-right">
+                    {editing ? (
+                      <input type="number" className="w-28 px-2 py-1 border border-slate-300 rounded text-sm text-right"
+                        value={editForm.monto_pagado} onChange={e => setEditForm(f => ({ ...f, monto_pagado: e.target.value }))} />
+                    ) : (
+                      <span className={p.pagado ? 'text-emerald-700 font-medium' : 'text-slate-400'}>
+                        {p.monto_pagado != null ? `$${p.monto_pagado.toLocaleString('es-MX', { minimumFractionDigits: 2 })}` : '—'}
+                      </span>
+                    )}
+                  </td>
+                  <td className="px-4 py-3 text-slate-500 text-xs">
+                    {editing ? (
+                      <input type="date" className="px-2 py-1 border border-slate-300 rounded text-sm"
+                        value={editForm.fecha_pago} onChange={e => setEditForm(f => ({ ...f, fecha_pago: e.target.value }))} />
+                    ) : (
+                      p.fecha_pago ? new Date(p.fecha_pago + 'T12:00:00').toLocaleDateString('es-MX') : '—'
+                    )}
+                  </td>
+                  <td className="px-4 py-3 text-center">
+                    {editing ? (
+                      <input type="checkbox" checked={editForm.pagado} onChange={e => setEditForm(f => ({ ...f, pagado: e.target.checked }))}
+                        className="w-4 h-4 accent-emerald-600" />
+                    ) : (
+                      <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${p.pagado ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-500'}`}>
+                        {p.pagado ? 'Pagado' : 'Pendiente'}
+                      </span>
+                    )}
+                  </td>
+                  <td className="px-4 py-3">
+                    {editing ? (
+                      <div className="flex gap-1">
+                        <button onClick={() => updateMut.mutate(p.id)} className="text-emerald-600 hover:text-emerald-800">
+                          <Save className="w-4 h-4" />
+                        </button>
+                        <button onClick={() => setEditingPago(null)} className="text-slate-400 hover:text-slate-600">
+                          <X className="w-4 h-4" />
+                        </button>
+                      </div>
+                    ) : (
+                      <button onClick={() => startEdit(p)} className="text-slate-400 hover:text-[#0C3B6E]">
+                        <Edit2 className="w-4 h-4" />
+                      </button>
+                    )}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// TAB: COMUNICADOS
+// ══════════════════════════════════════════════════════════════════════════════
+function TabComunicados({ comunicados, planteles, directorio, qc }: {
+  comunicados: Comunicado[]; planteles: Plantel[]; directorio: DirectorioItem[]; qc: any;
+}) {
+  const [showForm, setShowForm]     = useState(false);
+  const [previewCom, setPreviewCom] = useState<Comunicado | null>(null);
+  const [deleteCom, setDeleteCom]   = useState<Comunicado | null>(null);
+  const [form, setForm] = useState({
+    plantel_id: '', fecha_emision: hoyLocal(), fecha_visita: '', notas: ''
+  });
+  const [saving, setSaving] = useState(false);
+  const set = (k: string, v: string) => setForm(f => ({ ...f, [k]: v }));
+
+  const plantelSel  = planteles.find(p => p.id === form.plantel_id);
+  const datosCom    = plantelSel ? DATOS_COLEGIO[codigoCorto(plantelSel.colegio_clave)] : undefined;
+
+  // Carga jsPDF dinámicamente (igual que Insumos/Reports)
+  const loadJsPDF = async () => {
+    let JsPDF = (window as any).jspdf?.jsPDF;
+    if (!JsPDF) {
+      await new Promise<void>((res, rej) => {
+        const s = document.createElement('script');
+        s.src = 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js';
+        s.onload = () => res(); s.onerror = () => rej(new Error('No se pudo cargar jsPDF'));
+        document.head.appendChild(s);
+      });
+      JsPDF = (window as any).jspdf?.jsPDF;
+    }
+    return JsPDF;
+  };
+
+  // Genera PDF con jsPDF — devuelve Blob para subir a OneDrive
+  // Genera PDF usando doc.html() — convierte el HTML de vista previa directamente
+  const buildPDFBlob = (plantel: Plantel, c: { fecha_emision: string; fecha_visita: string | null; director_nombre: string | null }): Blob => {
+    const datos      = DATOS_COLEGIO[codigoCorto(plantel.colegio_clave)];
+    const dirNombre  = c.director_nombre ?? datos?.director ?? '';
+    const fechaEmision = c.fecha_emision
+      ? new Date(c.fecha_emision + 'T12:00:00').toLocaleDateString('es-MX', { day: 'numeric', month: 'long', year: 'numeric' })
+      : '';
+    const fechaVisita = c.fecha_visita
+      ? new Date(c.fecha_visita + 'T12:00:00').toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: '2-digit' })
+      : '(por confirmar)';
+
+    const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'letter' });
+    let yPos = 25;
+    const marginX      = 25;
+    const maxLineWidth = 165;
+
+    doc.setFont('Helvetica', 'normal');
+    doc.setFontSize(11);
+
+    // Fecha alineada a la derecha
+    doc.text(fechaEmision, 190, yPos, { align: 'right' });
+    yPos += 15;
+
+    // Asunto
+    doc.setFont('Helvetica', 'bold');
+    doc.text('Asunto: Inicio de Proyectos de Levantamientos y Estudios.', marginX, yPos);
+    yPos += 12;
+
+    // Saludo
+    doc.setFont('Helvetica', 'normal');
+    doc.text('Estimado/a ', marginX, yPos);
+    doc.setFont('Helvetica', 'bold');
+    doc.text(dirNombre + '.', marginX + doc.getTextWidth('Estimado/a '), yPos);
+    yPos += 12;
+
+    // Cuerpo
+    doc.setFont('Helvetica', 'normal');
+    const cuerpoTexto = `Por medio del presente, el Departamento de Coordinación de Obras y Mantenimiento RCMA tiene el placer de informarle sobre el inicio de un importante proyecto de levantamientos y estudios técnicos en las instalaciones de ${plantel.colegio_nombre}.
+
+Este proyecto es fundamental para el desarrollo de futuras iniciativas de mejora y mantenimiento de nuestra infraestructura a nivel institucional.`;
+    const lineasCuerpo = doc.splitTextToSize(cuerpoTexto, maxLineWidth);
+    doc.text(lineasCuerpo, marginX, yPos);
+    yPos += lineasCuerpo.length * 6 + 4;
+
+    // Detalles de la Visita
+    doc.setFont('Helvetica', 'bold');
+    doc.text('Detalles de la Visita', marginX, yPos);
+    yPos += 6;
+    doc.setFillColor(240, 240, 240);
+    doc.rect(marginX, yPos, maxLineWidth, 8, 'F');
+    doc.setFont('Helvetica', 'bold');
+    doc.text('Proveedor a Cargo:', marginX + 4, yPos + 5.5);
+    doc.setFont('Helvetica', 'normal');
+    doc.text('Navarro y Cal y Mayor Asociados S.A de C.V.', marginX + 50, yPos + 5.5);
+    yPos += 8;
+    doc.rect(marginX, yPos, maxLineWidth, 8, 'F');
+    doc.setFont('Helvetica', 'bold');
+    doc.text('Fecha de Ingreso:', marginX + 4, yPos + 5.5);
+    doc.setFont('Helvetica', 'normal');
+    doc.text(fechaVisita, marginX + 50, yPos + 5.5);
+    yPos += 14;
+
+    // Alcance
+    doc.setFont('Helvetica', 'bold');
+    doc.text('Alcance de los Trabajos a Realizar', marginX, yPos);
+    yPos += 6;
+    doc.setFont('Helvetica', 'normal');
+    doc.text('Los trabajos técnicos que se llevarán a cabo incluyen:', marginX, yPos);
+    yPos += 6;
+    ['- Estudio de Mecánica de Suelos.', '- Levantamientos Arquitectónicos.', '- Levantamientos Estructurales.', '- Levantamientos de Instalaciones (Eléctricas, Hidráulicas, Sanitarias, etc.).', '- Levantamiento de Planta de Conjunto.'].forEach(p => {
+      doc.text(p, marginX + 5, yPos); yPos += 5.5;
+    });
+    yPos += 4;
+
+    // Contacto del Proveedor
+    doc.setFont('Helvetica', 'bold');
+    doc.text('Contacto del Proveedor', marginX, yPos);
+    yPos += 6;
+    doc.setFont('Helvetica', 'normal');
+    const provTexto = 'El equipo de Navarro y Cal y Mayor Asociados S.A de C.V estará coordinado por la siguiente persona, quien será el contacto directo para cualquier asunto operativo o logístico relacionado con su visita:';
+    const lineasProv = doc.splitTextToSize(provTexto, maxLineWidth);
+    doc.text(lineasProv, marginX, yPos);
+    yPos += lineasProv.length * 6 + 4;
+
+    // Tabla contacto
+    doc.setFillColor(230, 230, 230);
+    doc.rect(marginX, yPos, maxLineWidth, 6, 'F');
+    doc.setFont('Helvetica', 'bold'); doc.setFontSize(10);
+    doc.text('Rol',               marginX + 2,  yPos + 4.5);
+    doc.text('Nombre',            marginX + 35, yPos + 4.5);
+    doc.text('Correo Electrónico',marginX + 80, yPos + 4.5);
+    doc.text('Teléfono',          marginX + 135,yPos + 4.5);
+    yPos += 6;
+    doc.setFont('Helvetica', 'normal');
+    doc.text('Líder Proyecto',             marginX + 2,  yPos + 4.5);
+    doc.text('Arq. Fátima Vázquez',        marginX + 35, yPos + 4.5);
+    doc.text('fvazquez@navarrocym.com.mx', marginX + 80, yPos + 4.5);
+    doc.text('(55) 5182 1276',             marginX + 135,yPos + 4.5);
+    yPos += 12;
+
+    // Cierre
+    doc.setFontSize(11);
+    const cierreTexto = 'Agradecemos de antemano todas las facilidades y el apoyo que se brinden al equipo de trabajo para asegurar el desarrollo eficiente de estas labores, minimizando cualquier posible afectación a las actividades cotidianas del colegio/clínica.
+
+Quedamos a su disposición para cualquier duda o aclaración.';
+    const lineasCierre = doc.splitTextToSize(cierreTexto, maxLineWidth);
+    doc.text(lineasCierre, marginX, yPos);
+    yPos += lineasCierre.length * 6 + 12;
+
+    // Firma
+    doc.text('Atentamente,', marginX, yPos); yPos += 14;
+    doc.setFont('Helvetica', 'bold');
+    doc.text('Ing. Ricardo Joanathan Reyes Medina', marginX, yPos); yPos += 5;
+    doc.setFont('Helvetica', 'normal'); doc.setFontSize(10);
+    doc.text('Coordinador de Obras y Mantenimiento RCMA.', marginX, yPos);
+
+    // Footer
+    doc.setFontSize(9);
+    doc.setDrawColor(220, 220, 220);
+    doc.line(marginX, 262, 190, 262);
+    doc.text('Coordinación de Obras y Mantenimiento RCMA', 105, 267, { align: 'center' });
+
+    return doc.output('blob') as Blob;
+  };
+
+  const buildPreviewHTML = (plantel: Plantel, c: { fecha_emision: string; fecha_visita: string | null; director_nombre: string | null }) => {
+    const datos     = DATOS_COLEGIO[codigoCorto(plantel.colegio_clave)];
+    const dirNombre = c.director_nombre ?? datos?.director ?? '';
+    const fechaEmision = c.fecha_emision
+      ? new Date(c.fecha_emision + 'T12:00:00').toLocaleDateString('es-MX', { day: 'numeric', month: 'long', year: 'numeric' })
+      : '';
+    const fechaVisita = c.fecha_visita
+      ? new Date(c.fecha_visita + 'T12:00:00').toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: 'numeric' })
+      : '(por confirmar)';
+    return `<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <style>
+      *{box-sizing:border-box;margin:0;padding:0;}
+      html,body{width:100%;background:#e8e8e8;}
+      body{font-family:Arial,sans-serif;font-size:12.5px;color:#222;line-height:1.55;}
+      .wrap{width:680px;margin:0 auto;background:#fff;}
+      .hdr{background:#0C3B6E;border-left:6px solid #F9A825;padding:16px 28px;display:flex;justify-content:space-between;align-items:center;}
+      .hdr h1{color:#fff;font-size:15px;margin:0;} .hdr p{color:#b0c4de;font-size:10px;margin:3px 0 0;}
+      .hdr img{height:42px;width:auto;}
+      .body{padding:24px 28px 28px;}
+      .asunto{font-weight:bold;color:#0C3B6E;margin-bottom:12px;}
+      p{margin:0 0 10px;word-break:break-word;}
+      .stitle{font-weight:bold;color:#0C3B6E;margin:16px 0 3px;}
+      .hr{border:none;border-top:1px solid #dde3ea;margin:0 0 10px;}
+      table.info{width:100%;border-collapse:collapse;margin:8px 0;}
+      table.info th{background:#f1f5f9;width:38%;padding:6px 9px;font-size:12px;border-bottom:1px solid #dde3ea;text-align:left;}
+      table.info td{padding:6px 9px;font-size:12px;border-bottom:1px solid #dde3ea;word-break:break-word;}
+      table.contact{width:100%;border-collapse:collapse;margin:8px 0;table-layout:fixed;}
+      table.contact th{background:#0C3B6E;color:#fff;padding:6px 8px;font-size:11px;text-align:left;}
+      table.contact td{padding:6px 8px;font-size:11px;border-bottom:1px solid #dde3ea;word-break:break-word;}
+      table.contact th:nth-child(1),table.contact td:nth-child(1){width:20%;}
+      table.contact th:nth-child(2),table.contact td:nth-child(2){width:24%;}
+      table.contact th:nth-child(3),table.contact td:nth-child(3){width:35%;}
+      table.contact th:nth-child(4),table.contact td:nth-child(4){width:21%;}
+      ul{margin:6px 0 10px 20px;} li{margin-bottom:3px;}
+      .firma{margin-top:24px;padding-top:12px;border-top:1px solid #dde3ea;}
+      .footer{background:#0C3B6E;color:#b0c4de;text-align:center;font-size:10px;padding:7px;}
+      @media print{*{-webkit-print-color-adjust:exact;print-color-adjust:exact;}body{background:#fff;}.wrap{width:100%;box-shadow:none;margin:0;}}
+    </style></head><body>
+    <div class="wrap">
+      <div class="hdr">
+        <div><h1>Comunicado Institucional</h1><p>Coordinación de Obras y Mantenimiento RCMA &nbsp;·&nbsp; ${fechaEmision}</p><p style="margin-top:1px;font-size:9px;color:#8facc8;">Documento interno — Mano Amiga</p></div>
+        <img src="/logo.png" alt="" onerror="this.style.display='none'">
+      </div>
+      <div class="body">
+        <div class="asunto">Asunto: Inicio de Proyectos de Levantamientos y Estudios.</div>
+        <p>Estimado/a <strong>${dirNombre}</strong>.</p>
+        <p>Por medio del presente, el Departamento de Coordinación de Obras y Mantenimiento RCMA tiene el placer de informarle sobre el inicio de un importante proyecto de <strong>levantamientos y estudios técnicos</strong> en las instalaciones de <strong>${plantel.colegio_nombre}</strong>.</p>
+        <p>Este proyecto es fundamental para el desarrollo de futuras iniciativas de mejora y mantenimiento de nuestra infraestructura a nivel institucional.</p>
+        <div class="stitle">Detalles de la Visita</div><div class="hr"></div>
+        <table class="info"><tr><th>Proveedor a Cargo</th><td>Navarro y Cal y Mayor Asociados S.A de C.V.</td></tr><tr><th>Fecha de Ingreso</th><td>${fechaVisita}</td></tr></table>
+        <div class="stitle">Alcance de los Trabajos a Realizar</div><div class="hr"></div>
+        <p>Los trabajos técnicos que se llevarán a cabo incluyen:</p>
+        <ul><li>Estudio de Mecánica de Suelos.</li><li>Levantamientos Arquitectónicos.</li><li>Levantamientos Estructurales.</li><li>Levantamientos de Instalaciones (Eléctricas, Hidráulicas, Sanitarias, etc.).</li><li>Levantamiento de Planta de Conjunto.</li></ul>
+        <div class="stitle">Contacto del Proveedor</div><div class="hr"></div>
+        <p>El equipo de Navarro y Cal y Mayor Asociados S.A de C.V estará coordinado por la siguiente persona, quien será el contacto directo para cualquier asunto operativo o logístico relacionado con su visita:</p>
+        <table class="contact"><tr><th>Rol</th><th>Nombre</th><th>Correo</th><th>Teléfono</th></tr><tr><td>Líder de Proyecto</td><td>Arq. Fátima Vázquez</td><td>fvazquez@navarrocym.com.mx</td><td>(55) 5182 1276</td></tr></table>
+        <p>Agradecemos de antemano todas las facilidades y el apoyo que se brinden al equipo de trabajo para asegurar el desarrollo eficiente de estas labores, minimizando cualquier posible afectación a las actividades cotidianas del colegio/clínica.</p>
+        <p>Quedamos a su disposición para cualquier duda o aclaración.</p>
+        <div class="firma"><p>Atentamente,</p><br><br><strong>Ing. Ricardo Joanathan Reyes Medina</strong><p style="font-size:11.5px;color:#555;margin-top:3px;">Coordinador de Obras y Mantenimiento RCMA</p></div>
+      </div>
+      <div class="footer">Coordinación de Obras y Mantenimiento RCMA — Sistema RCMA</div>
+    </div></body></html>`;
+  };
+
+  const saveMut = useMutation({
+    mutationFn: async () => {
+      setSaving(true);
+      try {
+        const plantel = planteles.find(p => p.id === form.plantel_id);
+        if (!plantel) throw new Error('Selecciona un plantel');
+        const dirNombre = datosCom?.director ?? null;
+        const blob = buildPDFBlob(plantel, { fecha_emision: form.fecha_emision, fecha_visita: form.fecha_visita || null, director_nombre: dirNombre });
+        const fecha = new Date(form.fecha_emision + 'T12:00:00');
+        const anio  = fecha.getFullYear();
+        const mes   = fecha.toLocaleDateString('es-MX', { month: 'long' }).toUpperCase();
+        const carpeta  = `Levantamiento Nacional/Comunicados/${anio}/${mes}`;
+        const fileName = `Comunicado_${plantel.colegio_clave}_${form.fecha_emision}.pdf`;
+        const fileObj  = new File([blob], fileName, { type: 'application/pdf' });
+        const webUrl   = await spUpload(fileObj, carpeta, fileName);
+        const { error } = await supabase.from('levantamiento_comunicados').insert({
+          plantel_id: form.plantel_id, fecha_emision: form.fecha_emision,
+          fecha_visita: form.fecha_visita || null, director_nombre: dirNombre,
+          director_correo: null, notas: form.notas || null,
+          onedrive_url: webUrl || null, onedrive_path: carpeta, archivo_nombre: fileName,
+        });
+        if (error) throw error;
+      } finally { setSaving(false); }
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['lev_comunicados'] });
+      toast.success('Comunicado guardado y subido a OneDrive ✓');
+      setShowForm(false);
+      setForm({ plantel_id: '', fecha_emision: hoyLocal(), fecha_visita: '', notas: '' });
+    },
+    onError: (e: any) => toast.error(e.message),
+  });
+
+  const deleteMut = useMutation({
+    mutationFn: async (c: Comunicado) => {
+      if (c.onedrive_path && c.archivo_nombre) await spDelete(c.onedrive_path, c.archivo_nombre);
+      const { error } = await supabase.from('levantamiento_comunicados').delete().eq('id', c.id);
+      if (error) throw error;
+    },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['lev_comunicados'] }); toast.success('Comunicado eliminado'); setDeleteCom(null); },
+    onError: (e: any) => toast.error(e.message),
+  });
+
+  const handlePreview = (c: Comunicado) => {
+    const plantel = planteles.find(p => p.id === c.plantel_id);
+    if (!plantel) { toast.error('Plantel no encontrado'); return; }
+    setPreviewCom(c);
+  };
+
+  const handlePrint = (c: Comunicado) => {
+    const plantel = planteles.find(p => p.id === c.plantel_id);
+    if (!plantel) return;
+    try {
+      const blob = buildPDFBlob(plantel, c);
+      const url  = URL.createObjectURL(blob);
+      window.open(url, '_blank');
+      setTimeout(() => URL.revokeObjectURL(url), 30000);
+    } catch (e: any) { toast.error('Error generando PDF: ' + e.message); }
+  };
+
+  // HTML para vista previa inline en iframe
+  const previewHTML = previewCom
+    ? (() => { const pl = planteles.find(p => p.id === previewCom.plantel_id); return pl ? buildPreviewHTML(pl, previewCom) : ''; })()
+    : '';
+
+  return (
+    <div className="space-y-4">
+      <div className="flex justify-end">
+        <button onClick={() => setShowForm(true)} className={btnPrimary}><Plus className="w-4 h-4" />Nuevo Comunicado</button>
+      </div>
+
+      {/* Modal Nuevo Comunicado */}
+      {showForm && (
+        <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md">
+            <div className="flex items-center justify-between p-5 border-b border-slate-100">
+              <h3 className="font-bold text-slate-900">Nuevo Comunicado</h3>
+              <button onClick={() => setShowForm(false)}><X className="w-5 h-5 text-slate-400" /></button>
+            </div>
+            <div className="p-5 space-y-3">
+              <div>
+                <label className="text-xs font-bold text-slate-500 uppercase block mb-1">Plantel</label>
+                <select className={inputCls} value={form.plantel_id} onChange={e => set('plantel_id', e.target.value)}>
+                  <option value="">Seleccionar…</option>
+                  {planteles.map(p => <option key={p.id} value={p.id}>{p.colegio_nombre}</option>)}
+                </select>
+              </div>
+              {datosCom && (
+                <div className="bg-blue-50 rounded-lg p-3 text-xs text-blue-800">
+                  <strong>Director:</strong> {datosCom.director || '—'}<br />
+                  <strong>Administrador:</strong> {datosCom.admin || '—'}
+                </div>
+              )}
+              {form.plantel_id && !datosCom && (
+                <div className="bg-amber-50 rounded-lg p-3 text-xs text-amber-800">No se encontraron datos para este plantel.</div>
+              )}
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs font-bold text-slate-500 uppercase block mb-1">Fecha de Emisión</label>
+                  <input type="date" className={inputCls} value={form.fecha_emision} onChange={e => set('fecha_emision', e.target.value)} />
+                </div>
+                <div>
+                  <label className="text-xs font-bold text-slate-500 uppercase block mb-1">Fecha de Visita</label>
+                  <input type="date" className={inputCls} value={form.fecha_visita} onChange={e => set('fecha_visita', e.target.value)} />
+                </div>
+              </div>
+              <div>
+                <label className="text-xs font-bold text-slate-500 uppercase block mb-1">Notas</label>
+                <textarea className={inputCls} rows={2} value={form.notas} onChange={e => set('notas', e.target.value)} />
+              </div>
+              <div className="bg-blue-50 rounded-lg p-2 text-xs text-blue-700">
+                📁 Se guardará en: <strong>Levantamiento Nacional / Comunicados / {new Date(form.fecha_emision + 'T12:00:00').getFullYear()} / {new Date(form.fecha_emision + 'T12:00:00').toLocaleDateString('es-MX', { month: 'long' }).toUpperCase()}</strong>
+              </div>
+            </div>
+            <div className="flex justify-end gap-2 p-5 border-t border-slate-100">
+              <button onClick={() => setShowForm(false)} className={btnSecondary}>Cancelar</button>
+              <button onClick={() => saveMut.mutate()} disabled={saveMut.isPending || saving || !form.plantel_id} className={btnPrimary}>
+                {(saveMut.isPending || saving) ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}Guardar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Vista Previa */}
+      {previewCom && (
+        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-3xl max-h-[90vh] flex flex-col">
+            <div className="flex items-center justify-between p-4 border-b border-slate-100">
+              <h3 className="font-bold text-slate-900">Vista Previa — Comunicado</h3>
+              <div className="flex items-center gap-2">
+                <button onClick={() => handlePrint(previewCom)} className={btnPrimary}>
+                  <Download className="w-4 h-4" />Imprimir / PDF
+                </button>
+                <button onClick={() => setPreviewCom(null)}><X className="w-5 h-5 text-slate-400" /></button>
+              </div>
+            </div>
+            <div className="flex-1 overflow-auto p-2">
+              <iframe
+                srcDoc={previewHTML}
+                className="w-full h-full min-h-[600px] border-0"
+                title="Vista previa comunicado"
+              />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Confirmar Eliminar */}
+      {deleteCom && (
+        <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 space-y-4">
+            <h3 className="font-bold text-slate-900">¿Eliminar comunicado?</h3>
+            <p className="text-sm text-slate-600">
+              Se eliminará el comunicado de <strong>{planteles.find(p => p.id === deleteCom.plantel_id)?.colegio_nombre}</strong> del sistema
+              {deleteCom.onedrive_path ? ' y del OneDrive' : ''}.
+            </p>
+            <div className="flex justify-end gap-2">
+              <button onClick={() => setDeleteCom(null)} className={btnSecondary}>Cancelar</button>
+              <button onClick={() => deleteMut.mutate(deleteCom)} disabled={deleteMut.isPending} className="px-4 py-2 bg-red-600 text-white rounded-lg text-sm font-medium hover:bg-red-700 flex items-center gap-2 disabled:opacity-50">
+                {deleteMut.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
+                Eliminar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Tabla */}
+      <div className="bg-white border border-slate-200 rounded-xl overflow-hidden">
+        <table className="w-full text-sm">
+          <thead className="bg-slate-50 text-slate-500 text-xs uppercase">
+            <tr>
+              <th className="text-left px-4 py-3">Plantel</th>
+              <th className="text-left px-4 py-3">Director</th>
+              <th className="text-left px-4 py-3">Fecha Emisión</th>
+              <th className="text-left px-4 py-3">Fecha Visita</th>
+              <th className="text-left px-4 py-3">OneDrive</th>
+              <th className="px-4 py-3"></th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-slate-100">
+            {comunicados.length === 0 && (
+              <tr><td colSpan={6} className="text-center py-8 text-slate-400">Sin comunicados registrados</td></tr>
+            )}
+            {comunicados.map(c => {
+              const plantel = planteles.find(p => p.id === c.plantel_id);
+              return (
+                <tr key={c.id} className="hover:bg-slate-50">
+                  <td className="px-4 py-3 font-medium text-slate-900">{plantel?.colegio_nombre ?? '—'}</td>
+                  <td className="px-4 py-3 text-slate-600 text-xs">{c.director_nombre ?? '—'}</td>
+                  <td className="px-4 py-3 text-slate-500 text-xs">
+                    {c.fecha_emision ? new Date(c.fecha_emision + 'T12:00:00').toLocaleDateString('es-MX') : '—'}
+                  </td>
+                  <td className="px-4 py-3 text-slate-500 text-xs">
+                    {c.fecha_visita ? new Date(c.fecha_visita + 'T12:00:00').toLocaleDateString('es-MX') : '—'}
+                  </td>
+                  <td className="px-4 py-3">
+                    {c.onedrive_url
+                      ? <a href={c.onedrive_url} target="_blank" rel="noreferrer" className="text-xs text-[#0C3B6E] hover:underline flex items-center gap-1"><Eye className="w-3.5 h-3.5" />Ver en Drive</a>
+                      : <span className="text-xs text-slate-300">—</span>}
+                  </td>
+                  <td className="px-4 py-3">
+                    <div className="flex items-center gap-2">
+                      <button onClick={() => handlePreview(c)} className="text-slate-400 hover:text-[#0C3B6E]" title="Vista previa">
+                        <Eye className="w-4 h-4" />
+                      </button>
+                      <button onClick={() => handlePrint(c)} className="text-slate-400 hover:text-[#0C3B6E]" title="Imprimir / PDF">
+                        <Download className="w-4 h-4" />
+                      </button>
+                      <button onClick={() => setDeleteCom(c)} className="text-slate-400 hover:text-red-500" title="Eliminar">
+                        <X className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+// TAB: REPORTES DIARIOS
+// ══════════════════════════════════════════════════════════════════════════════
+async function spDelete(carpeta: string, fileName: string) {
+  const { data: sessionData } = await supabase.auth.getSession();
+  const token = sessionData?.session?.access_token ?? '';
+  const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL as string;
+  await fetch(`${SUPABASE_URL}/functions/v1/sharepoint-upload`, {
+    method: 'POST',
+    headers: { 'Authorization': `Bearer ${token}`, 'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY as string, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ action: 'delete', carpeta, fileName }),
+  });
+}
+
+async function spUpload(file: File, carpeta: string, fileName: string): Promise<string> {
+  const formData = new FormData();
+  formData.append('file', file);
+  formData.append('carpeta', carpeta);
+  formData.append('fileName', fileName);
+  const { data: sessionData } = await supabase.auth.getSession();
+  const token = sessionData?.session?.access_token ?? '';
+  const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL as string;
+  const res = await fetch(`${SUPABASE_URL}/functions/v1/sharepoint-upload`, {
+    method: 'POST',
+    headers: { 'Authorization': `Bearer ${token}`, 'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY as string },
+    body: formData,
+  });
+  const result = await res.json();
+  if (!res.ok) throw new Error(result.error ?? 'Error al subir');
+  return result.webUrl ?? '';
+}
+
+function carpetaDesde(fecha: string) {
+  const d = new Date(fecha + 'T12:00:00');
+  const mes = d.toLocaleDateString('es-MX', { month: 'long' }).toUpperCase();
+  return `Levantamiento Nacional/${d.getFullYear()}/${mes}`;
+}
+
+function TabReportes({ reportes, planteles, qc }: { reportes: Reporte[]; planteles: Plantel[]; qc: any }) {
+  const hoy = hoyLocal();
+  const [showForm, setShowForm]   = useState(false);
+  const [editItem, setEditItem]   = useState<Reporte | null>(null);
+  const [form, setForm]           = useState({ plantel_id: '', plantel_id_2: '', fecha_reporte: hoy, notas: '' });
+  const [file, setFile]           = useState<File | null>(null);
+  const [uploading, setUploading] = useState(false);
+  const set = (k: string, v: string) => setForm(f => ({ ...f, [k]: v }));
+
+  const openNew = () => {
+    setEditItem(null); setFile(null);
+    setForm({ plantel_id: '', plantel_id_2: '', fecha_reporte: hoy, notas: '' });
+    setShowForm(true);
+  };
+
+  const openEdit = (r: Reporte) => {
+    setEditItem(r); setFile(null);
+    setForm({ plantel_id: r.plantel_id ?? '', plantel_id_2: r.plantel_id_2 ?? '', fecha_reporte: r.fecha_reporte, notas: r.notas ?? '' });
+    setShowForm(true);
+  };
+
+  const saveMut = useMutation({
+    mutationFn: async () => {
+      setUploading(true);
+      try {
+        const nuevaCarpeta = carpetaDesde(form.fecha_reporte);
+
+        if (editItem) {
+          const carpetaVieja   = editItem.onedrive_path ?? '';
+          const carpetaCambia  = carpetaVieja !== nuevaCarpeta;
+          let webUrl           = editItem.onedrive_url ?? null;
+          let archivoNombre    = editItem.archivo_nombre;
+
+          if (file) {
+            // Nuevo archivo: borra viejo en OneDrive y sube en la nueva ruta
+            if (carpetaVieja && editItem.archivo_nombre) {
+              await spDelete(carpetaVieja, editItem.archivo_nombre);
+            }
+            archivoNombre = `${form.fecha_reporte}_${file.name}`;
+            webUrl = await spUpload(file, nuevaCarpeta, archivoNombre);
+          } else if (carpetaCambia) {
+            // Solo cambió la fecha (mes/año diferente) sin nuevo archivo
+            toast.warning('La carpeta cambió. Sube el archivo nuevamente para moverlo en OneDrive.');
+          }
+
+          const { error } = await supabase.from('levantamiento_reportes').update({
+            plantel_id:     form.plantel_id || null,
+            plantel_id_2:   form.plantel_id_2 || null,
+            fecha_reporte:  form.fecha_reporte,
+            archivo_nombre: archivoNombre,
+            onedrive_url:   webUrl,
+            onedrive_path:  (file || carpetaCambia) ? nuevaCarpeta : carpetaVieja,
+            notas:          form.notas || null,
+          }).eq('id', editItem.id);
+          if (error) throw error;
+
+        } else {
+          // NUEVO reporte
+          if (!file) throw new Error('Selecciona un archivo PDF');
+          const fileName = `${form.fecha_reporte}_${file.name}`;
+          const webUrl   = await spUpload(file, nuevaCarpeta, fileName);
+          const { error } = await supabase.from('levantamiento_reportes').insert({
+            plantel_id:     form.plantel_id || null,
+            plantel_id_2:   form.plantel_id_2 || null,
+            fecha_reporte:  form.fecha_reporte,
+            archivo_nombre: fileName,
+            onedrive_url:   webUrl,
+            onedrive_path:  nuevaCarpeta,
+            notas:          form.notas || null,
+          });
+          if (error) throw error;
+        }
+      } finally {
+        setUploading(false);
+      }
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['lev_reportes'] });
+      toast.success(editItem ? 'Reporte actualizado ✓' : 'Reporte subido a OneDrive ✓');
+      setShowForm(false); setFile(null);
+    },
+    onError: (e: any) => toast.error(e.message),
+  });
+
+  const carpetaPreview = carpetaDesde(form.fecha_reporte);
+
+  return (
+    <div className="space-y-4">
+      <div className="flex justify-end">
+        <button onClick={openNew} className={btnPrimary}><Upload className="w-4 h-4" />Subir Reporte</button>
+      </div>
+
+      {showForm && (
+        <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md">
+            <div className="flex items-center justify-between p-5 border-b border-slate-100">
+              <h3 className="font-bold text-slate-900">{editItem ? 'Editar Reporte' : 'Subir Reporte Diario'}</h3>
+              <button onClick={() => setShowForm(false)}><X className="w-5 h-5 text-slate-400" /></button>
+            </div>
+            <div className="p-5 space-y-3">
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs font-bold text-slate-500 uppercase block mb-1">Plantel 1</label>
+                  <select className={inputCls} value={form.plantel_id} onChange={e => set('plantel_id', e.target.value)}>
+                    <option value="">Sin asignar</option>
+                    {planteles.map(p => <option key={p.id} value={p.id}>{p.colegio_nombre}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className="text-xs font-bold text-slate-500 uppercase block mb-1">Plantel 2 (opcional)</label>
+                  <select className={inputCls} value={form.plantel_id_2} onChange={e => set('plantel_id_2', e.target.value)}>
+                    <option value="">—</option>
+                    {planteles.filter(p => p.id !== form.plantel_id).map(p => <option key={p.id} value={p.id}>{p.colegio_nombre}</option>)}
+                  </select>
+                </div>
+              </div>
+              <div>
+                <label className="text-xs font-bold text-slate-500 uppercase block mb-1">Fecha del Reporte</label>
+                <input type="date" className={inputCls} value={form.fecha_reporte} onChange={e => set('fecha_reporte', e.target.value)} />
+              </div>
+              <div>
+                <label className="text-xs font-bold text-slate-500 uppercase block mb-1">
+                  {editItem ? 'Reemplazar archivo PDF (opcional)' : 'Archivo PDF'}
+                </label>
+                <input type="file" accept=".pdf" className={inputCls}
+                  onChange={e => setFile(e.target.files?.[0] ?? null)} />
+              </div>
+              {editItem && !file && (
+                <div className="bg-slate-50 rounded-lg p-2 text-xs text-slate-500 flex items-center gap-2">
+                  <FileText className="w-4 h-4 text-slate-300" />
+                  Archivo actual: {editItem.archivo_nombre}
+                </div>
+              )}
+              {file && (
+                <div className="bg-slate-50 rounded-lg p-2 text-xs text-slate-600 flex items-center gap-2">
+                  <FileText className="w-4 h-4 text-slate-400" />
+                  {file.name} — {(file.size / 1024 / 1024).toFixed(2)} MB
+                </div>
+              )}
+              <div className={`rounded-lg p-3 text-xs ${file || !editItem ? 'bg-blue-50 text-blue-700' : 'bg-amber-50 text-amber-700'}`}>
+                📁 {file || !editItem ? 'Se guardará en' : 'Ruta actual'}:{' '}
+                <strong>{carpetaPreview}</strong>
+                {editItem && editItem.onedrive_path !== carpetaPreview && editItem.onedrive_path && (
+                  <span className="block mt-1 text-red-600">⚠ La carpeta cambió desde <em>{editItem.onedrive_path}</em> — sube el archivo para moverlo en OneDrive.</span>
+                )}
+              </div>
+              <div>
+                <label className="text-xs font-bold text-slate-500 uppercase block mb-1">Notas</label>
+                <textarea className={inputCls} rows={2} value={form.notas} onChange={e => set('notas', e.target.value)} />
+              </div>
+            </div>
+            <div className="flex justify-end gap-2 p-5 border-t border-slate-100">
+              <button onClick={() => setShowForm(false)} className={btnSecondary}>Cancelar</button>
+              <button
+                onClick={() => saveMut.mutate()}
+                disabled={saveMut.isPending || uploading || (!editItem && !file)}
+                className={btnPrimary}>
+                {(saveMut.isPending || uploading) ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                {editItem ? 'Guardar cambios' : 'Subir'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <div className="bg-white border border-slate-200 rounded-xl overflow-hidden">
+        <table className="w-full text-sm">
+          <thead className="bg-slate-50 text-slate-500 text-xs uppercase">
+            <tr>
+              <th className="text-left px-4 py-3">Fecha</th>
+              <th className="text-left px-4 py-3">Plantel</th>
+              <th className="text-left px-4 py-3">Archivo</th>
+              <th className="text-left px-4 py-3">Ruta OneDrive</th>
+              <th className="px-4 py-3"></th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-slate-100">
+            {reportes.length === 0 && (
+              <tr><td colSpan={5} className="text-center py-8 text-slate-400">Sin reportes subidos</td></tr>
+            )}
+            {reportes.map(r => {
+              const plantel = planteles.find(p => p.id === r.plantel_id);
+              return (
+                <tr key={r.id} className="hover:bg-slate-50">
+                  <td className="px-4 py-3 text-slate-700 font-medium">
+                    {r.fecha_reporte ? new Date(r.fecha_reporte + 'T12:00:00').toLocaleDateString('es-MX') : '—'}
+                  </td>
+                  <td className="px-4 py-3 text-slate-500 text-xs">
+                    <div>{plantel?.colegio_nombre ?? 'General'}</div>
+                    {(() => { const p2 = planteles.find(p => p.id === r.plantel_id_2); return p2 ? <div className="text-slate-400">{p2.colegio_nombre}</div> : null; })()}
+                  </td>
+                  <td className="px-4 py-3 text-slate-600 text-xs">{r.archivo_nombre}</td>
+                  <td className="px-4 py-3 text-slate-400 text-xs">{r.onedrive_path ?? '—'}</td>
+                  <td className="px-4 py-3">
+                    <div className="flex items-center gap-2">
+                      {r.onedrive_url && (
+                        <a href={r.onedrive_url} target="_blank" rel="noreferrer" className="text-slate-400 hover:text-[#0C3B6E]">
+                          <Eye className="w-4 h-4" />
+                        </a>
+                      )}
+                      <button onClick={() => openEdit(r)} className="text-slate-400 hover:text-[#0C3B6E]">
+                        <Edit2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+// TAB: ENTREGABLES (Checklist)
+// ══════════════════════════════════════════════════════════════════════════════
+function TabEntregables({ entregables, planteles, qc }: { entregables: Entregable[]; planteles: Plantel[]; qc: any }) {
+  const [actaModal, setActaModal]   = useState<{ entId: string; plantelNombre: string } | null>(null);
+  const [actaFile, setActaFile]     = useState<File | null>(null);
+  const [actaUploading, setActaUploading] = useState(false);
+
+  const CHECKS = [
+    { field: 'mecanica_suelos',       label: 'Mecánica de Suelos'        },
+    { field: 'levant_arq',            label: 'Levant. Arquitectónico'     },
+    { field: 'levant_estructural',    label: 'Levant. Estructural'        },
+    { field: 'levant_instalaciones',  label: 'Levant. Instalaciones'      },
+    { field: 'levant_conjunto',       label: 'Planta de Conjunto'         },
+  ];
+
+  const updateMut = useMutation({
+    mutationFn: async ({ id, field, value }: { id: string; field: string; value: boolean }) => {
+      const { error } = await supabase.from('levantamiento_entregables')
+        .update({ [field]: value, updated_at: new Date().toISOString() }).eq('id', id);
+      if (error) throw error;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['lev_entregables'] }),
+    onError: (e: any) => toast.error(e.message),
+  });
+
+  const createMut = useMutation({
+    mutationFn: async (plantelId: string) => {
+      const { error } = await supabase.from('levantamiento_entregables').insert({ plantel_id: plantelId });
+      if (error) throw error;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['lev_entregables'] }),
+    onError: (e: any) => toast.error(e.message),
+  });
+
+  const actaMut = useMutation({
+    mutationFn: async () => {
+      if (!actaModal) return;
+      setActaUploading(true);
+      try {
+        let webUrl: string | null = null;
+        let fileName: string | null = null;
+
+        if (actaFile) {
+          fileName = `Acta_Cierre_${actaModal.plantelNombre.replace(/\s+/g, '_')}_${hoyLocal()}.pdf`;
+          webUrl = await spUpload(actaFile, 'Levantamiento Nacional/Actas de Cierre', fileName);
+        }
+
+        const updatePayload: any = { acta_firmada: true, updated_at: new Date().toISOString() };
+        if (fileName)  updatePayload.acta_cierre_nombre = fileName;
+        if (webUrl)    updatePayload.acta_cierre_url    = webUrl;
+
+        const { error } = await supabase.from('levantamiento_entregables')
+          .update(updatePayload).eq('id', actaModal.entId);
+        if (error) throw error;
+      } finally {
+        setActaUploading(false);
+      }
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['lev_entregables'] });
+      toast.success('Acta de cierre registrada ✓');
+      setActaModal(null); setActaFile(null);
+    },
+    onError: (e: any) => toast.error(e.message),
+  });
+
+  return (
+    <div className="space-y-3">
+      {planteles.length === 0 && (
+        <div className="text-center py-8 text-slate-400 text-sm">Agrega planteles primero en la pestaña Planteles</div>
+      )}
+
+      {/* Modal Acta de Cierre */}
+      {actaModal && (
+        <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md">
+            <div className="flex items-center justify-between p-5 border-b border-slate-100">
+              <h3 className="font-bold text-slate-900">Acta de Cierre — {actaModal.plantelNombre}</h3>
+              <button onClick={() => { setActaModal(null); setActaFile(null); }}><X className="w-5 h-5 text-slate-400" /></button>
+            </div>
+            <div className="p-5 space-y-3">
+              <p className="text-sm text-slate-600">Sube el PDF del acta firmada. Quedará guardada en OneDrive bajo <strong>Levantamiento Nacional / Actas de Cierre</strong>.</p>
+              <div>
+                <label className="text-xs font-bold text-slate-500 uppercase block mb-1">Archivo PDF (opcional)</label>
+                <input type="file" accept=".pdf" className={inputCls} onChange={e => setActaFile(e.target.files?.[0] ?? null)} />
+              </div>
+              {actaFile && (
+                <div className="bg-slate-50 rounded-lg p-2 text-xs text-slate-600 flex items-center gap-2">
+                  <FileText className="w-4 h-4 text-slate-400" />
+                  {actaFile.name} — {(actaFile.size / 1024 / 1024).toFixed(2)} MB
+                </div>
+              )}
+              <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-xs text-amber-800">
+                ⚠ Al confirmar se marcará como <strong>Acta Firmada</strong>. Podrás actualizar el estado de entregables por separado.
+              </div>
+            </div>
+            <div className="flex justify-end gap-2 p-5 border-t border-slate-100">
+              <button onClick={() => { setActaModal(null); setActaFile(null); }} className={btnSecondary}>Cancelar</button>
+              <button onClick={() => actaMut.mutate()} disabled={actaMut.isPending || actaUploading} className={btnPrimary}>
+                {(actaMut.isPending || actaUploading) ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                Confirmar Firma
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {planteles.map(plantel => {
+        const ent   = entregables.find(e => e.plantel_id === plantel.id);
+        const total = ent ? CHECKS.filter(c => (ent as any)[c.field]).length : 0;
+        const todosCompletos = total === 5;
+
+        // Estado del acta — entregables se derivan del checklist
+        const actaFirmada = ent?.acta_firmada ?? false;
+
+        let estadoBadge = null;
+        if (actaFirmada && todosCompletos) {
+          estadoBadge = <span className="flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-emerald-100 text-emerald-700"><CheckCircle2 className="w-3.5 h-3.5" />Cierre Completo</span>;
+        } else if (actaFirmada && !todosCompletos) {
+          estadoBadge = <span className="flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-700"><Circle className="w-3.5 h-3.5" />Acta Firmada — Entregables Pendientes</span>;
+        } else if (actaFirmada) {
+          estadoBadge = <span className="flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-700"><CheckCircle2 className="w-3.5 h-3.5" />Acta Firmada</span>;
+        }
+
+        return (
+          <div key={plantel.id} className={`bg-white border rounded-xl p-4 ${actaFirmada && !todosCompletos ? 'border-amber-200' : actaFirmada && todosCompletos ? 'border-emerald-200' : 'border-slate-200'}`}>
+            {/* Header */}
+            <div className="flex items-center justify-between mb-3">
+              <div>
+                <h4 className="font-bold text-slate-900">{plantel.colegio_nombre}</h4>
+                <p className="text-xs text-slate-400">{plantel.colegio_clave} · {plantel.zona}</p>
+              </div>
+              <div className="flex items-center gap-2 flex-wrap justify-end">
+                <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${faseColor(plantel.fase)}`}>
+                  {faseLabel(plantel.fase)}
+                </span>
+                <span className="text-xs text-slate-500 font-medium">{total}/5</span>
+                {!ent && (
+                  <button onClick={() => createMut.mutate(plantel.id)} className="text-xs text-[#0C3B6E] hover:underline">
+                    Iniciar checklist
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* Checklist */}
+            {ent ? (
+              <>
+                <div className="flex flex-wrap gap-2 mb-4">
+                  {CHECKS.map(c => {
+                    const checked = (ent as any)[c.field] as boolean;
+                    return (
+                      <button key={c.field}
+                        onClick={() => updateMut.mutate({ id: ent.id, field: c.field, value: !checked })}
+                        className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border text-sm transition-all ${
+                          checked ? 'bg-emerald-50 border-emerald-200 text-emerald-700' : 'bg-slate-50 border-slate-200 text-slate-500 hover:border-slate-300'
+                        }`}>
+                        {checked ? <CheckCircle2 className="w-4 h-4 text-emerald-500" /> : <Circle className="w-4 h-4 text-slate-300" />}
+                        {c.label}
+                      </button>
+                    );
+                  })}
+                </div>
+
+                {/* Barra inferior — Acta de Cierre */}
+                <div className="border-t border-slate-100 pt-3 flex items-center justify-between flex-wrap gap-2">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    {estadoBadge}
+                    {actaFirmada && ent.acta_cierre_url && (
+                      <a href={ent.acta_cierre_url} target="_blank" rel="noreferrer"
+                        className="flex items-center gap-1 text-xs text-[#0C3B6E] hover:underline">
+                        <Eye className="w-3.5 h-3.5" />Ver acta
+                      </a>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    {/* Estado entregables — automático según checklist */}
+                    <span className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-medium ${
+                      todosCompletos
+                        ? 'bg-emerald-50 border-emerald-200 text-emerald-700'
+                        : 'bg-amber-50 border-amber-200 text-amber-700'
+                    }`}>
+                      {todosCompletos ? <CheckCircle2 className="w-3.5 h-3.5" /> : <Circle className="w-3.5 h-3.5" />}
+                      {todosCompletos ? 'Entregables Completos' : 'Entregables Pendientes por Entrega'}
+                    </span>
+                    {/* Botón Acta de Cierre */}
+                    {!actaFirmada ? (
+                      <button
+                        onClick={() => setActaModal({ entId: ent.id, plantelNombre: plantel.colegio_nombre })}
+                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-[#0C3B6E] text-xs font-medium text-[#0C3B6E] hover:bg-blue-50 transition-all">
+                        <Upload className="w-3.5 h-3.5" />Registrar Acta de Cierre
+                      </button>
+                    ) : (
+                      <button
+                        onClick={() => setActaModal({ entId: ent.id, plantelNombre: plantel.colegio_nombre })}
+                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-200 text-xs text-slate-400 hover:border-slate-300 transition-all">
+                        <Upload className="w-3.5 h-3.5" />Reemplazar acta
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </>
+            ) : (
+              <p className="text-xs text-slate-400">Sin checklist iniciado</p>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
