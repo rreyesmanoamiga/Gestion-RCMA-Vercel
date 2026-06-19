@@ -1032,7 +1032,7 @@ export default function TicketMAS() {
   // ─────────────────────────────────────────────────────────────────────────────
   if (vista === 'lista') {
     return (
-      <div className="max-w-6xl mx-auto p-4 space-y-4">
+      <div className="w-full p-4 space-y-4">
         <div className="flex items-center justify-between mb-2">
           <PageHeader title="Ticket MAS" subtitle="Revisión y autorización de tickets" icon={<ClipboardList className="w-5 h-5"/>} />
           <button
@@ -1065,14 +1065,14 @@ export default function TicketMAS() {
             <table className="w-full text-sm min-w-[700px]">
               <thead>
                 <tr className="bg-slate-800 text-white text-xs uppercase">
-                  <th className="px-4 py-3 text-left w-[120px]">Folio</th>
-                  <th className="px-4 py-3 text-left w-[200px]">Proyecto</th>
-                  <th className="px-4 py-3 text-left w-[180px]">Colegio</th>
-                  <th className="px-4 py-3 text-left w-[150px]">Solicitante</th>
-                  <th className="px-4 py-3 text-left w-[160px]">Clasificación</th>
-                  <th className="px-4 py-3 text-left w-[110px]">Fecha</th>
-                  <th className="px-4 py-3 text-left w-[110px]">Estatus</th>
-                  <th className="px-4 py-3 text-center w-[120px]">Acciones</th>
+                  <th className="px-4 py-3 text-left w-[130px]">Folio</th>
+                  <th className="px-4 py-3 text-left">Proyecto</th>
+                  <th className="px-4 py-3 text-left w-[190px]">Colegio</th>
+                  <th className="px-4 py-3 text-left w-[160px]">Solicitante</th>
+                  <th className="px-4 py-3 text-left w-[170px]">Clasificación</th>
+                  <th className="px-4 py-3 text-left w-[115px]">Fecha</th>
+                  <th className="px-4 py-3 text-left w-[120px]">Estatus</th>
+                  <th className="px-4 py-3 text-center w-[130px]">Acciones</th>
                 </tr>
               </thead>
               <tbody>
