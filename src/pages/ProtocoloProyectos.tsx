@@ -19,7 +19,6 @@ import {
 
 // ─── Archivos en Supabase Storage (bucket privado: documentos-rcma) ────────────
 const BUCKET           = 'documentos-rcma';
-const FILE_TABLA       = 'TABLA COMPARATIVA_MAS_V2.xlsx';
 const FILE_CONTRATOS   = 'REQUISITOS_CONTRATO_PROVEEDOR.pdf';
 const SIGNED_URL_TTL   = 60;
 
@@ -32,6 +31,8 @@ const FASES = [
     color: 'blue',
     pasos: [
       'Ingresar al Sistema RCMA y completar el formulario de Solicitud de Proyecto con toda la información requerida: descripción del proyecto, clasificación, colegio solicitante, datos del responsable y cualquier información técnica pertinente.',
+      'Al momento de enviar la solicitud, el sistema permite adjuntar las cotizaciones de proveedores si ya se tienen disponibles. Es importante que las cotizaciones estén actualizadas — no deben tener una antigüedad mayor a 2 meses. Se requiere un mínimo de tres (3) cotizaciones de proveedores distintos. Cada cotización debe incluir: datos del proveedor (razón social, RFC, experiencia), alcance y descripción detallada del trabajo, monto total desglosado en MXN con IVA, tiempo de ejecución, garantía ofrecida y vigencia de la cotización.',
+      'En caso de no contar con las cotizaciones al momento de enviar la solicitud, deberán remitirse posteriormente por correo electrónico a rreyes@manoamiga.edu.mx, con copia a su Coordinación Administrativa Regional (CAR) y a arodriguez@manoamiga.edu.mx, en cuanto estén disponibles.',
       'Una vez enviada la solicitud, el sistema generará una notificación automática por correo electrónico al solicitante, confirmando la recepción del registro.',
       'La Coordinación de Obras y Mantenimiento RCMA revisará la solicitud en un plazo no mayor a 5 días hábiles y determinará los pasos a seguir.',
     ],
@@ -49,12 +50,12 @@ const FASES = [
   {
     num: '03',
     icon: BarChart2,
-    titulo: 'Cotizaciones y Tabla Comparativa',
+    titulo: 'Revisión de Cotizaciones',
     color: 'teal',
     pasos: [
-      'El colegio solicitante deberá recabar un mínimo de tres (3) cotizaciones de proveedores distintos. Cada cotización debe contener: datos del proveedor (razón social, RFC, experiencia), alcance y descripción detallada del trabajo, monto total desglosado en MXN con IVA, tiempo de ejecución, garantía ofrecida y vigencia de la cotización.',
-      'Con base en las cotizaciones recabadas, se deberá elaborar la Tabla Comparativa en el formato Excel proporcionado por la Coordinación de Obras (disponible para descarga en esta página), evaluando: monto total, tiempo de ejecución, garantía, experiencia del proveedor y justificación de la selección considerando la relación costo-beneficio.',
-      'La Tabla Comparativa junto con las tres cotizaciones en formato PDF deberán enviarse contestando el correo de notificación de revisión de la Solicitud de Proyecto, con copia a: arodriguez@manoamiga.edu.mx, CAR de Zona correspondiente y Líder de Proyecto ECO de Zona.',
+      'Si las cotizaciones no fueron adjuntadas durante la Solicitud de Proyecto (Fase 01), deberán enviarse por correo electrónico a rreyes@manoamiga.edu.mx con copia a su CAR de zona y a arodriguez@manoamiga.edu.mx, en cuanto se cuente con ellas.',
+      'Recuerda que las cotizaciones deben estar actualizadas (no mayor a 2 meses de antigüedad) y ser un mínimo de tres (3) de proveedores distintos, incluyendo: datos del proveedor, alcance del trabajo, monto en MXN con IVA, tiempo de ejecución, garantía y vigencia.',
+      'La Coordinación de Obras y Mantenimiento RCMA realizará la revisión y análisis comparativo de las cotizaciones recibidas para determinar la viabilidad y proceder con las siguientes fases.',
     ],
   },
   {
@@ -179,33 +180,7 @@ export default function ProtocoloProyectos() {
           </div>
         </div>
 
-        {/* ── Descargables ─────────────────────────────────────────────── */}
-        <div className="bg-white rounded-2xl border border-teal-200 shadow-sm overflow-hidden">
-          <div className="px-6 py-4 border-b border-teal-100 flex items-center gap-2.5 bg-teal-50">
-            <AlertCircle className="w-4 h-4 text-teal-600 flex-shrink-0" />
-            <p className="text-sm font-bold text-teal-800">
-              Documento requerido para la Fase 03 — Cotizaciones y Tabla Comparativa
-            </p>
-          </div>
-          <div className="p-6">
-            <button
-              onClick={() => handleDownload(FILE_TABLA)}
-              disabled={loadingFile === FILE_TABLA}
-              className="group flex items-center gap-4 p-4 rounded-xl border-2 border-slate-200 hover:border-teal-400 hover:bg-teal-50 transition-all duration-200 text-left w-full sm:w-auto"
-            >
-              <div className="w-11 h-11 rounded-lg bg-teal-100 group-hover:bg-teal-200 flex items-center justify-center flex-shrink-0 transition-colors">
-                <FileSpreadsheet className="w-5 h-5 text-teal-600" />
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-bold text-slate-800 leading-tight">Tabla Comparativa</p>
-                <p className="text-xs text-slate-500 mt-0.5">Archivo Excel · Análisis de cotizaciones de proveedores</p>
-              </div>
-              {loadingFile === FILE_TABLA
-                ? <span className="w-4 h-4 border-2 border-teal-400 border-t-transparent rounded-full animate-spin flex-shrink-0" />
-                : <Download className="w-4 h-4 text-slate-400 group-hover:text-teal-600 flex-shrink-0 transition-colors" />}
-            </button>
-          </div>
-        </div>
+
 
         {/* ── Fases del protocolo ───────────────────────────────────────── */}
         <div className="space-y-4">
