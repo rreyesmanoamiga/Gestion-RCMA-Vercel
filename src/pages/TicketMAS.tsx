@@ -1169,6 +1169,50 @@ export default function TicketMAS() {
           </div>
         )}
 
+        {/* Modal: Crear Expediente */}
+        {expedienteModal && (
+          <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md">
+              <div className="flex items-center justify-between p-5 border-b border-slate-100">
+                <div>
+                  <h3 className="font-bold text-slate-900">Crear Expediente en OneDrive</h3>
+                  <p className="text-xs text-slate-500 mt-0.5">{expedienteModal.folio} — {expedienteModal.colegio}</p>
+                </div>
+                <button onClick={() => setExpedienteModal(null)}><X className="w-5 h-5 text-slate-400" /></button>
+              </div>
+              <div className="p-5 space-y-4">
+                <div className="bg-blue-50 rounded-lg p-3 text-xs text-blue-700">
+                  📁 Se creará en: <strong>Expedientes/{expedienteModal.created_at ? new Date(expedienteModal.created_at).getFullYear() : new Date().getFullYear()}/{expedienteModal.colegio}/{expedienteModal.folio} - {(expedienteModal.nombre_proyecto ?? expedienteModal.descripcion ?? '').slice(0, 40)}</strong>
+                </div>
+                <div>
+                  <label className="text-xs font-bold text-slate-500 uppercase block mb-1">Solicitud de Proyecto (PDF) — opcional</label>
+                  <input type="file" accept=".pdf" className="w-full text-xs border border-slate-200 rounded-lg p-2"
+                    onChange={e => setExpForm(f => ({ ...f, solicitud_pdf: e.target.files?.[0] ?? null }))} />
+                </div>
+                <div>
+                  <label className="text-xs font-bold text-slate-500 uppercase block mb-1">Ticket MAS (PDF) — opcional</label>
+                  <input type="file" accept=".pdf" className="w-full text-xs border border-slate-200 rounded-lg p-2"
+                    onChange={e => setExpForm(f => ({ ...f, ticket_pdf: e.target.files?.[0] ?? null }))} />
+                </div>
+                <div>
+                  <label className="text-xs font-bold text-slate-500 uppercase block mb-1">Autorización (.msg o PDF) — opcional</label>
+                  <input type="file" accept=".msg,.pdf" className="w-full text-xs border border-slate-200 rounded-lg p-2"
+                    onChange={e => setExpForm(f => ({ ...f, autorizacion_msg: e.target.files?.[0] ?? null }))} />
+                </div>
+                <p className="text-xs text-slate-400">Los archivos son opcionales — puedes crear solo las carpetas vacías sin adjuntar nada.</p>
+              </div>
+              <div className="flex justify-end gap-2 p-5 border-t border-slate-100">
+                <button onClick={() => setExpedienteModal(null)} className="px-4 py-2 bg-slate-100 text-slate-700 rounded-lg text-sm hover:bg-slate-200">Cancelar</button>
+                <button onClick={() => crearExpedienteManual(expedienteModal)} disabled={creandoExpediente}
+                  className="px-4 py-2 bg-[#0C3B6E] text-white rounded-lg text-sm font-medium hover:bg-[#1565C0] flex items-center gap-2 disabled:opacity-50">
+                  {creandoExpediente ? <Loader2 className="w-4 h-4 animate-spin" /> : <FolderPlus className="w-4 h-4" />}
+                  {creandoExpediente ? 'Creando...' : 'Crear Expediente'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Modal: Cancelar con motivo */}
         {cancelModal && (
           <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
