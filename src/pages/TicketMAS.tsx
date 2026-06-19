@@ -521,6 +521,29 @@ export default function TicketMAS() {
       });
       if (ticketRegError) throw new Error(`Ticket autorizado pero no se pudo registrar en Tickets Registrados: ${ticketRegError.message}`);
 
+      // ── Crear proyecto en Projects automáticamente ────────────────────────────
+      if (updatedRow.nombre_proyecto) {
+        const { data: proyecto, error: projError } = await supabase.from('projects').insert({
+          name:          updatedRow.nombre_proyecto,
+          status:        'en_espera',
+          priority:      'media',
+          territorio:    updatedRow.territorio    ?? null,
+          colegio:       updatedRow.colegio       ?? null,
+          eco:           updatedRow.centro_gestor ?? null,
+          tipo_proyecto: updatedRow.clasificacion ?? null,
+          notes:         updatedRow.descripcion   ?? null,
+          folio:         updatedRow.folio         ?? null,
+          type:          'Mantenimiento',
+          progress:      0,
+        }).select().single();
+
+        if (!projError && proyecto) {
+          // Vincular el proyecto creado al ticket registrado
+          await supabase.from('tickets').update({ proyecto_id: proyecto.id })
+            .eq('folio', updatedRow.folio);
+        }
+      }
+
       // ── Crear estructura de expediente en OneDrive + subir PDF autorizado ────────
       try {
         const colegioCarpeta = updatedRow.colegio?.replace(/[/\\:*?"<>|]/g, '_') ?? 'SIN_COLEGIO';
