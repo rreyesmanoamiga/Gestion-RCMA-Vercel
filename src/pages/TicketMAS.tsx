@@ -379,12 +379,17 @@ export default function TicketMAS() {
     }
     setLoading(true);
     try {
-      // Generar folio con consecutivo anual (se reinicia cada año)
+      // Generar folio: tomar el número máximo existente + 1 (evita duplicados por eliminados/cancelados)
       const currentYear = new Date().getFullYear();
-      const { count } = await supabase.from('tickets_mas')
-        .select('*', { count: 'exact', head: true })
+      const { data: foliosExistentes } = await supabase.from('tickets_mas')
+        .select('folio')
         .like('folio', `TMAS-${currentYear}-%`);
-      const num = (count ?? 0) + 1;
+      let maxNum = 0;
+      (foliosExistentes ?? []).forEach((row: any) => {
+        const match = row.folio?.match(/TMAS-\d{4}-(\d+)$/);
+        if (match) { const n = parseInt(match[1], 10); if (n > maxNum) maxNum = n; }
+      });
+      const num = maxNum + 1;
       const folio = `TMAS-${currentYear}-${String(num).padStart(3, '0')}`;
 
       const { error } = await supabase.from('tickets_mas').insert([{
