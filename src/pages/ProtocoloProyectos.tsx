@@ -71,22 +71,6 @@ const FASES = [
   },
   {
     num: '05',
-    icon: Scale,
-    titulo: 'Solicitud de Contratos',
-    color: 'rose',
-    pasos: [
-      'Con base en la validación técnica del equipo ECO y la selección formal del proveedor, la Coordinación de Obras y Mantenimiento RCMA remitirá vía correo electrónico una solicitud de autorización a la Dirección correspondiente para gestionar ante OR - SER Jurídico la elaboración del instrumento contractual aplicable. El tipo de documento a elaborar será determinado según la naturaleza del proyecto: Contrato de Prestación de Servicios, Contrato de Donación o Acta de Garantía.',
-      'El colegio solicitante deberá recabar la documentación corporativa y fiscal del proveedor seleccionado con base en el listado de requisitos disponible para descarga en esta fase. Dicha documentación deberá adjuntarse directamente en el correo dirigido a OR - SER Jurídico solicitando la elaboración del contrato correspondiente, con copia a: arodriguez@manoamiga.edu.mx, CAR del territorio y Coordinador de Obras y Mantenimiento RCMA.',
-      'Una vez que OR - SER Jurídico concluya la elaboración del contrato y éste cuente con la firma del proveedor, la Coordinación de Obras y Mantenimiento RCMA procederá a habilitar el módulo Ticket MAS en el Sistema RCMA. Dicha habilitación constituye la autorización formal para que el colegio registre el proyecto y el proveedor pueda iniciar las actividades contratadas.',
-    ],
-    descarga: {
-      filename: FILE_CONTRATOS,
-      label: 'Requisitos para Elaboración de Contrato',
-      descripcion: 'Archivo PDF · Documentación requerida al proveedor para OR - SER Jurídico',
-    },
-  },
-  {
-    num: '06',
     icon: Ticket,
     titulo: 'Ticket MAS',
     color: 'orange',
@@ -97,7 +81,7 @@ const FASES = [
     ],
   },
   {
-    num: '07',
+    num: '06',
     icon: ShieldCheck,
     titulo: 'Autorización del Proyecto',
     color: 'green',
@@ -107,6 +91,23 @@ const FASES = [
       'El Coordinador de Obras y Mantenimiento hará llegar al colegio los documentos oficiales (Solicitud de Proyecto y Ticket MAS autorizados) para su integración al expediente del proyecto.',
       'A partir de la autorización, el proyecto quedará registrado en el sistema para su seguimiento, control y supervisión por parte de la Coordinación de Obras y Mantenimiento RCMA.',
     ],
+  },
+  {
+    num: '07',
+    icon: Scale,
+    titulo: 'Solicitud de Contratos y Actas de Garantía',
+    color: 'rose',
+    pasos: [
+      'Con base en la validación técnica del equipo ECO y la selección formal del proveedor, la Coordinación de Obras y Mantenimiento RCMA remitirá vía correo electrónico una solicitud de autorización a la Dirección correspondiente para gestionar ante OR - SER Jurídico la elaboración del instrumento contractual aplicable. El tipo de documento a elaborar será determinado según la naturaleza del proyecto: Contrato de Prestación de Servicios, Contrato de Donación o Acta de Garantía.',
+      'El colegio solicitante deberá recabar la documentación corporativa y fiscal del proveedor seleccionado con base en el listado de requisitos disponible para descarga en esta fase. Dicha documentación deberá adjuntarse directamente en el correo dirigido a OR - SER Jurídico solicitando la elaboración del contrato correspondiente, con copia a: arodriguez@manoamiga.edu.mx, CAR del territorio y Coordinador de Obras y Mantenimiento RCMA.',
+      'Es fundamental que, una vez concluidos los trabajos, el proveedor emita y firme el Acta de Garantía correspondiente. Este documento es el respaldo formal que compromete al proveedor a responder por defectos, vicios ocultos o fallas en los materiales y mano de obra durante el período de garantía establecido. Sin el Acta de Garantía debidamente firmada, el colegio no contará con sustento legal para exigir correcciones o reparaciones sin costo adicional en caso de que los trabajos presenten fallas posteriores a su entrega.',
+      'Una vez que OR - SER Jurídico concluya la elaboración del contrato y éste cuente con la firma del proveedor, la Coordinación de Obras y Mantenimiento RCMA procederá a habilitar el módulo Ticket MAS en el Sistema RCMA. Dicha habilitación constituye la autorización formal para que el colegio registre el proyecto y el proveedor pueda iniciar las actividades contratadas.',
+    ],
+    descarga: {
+      filename: FILE_CONTRATOS,
+      label: 'Requisitos para Elaboración de Contrato',
+      descripcion: 'Archivo PDF · Documentación requerida al proveedor para OR - SER Jurídico',
+    },
   },
 ];
 
