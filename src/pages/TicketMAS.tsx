@@ -8,7 +8,7 @@ import { useAuth } from '@/lib/AuthContext';
 import { usePermissions } from '@/hooks/usePermissions';
 import {
   Send, CheckCircle, Eye, X, Printer, ClipboardList,
-  ChevronDown, FileCheck, Clock, Trash2, Ban, RefreshCw, AlertCircle
+  ChevronDown, FileCheck, Clock, Trash2, Ban, RefreshCw, AlertCircle, FolderPlus, Loader2
 } from 'lucide-react';
 import PageHeader from '@/components/shared/PageHeader';
 
@@ -449,6 +449,80 @@ export default function TicketMAS() {
       toast.error(e.message ?? 'Error al enviar el ticket');
     } finally {
       setLoading(false);
+    }
+  };
+
+  // ── Crear expediente manual (tickets existentes) ─────────────────────────────
+  const crearExpedienteManual = async (t: TicketMAS) => {
+    setCreandoExpediente(true);
+    try {
+      const anio = t.created_at ? new Date(t.created_at).getFullYear() : new Date().getFullYear();
+      const colegioCarpeta  = (t.colegio ?? 'SIN_COLEGIO').replace(/[/\\:*?"<>|]/g, '_');
+      const folioCarpeta    = t.folio ?? 'SIN_FOLIO';
+      const nombreCarpeta   = (t.nombre_proyecto ?? t.descripcion ?? 'Sin nombre').slice(0, 60).replace(/[/\\:*?"<>|]/g, '_');
+      const raiz = `Expedientes/${anio}/${colegioCarpeta}/${folioCarpeta} - ${nombreCarpeta}`;
+
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token    = sessionData?.session?.access_token ?? '';
+      const SUPA_URL = import.meta.env.VITE_SUPABASE_URL as string;
+      const ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY as string;
+
+      const spUp = async (file: File, carpeta: string, fileName: string) => {
+        const fd = new FormData();
+        fd.append('file', file); fd.append('carpeta', carpeta); fd.append('fileName', fileName);
+        const res = await fetch(`${SUPA_URL}/functions/v1/sharepoint-upload`, {
+          method: 'POST', headers: { 'Authorization': `Bearer ${token}`, 'apikey': ANON_KEY }, body: fd,
+        });
+        return res.json();
+      };
+
+      // Crear carpetas con placeholder
+      const placeholder = new File([''], '.keep', { type: 'text/plain' });
+      const subcarpetas = [
+        `${raiz}/Coordinación RCMA/01 - Solicitud de Proyecto`,
+        `${raiz}/Coordinación RCMA/02 - Cotizaciones`,
+        `${raiz}/Coordinación RCMA/03 - Ticket MAS`,
+        `${raiz}/Coordinación RCMA/04 - Autorización`,
+        `${raiz}/ECO/01 - Proyecto Ejecutivo`,
+        `${raiz}/ECO/02 - Acta de Inicio`,
+        `${raiz}/ECO/03 - Reportes de Obra`,
+        `${raiz}/ECO/04 - Acta de Entrega`,
+        `${raiz}/ECO/05 - Cierre de Obra`,
+        `${raiz}/ECO/06 - Fotografías/Antes`,
+        `${raiz}/ECO/06 - Fotografías/Durante`,
+        `${raiz}/ECO/06 - Fotografías/Después`,
+      ];
+      for (const carpeta of subcarpetas) {
+        await spUp(placeholder, carpeta, '.keep');
+      }
+
+      // Subir archivos que el usuario adjuntó
+      let expedienteUrl = '';
+      if (expForm.solicitud_pdf) {
+        await spUp(expForm.solicitud_pdf, `${raiz}/Coordinación RCMA/01 - Solicitud de Proyecto`, expForm.solicitud_pdf.name);
+      }
+      if (expForm.ticket_pdf) {
+        const r = await spUp(expForm.ticket_pdf, `${raiz}/Coordinación RCMA/03 - Ticket MAS`, expForm.ticket_pdf.name);
+        expedienteUrl = r?.webUrl ?? '';
+      }
+      if (expForm.autorizacion_msg) {
+        await spUp(expForm.autorizacion_msg, `${raiz}/Coordinación RCMA/04 - Autorización`, expForm.autorizacion_msg.name);
+      }
+
+      // Guardar URL en la DB
+      const urlBase = expedienteUrl
+        ? expedienteUrl.split('/03%20-%20Ticket%20MAS')[0].split('/03 - Ticket MAS')[0]
+        : null;
+      await supabase.from('tickets_mas').update({ expediente_url: urlBase }).eq('id', t.id);
+      await qc.refetchQueries({ queryKey: ['tickets_mas'] });
+
+      toast.success('Expediente creado en OneDrive ✓');
+      setExpedienteModal(null);
+      setExpForm({ solicitud_pdf: null, ticket_pdf: null, autorizacion_msg: null });
+    } catch (e: any) {
+      toast.error('Error creando expediente: ' + e.message);
+    } finally {
+      setCreandoExpediente(false);
     }
   };
 
@@ -1006,18 +1080,18 @@ export default function TicketMAS() {
                   const vencido = isVencido(t);
                   return (
                   <tr key={t.id} className={`${i % 2 === 0 ? 'bg-white' : 'bg-slate-50'} ${vencido ? 'border-l-4 border-l-red-400' : ''}`}>
-                    <td className="px-3 py-2.5 font-mono text-xs font-bold text-slate-700">{t.folio}</td>
-                    <td className="px-3 py-2.5 text-slate-800 text-xs font-medium">{t.nombre_proyecto ?? <span className="text-slate-300 italic">Sin nombre</span>}</td>
-                    <td className="px-3 py-2.5 text-slate-800 text-xs">{t.colegio}</td>
-                    <td className="px-3 py-2.5 text-slate-600 text-xs">{t.nombre_solicitante}</td>
-                    <td className="px-3 py-2.5 text-slate-600 text-xs">{t.clasificacion}</td>
-                    <td className="px-3 py-2.5 text-slate-500 text-xs">
+                    <td className="px-4 py-3 font-mono text-xs font-bold text-slate-700 whitespace-nowrap">{t.folio}</td>
+                    <td className="px-4 py-3 text-slate-800 text-xs font-medium max-w-[160px]">{t.nombre_proyecto ?? <span className="text-slate-300 italic">Sin nombre</span>}</td>
+                    <td className="px-4 py-3 text-slate-800 text-xs whitespace-nowrap">{t.colegio}</td>
+                    <td className="px-4 py-3 text-slate-600 text-xs whitespace-nowrap">{t.nombre_solicitante}</td>
+                    <td className="px-4 py-3 text-slate-600 text-xs">{t.clasificacion}</td>
+                    <td className="px-4 py-3 text-slate-500 text-xs whitespace-nowrap">
                       {t.created_at ? format(new Date(t.created_at), 'dd/MM/yyyy HH:mm', { locale: es }) : '—'}
                       {vencido && <span className="block text-[10px] text-red-500 font-bold">⚠ +12h sin revisión</span>}
                     </td>
-                    <td className="px-3 py-2.5"><EstatusBadge estatus={t.estatus} /></td>
-                    <td className="px-3 py-2.5">
-                      <div className="flex items-center justify-center gap-1 flex-wrap">
+                    <td className="px-4 py-3 whitespace-nowrap"><EstatusBadge estatus={t.estatus} /></td>
+                    <td className="px-4 py-3">
+                      <div className="flex items-center justify-center gap-1">
                         {/* Ver */}
                         <button onClick={() => handleVerTicket(t)} title="Revisar"
                           className="p-1.5 rounded hover:bg-blue-50 text-blue-600 transition">
@@ -1029,6 +1103,20 @@ export default function TicketMAS() {
                           <Printer className="w-4 h-4" />
                         </button>
 
+                        {/* Crear Expediente — solo autorizados sin expediente aún */}
+                        {isAdmin && t.estatus === 'autorizado' && !t.expediente_url && (
+                          <button onClick={() => { setExpedienteModal(t); setExpForm({ solicitud_pdf: null, ticket_pdf: null, autorizacion_msg: null }); }} title="Crear Expediente en OneDrive"
+                            className="p-1.5 rounded hover:bg-emerald-50 text-emerald-600 transition">
+                            <FolderPlus className="w-4 h-4" />
+                          </button>
+                        )}
+                        {/* Ver Expediente — si ya existe */}
+                        {t.expediente_url && (
+                          <a href={t.expediente_url} target="_blank" rel="noreferrer" title="Ver Expediente en OneDrive"
+                            className="p-1.5 rounded hover:bg-blue-50 text-[#0C3B6E] transition">
+                            <FolderPlus className="w-4 h-4" />
+                          </a>
+                        )}
                         {/* Cancelar — solo admin */}
                         {isAdmin && t.estatus !== 'cancelado' && (
                           <button onClick={() => { setCancelModal(t); setMotivoCancel(''); }} title="Cancelar"
