@@ -277,63 +277,42 @@ function TicketForm({
           </div>
 
 
-          {/* Toggle Crear Proyecto Automáticamente */}
-          {(!ticket || (ticket && !ticket.proyecto_id)) && (
-            <div className="mt-4 p-4 bg-blue-50 border border-blue-200 rounded-xl">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <FolderKanban className="w-4 h-4 text-blue-600" />
-                  <div>
-                    <p className="text-sm font-bold text-blue-900">Crear Proyecto automáticamente</p>
-                    <p className="text-xs text-blue-600">Se generará un proyecto vinculado con los datos del ticket</p>
-                  </div>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setFormData(p => ({ ...p, crear_proyecto: !p.crear_proyecto, nombre_proyecto: '' }))}
-                  className={`relative w-11 h-6 rounded-full transition-colors ${formData.crear_proyecto ? 'bg-blue-600' : 'bg-slate-300'}`}>
-                  <span className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform ${formData.crear_proyecto ? 'translate-x-5' : 'translate-x-0'}`} />
-                </button>
+          {/* Nombre del Proyecto — siempre obligatorio, crea proyecto automáticamente */}
+          <div className="mt-4 p-4 bg-blue-50 border border-blue-200 rounded-xl">
+            <div className="flex items-center gap-2 mb-3">
+              <FolderKanban className="w-4 h-4 text-blue-600" />
+              <div>
+                <p className="text-sm font-bold text-blue-900">Nombre del Proyecto *</p>
+                <p className="text-xs text-blue-600">Se creará un proyecto vinculado automáticamente al guardar</p>
               </div>
-
-              {formData.crear_proyecto && (
-                <div className="mt-3 pt-3 border-t border-blue-200">
-                  <label className="block text-xs font-bold text-blue-700 uppercase mb-1 flex items-center gap-1">
-                    <Sparkles className="w-3 h-3" /> Nombre del Proyecto *
-                  </label>
-                  <input
-                    type="text"
-                    required={formData.crear_proyecto}
-                    className="w-full px-3 py-2 border border-blue-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none bg-white text-slate-900"
-                    value={formData.nombre_proyecto}
-                    onChange={e => setFormData(p => ({ ...p, nombre_proyecto: e.target.value }))}
-                    placeholder="Ej. Impermeabilización Aula 4 — MA MTY"
-                  />
-                  <div className="mt-2 grid grid-cols-2 gap-1">
-                    {[
-                      ['Territorio', formData.territorio || '—'],
-                      ['Colegio',    formData.colegio    || '—'],
-                      ['Tipo',       formData.tipo_proyecto || '—'],
-                      ['Presupuesto',formData.presupuesto ? '$' + Number(formData.presupuesto).toLocaleString('es-MX') : '—'],
-                    ].map(([k, v]) => (
-                      <div key={k} className="text-[10px] text-blue-700 bg-blue-100/60 rounded px-2 py-1">
-                        <span className="font-bold">{k}:</span> {v}
-                      </div>
-                    ))}
-                  </div>
-                  <p className="text-[10px] text-blue-500 mt-2 italic">
-                    ✓ El resto de campos se toman automáticamente del ticket
-                  </p>
-                </div>
-              )}
             </div>
-          )}
+            <input
+              type="text"
+              required
+              className="w-full px-3 py-2 border border-blue-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none bg-white text-slate-900"
+              value={formData.nombre_proyecto}
+              onChange={e => setFormData(p => ({ ...p, nombre_proyecto: e.target.value }))}
+              placeholder="Ej. Impermeabilización Aula 4 — MA MTY"
+            />
+            <div className="mt-2 grid grid-cols-2 gap-1">
+              {[
+                ['Territorio', formData.territorio || '—'],
+                ['Colegio',    formData.colegio    || '—'],
+                ['Tipo',       formData.tipo_proyecto || '—'],
+                ['Presupuesto',formData.presupuesto ? '$' + Number(formData.presupuesto).toLocaleString('es-MX') : '—'],
+              ].map(([k, v]) => (
+                <div key={k} className="text-[10px] text-blue-700 bg-blue-100/60 rounded px-2 py-1">
+                  <span className="font-bold">{k}:</span> {v}
+                </div>
+              ))}
+            </div>
+          </div>
 
-          {/* Vincular proyecto */}
-          {!formData.crear_proyecto && (
+          {/* Vincular proyecto existente (solo si ya tiene uno) */}
+          {ticket?.proyecto_id && (
           <div>
             <label className={labelClass}>
-              <span className="flex items-center gap-1.5"><Link2 className="w-3 h-3" /> Vincular con Proyecto (opcional)</span>
+              <span className="flex items-center gap-1.5"><Link2 className="w-3 h-3" /> Proyecto vinculado</span>
             </label>
             <select className={inputClass} value={formData.proyecto_id}
               onChange={e => setFormData(p => ({ ...p, proyecto_id: e.target.value }))}>
@@ -422,16 +401,15 @@ export default function Tickets() {
 
   const createMutation = useMutation({
     mutationFn: async (data: Record<string, unknown>) => {
-      const crearProyecto  = data._crear_proyecto  as boolean;
-      const nombreProyecto = data._nombre_proyecto as string | null;
+      const nombreProyecto = (data.nombre_proyecto || data._nombre_proyecto) as string | null;
 
       // Limpiar campos internos antes de insertar
       const { _crear_proyecto, _nombre_proyecto, ...ticketData } = data;
 
       let proyecto_id: string | null = ticketData.proyecto_id as string | null;
 
-      // Si se pidió crear proyecto automáticamente
-      if (crearProyecto && nombreProyecto) {
+      // Crear proyecto automáticamente siempre que haya nombre
+      if (nombreProyecto && !proyecto_id) {
         const folio = ticketData.folio as string | null;
         const folioNum = null;
 
@@ -461,11 +439,11 @@ export default function Tickets() {
 
       const { data: result, error } = await supabase
         .from('tickets')
-        .insert({ ...ticketData, proyecto_id })
+        .insert({ ...ticketData, proyecto_id, nombre_proyecto: nombreProyecto ?? null })
         .select()
         .single();
       if (error) throw error;
-      return { result, crearProyecto };
+      return { result, crearProyecto: !!nombreProyecto };
     },
     onSuccess: (res) => {
       queryClient.invalidateQueries({ queryKey: ['tickets'] });
@@ -474,7 +452,7 @@ export default function Tickets() {
       if (res.crearProyecto) {
         toast.success('✅ Ticket y Proyecto creados y vinculados correctamente');
       } else {
-        toast.success('Ticket creado correctamente');
+        toast.success('✅ Ticket y Proyecto creados correctamente');
       }
     },
     onError: () => toast.error('Error al crear el ticket'),

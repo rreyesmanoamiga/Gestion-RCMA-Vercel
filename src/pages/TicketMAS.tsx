@@ -102,6 +102,8 @@ interface TicketMAS {
   fecha_autorizacion?:    string;
   motivo_cancelacion?:    string;
   fecha_cancelacion?:     string;
+  expediente_url?:        string;
+  nombre_proyecto?:       string;
   created_at?:            string;
 }
 
@@ -292,6 +294,7 @@ export default function TicketMAS() {
     cot3_importe:'', cot3_proveedor:'',
     motivo_seleccion:'', forma_financiamiento:'',
     elaborar_suplemento:'NO', elaborar_traspaso:'SI',
+    nombre_proyecto:'',
   };
   const [form, setForm] = useState({ ...FORM_INIT });
   const set = (k: string, v: string) => setForm(p => ({ ...p, [k]: v }));
@@ -362,7 +365,7 @@ export default function TicketMAS() {
 
   // ── Enviar ticket ─────────────────────────────────────────────────────────────
   const handleSubmit = async () => {
-    if (!form.colegio || !form.nombre_solicitante || !form.correo_solicitante || !form.descripcion || !form.clasificacion) {
+    if (!form.colegio || !form.nombre_solicitante || !form.correo_solicitante || !form.descripcion || !form.clasificacion || !form.nombre_proyecto) {
       toast.error('Completa los campos obligatorios marcados con *');
       return;
     }
@@ -413,6 +416,7 @@ export default function TicketMAS() {
         orden_interna:        form.orden_interna,
         numero_orden_interna: form.numero_orden_interna,
         descripcion:          form.descripcion,
+        nombre_proyecto:      form.nombre_proyecto,
         cot1_importe:         form.cot1_importe ? parseFloat(parseMXN(form.cot1_importe)) : null,
         cot1_proveedor:       form.cot1_proveedor,
         cot2_importe:         form.cot2_importe ? parseFloat(parseMXN(form.cot2_importe)) : null,
@@ -450,6 +454,12 @@ export default function TicketMAS() {
 
   // ── Autorizar ticket ──────────────────────────────────────────────────────────
   const adminFieldsComplete = adminForm.fecha_recepcion && adminForm.fecha_inicio_estimada && adminForm.fecha_fin_estimada;
+
+  // Genera el PDF del ticket como Blob para subir a OneDrive
+  const generarPDFBlob = (t: TicketMAS): Blob => {
+    const html = generarHTMLTicket(t, FIRMA_RCMA);
+    return new Blob([html], { type: 'text/html;charset=utf-8' });
+  };
 
   const handleAutorizar = async () => {
     if (!viewing || !adminFieldsComplete) return;
@@ -501,6 +511,7 @@ export default function TicketMAS() {
         estatus:             'aprobado',
         tipo_proyecto:       updatedRow.clasificacion     ?? null,
         notas:               updatedRow.descripcion       ?? null,
+        nombre_proyecto:     updatedRow.nombre_proyecto    ?? null,
         plan_financiamiento: updatedRow.forma_financiamiento ?? null,
         presupuesto:         null,
         nombre_proveedor:    null,
@@ -509,6 +520,72 @@ export default function TicketMAS() {
         proyecto_id:         null,
       });
       if (ticketRegError) throw new Error(`Ticket autorizado pero no se pudo registrar en Tickets Registrados: ${ticketRegError.message}`);
+
+      // ── Crear estructura de expediente en OneDrive + subir PDF autorizado ────────
+      try {
+        const colegioCarpeta = updatedRow.colegio?.replace(/[/\\:*?"<>|]/g, '_') ?? 'SIN_COLEGIO';
+        const folioCarpeta   = updatedRow.folio ?? 'SIN_FOLIO';
+        const descripCarpeta = (updatedRow.nombre_proyecto ?? updatedRow.descripcion ?? 'Sin nombre').slice(0, 60).replace(/[/\\:*?"<>|]/g, '_');
+        const raiz = `Expedientes/${colegioCarpeta}/${folioCarpeta} - ${descripCarpeta}`;
+
+        // Subcarpetas a crear (archivos placeholder vacíos para forzar la creación)
+        const subcarpetas = [
+          `${raiz}/Coordinación RCMA/01 - Solicitud de Proyecto/.keep`,
+          `${raiz}/Coordinación RCMA/02 - Cotizaciones/.keep`,
+          `${raiz}/Coordinación RCMA/03 - Ticket MAS/.keep`,
+          `${raiz}/Coordinación RCMA/04 - Autorización/.keep`,
+          `${raiz}/ECO/01 - Proyecto Ejecutivo/.keep`,
+          `${raiz}/ECO/02 - Acta de Inicio/.keep`,
+          `${raiz}/ECO/03 - Reportes de Obra/.keep`,
+          `${raiz}/ECO/04 - Acta de Entrega/.keep`,
+          `${raiz}/ECO/05 - Cierre de Obra/.keep`,
+          `${raiz}/ECO/06 - Fotografías/Antes/.keep`,
+          `${raiz}/ECO/06 - Fotografías/Durante/.keep`,
+          `${raiz}/ECO/06 - Fotografías/Después/.keep`,
+        ];
+
+        const { data: sessionData } = await supabase.auth.getSession();
+        const token = sessionData?.session?.access_token ?? '';
+        const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL as string;
+        const ANON_KEY     = import.meta.env.VITE_SUPABASE_ANON_KEY as string;
+
+        const spUpload = async (fileObj: File, carpeta: string, fileName: string) => {
+          const fd = new FormData();
+          fd.append('file', fileObj); fd.append('carpeta', carpeta); fd.append('fileName', fileName);
+          const res = await fetch(`${SUPABASE_URL}/functions/v1/sharepoint-upload`, {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${token}`, 'apikey': ANON_KEY },
+            body: fd,
+          });
+          return res.json();
+        };
+
+        // Crear carpetas con archivos placeholder
+        const placeholder = new File([''], '.keep', { type: 'text/plain' });
+        for (const ruta of subcarpetas) {
+          const partes  = ruta.split('/');
+          const archivo = partes.pop()!;
+          const carpeta = partes.join('/');
+          await spUpload(placeholder, carpeta, archivo);
+        }
+
+        // Subir PDF del ticket autorizado a 03 - Ticket MAS
+        const pdfBlob  = generarPDFBlob(updatedRow);
+        const pdfFile  = new File([pdfBlob], `${folioCarpeta}_Autorizado.pdf`, { type: 'application/pdf' });
+        const pdfResult = await spUpload(pdfFile, `${raiz}/Coordinación RCMA/03 - Ticket MAS`, `${folioCarpeta}_Autorizado.pdf`);
+
+        // Guardar URL del expediente en la DB
+        await supabase.from('tickets_mas').update({
+          expediente_url: pdfResult?.webUrl
+            ? pdfResult.webUrl.split('/03%20-%20Ticket%20MAS')[0].split('/03 - Ticket MAS')[0]
+            : null,
+        }).eq('id', updatedRow.id);
+
+      } catch (expErr) {
+        console.error('Error creando expediente en OneDrive:', expErr);
+        // No bloqueamos la autorización si falla el expediente
+        toast.warning('Ticket autorizado, pero no se pudo crear el expediente en OneDrive.');
+      }
 
       // Refetch inmediato desde el servidor
       await qc.refetchQueries({ queryKey: ['tickets_mas'] });
@@ -786,6 +863,11 @@ export default function TicketMAS() {
           </div>
           <div className="p-4 space-y-4">
             <div>
+              <label className={labelClass}>Nombre del Proyecto *</label>
+              <input className={inputClass} value={form.nombre_proyecto} onChange={e => set('nombre_proyecto', e.target.value)} placeholder="Ej: Mantenimiento de Luminarias Primaria" />
+              <p className="text-[10px] text-slate-400 mt-1">Este nombre se usará para identificar el expediente y el proyecto vinculado.</p>
+            </div>
+            <div>
               <label className={labelClass}>Descripción de la obra *</label>
               <textarea className={inputClass + ' min-h-[80px] resize-none'} value={form.descripcion} onChange={e => set('descripcion', e.target.value)} placeholder="Describe detalladamente el trabajo requerido..." />
             </div>
@@ -887,6 +969,7 @@ export default function TicketMAS() {
               <thead>
                 <tr className="bg-slate-800 text-white text-xs uppercase">
                   <th className="px-4 py-3 text-left">Folio</th>
+                  <th className="px-4 py-3 text-left">Proyecto</th>
                   <th className="px-4 py-3 text-left">Colegio</th>
                   <th className="px-4 py-3 text-left">Solicitante</th>
                   <th className="px-4 py-3 text-left">Clasificación</th>
@@ -901,6 +984,7 @@ export default function TicketMAS() {
                   return (
                   <tr key={t.id} className={`${i % 2 === 0 ? 'bg-white' : 'bg-slate-50'} ${vencido ? 'border-l-4 border-l-red-400' : ''}`}>
                     <td className="px-3 py-2.5 font-mono text-xs font-bold text-slate-700">{t.folio}</td>
+                    <td className="px-3 py-2.5 text-slate-800 text-xs font-medium">{t.nombre_proyecto ?? <span className="text-slate-300 italic">Sin nombre</span>}</td>
                     <td className="px-3 py-2.5 text-slate-800 text-xs">{t.colegio}</td>
                     <td className="px-3 py-2.5 text-slate-600 text-xs">{t.nombre_solicitante}</td>
                     <td className="px-3 py-2.5 text-slate-600 text-xs">{t.clasificacion}</td>
@@ -1055,6 +1139,12 @@ export default function TicketMAS() {
             ))}
           </div>
           <div className="px-4 pb-4">
+            {viewing.nombre_proyecto && (
+              <div className="mb-3">
+                <p className="text-[10px] font-bold text-slate-400 uppercase mb-1">Nombre del Proyecto</p>
+                <p className="text-sm font-bold text-[#0C3B6E] bg-blue-50 rounded-lg p-3">{viewing.nombre_proyecto}</p>
+              </div>
+            )}
             <p className="text-[10px] font-bold text-slate-400 uppercase mb-1">Descripción</p>
             <p className="text-sm text-slate-700 bg-slate-50 rounded-lg p-3 whitespace-pre-wrap">{viewing.descripcion ?? '—'}</p>
           </div>
@@ -1121,6 +1211,12 @@ export default function TicketMAS() {
             <p className="text-xs text-emerald-600 mt-1">
               Recepción: {viewing.fecha_recepcion ?? '—'} · Inicio: {viewing.fecha_inicio_estimada ?? '—'} · Conclusión: {viewing.fecha_fin_estimada ?? '—'}
             </p>
+            {viewing.expediente_url && (
+              <a href={viewing.expediente_url} target="_blank" rel="noreferrer"
+                className="mt-3 inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-[#0C3B6E] text-white text-xs font-bold hover:bg-[#1565C0] transition-colors">
+                📁 Ver Expediente en OneDrive
+              </a>
+            )}
           </div>
         )}
 
