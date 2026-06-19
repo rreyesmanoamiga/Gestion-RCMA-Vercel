@@ -1065,14 +1065,14 @@ export default function TicketMAS() {
             <table className="w-full text-sm min-w-[700px]">
               <thead>
                 <tr className="bg-slate-800 text-white text-xs uppercase">
-                  <th className="px-4 py-3 text-left">Folio</th>
-                  <th className="px-4 py-3 text-left">Proyecto</th>
-                  <th className="px-4 py-3 text-left">Colegio</th>
-                  <th className="px-4 py-3 text-left">Solicitante</th>
-                  <th className="px-4 py-3 text-left">Clasificación</th>
-                  <th className="px-4 py-3 text-left">Fecha</th>
-                  <th className="px-4 py-3 text-left">Estatus</th>
-                  <th className="px-4 py-3 text-center">Acciones</th>
+                  <th className="px-4 py-3 text-left w-[120px]">Folio</th>
+                  <th className="px-4 py-3 text-left w-[200px]">Proyecto</th>
+                  <th className="px-4 py-3 text-left w-[180px]">Colegio</th>
+                  <th className="px-4 py-3 text-left w-[150px]">Solicitante</th>
+                  <th className="px-4 py-3 text-left w-[160px]">Clasificación</th>
+                  <th className="px-4 py-3 text-left w-[110px]">Fecha</th>
+                  <th className="px-4 py-3 text-left w-[110px]">Estatus</th>
+                  <th className="px-4 py-3 text-center w-[120px]">Acciones</th>
                 </tr>
               </thead>
               <tbody>
@@ -1081,7 +1081,7 @@ export default function TicketMAS() {
                   return (
                   <tr key={t.id} className={`${i % 2 === 0 ? 'bg-white' : 'bg-slate-50'} ${vencido ? 'border-l-4 border-l-red-400' : ''}`}>
                     <td className="px-4 py-3 font-mono text-xs font-bold text-slate-700">{t.folio}</td>
-                    <td className="px-4 py-3 text-slate-800 text-xs font-medium max-w-[160px]">{t.nombre_proyecto ?? <span className="text-slate-300 italic">Sin nombre</span>}</td>
+                    <td className="px-4 py-3 text-slate-800 text-xs font-medium"><div className="truncate" title={t.nombre_proyecto ?? ''}>{t.nombre_proyecto ?? <span className="text-slate-300 italic">Sin nombre</span>}</div></td>
                     <td className="px-4 py-3 text-slate-800 text-xs">{t.colegio}</td>
                     <td className="px-4 py-3 text-slate-600 text-xs">{t.nombre_solicitante}</td>
                     <td className="px-4 py-3 text-slate-600 text-xs leading-tight">{t.clasificacion}</td>
