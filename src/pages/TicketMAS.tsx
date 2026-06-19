@@ -1080,16 +1080,17 @@ export default function TicketMAS() {
                   const vencido = isVencido(t);
                   return (
                   <tr key={t.id} className={`${i % 2 === 0 ? 'bg-white' : 'bg-slate-50'} ${vencido ? 'border-l-4 border-l-red-400' : ''}`}>
-                    <td className="px-4 py-3 font-mono text-xs font-bold text-slate-700 whitespace-nowrap">{t.folio}</td>
+                    <td className="px-4 py-3 font-mono text-xs font-bold text-slate-700">{t.folio}</td>
                     <td className="px-4 py-3 text-slate-800 text-xs font-medium max-w-[160px]">{t.nombre_proyecto ?? <span className="text-slate-300 italic">Sin nombre</span>}</td>
-                    <td className="px-4 py-3 text-slate-800 text-xs whitespace-nowrap">{t.colegio}</td>
-                    <td className="px-4 py-3 text-slate-600 text-xs whitespace-nowrap">{t.nombre_solicitante}</td>
-                    <td className="px-4 py-3 text-slate-600 text-xs">{t.clasificacion}</td>
-                    <td className="px-4 py-3 text-slate-500 text-xs whitespace-nowrap">
+                    <td className="px-4 py-3 text-slate-800 text-xs">{t.colegio}</td>
+                    <td className="px-4 py-3 text-slate-600 text-xs">{t.nombre_solicitante}</td>
+                    <td className="px-4 py-3 text-slate-600 text-xs leading-tight">{t.clasificacion}</td>
+                    <td className="px-4 py-3 text-slate-500 text-xs">
                       {t.created_at ? format(new Date(t.created_at), 'dd/MM/yyyy HH:mm', { locale: es }) : '—'}
                       {vencido && <span className="block text-[10px] text-red-500 font-bold">⚠ +12h sin revisión</span>}
                     </td>
-                    <td className="px-4 py-3 whitespace-nowrap"><EstatusBadge estatus={t.estatus} /></td>
+                    <td className="px-4 py-3">
+                    <EstatusBadge estatus={t.estatus} /></td>
                     <td className="px-4 py-3">
                       <div className="flex items-center justify-center gap-1">
                         {/* Ver */}
