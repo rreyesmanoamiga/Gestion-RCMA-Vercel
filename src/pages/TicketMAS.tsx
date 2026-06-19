@@ -309,6 +309,9 @@ export default function TicketMAS() {
 
   // Cancelación modal
   const [cancelModal, setCancelModal]     = useState<TicketMAS | null>(null);
+  const [expedienteModal, setExpedienteModal] = useState<TicketMAS | null>(null);
+  const [creandoExpediente, setCreandoExpediente] = useState(false);
+  const [expForm, setExpForm] = useState({ solicitud_pdf: null as File | null, ticket_pdf: null as File | null, autorizacion_msg: null as File | null });
   const [motivoCancel, setMotivoCancel]   = useState('');
   const [cancelLoading, setCancelLoading] = useState(false);
   const [changingStatus, setChangingStatus] = useState<string | null>(null);
