@@ -4,7 +4,7 @@ import { supabase } from '@/lib/supabaseClient';
 import { db } from '@/lib/db';
 import {
   Ticket, ChevronDown, Pencil, Trash2, X, Save,
-  Calendar, Link2, CheckCircle, XCircle, FileCheck, FolderKanban, Sparkles
+  Calendar, Link2, CheckCircle, XCircle, FileCheck, FolderKanban, Sparkles, FolderPlus, Loader2
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
@@ -54,6 +54,8 @@ interface TicketRecord {
   plan_financiamiento?: string;
   proyecto_id?:        string | null;
   notas?:              string;
+  nombre_proyecto?:    string;
+  expediente_url?:     string;
   created_at?:         string;
 }
 
@@ -356,6 +358,9 @@ export default function Tickets() {
   const [showForm, setShowForm]               = useState(false);
   const [editingTicket, setEditingTicket]     = useState<TicketRecord | null>(null);
   const [deletingId, setDeletingId]           = useState<string | null>(null);
+  const [expModal, setExpModal]               = useState<TicketRecord | null>(null);
+  const [creandoExp, setCreandoExp]           = useState(false);
+  const [expFiles, setExpFiles]               = useState({ solicitud: null as File | null, ticket: null as File | null, cotizaciones: null as File | null, autorizacion: null as File | null });
   const [filterEstatus, setFilterEstatus]     = useState('all');
   const [filterTerritorio, setFilterTerritorio] = useState('all');
   const [filterColegio, setFilterColegio]     = useState('all');
@@ -720,6 +725,18 @@ export default function Tickets() {
                       )}
                     </div>
                     <div className="flex gap-2">
+                      {/* Crear/Ver Expediente */}
+                      {t.expediente_url ? (
+                        <a href={t.expediente_url} target="_blank" rel="noreferrer"
+                          className="p-1.5 rounded-md border border-emerald-200 text-emerald-600 hover:bg-emerald-50 transition-colors" title="Ver Expediente en OneDrive">
+                          <FolderPlus className="w-3.5 h-3.5" />
+                        </a>
+                      ) : (
+                        <button onClick={() => { setExpModal(t); setExpFiles({ solicitud: null, ticket: null, cotizaciones: null, autorizacion: null }); }}
+                          className="p-1.5 rounded-md border border-blue-200 text-blue-500 hover:bg-blue-50 transition-colors" title="Crear Expediente en OneDrive">
+                          <FolderPlus className="w-3.5 h-3.5" />
+                        </button>
+                      )}
                       <button onClick={() => setEditingTicket(t)}
                         className="p-1.5 rounded-md border border-slate-200 text-slate-500 hover:bg-slate-100 transition-colors">
                         <Pencil className="w-3.5 h-3.5" />
@@ -758,6 +775,47 @@ export default function Tickets() {
         projects={projectsVinculables.filter(p =>
           !linkedProjectIds.has(p.id) || p.id === editingTicket?.proyecto_id
         )} />
+
+      {/* ── Modal Crear Expediente ─────────────────────────────────────────── */}
+      {expModal && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md">
+            <div className="flex items-center justify-between p-5 border-b border-slate-100">
+              <div>
+                <h3 className="font-bold text-slate-900">Crear Expediente en OneDrive</h3>
+                <p className="text-xs text-slate-500 mt-0.5">{expModal.folio} — {expModal.colegio}</p>
+              </div>
+              <button onClick={() => setExpModal(null)}><X className="w-5 h-5 text-slate-400" /></button>
+            </div>
+            <div className="p-5 space-y-4">
+              <div className="bg-blue-50 rounded-lg p-3 text-xs text-blue-700">
+                📁 <strong>Expedientes/{expModal.created_at ? new Date(expModal.created_at).getFullYear() : new Date().getFullYear()}/{expModal.colegio}/{expModal.folio} - {(expModal.nombre_proyecto ?? '').slice(0, 40)}</strong>
+              </div>
+              {[
+                { key: 'solicitud',    label: 'Solicitud de Proyecto',    accept: '.pdf' },
+                { key: 'cotizaciones', label: 'Cotizaciones',              accept: '.pdf,.xlsx,.xls,.doc,.docx' },
+                { key: 'ticket',       label: 'Ticket MAS / Ticket físico', accept: '.pdf' },
+                { key: 'autorizacion', label: 'Autorización',              accept: '.msg,.pdf' },
+              ].map(({ key, label, accept }) => (
+                <div key={key}>
+                  <label className="text-xs font-bold text-slate-500 uppercase block mb-1">{label} — opcional</label>
+                  <input type="file" accept={accept} className="w-full text-xs border border-slate-200 rounded-lg p-2"
+                    onChange={e => setExpFiles(f => ({ ...f, [key]: e.target.files?.[0] ?? null }))} />
+                </div>
+              ))}
+              <p className="text-xs text-slate-400">Todos los archivos son opcionales. Puedes crear solo las carpetas y subir los archivos después manualmente en OneDrive.</p>
+            </div>
+            <div className="flex justify-end gap-2 p-5 border-t border-slate-100">
+              <button onClick={() => setExpModal(null)} className="px-4 py-2 bg-slate-100 text-slate-700 rounded-lg text-sm hover:bg-slate-200">Cancelar</button>
+              <button onClick={() => crearExpediente(expModal)} disabled={creandoExp}
+                className="px-4 py-2 bg-[#0C3B6E] text-white rounded-lg text-sm font-medium hover:bg-[#1565C0] flex items-center gap-2 disabled:opacity-50">
+                {creandoExp ? <Loader2 className="w-4 h-4 animate-spin" /> : <FolderPlus className="w-4 h-4" />}
+                {creandoExp ? 'Creando...' : 'Crear Expediente'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {deletingId && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 p-4">
