@@ -512,11 +512,14 @@ export default function TicketMAS() {
         await spUp(expForm.autorizacion_msg, `${raiz}/Coordinación RCMA/04 - Autorización`, expForm.autorizacion_msg.name);
       }
 
-      // Guardar URL en la DB
+      // Guardar URL en tickets_mas Y en tickets
       const urlBase = expedienteUrl
         ? expedienteUrl.split('/03%20-%20Ticket%20MAS')[0].split('/03 - Ticket MAS')[0]
         : null;
       await supabase.from('tickets_mas').update({ expediente_url: urlBase }).eq('id', t.id);
+      if (urlBase && t.folio) {
+        await supabase.from('tickets').update({ expediente_url: urlBase }).eq('folio', t.folio);
+      }
       await qc.refetchQueries({ queryKey: ['tickets_mas'] });
 
       toast.success('Expediente creado en OneDrive ✓');
@@ -674,12 +677,14 @@ export default function TicketMAS() {
         const pdfFile  = new File([pdfBlob], `${folioCarpeta}_Autorizado.pdf`, { type: 'application/pdf' });
         const pdfResult = await spUpload(pdfFile, `${raiz}/Coordinación RCMA/03 - Ticket MAS`, `${folioCarpeta}_Autorizado.pdf`);
 
-        // Guardar URL del expediente en la DB
-        await supabase.from('tickets_mas').update({
-          expediente_url: pdfResult?.webUrl
-            ? pdfResult.webUrl.split('/03%20-%20Ticket%20MAS')[0].split('/03 - Ticket MAS')[0]
-            : null,
-        }).eq('id', updatedRow.id);
+        // Guardar URL del expediente en tickets_mas Y en tickets (para que Tickets Registrados lo vea)
+        const expUrl = pdfResult?.webUrl
+          ? pdfResult.webUrl.split('/03%20-%20Ticket%20MAS')[0].split('/03 - Ticket MAS')[0]
+          : null;
+        await supabase.from('tickets_mas').update({ expediente_url: expUrl }).eq('id', updatedRow.id);
+        if (expUrl && updatedRow.folio) {
+          await supabase.from('tickets').update({ expediente_url: expUrl }).eq('folio', updatedRow.folio);
+        }
 
       } catch (expErr) {
         console.error('Error creando expediente en OneDrive:', expErr);

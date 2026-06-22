@@ -376,7 +376,22 @@ export default function Tickets() {
         .select('*')
         .order('created_at', { ascending: false });
       if (error) throw error;
-      return data ?? [];
+      const tickets = data ?? [];
+
+      // Enriquecer con expediente_url de tickets_mas para folios TMAS-*
+      const foliosTMAS = tickets.filter(t => t.folio?.startsWith('TMAS') && !t.expediente_url).map(t => t.folio);
+      if (foliosTMAS.length > 0) {
+        const { data: tmasData } = await supabase
+          .from('tickets_mas')
+          .select('folio, expediente_url')
+          .in('folio', foliosTMAS)
+          .not('expediente_url', 'is', null);
+        if (tmasData?.length) {
+          const tmasMap = Object.fromEntries(tmasData.map(t => [t.folio, t.expediente_url]));
+          return tickets.map(t => t.folio && tmasMap[t.folio] ? { ...t, expediente_url: tmasMap[t.folio] } : t);
+        }
+      }
+      return tickets;
     },
   });
 
