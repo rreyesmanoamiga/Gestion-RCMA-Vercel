@@ -55,6 +55,15 @@ interface Plantel {
   notas: string | null;
 }
 
+interface ReporteGeneral {
+  id: string;
+  fecha_reporte: string;
+  archivo_nombre: string | null;
+  onedrive_url: string | null;
+  onedrive_path: string | null;
+  notas: string | null;
+}
+
 interface Entregable {
   id: string;
   plantel_id: string;
