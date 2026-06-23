@@ -1121,6 +1121,11 @@ function TabReportes({ reportes, planteles, qc }: { reportes: Reporte[]; plantel
   const [deleteReporte, setDeleteReporte] = useState<Reporte | null>(null);
   const set = (k: string, v: string) => setForm(f => ({ ...f, [k]: v }));
 
+  const carpetaDesde = (fecha: string) =>
+    fecha
+      ? `Levantamiento Nacional/Reportes Diarios/${new Date(fecha + 'T12:00:00').getFullYear()}/${new Date(fecha + 'T12:00:00').toLocaleDateString('es-MX', { month: 'long' }).toUpperCase()}`
+      : 'Levantamiento Nacional/Reportes Diarios';
+
   const deleteMut = useMutation({
     mutationFn: async (r: Reporte) => {
       if (r.onedrive_path && r.archivo_nombre) await spDelete(r.onedrive_path, r.archivo_nombre);
