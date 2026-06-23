@@ -24,7 +24,7 @@ const DATOS_COLEGIO: Record<string, { nombre: string; director: string; admin: s
   TAP: { nombre: 'Mano Amiga Tapachula',         director: 'José Octavio Ramos Martínez',       admin: 'Eliabet Salas Escobar'           },
   TIJ: { nombre: 'Mano Amiga Tijuana',           director: 'Francisco Daniel Robles Noriega',   admin: 'Juana Rosa Cornejo Ledesma'      },
   TOR: { nombre: 'Mano Amiga Torreón',           director: 'Ma. Teresa Robles Limones',         admin: 'Maria Alicia Vilchis Esquivel'   },
-  VSJ: { nombre: 'Mano Amiga Villa de Santiago', director: '',                                   admin: ''                                },
+  VSJ: { nombre: 'Mano Amiga Villas de San Juan', director: '',                                   admin: ''                                },
   ZOM: { nombre: 'Mano Amiga Zompopa',           director: '',                                   admin: ''                                },
 };
 
@@ -137,12 +137,12 @@ const btnSecondary = 'px-4 py-2 bg-slate-100 text-slate-700 rounded-lg text-sm f
 
 // ─── Tabs ─────────────────────────────────────────────────────────────────────
 const TABS = [
+  { key: 'comunicados',  label: 'Comunicados',  icon: FileText      },
   { key: 'planteles',    label: 'Planteles',    icon: MapPin        },
   { key: 'pagos',        label: 'Pagos',        icon: DollarSign    },
-  { key: 'comunicados',  label: 'Comunicados',  icon: FileText      },
   { key: 'reportes',     label: 'Reportes',     icon: Upload        },
   { key: 'entregables',  label: 'Entregables',  icon: ClipboardList },
-  { key: 'reporte',      label: 'Reporte',      icon: FileText        },
+  { key: 'reporte',      label: 'Reporte',      icon: FileText      },
 ];
 
 // ─── PDF Generator ─────────────────────────────────────────────────────────────
@@ -221,7 +221,7 @@ Este proyecto es fundamental para el desarrollo de futuras iniciativas de mejora
 // COMPONENTE PRINCIPAL
 // ══════════════════════════════════════════════════════════════════════════════
 export default function LevantamientoNacional() {
-  const [tab, setTab] = useState('planteles');
+  const [tab, setTab] = useState('comunicados');
   const qc = useQueryClient();
 
   // ─── Queries ──────────────────────────────────────────────────────────────
@@ -798,226 +798,100 @@ function TabComunicados({ comunicados, planteles, directorio, qc }: {
   const [showForm, setShowForm]     = useState(false);
   const [previewCom, setPreviewCom] = useState<Comunicado | null>(null);
   const [deleteCom, setDeleteCom]   = useState<Comunicado | null>(null);
-  const [form, setForm] = useState({
-    plantel_id: '', fecha_emision: hoyLocal(), fecha_visita: '', notas: ''
-  });
-  const [saving, setSaving] = useState(false);
+  const [saving, setSaving]         = useState(false);
+  const [territorio, setTerritorio] = useState('');
+  const [colegio, setColegio]       = useState('');
+  const [form, setForm] = useState({ fecha_emision: hoyLocal(), fecha_visita: '', notas: '' });
   const set = (k: string, v: string) => setForm(f => ({ ...f, [k]: v }));
 
-  const plantelSel  = planteles.find(p => p.id === form.plantel_id);
-  const datosCom    = plantelSel ? DATOS_COLEGIO[codigoCorto(plantelSel.colegio_clave)] : undefined;
+  const colegioInfo = COLEGIOS.find(c => c.colegio === colegio);
+  const datosCom    = colegio ? DATOS_COLEGIO[codigoCorto(colegio)] : undefined;
 
-  // Carga jsPDF dinámicamente (igual que Insumos/Reports)
-  const loadJsPDF = async () => {
-    let JsPDF = (window as any).jspdf?.jsPDF;
-    if (!JsPDF) {
-      await new Promise<void>((res, rej) => {
-        const s = document.createElement('script');
-        s.src = 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js';
-        s.onload = () => res(); s.onerror = () => rej(new Error('No se pudo cargar jsPDF'));
-        document.head.appendChild(s);
-      });
-      JsPDF = (window as any).jspdf?.jsPDF;
-    }
-    return JsPDF;
+  const resetForm = () => {
+    setTerritorio(''); setColegio('');
+    setForm({ fecha_emision: hoyLocal(), fecha_visita: '', notas: '' });
+    setShowForm(false);
   };
 
-  // Genera PDF con jsPDF — devuelve Blob para subir a OneDrive
-  const buildPDFBlob = async (plantel: Plantel, c: { fecha_emision: string; fecha_visita: string | null; director_nombre: string | null }): Promise<Blob> => {
-    const datos      = DATOS_COLEGIO[codigoCorto(plantel.colegio_clave)];
-    const dirNombre  = c.director_nombre ?? datos?.director ?? '';
-    const fechaEmision = c.fecha_emision
-      ? new Date(c.fecha_emision + 'T12:00:00').toLocaleDateString('es-MX', { day: 'numeric', month: 'long', year: 'numeric' })
-      : '';
-    const fechaVisita = c.fecha_visita
-      ? new Date(c.fecha_visita + 'T12:00:00').toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: '2-digit' })
-      : '(por confirmar)';
+  const saveMut = useMutation({
+    mutationFn: async () => {
+      if (!colegio) throw new Error('Selecciona un colegio');
+      setSaving(true);
+      try {
+        const dirNombre = datosCom?.director ?? null;
 
-    const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
-    const PW  = 210;   // page width
-    const PH  = 297;   // page height
-    const ML  = 20;    // margin left
-    const MR  = 20;    // margin right
-    const TW  = PW - ML - MR;  // 170mm text width
-    const YLIMIT = 272; // max y antes de footer
+        // Buscar si el plantel ya existe
+        let plantelId = planteles.find(p => p.colegio_clave === colegio)?.id ?? null;
 
-    // ── helpers ─────────────────────────────────────────────────────────────
-    const setBody = () => { doc.setFont('helvetica', 'normal'); doc.setFontSize(10); doc.setTextColor(30, 30, 30); };
-    const setBold = () => { doc.setFont('helvetica', 'bold'); };
+        // Si no existe, crearlo automáticamente con Fase = COMUNICADO
+        if (!plantelId) {
+          const info = COLEGIOS.find(c => c.colegio === colegio);
+          const { data: nuevo, error: errP } = await supabase.from('levantamiento_planteles').insert({
+            colegio_clave:  colegio,
+            colegio_nombre: datosCom?.nombre ?? colegio,
+            zona:           info?.territorio ?? territorio,
+            eco_nombre:     info?.eco ?? null,
+            asignacion:     'PROVEEDOR',
+            fase:           'COMUNICADO',
+            updated_at:     new Date().toISOString(),
+          }).select().single();
+          if (errP) throw errP;
+          plantelId = nuevo.id;
+          qc.invalidateQueries({ queryKey: ['lev_planteles'] });
+        }
 
-    const drawHeader = () => {
-      doc.setFillColor(12, 59, 110); doc.rect(0, 0, PW, 34, 'F');
-      doc.setFillColor(232, 119, 34); doc.rect(0, 0, 5, 34, 'F');  // Naranja institucional Mano Amiga
-      doc.setFontSize(16); setBold(); doc.setTextColor(255, 255, 255);
-      doc.text('Comunicado Institucional', ML, 13);
-      doc.setFontSize(9); doc.setFont('helvetica', 'normal'); doc.setTextColor(180, 200, 220);
-      doc.text('Coordinación de Obras y Mantenimiento RCMA  ·  ' + fechaEmision, ML, 21);
-      doc.setFontSize(8); doc.setTextColor(130, 160, 190);
-      doc.text('Documento interno — Mano Amiga', ML, 28);
-    };
+        // Generar PDF y subir a OneDrive
+        const blob     = await buildPDFBlob({ colegio_clave: colegio, colegio_nombre: datosCom?.nombre ?? colegio } as Plantel,
+          { fecha_emision: form.fecha_emision, fecha_visita: form.fecha_visita || null, director_nombre: dirNombre });
+        const fecha    = new Date(form.fecha_emision + 'T12:00:00');
+        const anio     = fecha.getFullYear();
+        const mes      = fecha.toLocaleDateString('es-MX', { month: 'long' }).toUpperCase();
+        const carpeta  = `Levantamiento Nacional/Comunicados/${anio}/${mes}`;
+        const fileName = `Comunicado_${colegio}_${form.fecha_emision}.pdf`;
+        const fileObj  = new File([blob], fileName, { type: 'application/pdf' });
+        const webUrl   = await spUpload(fileObj, carpeta, fileName);
 
-    const drawFooter = () => {
-      doc.setFillColor(12, 59, 110); doc.rect(0, PH - 12, PW, 12, 'F');
-      doc.setFontSize(7.5); doc.setFont('helvetica', 'normal'); doc.setTextColor(180, 200, 220);
-      doc.text('Coordinación de Obras y Mantenimiento RCMA  —  Sistema RCMA', PW / 2, PH - 5, { align: 'center' });
-    };
+        const { error } = await supabase.from('levantamiento_comunicados').insert({
+          plantel_id:      plantelId,
+          fecha_emision:   form.fecha_emision,
+          fecha_visita:    form.fecha_visita || null,
+          director_nombre: dirNombre,
+          director_correo: null,
+          notas:           form.notas || null,
+          onedrive_url:    webUrl || null,
+          onedrive_path:   carpeta,
+          archivo_nombre:  fileName,
+        });
+        if (error) throw error;
+      } finally { setSaving(false); }
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['lev_comunicados'] });
+      toast.success('Comunicado guardado y subido a OneDrive ✓');
+      resetForm();
+    },
+    onError: (e: any) => toast.error(e.message),
+  });
 
-    const checkY = (need: number) => {
-      if (y + need > YLIMIT) { drawFooter(); doc.addPage(); drawHeaderWithLogo(); y = 42; }
-    };
-
-    const para = (txt: string, gap = 6) => {
-      setBody();
-      const lines = doc.splitTextToSize(txt, TW);
-      checkY(lines.length * 5.5 + gap);
-      doc.text(lines, ML, y);
-      y += lines.length * 5.5 + gap;
-    };
-
-    const secTitle = (txt: string) => {
-      checkY(12);
-      setBold(); doc.setFontSize(10); doc.setTextColor(12, 59, 110);
-      doc.text(txt, ML, y); y += 3.5;
-      doc.setDrawColor(200, 210, 220); doc.setLineWidth(0.3);
-      doc.line(ML, y, PW - MR, y); y += 5;
-    };
-
-    // ── Logo — cargar antes para usarlo en todas las páginas ───────────────
-    let logoImg = '';
-    try {
-      logoImg = await new Promise<string>((res, rej) => {
-        const img = new Image(); img.crossOrigin = 'anonymous';
-        img.onload = () => { const cv = document.createElement('canvas'); cv.width = img.width; cv.height = img.height; cv.getContext('2d')!.drawImage(img, 0, 0); res(cv.toDataURL('image/png')); };
-        img.onerror = rej; img.src = '/logo.png';
-      });
-    } catch { /* sin logo */ }
-
-    const drawHeaderWithLogo = () => {
-      drawHeader();
-      if (logoImg) doc.addImage(logoImg, 'PNG', PW - 37, 4, 22, 22);
-    };
-
-    drawHeaderWithLogo();
-
-    let y = 44;
-
-    // ── ASUNTO ──────────────────────────────────────────────────────────────
-    setBold(); doc.setFontSize(10); doc.setTextColor(12, 59, 110);
-    doc.text('Asunto: Inicio de Proyectos de Levantamientos y Estudios.', ML, y); y += 9;
-
-    // ── SALUDO ──────────────────────────────────────────────────────────────
-    setBody();
-    doc.text('Estimado/a ', ML, y);
-    setBold(); doc.text(dirNombre + '.', ML + doc.getTextWidth('Estimado/a '), y);
-    y += 9;
-
-    // ── CUERPO ──────────────────────────────────────────────────────────────
-    // Párrafo 1 — colegio en negritas en línea propia al final
-    setBody();
-    const linea1 = doc.splitTextToSize('Por medio del presente, el Departamento de Coordinación de Obras y Mantenimiento RCMA tiene el placer de informarle sobre el inicio de un importante proyecto de levantamientos y estudios técnicos en las instalaciones de:', TW);
-    checkY(linea1.length * 5.5 + 8);
-    doc.text(linea1, ML, y);
-    y += linea1.length * 5.5 + 1;
-    setBold(); doc.setFontSize(10);
-    doc.text(plantel.colegio_nombre + '.', ML, y);
-    y += 5.5 + 5;
-    setBody();
-    para('Este proyecto es fundamental para el desarrollo de futuras iniciativas de mejora y mantenimiento de nuestra infraestructura a nivel institucional.', 10);
-
-    // ── DETALLES VISITA ──────────────────────────────────────────────────────
-    secTitle('Detalles de la Visita');
-    const ROW = 9; const C1 = 68;
-    // fila 1
-    checkY(ROW);
-    doc.setFillColor(241, 245, 249); doc.rect(ML, y - 3, TW, ROW, 'F');
-    doc.setDrawColor(220, 225, 230); doc.setLineWidth(0.2); doc.rect(ML, y - 3, TW, ROW, 'D');
-    setBold(); doc.setFontSize(9); doc.setTextColor(50, 50, 50);
-    doc.text('Proveedor a Cargo', ML + 3, y + 3);
-    setBody(); doc.setFontSize(9);
-    doc.text('Navarro y Cal y Mayor Asociados S.A de C.V.', ML + C1, y + 3);
-    y += ROW + 1;
-    // fila 2
-    checkY(ROW);
-    doc.setFillColor(255, 255, 255); doc.rect(ML, y - 3, TW, ROW, 'F');
-    doc.rect(ML, y - 3, TW, ROW, 'D');
-    setBold(); doc.setFontSize(9); doc.setTextColor(50, 50, 50);
-    doc.text('Fecha de Ingreso', ML + 3, y + 3);
-    setBody(); doc.setFontSize(9);
-    doc.text(fechaVisita, ML + C1, y + 3);
-    y += ROW + 8;
-
-    // ── ALCANCE ──────────────────────────────────────────────────────────────
-    secTitle('Alcance de los Trabajos a Realizar');
-    para('Los trabajos técnicos que se llevarán a cabo incluyen:', 5);
-    ['Estudio de Mecánica de Suelos.', 'Levantamientos Arquitectónicos.', 'Levantamientos Estructurales.', 'Levantamientos de Instalaciones (Eléctricas, Hidráulicas, Sanitarias, etc.).', 'Levantamiento de Planta de Conjunto.'].forEach(item => {
-      const ls = doc.splitTextToSize(item, TW - 8);
-      checkY(ls.length * 5.5 + 2);
-      setBody();
-      doc.setFillColor(12, 59, 110); doc.circle(ML + 3, y - 1, 0.9, 'F');
-      doc.text(ls, ML + 8, y);
-      y += ls.length * 5.5 + 2;
-    });
-    y += 5;
-
-    // ── CONTACTO PROVEEDOR — siempre en página 2 ─────────────────────────────
-    drawFooter(); doc.addPage(); drawHeaderWithLogo(); y = 42;
-    secTitle('Contacto del Proveedor');
-    para('El equipo de Navarro y Cal y Mayor Asociados S.A de C.V estará coordinado por la siguiente persona, quien será el contacto directo para cualquier asunto operativo o logístico relacionado con su visita:');
-
-    // Tabla contacto — anchos fijos que no se salen
-    const tc1 = 36; const tc2 = 42; const tc3 = 56; const tc4 = TW - tc1 - tc2 - tc3;
-    checkY(20);
-    // header
-    doc.setFillColor(12, 59, 110); doc.rect(ML, y - 3, TW, 8, 'F');
-    setBold(); doc.setFontSize(8); doc.setTextColor(255, 255, 255);
-    doc.text('Rol',      ML + 2,               y + 2);
-    doc.text('Nombre',   ML + tc1 + 2,         y + 2);
-    doc.text('Correo',   ML + tc1 + tc2 + 2,   y + 2);
-    doc.text('Teléfono', ML + tc1 + tc2 + tc3 + 2, y + 2);
-    y += 9;
-    // fila datos
-    checkY(9);
-    doc.setFillColor(241, 245, 249); doc.rect(ML, y - 3, TW, 8, 'F');
-    doc.setDrawColor(220, 225, 230); doc.rect(ML, y - 3, TW, 8, 'D');
-    setBody(); doc.setFontSize(8);
-    doc.text('Líder de Proyecto',           ML + 2,               y + 2);
-    doc.text('Arq. Fátima Vázquez',         ML + tc1 + 2,         y + 2);
-    doc.text('fvazquez@navarrocym.com.mx',  ML + tc1 + tc2 + 2,   y + 2);
-    doc.text('(55) 5182 1276',              ML + tc1 + tc2 + tc3 + 2, y + 2);
-    y += 11;
-
-    // ── CIERRE ───────────────────────────────────────────────────────────────
-    para('Agradecemos de antemano todas las facilidades y el apoyo que se brinden al equipo de trabajo para asegurar el desarrollo eficiente de estas labores, minimizando cualquier posible afectación a las actividades cotidianas del colegio/clínica.');
-    doc.setTextColor(30, 30, 30); doc.setFont('helvetica', 'normal'); doc.setFontSize(11);
-    para('Quedamos a su disposición para cualquier duda o aclaración.', 12);
-
-    // ── FIRMA ────────────────────────────────────────────────────────────────
-    checkY(28);
-    setBody();
-    doc.text('Atentamente,', ML, y); y += 16;
-    setBold(); doc.setFontSize(10); doc.setTextColor(12, 59, 110);
-    doc.text('Ing. Ricardo Joanathan Reyes Medina', ML, y); y += 6;
-    setBody();
-    doc.text('Coordinador de Obras y Mantenimiento RCMA', ML, y);
-
-    drawFooter();
-    return doc.output('blob') as Blob;
-  };
+  const deleteMut = useMutation({
+    mutationFn: async (c: Comunicado) => {
+      if (c.onedrive_path && c.archivo_nombre) await spDelete(c.onedrive_path, c.archivo_nombre);
+      const { error } = await supabase.from('levantamiento_comunicados').delete().eq('id', c.id);
+      if (error) throw error;
+    },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['lev_comunicados'] }); toast.success('Comunicado eliminado'); setDeleteCom(null); },
+    onError: (e: any) => toast.error(e.message),
+  });
 
   const buildPreviewHTML = (plantel: Plantel, c: { fecha_emision: string; fecha_visita: string | null; director_nombre: string | null }) => {
     const datos     = DATOS_COLEGIO[codigoCorto(plantel.colegio_clave)];
     const dirNombre = c.director_nombre ?? datos?.director ?? '';
-    const fechaEmision = c.fecha_emision
-      ? new Date(c.fecha_emision + 'T12:00:00').toLocaleDateString('es-MX', { day: 'numeric', month: 'long', year: 'numeric' })
-      : '';
-    const fechaVisita = c.fecha_visita
-      ? new Date(c.fecha_visita + 'T12:00:00').toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: 'numeric' })
-      : '(por confirmar)';
+    const fechaEmision = c.fecha_emision ? new Date(c.fecha_emision + 'T12:00:00').toLocaleDateString('es-MX', { day: 'numeric', month: 'long', year: 'numeric' }) : '';
+    const fechaVisita  = c.fecha_visita  ? new Date(c.fecha_visita  + 'T12:00:00').toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: 'numeric' }) : '(por confirmar)';
     return `<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8">
     <meta name="viewport" content="width=device-width,initial-scale=1">
     <style>
-      *{box-sizing:border-box;margin:0;padding:0;}
-      html,body{width:100%;background:#e8e8e8;}
+      *{box-sizing:border-box;margin:0;padding:0;}html,body{width:100%;background:#e8e8e8;}
       body{font-family:Arial,sans-serif;font-size:12.5px;color:#222;line-height:1.55;}
       .wrap{width:680px;margin:0 auto;background:#fff;}
       .hdr{background:#0C3B6E;border-left:6px solid #E87722;padding:16px 28px;display:flex;justify-content:space-between;align-items:center;}
@@ -1045,7 +919,7 @@ function TabComunicados({ comunicados, planteles, directorio, qc }: {
     </style></head><body>
     <div class="wrap">
       <div class="hdr">
-        <div><h1>Comunicado Institucional</h1><p>Coordinación de Obras y Mantenimiento RCMA &nbsp;·&nbsp; ${fechaEmision}</p><p style="margin-top:1px;font-size:9px;color:#8facc8;">Documento interno — Mano Amiga</p></div>
+        <div><h1>Comunicado Institucional</h1><p>Coordinación de Obras y Mantenimiento RCMA &nbsp;·&nbsp; ${fechaEmision}</p></div>
         <img src="/logo.png" alt="" onerror="this.style.display='none'">
       </div>
       <div class="body">
@@ -1069,49 +943,6 @@ function TabComunicados({ comunicados, planteles, directorio, qc }: {
     </div></body></html>`;
   };
 
-  const saveMut = useMutation({
-    mutationFn: async () => {
-      setSaving(true);
-      try {
-        const plantel = planteles.find(p => p.id === form.plantel_id);
-        if (!plantel) throw new Error('Selecciona un plantel');
-        const dirNombre = datosCom?.director ?? null;
-        const blob = await buildPDFBlob(plantel, { fecha_emision: form.fecha_emision, fecha_visita: form.fecha_visita || null, director_nombre: dirNombre });
-        const fecha = new Date(form.fecha_emision + 'T12:00:00');
-        const anio  = fecha.getFullYear();
-        const mes   = fecha.toLocaleDateString('es-MX', { month: 'long' }).toUpperCase();
-        const carpeta  = `Levantamiento Nacional/Comunicados/${anio}/${mes}`;
-        const fileName = `Comunicado_${plantel.colegio_clave}_${form.fecha_emision}.pdf`;
-        const fileObj  = new File([blob], fileName, { type: 'application/pdf' });
-        const webUrl   = await spUpload(fileObj, carpeta, fileName);
-        const { error } = await supabase.from('levantamiento_comunicados').insert({
-          plantel_id: form.plantel_id, fecha_emision: form.fecha_emision,
-          fecha_visita: form.fecha_visita || null, director_nombre: dirNombre,
-          director_correo: null, notas: form.notas || null,
-          onedrive_url: webUrl || null, onedrive_path: carpeta, archivo_nombre: fileName,
-        });
-        if (error) throw error;
-      } finally { setSaving(false); }
-    },
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['lev_comunicados'] });
-      toast.success('Comunicado guardado y subido a OneDrive ✓');
-      setShowForm(false);
-      setForm({ plantel_id: '', fecha_emision: hoyLocal(), fecha_visita: '', notas: '' });
-    },
-    onError: (e: any) => toast.error(e.message),
-  });
-
-  const deleteMut = useMutation({
-    mutationFn: async (c: Comunicado) => {
-      if (c.onedrive_path && c.archivo_nombre) await spDelete(c.onedrive_path, c.archivo_nombre);
-      const { error } = await supabase.from('levantamiento_comunicados').delete().eq('id', c.id);
-      if (error) throw error;
-    },
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['lev_comunicados'] }); toast.success('Comunicado eliminado'); setDeleteCom(null); },
-    onError: (e: any) => toast.error(e.message),
-  });
-
   const handlePreview = (c: Comunicado) => {
     const plantel = planteles.find(p => p.id === c.plantel_id);
     if (!plantel) { toast.error('Plantel no encontrado'); return; }
@@ -1121,14 +952,13 @@ function TabComunicados({ comunicados, planteles, directorio, qc }: {
   const handlePrint = (c: Comunicado) => {
     const plantel = planteles.find(p => p.id === c.plantel_id);
     if (!plantel) return;
-    buildPDFBlob(plantel, c).then(blob => {
-      const url = URL.createObjectURL(blob);
-      window.open(url, '_blank');
-      setTimeout(() => URL.revokeObjectURL(url), 30000);
-    }).catch((e: any) => toast.error('Error generando PDF: ' + e.message));
+    const html = buildPreviewHTML(plantel, c);
+    const win = window.open('', '_blank');
+    if (!win) { toast.error('Permite ventanas emergentes'); return; }
+    win.document.write(html); win.document.close(); win.focus();
+    setTimeout(() => win.print(), 800);
   };
 
-  // HTML para vista previa inline en iframe
   const previewHTML = previewCom
     ? (() => { const pl = planteles.find(p => p.id === previewCom.plantel_id); return pl ? buildPreviewHTML(pl, previewCom) : ''; })()
     : '';
@@ -1142,27 +972,31 @@ function TabComunicados({ comunicados, planteles, directorio, qc }: {
       {/* Modal Nuevo Comunicado */}
       {showForm && (
         <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between p-5 border-b border-slate-100">
               <h3 className="font-bold text-slate-900">Nuevo Comunicado</h3>
-              <button onClick={() => setShowForm(false)}><X className="w-5 h-5 text-slate-400" /></button>
+              <button onClick={resetForm}><X className="w-5 h-5 text-slate-400" /></button>
             </div>
-            <div className="p-5 space-y-3">
-              <div>
-                <label className="text-xs font-bold text-slate-500 uppercase block mb-1">Plantel</label>
-                <select className={inputCls} value={form.plantel_id} onChange={e => set('plantel_id', e.target.value)}>
-                  <option value="">Seleccionar…</option>
-                  {planteles.map(p => <option key={p.id} value={p.id}>{p.colegio_nombre}</option>)}
-                </select>
-              </div>
+            <div className="p-5 space-y-4">
+              <ColegioSelector
+                territorio={territorio} colegio={colegio}
+                onTerritorioChange={v => { setTerritorio(v); setColegio(''); }}
+                onColegioChange={v => setColegio(v)}
+                required
+              />
               {datosCom && (
                 <div className="bg-blue-50 rounded-lg p-3 text-xs text-blue-800">
                   <strong>Director:</strong> {datosCom.director || '—'}<br />
                   <strong>Administrador:</strong> {datosCom.admin || '—'}
                 </div>
               )}
-              {form.plantel_id && !datosCom && (
-                <div className="bg-amber-50 rounded-lg p-3 text-xs text-amber-800">No se encontraron datos para este plantel.</div>
+              {colegio && !datosCom && (
+                <div className="bg-amber-50 rounded-lg p-3 text-xs text-amber-800">No se encontraron datos para este colegio.</div>
+              )}
+              {colegio && !planteles.find(p => p.colegio_clave === colegio) && (
+                <div className="bg-emerald-50 rounded-lg p-3 text-xs text-emerald-700">
+                  ✓ Este colegio se agregará automáticamente a Planteles con Fase: Comunicado
+                </div>
               )}
               <div className="grid grid-cols-2 gap-3">
                 <div>
@@ -1183,8 +1017,8 @@ function TabComunicados({ comunicados, planteles, directorio, qc }: {
               </div>
             </div>
             <div className="flex justify-end gap-2 p-5 border-t border-slate-100">
-              <button onClick={() => setShowForm(false)} className={btnSecondary}>Cancelar</button>
-              <button onClick={() => saveMut.mutate()} disabled={saveMut.isPending || saving || !form.plantel_id} className={btnPrimary}>
+              <button onClick={resetForm} className={btnSecondary}>Cancelar</button>
+              <button onClick={() => saveMut.mutate()} disabled={saveMut.isPending || saving || !colegio} className={btnPrimary}>
                 {(saveMut.isPending || saving) ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}Guardar
               </button>
             </div>
@@ -1192,44 +1026,38 @@ function TabComunicados({ comunicados, planteles, directorio, qc }: {
         </div>
       )}
 
-      {/* Modal Vista Previa */}
+      {/* Vista Previa */}
       {previewCom && (
         <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-3xl max-h-[90vh] flex flex-col">
             <div className="flex items-center justify-between p-4 border-b border-slate-100">
               <h3 className="font-bold text-slate-900">Vista Previa — Comunicado</h3>
               <div className="flex items-center gap-2">
-                <button onClick={() => handlePrint(previewCom)} className={btnPrimary}>
-                  <Download className="w-4 h-4" />Imprimir / PDF
-                </button>
+                <button onClick={() => handlePrint(previewCom)} className={btnPrimary}><Download className="w-4 h-4" />Imprimir / PDF</button>
                 <button onClick={() => setPreviewCom(null)}><X className="w-5 h-5 text-slate-400" /></button>
               </div>
             </div>
             <div className="flex-1 overflow-auto p-2">
-              <iframe
-                srcDoc={previewHTML}
-                className="w-full h-full min-h-[600px] border-0"
-                title="Vista previa comunicado"
-              />
+              <iframe srcDoc={previewHTML} className="w-full h-full min-h-[600px] border-0" title="Vista previa comunicado" />
             </div>
           </div>
         </div>
       )}
 
-      {/* Modal Confirmar Eliminar */}
+      {/* Confirmar Eliminar */}
       {deleteCom && (
         <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 space-y-4">
             <h3 className="font-bold text-slate-900">¿Eliminar comunicado?</h3>
             <p className="text-sm text-slate-600">
-              Se eliminará el comunicado de <strong>{planteles.find(p => p.id === deleteCom.plantel_id)?.colegio_nombre}</strong> del sistema
+              Se eliminará el comunicado de <strong>{planteles.find(p => p.id === deleteCom.plantel_id)?.colegio_nombre}</strong>
               {deleteCom.onedrive_path ? ' y del OneDrive' : ''}.
             </p>
             <div className="flex justify-end gap-2">
               <button onClick={() => setDeleteCom(null)} className={btnSecondary}>Cancelar</button>
-              <button onClick={() => deleteMut.mutate(deleteCom)} disabled={deleteMut.isPending} className="px-4 py-2 bg-red-600 text-white rounded-lg text-sm font-medium hover:bg-red-700 flex items-center gap-2 disabled:opacity-50">
-                {deleteMut.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
-                Eliminar
+              <button onClick={() => deleteMut.mutate(deleteCom)} disabled={deleteMut.isPending}
+                className="px-4 py-2 bg-red-600 text-white rounded-lg text-sm font-medium hover:bg-red-700 flex items-center gap-2 disabled:opacity-50">
+                {deleteMut.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : null}Eliminar
               </button>
             </div>
           </div>
@@ -1259,12 +1087,8 @@ function TabComunicados({ comunicados, planteles, directorio, qc }: {
                 <tr key={c.id} className="hover:bg-slate-50">
                   <td className="px-4 py-3 font-medium text-slate-900">{plantel?.colegio_nombre ?? '—'}</td>
                   <td className="px-4 py-3 text-slate-600 text-xs">{c.director_nombre ?? '—'}</td>
-                  <td className="px-4 py-3 text-slate-500 text-xs">
-                    {c.fecha_emision ? new Date(c.fecha_emision + 'T12:00:00').toLocaleDateString('es-MX') : '—'}
-                  </td>
-                  <td className="px-4 py-3 text-slate-500 text-xs">
-                    {c.fecha_visita ? new Date(c.fecha_visita + 'T12:00:00').toLocaleDateString('es-MX') : '—'}
-                  </td>
+                  <td className="px-4 py-3 text-slate-500 text-xs">{c.fecha_emision ? new Date(c.fecha_emision + 'T12:00:00').toLocaleDateString('es-MX') : '—'}</td>
+                  <td className="px-4 py-3 text-slate-500 text-xs">{c.fecha_visita  ? new Date(c.fecha_visita  + 'T12:00:00').toLocaleDateString('es-MX') : '—'}</td>
                   <td className="px-4 py-3">
                     {c.onedrive_url
                       ? <a href={c.onedrive_url} target="_blank" rel="noreferrer" className="text-xs text-[#0C3B6E] hover:underline flex items-center gap-1"><Eye className="w-3.5 h-3.5" />Ver en Drive</a>
@@ -1272,15 +1096,9 @@ function TabComunicados({ comunicados, planteles, directorio, qc }: {
                   </td>
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-2">
-                      <button onClick={() => handlePreview(c)} className="text-slate-400 hover:text-[#0C3B6E]" title="Vista previa">
-                        <Eye className="w-4 h-4" />
-                      </button>
-                      <button onClick={() => handlePrint(c)} className="text-slate-400 hover:text-[#0C3B6E]" title="Imprimir / PDF">
-                        <Download className="w-4 h-4" />
-                      </button>
-                      <button onClick={() => setDeleteCom(c)} className="text-slate-400 hover:text-red-500" title="Eliminar">
-                        <X className="w-4 h-4" />
-                      </button>
+                      <button onClick={() => handlePreview(c)} className="text-slate-400 hover:text-[#0C3B6E]" title="Vista previa"><Eye className="w-4 h-4" /></button>
+                      <button onClick={() => handlePrint(c)} className="text-slate-400 hover:text-[#0C3B6E]" title="Imprimir"><Download className="w-4 h-4" /></button>
+                      <button onClick={() => setDeleteCom(c)} className="text-slate-400 hover:text-red-500" title="Eliminar"><X className="w-4 h-4" /></button>
                     </div>
                   </td>
                 </tr>
@@ -1293,43 +1111,6 @@ function TabComunicados({ comunicados, planteles, directorio, qc }: {
   );
 }
 
-// TAB: REPORTES DIARIOS
-// ══════════════════════════════════════════════════════════════════════════════
-async function spDelete(carpeta: string, fileName: string) {
-  const { data: sessionData } = await supabase.auth.getSession();
-  const token = sessionData?.session?.access_token ?? '';
-  const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL as string;
-  await fetch(`${SUPABASE_URL}/functions/v1/sharepoint-upload`, {
-    method: 'POST',
-    headers: { 'Authorization': `Bearer ${token}`, 'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY as string, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ action: 'delete', carpeta, fileName }),
-  });
-}
-
-async function spUpload(file: File, carpeta: string, fileName: string): Promise<string> {
-  const formData = new FormData();
-  formData.append('file', file);
-  formData.append('carpeta', carpeta);
-  formData.append('fileName', fileName);
-  const { data: sessionData } = await supabase.auth.getSession();
-  const token = sessionData?.session?.access_token ?? '';
-  const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL as string;
-  const res = await fetch(`${SUPABASE_URL}/functions/v1/sharepoint-upload`, {
-    method: 'POST',
-    headers: { 'Authorization': `Bearer ${token}`, 'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY as string },
-    body: formData,
-  });
-  const result = await res.json();
-  if (!res.ok) throw new Error(result.error ?? 'Error al subir');
-  return result.webUrl ?? '';
-}
-
-function carpetaDesde(fecha: string) {
-  const d = new Date(fecha + 'T12:00:00');
-  const mes = d.toLocaleDateString('es-MX', { month: 'long' }).toUpperCase();
-  return `Levantamiento Nacional/${d.getFullYear()}/${mes}`;
-}
-
 function TabReportes({ reportes, planteles, qc }: { reportes: Reporte[]; planteles: Plantel[]; qc: any }) {
   const hoy = hoyLocal();
   const [showForm, setShowForm]   = useState(false);
@@ -1337,7 +1118,18 @@ function TabReportes({ reportes, planteles, qc }: { reportes: Reporte[]; plantel
   const [form, setForm]           = useState({ plantel_id: '', plantel_id_2: '', fecha_reporte: hoy, notas: '' });
   const [file, setFile]           = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
+  const [deleteReporte, setDeleteReporte] = useState<Reporte | null>(null);
   const set = (k: string, v: string) => setForm(f => ({ ...f, [k]: v }));
+
+  const deleteMut = useMutation({
+    mutationFn: async (r: Reporte) => {
+      if (r.onedrive_path && r.archivo_nombre) await spDelete(r.onedrive_path, r.archivo_nombre);
+      const { error } = await supabase.from('levantamiento_reportes').delete().eq('id', r.id);
+      if (error) throw error;
+    },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['lev_reportes'] }); toast.success('Reporte eliminado'); setDeleteReporte(null); },
+    onError: (e: any) => toast.error(e.message),
+  });
 
   const openNew = () => {
     setEditItem(null); setFile(null);
@@ -1495,6 +1287,22 @@ function TabReportes({ reportes, planteles, qc }: { reportes: Reporte[]; plantel
         </div>
       )}
 
+      {deleteReporte && (
+        <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 space-y-4">
+            <h3 className="font-bold text-slate-900">¿Eliminar reporte?</h3>
+            <p className="text-sm text-slate-600">Se eliminará <strong>{deleteReporte.archivo_nombre}</strong>{deleteReporte.onedrive_path ? ' y el archivo en OneDrive' : ''}.</p>
+            <div className="flex justify-end gap-2">
+              <button onClick={() => setDeleteReporte(null)} className={btnSecondary}>Cancelar</button>
+              <button onClick={() => deleteMut.mutate(deleteReporte)} disabled={deleteMut.isPending}
+                className="px-4 py-2 bg-red-600 text-white rounded-lg text-sm font-medium hover:bg-red-700 flex items-center gap-2 disabled:opacity-50">
+                {deleteMut.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : null}Eliminar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="bg-white border border-slate-200 rounded-xl overflow-hidden">
         <table className="w-full text-sm">
           <thead className="bg-slate-50 text-slate-500 text-xs uppercase">
@@ -1532,6 +1340,9 @@ function TabReportes({ reportes, planteles, qc }: { reportes: Reporte[]; plantel
                       )}
                       <button onClick={() => openEdit(r)} className="text-slate-400 hover:text-[#0C3B6E]">
                         <Edit2 className="w-4 h-4" />
+                      </button>
+                      <button onClick={() => setDeleteReporte(r)} className="text-slate-400 hover:text-red-500">
+                        <X className="w-4 h-4" />
                       </button>
                     </div>
                   </td>
@@ -2025,6 +1836,22 @@ function TabReporteGeneral({ reportesGenerales, planteles, pagos, comunicados, e
           {generating ? 'Generando…' : 'Generar Reporte'}
         </button>
       </div>
+
+      {deleteReporte && (
+        <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 space-y-4">
+            <h3 className="font-bold text-slate-900">¿Eliminar reporte?</h3>
+            <p className="text-sm text-slate-600">Se eliminará <strong>{deleteReporte.archivo_nombre}</strong>{deleteReporte.onedrive_path ? ' y el archivo en OneDrive' : ''}.</p>
+            <div className="flex justify-end gap-2">
+              <button onClick={() => setDeleteReporte(null)} className={btnSecondary}>Cancelar</button>
+              <button onClick={() => deleteMut.mutate(deleteReporte)} disabled={deleteMut.isPending}
+                className="px-4 py-2 bg-red-600 text-white rounded-lg text-sm font-medium hover:bg-red-700 flex items-center gap-2 disabled:opacity-50">
+                {deleteMut.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : null}Eliminar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="bg-white border border-slate-200 rounded-xl overflow-hidden">
         <table className="w-full text-sm">
