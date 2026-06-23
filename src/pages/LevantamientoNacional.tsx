@@ -343,6 +343,76 @@ export default function LevantamientoNacional() {
 // ══════════════════════════════════════════════════════════════════════════════
 // TAB: PLANTELES
 // ══════════════════════════════════════════════════════════════════════════════
+
+// ─── Helpers OneDrive ─────────────────────────────────────────────────────────
+async function spUpload(file: File, carpeta: string, fileName: string): Promise<string> {
+  const { data: s } = await (await import('@/lib/supabaseClient')).supabase.auth.getSession();
+  const token = s?.session?.access_token ?? '';
+  const SUPA_URL = import.meta.env.VITE_SUPABASE_URL as string;
+  const ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY as string;
+
+  // Obtener token Azure desde get-sharepoint-token
+  const tokenRes = await fetch(`${SUPA_URL}/functions/v1/get-sharepoint-token`, {
+    method: 'POST',
+    headers: { 'Authorization': `Bearer ${token}`, 'apikey': ANON_KEY },
+  });
+  const { access_token } = await tokenRes.json();
+  if (!access_token) throw new Error('No se pudo obtener token de Azure');
+
+  const USER      = 'rreyes@manoamiga.edu.mx';
+  const CHUNK     = 5 * 1024 * 1024;
+  const path      = carpeta.split('/').map(p => encodeURIComponent(p)).join('/');
+  const itemPath  = `Sistema%20RCMA%20Doc/${path}/${encodeURIComponent(fileName)}`;
+
+  const sessionRes = await fetch(
+    `https://graph.microsoft.com/v1.0/users/${USER}/drive/root:/${itemPath}:/createUploadSession`,
+    {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${access_token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ item: { '@microsoft.graph.conflictBehavior': 'replace', name: fileName } }),
+    }
+  );
+  if (!sessionRes.ok) throw new Error(`Upload session error ${sessionRes.status}`);
+  const { uploadUrl } = await sessionRes.json();
+
+  let webUrl = '';
+  let start  = 0;
+  const total = file.size;
+  while (start < total) {
+    const end = Math.min(start + CHUNK, total);
+    const buf = await file.slice(start, end).arrayBuffer();
+    const res = await fetch(uploadUrl, {
+      method: 'PUT',
+      headers: {
+        'Content-Length': String(buf.byteLength),
+        'Content-Range': `bytes ${start}-${end - 1}/${total}`,
+        'Content-Type': file.type || 'application/octet-stream',
+      },
+      body: buf,
+    });
+    if (!res.ok && res.status !== 202) throw new Error(`Chunk error ${res.status}`);
+    if (res.status === 200 || res.status === 201) {
+      const item = await res.json();
+      webUrl = item.webUrl ?? '';
+    }
+    start = end;
+  }
+  return webUrl;
+}
+
+async function spDelete(carpeta: string, fileName: string): Promise<void> {
+  const { data: s } = await (await import('@/lib/supabaseClient')).supabase.auth.getSession();
+  const token = s?.session?.access_token ?? '';
+  const SUPA_URL = import.meta.env.VITE_SUPABASE_URL as string;
+  const ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY as string;
+
+  await fetch(`${SUPA_URL}/functions/v1/sharepoint-upload`, {
+    method: 'POST',
+    headers: { 'Authorization': `Bearer ${token}`, 'apikey': ANON_KEY, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ action: 'delete', carpeta, fileName }),
+  });
+}
+
 function TabPlanteles({ planteles, loading, qc, directorio }: {
   planteles: Plantel[]; loading: boolean; qc: any; directorio: DirectorioItem[];
 }) {
