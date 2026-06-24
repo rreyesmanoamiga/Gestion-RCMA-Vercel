@@ -229,6 +229,327 @@ Este proyecto es fundamental para el desarrollo de futuras iniciativas de mejora
 // ══════════════════════════════════════════════════════════════════════════════
 // COMPONENTE PRINCIPAL
 // ══════════════════════════════════════════════════════════════════════════════
+function TabReporteGeneral({ reportesGenerales, planteles, pagos, comunicados, entregables, qc }: {
+  reportesGenerales: ReporteGeneral[];
+  planteles: Plantel[];
+  pagos: Pago[];
+  comunicados: Comunicado[];
+  entregables: Entregable[];
+  qc: any;
+}) {
+  const [generating, setGenerating] = useState(false);
+
+  const MESES_CONTRATO = [
+    { etiqueta: 'ANTICIPO', total: 1034297.65 },
+    { etiqueta: 'MES 1',    total: 603932.62  }, { etiqueta: 'MES 2',  total: 387111.22  },
+    { etiqueta: 'MES 3',    total: 475920.82  }, { etiqueta: 'MES 4',  total: 430715.62  },
+    { etiqueta: 'MES 5',    total: 321252.22  }, { etiqueta: 'MES 6',  total: 564817.42  },
+    { etiqueta: 'MES 7',    total: 338342.50  }, { etiqueta: 'MES 8',  total: 508326.58  },
+    { etiqueta: 'MES 9',    total: 534878.88  }, { etiqueta: 'MES 10', total: 444781.29  },
+    { etiqueta: 'MES 11',   total: 340174.72  }, { etiqueta: 'MES 12', total: 565502.54  },
+    { etiqueta: 'MES 13',   total: 892463.77  }, { etiqueta: 'MES 14', total: 570742.12  },
+    { etiqueta: 'MES 15',   total: 824408.02  }, { etiqueta: 'MES 16', total: 614172.52  },
+    { etiqueta: 'MES 17',   total: 723140.02  }, { etiqueta: 'MES 18', total: 167996.00  },
+  ];
+
+  const fmt = (n: number) => '$' + n.toLocaleString('es-MX', { minimumFractionDigits: 2 });
+  const totalPagado = pagos.reduce((s, p) => s + (p.monto_pagado ?? 0), 0);
+  const totalContrato = 10342976.48;
+
+  const CHECKS = [
+    { field: 'mecanica_suelos', label: 'Mecánica de Suelos' },
+    { field: 'levant_arq', label: 'Levant. Arq.' },
+    { field: 'levant_estructural', label: 'Levant. Estructural' },
+    { field: 'levant_instalaciones', label: 'Levant. Instalaciones' },
+    { field: 'levant_conjunto', label: 'Planta de Conjunto' },
+  ];
+
+  const generarReporte = async () => {
+    setGenerating(true);
+    try {
+      let JsPDF = (window as any).jspdf?.jsPDF;
+      if (!JsPDF) {
+        await new Promise<void>((res, rej) => {
+          const s = document.createElement('script');
+          s.src = 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js';
+          s.onload = () => res(); s.onerror = () => rej();
+          document.head.appendChild(s);
+        });
+        JsPDF = (window as any).jspdf?.jsPDF;
+      }
+
+      const doc = new JsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+      const W = 210; const ML = 14; const TW = 182;
+      let y = 0;
+      const fecha = hoyLocal();
+      const fechaLabel = new Date(fecha + 'T12:00:00').toLocaleDateString('es-MX', { day: 'numeric', month: 'long', year: 'numeric' });
+
+      const drawHeader = (logoImg = '') => {
+        doc.setFillColor(12, 59, 110); doc.rect(0, 0, W, 32, 'F');
+        doc.setFillColor(232, 119, 34); doc.rect(0, 0, 5, 32, 'F');
+        doc.setFontSize(15); doc.setFont('helvetica', 'bold'); doc.setTextColor(255, 255, 255);
+        doc.text('Reporte General — Levantamiento Nacional', ML, 13);
+        doc.setFontSize(8.5); doc.setFont('helvetica', 'normal'); doc.setTextColor(180, 200, 220);
+        doc.text('Coordinación de Obras y Mantenimiento RCMA  ·  ' + fechaLabel, ML, 21);
+        doc.setFontSize(7.5); doc.setTextColor(130, 160, 190);
+        doc.text('Contrato 110-057-MANO_AMIGA', ML, 28);
+        if (logoImg) doc.addImage(logoImg, 'PNG', W - 36, 4, 22, 22);
+      };
+
+      const drawFooter = () => {
+        doc.setFillColor(12, 59, 110); doc.rect(0, 285, W, 12, 'F');
+        doc.setFontSize(7); doc.setFont('helvetica', 'normal'); doc.setTextColor(180, 200, 220);
+        doc.text('Coordinación de Obras y Mantenimiento RCMA  —  Sistema RCMA', W / 2, 292, { align: 'center' });
+      };
+
+      const np = (need = 10) => {
+        if (y + need > 272) { drawFooter(); doc.addPage(); drawHeader(logoData); y = 40; }
+      };
+
+      const seccion = (titulo: string) => {
+        np(14);
+        doc.setFontSize(10); doc.setFont('helvetica', 'bold'); doc.setTextColor(12, 59, 110);
+        doc.text(titulo, ML, y); y += 3;
+        doc.setDrawColor(200, 210, 220); doc.setLineWidth(0.3); doc.line(ML, y, W - ML, y); y += 5;
+      };
+
+      // Logo
+      let logoData = '';
+      try {
+        logoData = await new Promise<string>((res, rej) => {
+          const img = new Image(); img.crossOrigin = 'anonymous';
+          img.onload = () => { const cv = document.createElement('canvas'); cv.width = img.width; cv.height = img.height; cv.getContext('2d')!.drawImage(img, 0, 0); res(cv.toDataURL('image/png')); };
+          img.onerror = rej; img.src = '/logo.png';
+        });
+      } catch { /* sin logo */ }
+
+      drawHeader(logoData);
+      y = 40;
+
+      // ── SECCIÓN 1: PLANTELES ───────────────────────────────────────────
+      seccion('1. Planteles');
+      const faseLabels: Record<string, string> = {
+        COMUNICADO: 'Comunicado', FASE1: 'Fase 1 – Campo', FASE2: 'Fase 2 – Gabinete',
+        FASE3: 'Fase 3 – Revisión', FASE4: 'Fase 4 – ECO', FASE5: 'Fase 5 – Cierre',
+      };
+
+      // Header tabla planteles
+      np(10);
+      doc.setFillColor(12, 59, 110); doc.rect(ML, y - 3, TW, 7, 'F');
+      doc.setFontSize(7.5); doc.setFont('helvetica', 'bold'); doc.setTextColor(255, 255, 255);
+      doc.text('Colegio', ML + 2, y + 1.5);
+      doc.text('Territorio', ML + 80, y + 1.5);
+      doc.text('Asignación', ML + 115, y + 1.5);
+      doc.text('Fase', ML + 148, y + 1.5); y += 8;
+
+      planteles.forEach((p, i) => {
+        np(7);
+        if (i % 2 === 0) { doc.setFillColor(248, 250, 252); doc.rect(ML, y - 3, TW, 7, 'F'); }
+        doc.setFont('helvetica', 'normal'); doc.setFontSize(8); doc.setTextColor(30, 30, 30);
+        doc.text((p.colegio_nombre || '').slice(0, 38), ML + 2, y + 1);
+        doc.text((p.zona || '').slice(0, 18), ML + 80, y + 1);
+        doc.text((p.asignacion || '').slice(0, 18), ML + 115, y + 1);
+        doc.text(faseLabels[p.fase] || p.fase, ML + 148, y + 1); y += 7;
+      });
+      if (planteles.length === 0) { doc.setFontSize(8); doc.setTextColor(150, 150, 150); doc.text('Sin planteles registrados', ML + 2, y); y += 7; }
+      y += 6;
+
+      // ── SECCIÓN 2: PAGOS ──────────────────────────────────────────────
+      seccion('2. Flujograma de Pagos');
+      np(10);
+      doc.setFillColor(12, 59, 110); doc.rect(ML, y - 3, TW, 7, 'F');
+      doc.setFontSize(7.5); doc.setFont('helvetica', 'bold'); doc.setTextColor(255, 255, 255);
+      doc.text('Mes', ML + 2, y + 1.5);
+      doc.text('Total Contrato', ML + 35, y + 1.5);
+      doc.text('Fact. Cons.', ML + 80, y + 1.5);
+      doc.text('Fecha Pago', ML + 108, y + 1.5);
+      doc.text('Folio', ML + 138, y + 1.5);
+      doc.text('Monto Real', ML + 158, y + 1.5); y += 8;
+
+      MESES_CONTRATO.forEach((m, i) => {
+        const pago = pagos.find(p => p.mes_etiqueta === m.etiqueta);
+        np(7);
+        if (pago) { doc.setFillColor(236, 253, 245); doc.rect(ML, y - 3, TW, 7, 'F'); }
+        else if (i % 2 === 0) { doc.setFillColor(248, 250, 252); doc.rect(ML, y - 3, TW, 7, 'F'); }
+        doc.setFont('helvetica', pago ? 'bold' : 'normal'); doc.setFontSize(8); doc.setTextColor(30, 30, 30);
+        doc.text(m.etiqueta, ML + 2, y + 1);
+        doc.text(fmt(m.total), ML + 35, y + 1);
+        doc.text(pago?.factura_consecutivo ?? '—', ML + 80, y + 1);
+        doc.text(pago?.fecha_pago ? new Date(pago.fecha_pago + 'T12:00:00').toLocaleDateString('es-MX') : '—', ML + 108, y + 1);
+        doc.text(pago?.folio_factura ?? '—', ML + 138, y + 1);
+        if (pago?.monto_pagado) { doc.setTextColor(22, 163, 74); doc.text(fmt(pago.monto_pagado), ML + 158, y + 1); doc.setTextColor(30, 30, 30); }
+        else doc.text('—', ML + 158, y + 1);
+        y += 7;
+      });
+      // Totales
+      np(10);
+      doc.setFillColor(220, 230, 245); doc.rect(ML, y - 3, TW, 8, 'F');
+      doc.setFont('helvetica', 'bold'); doc.setFontSize(8.5); doc.setTextColor(12, 59, 110);
+      doc.text('TOTAL CONTRATO', ML + 2, y + 2);
+      doc.text(fmt(totalContrato), ML + 35, y + 2);
+      doc.text('TOTAL PAGADO', ML + 108, y + 2);
+      doc.setTextColor(22, 163, 74); doc.text(fmt(totalPagado), ML + 158, y + 2); y += 12;
+
+      // ── SECCIÓN 3: COMUNICADOS ────────────────────────────────────────
+      seccion('3. Comunicados Enviados');
+      np(10);
+      doc.setFillColor(12, 59, 110); doc.rect(ML, y - 3, TW, 7, 'F');
+      doc.setFontSize(7.5); doc.setFont('helvetica', 'bold'); doc.setTextColor(255, 255, 255);
+      doc.text('Plantel', ML + 2, y + 1.5);
+      doc.text('Director', ML + 80, y + 1.5);
+      doc.text('F. Emisión', ML + 135, y + 1.5);
+      doc.text('F. Visita', ML + 162, y + 1.5); y += 8;
+
+      comunicados.forEach((c, i) => {
+        const pl = planteles.find(p => p.id === c.plantel_id);
+        np(7);
+        if (i % 2 === 0) { doc.setFillColor(248, 250, 252); doc.rect(ML, y - 3, TW, 7, 'F'); }
+        doc.setFont('helvetica', 'normal'); doc.setFontSize(8); doc.setTextColor(30, 30, 30);
+        doc.text((pl?.colegio_nombre || '—').slice(0, 38), ML + 2, y + 1);
+        doc.text((c.director_nombre || '—').slice(0, 28), ML + 80, y + 1);
+        doc.text(c.fecha_emision ? new Date(c.fecha_emision + 'T12:00:00').toLocaleDateString('es-MX') : '—', ML + 135, y + 1);
+        doc.text(c.fecha_visita ? new Date(c.fecha_visita + 'T12:00:00').toLocaleDateString('es-MX') : '—', ML + 162, y + 1);
+        y += 7;
+      });
+      if (comunicados.length === 0) { doc.setFontSize(8); doc.setTextColor(150, 150, 150); doc.text('Sin comunicados registrados', ML + 2, y); y += 7; }
+      y += 6;
+
+      // ── SECCIÓN 4: ENTREGABLES ─────────────────────────────────────────
+      seccion('4. Estatus de Entregables por Plantel');
+      np(10);
+      doc.setFillColor(12, 59, 110); doc.rect(ML, y - 3, TW, 7, 'F');
+      doc.setFontSize(7); doc.setFont('helvetica', 'bold'); doc.setTextColor(255, 255, 255);
+      doc.text('Plantel', ML + 2, y + 1.5);
+      doc.text('Mec.', ML + 80, y + 1.5);
+      doc.text('Arq.', ML + 97, y + 1.5);
+      doc.text('Estr.', ML + 112, y + 1.5);
+      doc.text('Inst.', ML + 128, y + 1.5);
+      doc.text('Conj.', ML + 143, y + 1.5);
+      doc.text('Acta', ML + 158, y + 1.5);
+      doc.text('Fase', ML + 170, y + 1.5); y += 8;
+
+      planteles.forEach((p, i) => {
+        const ent = entregables.find(e => e.plantel_id === p.id);
+        np(7);
+        if (i % 2 === 0) { doc.setFillColor(248, 250, 252); doc.rect(ML, y - 3, TW, 7, 'F'); }
+        doc.setFont('helvetica', 'normal'); doc.setFontSize(7.5); doc.setTextColor(30, 30, 30);
+        doc.text((p.colegio_nombre || '').slice(0, 36), ML + 2, y + 1);
+        const ok = (field: string) => ent && (ent as any)[field] ? '✓' : '—';
+        doc.setTextColor(ent?.mecanica_suelos ? 22 : 150, ent?.mecanica_suelos ? 163 : 150, ent?.mecanica_suelos ? 74 : 150);
+        doc.text(ok('mecanica_suelos'), ML + 82, y + 1);
+        doc.setTextColor(ent?.levant_arq ? 22 : 150, ent?.levant_arq ? 163 : 150, ent?.levant_arq ? 74 : 150);
+        doc.text(ok('levant_arq'), ML + 99, y + 1);
+        doc.setTextColor(ent?.levant_estructural ? 22 : 150, ent?.levant_estructural ? 163 : 150, ent?.levant_estructural ? 74 : 150);
+        doc.text(ok('levant_estructural'), ML + 114, y + 1);
+        doc.setTextColor(ent?.levant_instalaciones ? 22 : 150, ent?.levant_instalaciones ? 163 : 150, ent?.levant_instalaciones ? 74 : 150);
+        doc.text(ok('levant_instalaciones'), ML + 130, y + 1);
+        doc.setTextColor(ent?.levant_conjunto ? 22 : 150, ent?.levant_conjunto ? 163 : 150, ent?.levant_conjunto ? 74 : 150);
+        doc.text(ok('levant_conjunto'), ML + 145, y + 1);
+        doc.setTextColor(ent?.acta_firmada ? 22 : 150, ent?.acta_firmada ? 163 : 150, ent?.acta_firmada ? 74 : 150);
+        doc.text(ent?.acta_firmada ? '✓' : '—', ML + 160, y + 1);
+        doc.setTextColor(30, 30, 30);
+        doc.text((faseLabels[p.fase] || p.fase).slice(0, 14), ML + 168, y + 1);
+        y += 7;
+      });
+      if (planteles.length === 0) { doc.setFontSize(8); doc.setTextColor(150, 150, 150); doc.text('Sin planteles registrados', ML + 2, y); y += 7; }
+
+      drawFooter();
+
+      // Subir a OneDrive
+      const blob = doc.output('blob') as Blob;
+      const fechaArchivo = hoyLocal();
+      const anio = new Date(fechaArchivo + 'T12:00:00').getFullYear();
+      const mes  = new Date(fechaArchivo + 'T12:00:00').toLocaleDateString('es-MX', { month: 'long' }).toUpperCase();
+      const carpeta  = `Levantamiento Nacional/Reportes Generales/${anio}/${mes}`;
+      const fileName = `Reporte_General_Levantamiento_${fechaArchivo}.pdf`;
+      const fileObj  = new File([blob], fileName, { type: 'application/pdf' });
+      const webUrl   = await spUpload(fileObj, carpeta, fileName);
+
+      const { error } = await supabase.from('levantamiento_reportes_generales').insert({
+        fecha_reporte: fechaArchivo, archivo_nombre: fileName,
+        onedrive_url: webUrl || null, onedrive_path: carpeta,
+      });
+      if (error) throw error;
+
+      qc.invalidateQueries({ queryKey: ['lev_reportes_generales'] });
+      toast.success('Reporte generado y guardado en OneDrive ✓');
+
+    } catch (e: any) {
+      toast.error('Error generando reporte: ' + e.message);
+    } finally {
+      setGenerating(false);
+    }
+  };
+
+  const faseLabels: Record<string, string> = {
+    COMUNICADO: 'Comunicado', FASE1: 'Fase 1 – Campo', FASE2: 'Fase 2 – Gabinete',
+    FASE3: 'Fase 3 – Revisión', FASE4: 'Fase 4 – ECO', FASE5: 'Fase 5 – Cierre',
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <p className="text-sm text-slate-500">Genera un reporte PDF con el estado actual de planteles, pagos, comunicados y entregables.</p>
+        <button onClick={generarReporte} disabled={generating} className={btnPrimary}>
+          {generating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
+          {generating ? 'Generando…' : 'Generar Reporte'}
+        </button>
+      </div>
+
+      {deleteReporte && (
+        <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 space-y-4">
+            <h3 className="font-bold text-slate-900">¿Eliminar reporte?</h3>
+            <p className="text-sm text-slate-600">Se eliminará <strong>{deleteReporte.archivo_nombre}</strong>{deleteReporte.onedrive_path ? ' y el archivo en OneDrive' : ''}.</p>
+            <div className="flex justify-end gap-2">
+              <button onClick={() => setDeleteReporte(null)} className={btnSecondary}>Cancelar</button>
+              <button onClick={() => deleteMut.mutate(deleteReporte)} disabled={deleteMut.isPending}
+                className="px-4 py-2 bg-red-600 text-white rounded-lg text-sm font-medium hover:bg-red-700 flex items-center gap-2 disabled:opacity-50">
+                {deleteMut.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : null}Eliminar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <div className="bg-white border border-slate-200 rounded-xl overflow-hidden">
+        <table className="w-full text-sm">
+          <thead className="bg-slate-50 text-slate-500 text-xs uppercase">
+            <tr>
+              <th className="text-left px-4 py-3">Fecha</th>
+              <th className="text-left px-4 py-3">Archivo</th>
+              <th className="px-4 py-3"></th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-slate-100">
+            {reportesGenerales.length === 0 && (
+              <tr><td colSpan={3} className="text-center py-8 text-slate-400">Sin reportes generados</td></tr>
+            )}
+            {reportesGenerales.map(r => (
+              <tr key={r.id} className="hover:bg-slate-50">
+                <td className="px-4 py-3 text-slate-700 font-medium">
+                  {r.fecha_reporte ? new Date(r.fecha_reporte + 'T12:00:00').toLocaleDateString('es-MX') : '—'}
+                </td>
+                <td className="px-4 py-3 text-slate-500 text-xs">{r.archivo_nombre}</td>
+                <td className="px-4 py-3">
+                  {r.onedrive_url && (
+                    <a href={r.onedrive_url} target="_blank" rel="noreferrer" className="text-[#0C3B6E] hover:underline flex items-center gap-1 text-xs">
+                      <Eye className="w-3.5 h-3.5" />Ver PDF
+                    </a>
+                  )}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+
+}
+
 export default function LevantamientoNacional() {
   const [tab, setTab] = useState('comunicados');
   const qc = useQueryClient();
@@ -1787,323 +2108,3 @@ function TabEntregables({ entregables, planteles, qc }: { entregables: Entregabl
 // ══════════════════════════════════════════════════════════════════════════════
 // TAB: REPORTE GENERAL
 // ══════════════════════════════════════════════════════════════════════════════
-function TabReporteGeneral({ reportesGenerales, planteles, pagos, comunicados, entregables, qc }: {
-  reportesGenerales: ReporteGeneral[];
-  planteles: Plantel[];
-  pagos: Pago[];
-  comunicados: Comunicado[];
-  entregables: Entregable[];
-  qc: any;
-}) {
-  const [generating, setGenerating] = useState(false);
-
-  const MESES_CONTRATO = [
-    { etiqueta: 'ANTICIPO', total: 1034297.65 },
-    { etiqueta: 'MES 1',    total: 603932.62  }, { etiqueta: 'MES 2',  total: 387111.22  },
-    { etiqueta: 'MES 3',    total: 475920.82  }, { etiqueta: 'MES 4',  total: 430715.62  },
-    { etiqueta: 'MES 5',    total: 321252.22  }, { etiqueta: 'MES 6',  total: 564817.42  },
-    { etiqueta: 'MES 7',    total: 338342.50  }, { etiqueta: 'MES 8',  total: 508326.58  },
-    { etiqueta: 'MES 9',    total: 534878.88  }, { etiqueta: 'MES 10', total: 444781.29  },
-    { etiqueta: 'MES 11',   total: 340174.72  }, { etiqueta: 'MES 12', total: 565502.54  },
-    { etiqueta: 'MES 13',   total: 892463.77  }, { etiqueta: 'MES 14', total: 570742.12  },
-    { etiqueta: 'MES 15',   total: 824408.02  }, { etiqueta: 'MES 16', total: 614172.52  },
-    { etiqueta: 'MES 17',   total: 723140.02  }, { etiqueta: 'MES 18', total: 167996.00  },
-  ];
-
-  const fmt = (n: number) => '$' + n.toLocaleString('es-MX', { minimumFractionDigits: 2 });
-  const totalPagado = pagos.reduce((s, p) => s + (p.monto_pagado ?? 0), 0);
-  const totalContrato = 10342976.48;
-
-  const CHECKS = [
-    { field: 'mecanica_suelos', label: 'Mecánica de Suelos' },
-    { field: 'levant_arq', label: 'Levant. Arq.' },
-    { field: 'levant_estructural', label: 'Levant. Estructural' },
-    { field: 'levant_instalaciones', label: 'Levant. Instalaciones' },
-    { field: 'levant_conjunto', label: 'Planta de Conjunto' },
-  ];
-
-  const generarReporte = async () => {
-    setGenerating(true);
-    try {
-      let JsPDF = (window as any).jspdf?.jsPDF;
-      if (!JsPDF) {
-        await new Promise<void>((res, rej) => {
-          const s = document.createElement('script');
-          s.src = 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js';
-          s.onload = () => res(); s.onerror = () => rej();
-          document.head.appendChild(s);
-        });
-        JsPDF = (window as any).jspdf?.jsPDF;
-      }
-
-      const doc = new JsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
-      const W = 210; const ML = 14; const TW = 182;
-      let y = 0;
-      const fecha = hoyLocal();
-      const fechaLabel = new Date(fecha + 'T12:00:00').toLocaleDateString('es-MX', { day: 'numeric', month: 'long', year: 'numeric' });
-
-      const drawHeader = (logoImg = '') => {
-        doc.setFillColor(12, 59, 110); doc.rect(0, 0, W, 32, 'F');
-        doc.setFillColor(232, 119, 34); doc.rect(0, 0, 5, 32, 'F');
-        doc.setFontSize(15); doc.setFont('helvetica', 'bold'); doc.setTextColor(255, 255, 255);
-        doc.text('Reporte General — Levantamiento Nacional', ML, 13);
-        doc.setFontSize(8.5); doc.setFont('helvetica', 'normal'); doc.setTextColor(180, 200, 220);
-        doc.text('Coordinación de Obras y Mantenimiento RCMA  ·  ' + fechaLabel, ML, 21);
-        doc.setFontSize(7.5); doc.setTextColor(130, 160, 190);
-        doc.text('Contrato 110-057-MANO_AMIGA', ML, 28);
-        if (logoImg) doc.addImage(logoImg, 'PNG', W - 36, 4, 22, 22);
-      };
-
-      const drawFooter = () => {
-        doc.setFillColor(12, 59, 110); doc.rect(0, 285, W, 12, 'F');
-        doc.setFontSize(7); doc.setFont('helvetica', 'normal'); doc.setTextColor(180, 200, 220);
-        doc.text('Coordinación de Obras y Mantenimiento RCMA  —  Sistema RCMA', W / 2, 292, { align: 'center' });
-      };
-
-      const np = (need = 10) => {
-        if (y + need > 272) { drawFooter(); doc.addPage(); drawHeader(logoData); y = 40; }
-      };
-
-      const seccion = (titulo: string) => {
-        np(14);
-        doc.setFontSize(10); doc.setFont('helvetica', 'bold'); doc.setTextColor(12, 59, 110);
-        doc.text(titulo, ML, y); y += 3;
-        doc.setDrawColor(200, 210, 220); doc.setLineWidth(0.3); doc.line(ML, y, W - ML, y); y += 5;
-      };
-
-      // Logo
-      let logoData = '';
-      try {
-        logoData = await new Promise<string>((res, rej) => {
-          const img = new Image(); img.crossOrigin = 'anonymous';
-          img.onload = () => { const cv = document.createElement('canvas'); cv.width = img.width; cv.height = img.height; cv.getContext('2d')!.drawImage(img, 0, 0); res(cv.toDataURL('image/png')); };
-          img.onerror = rej; img.src = '/logo.png';
-        });
-      } catch { /* sin logo */ }
-
-      drawHeader(logoData);
-      y = 40;
-
-      // ── SECCIÓN 1: PLANTELES ───────────────────────────────────────────
-      seccion('1. Planteles');
-      const faseLabels: Record<string, string> = {
-        COMUNICADO: 'Comunicado', FASE1: 'Fase 1 – Campo', FASE2: 'Fase 2 – Gabinete',
-        FASE3: 'Fase 3 – Revisión', FASE4: 'Fase 4 – ECO', FASE5: 'Fase 5 – Cierre',
-      };
-
-      // Header tabla planteles
-      np(10);
-      doc.setFillColor(12, 59, 110); doc.rect(ML, y - 3, TW, 7, 'F');
-      doc.setFontSize(7.5); doc.setFont('helvetica', 'bold'); doc.setTextColor(255, 255, 255);
-      doc.text('Colegio', ML + 2, y + 1.5);
-      doc.text('Territorio', ML + 80, y + 1.5);
-      doc.text('Asignación', ML + 115, y + 1.5);
-      doc.text('Fase', ML + 148, y + 1.5); y += 8;
-
-      planteles.forEach((p, i) => {
-        np(7);
-        if (i % 2 === 0) { doc.setFillColor(248, 250, 252); doc.rect(ML, y - 3, TW, 7, 'F'); }
-        doc.setFont('helvetica', 'normal'); doc.setFontSize(8); doc.setTextColor(30, 30, 30);
-        doc.text((p.colegio_nombre || '').slice(0, 38), ML + 2, y + 1);
-        doc.text((p.zona || '').slice(0, 18), ML + 80, y + 1);
-        doc.text((p.asignacion || '').slice(0, 18), ML + 115, y + 1);
-        doc.text(faseLabels[p.fase] || p.fase, ML + 148, y + 1); y += 7;
-      });
-      if (planteles.length === 0) { doc.setFontSize(8); doc.setTextColor(150, 150, 150); doc.text('Sin planteles registrados', ML + 2, y); y += 7; }
-      y += 6;
-
-      // ── SECCIÓN 2: PAGOS ──────────────────────────────────────────────
-      seccion('2. Flujograma de Pagos');
-      np(10);
-      doc.setFillColor(12, 59, 110); doc.rect(ML, y - 3, TW, 7, 'F');
-      doc.setFontSize(7.5); doc.setFont('helvetica', 'bold'); doc.setTextColor(255, 255, 255);
-      doc.text('Mes', ML + 2, y + 1.5);
-      doc.text('Total Contrato', ML + 35, y + 1.5);
-      doc.text('Fact. Cons.', ML + 80, y + 1.5);
-      doc.text('Fecha Pago', ML + 108, y + 1.5);
-      doc.text('Folio', ML + 138, y + 1.5);
-      doc.text('Monto Real', ML + 158, y + 1.5); y += 8;
-
-      MESES_CONTRATO.forEach((m, i) => {
-        const pago = pagos.find(p => p.mes_etiqueta === m.etiqueta);
-        np(7);
-        if (pago) { doc.setFillColor(236, 253, 245); doc.rect(ML, y - 3, TW, 7, 'F'); }
-        else if (i % 2 === 0) { doc.setFillColor(248, 250, 252); doc.rect(ML, y - 3, TW, 7, 'F'); }
-        doc.setFont('helvetica', pago ? 'bold' : 'normal'); doc.setFontSize(8); doc.setTextColor(30, 30, 30);
-        doc.text(m.etiqueta, ML + 2, y + 1);
-        doc.text(fmt(m.total), ML + 35, y + 1);
-        doc.text(pago?.factura_consecutivo ?? '—', ML + 80, y + 1);
-        doc.text(pago?.fecha_pago ? new Date(pago.fecha_pago + 'T12:00:00').toLocaleDateString('es-MX') : '—', ML + 108, y + 1);
-        doc.text(pago?.folio_factura ?? '—', ML + 138, y + 1);
-        if (pago?.monto_pagado) { doc.setTextColor(22, 163, 74); doc.text(fmt(pago.monto_pagado), ML + 158, y + 1); doc.setTextColor(30, 30, 30); }
-        else doc.text('—', ML + 158, y + 1);
-        y += 7;
-      });
-      // Totales
-      np(10);
-      doc.setFillColor(220, 230, 245); doc.rect(ML, y - 3, TW, 8, 'F');
-      doc.setFont('helvetica', 'bold'); doc.setFontSize(8.5); doc.setTextColor(12, 59, 110);
-      doc.text('TOTAL CONTRATO', ML + 2, y + 2);
-      doc.text(fmt(totalContrato), ML + 35, y + 2);
-      doc.text('TOTAL PAGADO', ML + 108, y + 2);
-      doc.setTextColor(22, 163, 74); doc.text(fmt(totalPagado), ML + 158, y + 2); y += 12;
-
-      // ── SECCIÓN 3: COMUNICADOS ────────────────────────────────────────
-      seccion('3. Comunicados Enviados');
-      np(10);
-      doc.setFillColor(12, 59, 110); doc.rect(ML, y - 3, TW, 7, 'F');
-      doc.setFontSize(7.5); doc.setFont('helvetica', 'bold'); doc.setTextColor(255, 255, 255);
-      doc.text('Plantel', ML + 2, y + 1.5);
-      doc.text('Director', ML + 80, y + 1.5);
-      doc.text('F. Emisión', ML + 135, y + 1.5);
-      doc.text('F. Visita', ML + 162, y + 1.5); y += 8;
-
-      comunicados.forEach((c, i) => {
-        const pl = planteles.find(p => p.id === c.plantel_id);
-        np(7);
-        if (i % 2 === 0) { doc.setFillColor(248, 250, 252); doc.rect(ML, y - 3, TW, 7, 'F'); }
-        doc.setFont('helvetica', 'normal'); doc.setFontSize(8); doc.setTextColor(30, 30, 30);
-        doc.text((pl?.colegio_nombre || '—').slice(0, 38), ML + 2, y + 1);
-        doc.text((c.director_nombre || '—').slice(0, 28), ML + 80, y + 1);
-        doc.text(c.fecha_emision ? new Date(c.fecha_emision + 'T12:00:00').toLocaleDateString('es-MX') : '—', ML + 135, y + 1);
-        doc.text(c.fecha_visita ? new Date(c.fecha_visita + 'T12:00:00').toLocaleDateString('es-MX') : '—', ML + 162, y + 1);
-        y += 7;
-      });
-      if (comunicados.length === 0) { doc.setFontSize(8); doc.setTextColor(150, 150, 150); doc.text('Sin comunicados registrados', ML + 2, y); y += 7; }
-      y += 6;
-
-      // ── SECCIÓN 4: ENTREGABLES ─────────────────────────────────────────
-      seccion('4. Estatus de Entregables por Plantel');
-      np(10);
-      doc.setFillColor(12, 59, 110); doc.rect(ML, y - 3, TW, 7, 'F');
-      doc.setFontSize(7); doc.setFont('helvetica', 'bold'); doc.setTextColor(255, 255, 255);
-      doc.text('Plantel', ML + 2, y + 1.5);
-      doc.text('Mec.', ML + 80, y + 1.5);
-      doc.text('Arq.', ML + 97, y + 1.5);
-      doc.text('Estr.', ML + 112, y + 1.5);
-      doc.text('Inst.', ML + 128, y + 1.5);
-      doc.text('Conj.', ML + 143, y + 1.5);
-      doc.text('Acta', ML + 158, y + 1.5);
-      doc.text('Fase', ML + 170, y + 1.5); y += 8;
-
-      planteles.forEach((p, i) => {
-        const ent = entregables.find(e => e.plantel_id === p.id);
-        np(7);
-        if (i % 2 === 0) { doc.setFillColor(248, 250, 252); doc.rect(ML, y - 3, TW, 7, 'F'); }
-        doc.setFont('helvetica', 'normal'); doc.setFontSize(7.5); doc.setTextColor(30, 30, 30);
-        doc.text((p.colegio_nombre || '').slice(0, 36), ML + 2, y + 1);
-        const ok = (field: string) => ent && (ent as any)[field] ? '✓' : '—';
-        doc.setTextColor(ent?.mecanica_suelos ? 22 : 150, ent?.mecanica_suelos ? 163 : 150, ent?.mecanica_suelos ? 74 : 150);
-        doc.text(ok('mecanica_suelos'), ML + 82, y + 1);
-        doc.setTextColor(ent?.levant_arq ? 22 : 150, ent?.levant_arq ? 163 : 150, ent?.levant_arq ? 74 : 150);
-        doc.text(ok('levant_arq'), ML + 99, y + 1);
-        doc.setTextColor(ent?.levant_estructural ? 22 : 150, ent?.levant_estructural ? 163 : 150, ent?.levant_estructural ? 74 : 150);
-        doc.text(ok('levant_estructural'), ML + 114, y + 1);
-        doc.setTextColor(ent?.levant_instalaciones ? 22 : 150, ent?.levant_instalaciones ? 163 : 150, ent?.levant_instalaciones ? 74 : 150);
-        doc.text(ok('levant_instalaciones'), ML + 130, y + 1);
-        doc.setTextColor(ent?.levant_conjunto ? 22 : 150, ent?.levant_conjunto ? 163 : 150, ent?.levant_conjunto ? 74 : 150);
-        doc.text(ok('levant_conjunto'), ML + 145, y + 1);
-        doc.setTextColor(ent?.acta_firmada ? 22 : 150, ent?.acta_firmada ? 163 : 150, ent?.acta_firmada ? 74 : 150);
-        doc.text(ent?.acta_firmada ? '✓' : '—', ML + 160, y + 1);
-        doc.setTextColor(30, 30, 30);
-        doc.text((faseLabels[p.fase] || p.fase).slice(0, 14), ML + 168, y + 1);
-        y += 7;
-      });
-      if (planteles.length === 0) { doc.setFontSize(8); doc.setTextColor(150, 150, 150); doc.text('Sin planteles registrados', ML + 2, y); y += 7; }
-
-      drawFooter();
-
-      // Subir a OneDrive
-      const blob = doc.output('blob') as Blob;
-      const fechaArchivo = hoyLocal();
-      const anio = new Date(fechaArchivo + 'T12:00:00').getFullYear();
-      const mes  = new Date(fechaArchivo + 'T12:00:00').toLocaleDateString('es-MX', { month: 'long' }).toUpperCase();
-      const carpeta  = `Levantamiento Nacional/Reportes Generales/${anio}/${mes}`;
-      const fileName = `Reporte_General_Levantamiento_${fechaArchivo}.pdf`;
-      const fileObj  = new File([blob], fileName, { type: 'application/pdf' });
-      const webUrl   = await spUpload(fileObj, carpeta, fileName);
-
-      const { error } = await supabase.from('levantamiento_reportes_generales').insert({
-        fecha_reporte: fechaArchivo, archivo_nombre: fileName,
-        onedrive_url: webUrl || null, onedrive_path: carpeta,
-      });
-      if (error) throw error;
-
-      qc.invalidateQueries({ queryKey: ['lev_reportes_generales'] });
-      toast.success('Reporte generado y guardado en OneDrive ✓');
-
-    } catch (e: any) {
-      toast.error('Error generando reporte: ' + e.message);
-    } finally {
-      setGenerating(false);
-    }
-  };
-
-  const faseLabels: Record<string, string> = {
-    COMUNICADO: 'Comunicado', FASE1: 'Fase 1 – Campo', FASE2: 'Fase 2 – Gabinete',
-    FASE3: 'Fase 3 – Revisión', FASE4: 'Fase 4 – ECO', FASE5: 'Fase 5 – Cierre',
-  };
-
-  return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <p className="text-sm text-slate-500">Genera un reporte PDF con el estado actual de planteles, pagos, comunicados y entregables.</p>
-        <button onClick={generarReporte} disabled={generating} className={btnPrimary}>
-          {generating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
-          {generating ? 'Generando…' : 'Generar Reporte'}
-        </button>
-      </div>
-
-      {deleteReporte && (
-        <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 space-y-4">
-            <h3 className="font-bold text-slate-900">¿Eliminar reporte?</h3>
-            <p className="text-sm text-slate-600">Se eliminará <strong>{deleteReporte.archivo_nombre}</strong>{deleteReporte.onedrive_path ? ' y el archivo en OneDrive' : ''}.</p>
-            <div className="flex justify-end gap-2">
-              <button onClick={() => setDeleteReporte(null)} className={btnSecondary}>Cancelar</button>
-              <button onClick={() => deleteMut.mutate(deleteReporte)} disabled={deleteMut.isPending}
-                className="px-4 py-2 bg-red-600 text-white rounded-lg text-sm font-medium hover:bg-red-700 flex items-center gap-2 disabled:opacity-50">
-                {deleteMut.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : null}Eliminar
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      <div className="bg-white border border-slate-200 rounded-xl overflow-hidden">
-        <table className="w-full text-sm">
-          <thead className="bg-slate-50 text-slate-500 text-xs uppercase">
-            <tr>
-              <th className="text-left px-4 py-3">Fecha</th>
-              <th className="text-left px-4 py-3">Archivo</th>
-              <th className="px-4 py-3"></th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-slate-100">
-            {reportesGenerales.length === 0 && (
-              <tr><td colSpan={3} className="text-center py-8 text-slate-400">Sin reportes generados</td></tr>
-            )}
-            {reportesGenerales.map(r => (
-              <tr key={r.id} className="hover:bg-slate-50">
-                <td className="px-4 py-3 text-slate-700 font-medium">
-                  {r.fecha_reporte ? new Date(r.fecha_reporte + 'T12:00:00').toLocaleDateString('es-MX') : '—'}
-                </td>
-                <td className="px-4 py-3 text-slate-500 text-xs">{r.archivo_nombre}</td>
-                <td className="px-4 py-3">
-                  {r.onedrive_url && (
-                    <a href={r.onedrive_url} target="_blank" rel="noreferrer" className="text-[#0C3B6E] hover:underline flex items-center gap-1 text-xs">
-                      <Eye className="w-3.5 h-3.5" />Ver PDF
-                    </a>
-                  )}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    </div>
-  );
-}
-
-
-}
