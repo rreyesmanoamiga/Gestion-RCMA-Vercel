@@ -32,7 +32,7 @@ const DATOS_COLEGIO: Record<string, { nombre: string; director: string; admin: s
 
 // Extrae el código corto de la clave: 'MA QRO' → 'QRO'
 function codigoCorto(clave: string): string {
-  return clave.replace(/^MA\s+/, '').trim();
+  return clave.replace(/^MA\s+/, '').replace(/^CLIN\s+/, 'CLIN').trim();
 }
 import { supabase } from '@/lib/supabaseClient';
 import { toast } from 'sonner';
