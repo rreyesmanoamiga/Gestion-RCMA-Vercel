@@ -1212,14 +1212,21 @@ function TabPagos({ pagos, planteles, qc }: { pagos: Pago[]; planteles: Plantel[
               <div>
                 <label className="text-xs font-bold text-slate-500 uppercase block mb-1">Monto Real</label>
                 <div className="relative">
-                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 text-sm font-medium">$</span>
-                  <input type="number" className={inputCls + " pl-7"} value={form.monto_pagado} onChange={e => set('monto_pagado', e.target.value)} placeholder="0.00" step="0.01" />
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 text-sm font-medium pointer-events-none">$</span>
+                  <input
+                    type="text"
+                    inputMode="decimal"
+                    className={inputCls + " pl-7 font-medium"}
+                    value={form.monto_pagado
+                      ? parseFloat(form.monto_pagado.replace(/,/g, '')).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+                      : ''}
+                    onChange={e => {
+                      const raw = e.target.value.replace(/[^0-9.]/g, '');
+                      set('monto_pagado', raw);
+                    }}
+                    placeholder="0.00"
+                  />
                 </div>
-                {form.monto_pagado && !isNaN(parseFloat(form.monto_pagado)) && (
-                  <p className="text-xs text-slate-500 mt-1">
-                    {parseFloat(form.monto_pagado).toLocaleString('es-MX', { style: 'currency', currency: 'MXN' })} MXN
-                  </p>
-                )}
               </div>
               <div>
                 <label className="text-xs font-bold text-slate-500 uppercase block mb-1">Observaciones</label>
