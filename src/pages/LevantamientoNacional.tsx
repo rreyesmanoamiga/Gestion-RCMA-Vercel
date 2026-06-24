@@ -89,6 +89,8 @@ interface Pago {
   monto_pagado: number | null;
   pagado: boolean;
   fecha_pago: string | null;
+  factura_consecutivo: string | null;
+  folio_factura: string | null;
   notas: string | null;
 }
 
@@ -496,21 +498,9 @@ function TabReporteGeneral({ reportesGenerales, planteles, pagos, comunicados, e
         </button>
       </div>
 
-      {deleteReporte && (
-        <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 space-y-4">
-            <h3 className="font-bold text-slate-900">¿Eliminar reporte?</h3>
-            <p className="text-sm text-slate-600">Se eliminará <strong>{deleteReporte.archivo_nombre}</strong>{deleteReporte.onedrive_path ? ' y el archivo en OneDrive' : ''}.</p>
-            <div className="flex justify-end gap-2">
-              <button onClick={() => setDeleteReporte(null)} className={btnSecondary}>Cancelar</button>
-              <button onClick={() => deleteMut.mutate(deleteReporte)} disabled={deleteMut.isPending}
-                className="px-4 py-2 bg-red-600 text-white rounded-lg text-sm font-medium hover:bg-red-700 flex items-center gap-2 disabled:opacity-50">
-                {deleteMut.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : null}Eliminar
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+
+
+
 
       <div className="bg-white border border-slate-200 rounded-xl overflow-hidden">
         <table className="w-full text-sm">
@@ -545,9 +535,6 @@ function TabReporteGeneral({ reportesGenerales, planteles, pagos, comunicados, e
       </div>
     </div>
   );
-}
-
-
 }
 
 export default function LevantamientoNacional() {
@@ -1677,7 +1664,7 @@ function TabReportes({ reportes, planteles, qc }: { reportes: Reporte[]; plantel
 
   const openEdit = (r: Reporte) => {
     setEditItem(r); setFile(null);
-    setForm({ plantel_id: r.plantel_id ?? '', plantel_id_2: r.plantel_id_2 ?? '', fecha_reporte: r.fecha_reporte, notas: r.notas ?? '' });
+    setForm({ plantel_id: r.plantel_id ?? '', plantel_id_2: r.plantel_id ?? '', fecha_reporte: r.fecha_reporte, notas: r.notas ?? '' });
     setShowForm(true);
   };
 
@@ -1707,7 +1694,7 @@ function TabReportes({ reportes, planteles, qc }: { reportes: Reporte[]; plantel
 
           const { error } = await supabase.from('levantamiento_reportes').update({
             plantel_id:     form.plantel_id || null,
-            plantel_id_2:   form.plantel_id_2 || null,
+            plantel_id_2:   form.plantel_id || null,
             fecha_reporte:  form.fecha_reporte,
             archivo_nombre: archivoNombre,
             onedrive_url:   webUrl,
@@ -1723,7 +1710,7 @@ function TabReportes({ reportes, planteles, qc }: { reportes: Reporte[]; plantel
           const webUrl   = await spUpload(file, nuevaCarpeta, fileName);
           const { error } = await supabase.from('levantamiento_reportes').insert({
             plantel_id:     form.plantel_id || null,
-            plantel_id_2:   form.plantel_id_2 || null,
+            plantel_id_2:   form.plantel_id || null,
             fecha_reporte:  form.fecha_reporte,
             archivo_nombre: fileName,
             onedrive_url:   webUrl,
@@ -1770,7 +1757,7 @@ function TabReportes({ reportes, planteles, qc }: { reportes: Reporte[]; plantel
                 </div>
                 <div>
                   <label className="text-xs font-bold text-slate-500 uppercase block mb-1">Plantel 2 (opcional)</label>
-                  <select className={inputCls} value={form.plantel_id_2} onChange={e => set('plantel_id_2', e.target.value)}>
+                  <select className={inputCls} value={form.plantel_id} onChange={e => set('plantel_id_2', e.target.value)}>
                     <option value="">—</option>
                     {planteles.filter(p => p.id !== form.plantel_id).map(p => <option key={p.id} value={p.id}>{p.colegio_nombre}</option>)}
                   </select>
@@ -1865,7 +1852,7 @@ function TabReportes({ reportes, planteles, qc }: { reportes: Reporte[]; plantel
                   </td>
                   <td className="px-4 py-3 text-slate-500 text-xs">
                     <div>{plantel?.colegio_nombre ?? 'General'}</div>
-                    {(() => { const p2 = planteles.find(p => p.id === r.plantel_id_2); return p2 ? <div className="text-slate-400">{p2.colegio_nombre}</div> : null; })()}
+                    {(() => { const p2 = planteles.find(p => p.id === r.plantel_id); return p2 ? <div className="text-slate-400">{p2.colegio_nombre}</div> : null; })()}
                   </td>
                   <td className="px-4 py-3 text-slate-600 text-xs">{r.archivo_nombre}</td>
                   <td className="px-4 py-3 text-slate-400 text-xs">{r.onedrive_path ?? '—'}</td>
@@ -2104,7 +2091,4 @@ function TabEntregables({ entregables, planteles, qc }: { entregables: Entregabl
       })}
     </div>
   );
-
-// ══════════════════════════════════════════════════════════════════════════════
-// TAB: REPORTE GENERAL
-// ══════════════════════════════════════════════════════════════════════════════
+}
