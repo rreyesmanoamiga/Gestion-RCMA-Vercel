@@ -1026,6 +1026,7 @@ function TabPagos({ pagos, planteles, qc }: { pagos: Pago[]; planteles: Plantel[
   const [uploading, setUploading]     = useState(false);
   const [editPago, setEditPago]       = useState<Pago | null>(null);
   const [editFechaPago, setEditFechaPago] = useState('');
+  const [editMontoPagado, setEditMontoPagado] = useState('');
   const [editFileFactura, setEditFileFactura] = useState<File | null>(null);
   const [editFileRecibo, setEditFileRecibo]   = useState<File | null>(null);
   const [editUploading, setEditUploading]     = useState(false);
@@ -1133,14 +1134,14 @@ function TabPagos({ pagos, planteles, qc }: { pagos: Pago[]; planteles: Plantel[
         }
 
         const nuevasNotas = [obs, facturaUrl ? `factura_url:${facturaUrl}` : '', reciboUrl ? `recibo_url:${reciboUrl}` : ''].filter(Boolean).join('||') || null;
-        const { error } = await supabase.from('levantamiento_pagos').update({ notas: nuevasNotas, fecha_pago: editFechaPago || null }).eq('id', editPago.id);
+        const { error } = await supabase.from('levantamiento_pagos').update({ notas: nuevasNotas, fecha_pago: editFechaPago || null, monto_pagado: parseFloat(editMontoPagado.replace(/,/g, '')) || null }).eq('id', editPago.id);
         if (error) throw error;
       } finally { setEditUploading(false); }
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['lev_pagos'] });
       toast.success('Pago actualizado ✓');
-      setEditPago(null); setEditFechaPago(''); setEditFileFactura(null); setEditFileRecibo(null);
+      setEditPago(null); setEditFechaPago(''); setEditMontoPagado(''); setEditFileFactura(null); setEditFileRecibo(null);
     },
     onError: (e: any) => toast.error(e.message),
   });
@@ -1280,6 +1281,21 @@ function TabPagos({ pagos, planteles, qc }: { pagos: Pago[]; planteles: Plantel[
                 <input type="date" className={inputCls} value={editFechaPago} onChange={e => setEditFechaPago(e.target.value)} />
               </div>
               <div>
+                <label className="text-xs font-bold text-slate-500 uppercase block mb-1">Monto Real</label>
+                <div className="relative">
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 text-sm font-medium pointer-events-none">$</span>
+                  <input
+                    type="text" inputMode="decimal"
+                    className={inputCls + " pl-7 font-medium"}
+                    value={editMontoPagado}
+                    onChange={e => setEditMontoPagado(e.target.value.replace(/[^0-9.]/g, ''))}
+                    onBlur={e => { const n = parseFloat(e.target.value.replace(/,/g, '')); if (!isNaN(n)) setEditMontoPagado(n.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })); }}
+                    onFocus={e => setEditMontoPagado(e.target.value.replace(/,/g, ''))}
+                    placeholder="0.00"
+                  />
+                </div>
+              </div>
+              <div>
                 <label className="text-xs font-bold text-slate-500 uppercase block mb-1">
                   {editPago.notas?.includes('factura_url:') ? 'Reemplazar Factura' : 'Subir Factura'} (cualquier formato)
                 </label>
@@ -1364,7 +1380,7 @@ function TabPagos({ pagos, planteles, qc }: { pagos: Pago[]; planteles: Plantel[
                         ? <span className="px-2 py-0.5 rounded-full text-xs font-bold bg-emerald-200 text-emerald-800">✓ Pagado</span>
                         : <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-700">Pendiente</span>}
                       {isPagado && (
-                        <button onClick={() => { setEditPago(pago!); setEditFechaPago(pago!.fecha_pago ?? ''); setEditFileFactura(null); setEditFileRecibo(null); }}
+                        <button onClick={() => { setEditPago(pago!); setEditFechaPago(pago!.fecha_pago ?? ''); setEditMontoPagado(pago!.monto_pagado != null ? String(pago!.monto_pagado) : ''); setEditFileFactura(null); setEditFileRecibo(null); }}
                           className="text-slate-400 hover:text-[#0C3B6E] transition-colors" title="Agregar/editar archivos">
                           <Edit2 className="w-3.5 h-3.5" />
                         </button>
