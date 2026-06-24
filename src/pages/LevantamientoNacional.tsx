@@ -1021,6 +1021,9 @@ function TabPlanteles({ planteles, loading, qc, directorio }: {
 function TabPagos({ pagos, planteles, qc }: { pagos: Pago[]; planteles: Plantel[]; qc: any }) {
   const [showAdd, setShowAdd] = useState(false);
   const [form, setForm] = useState({ mes_etiqueta: '', fecha_pago: '', folio_factura: '', monto_pagado: '', observaciones: '' });
+  const [fileFactura, setFileFactura] = useState<File | null>(null);
+  const [fileRecibo, setFileRecibo]   = useState<File | null>(null);
+  const [uploading, setUploading]     = useState(false);
   const set = (k: string, v: string) => setForm(f => ({ ...f, [k]: v }));
 
   // Tabla precargada del contrato — datos fijos del Word
@@ -1062,27 +1065,44 @@ function TabPagos({ pagos, planteles, qc }: { pagos: Pago[]; planteles: Plantel[
   const addMut = useMutation({
     mutationFn: async () => {
       if (!form.mes_etiqueta) throw new Error('Selecciona el mes');
-      const mesData = MESES_CONTRATO.find(m => m.etiqueta === form.mes_etiqueta);
-      const { error } = await supabase.from('levantamiento_pagos').insert({
-        mes_numero:          mesData?.mes ?? 0,
-        mes_etiqueta:        form.mes_etiqueta,
-        concepto:            form.mes_etiqueta,
-        monto_programado:    mesData?.total ?? 0,
-        monto_pagado:        parseFloat(form.monto_pagado) || null,
-        fecha_pago:          form.fecha_pago || null,
-        pagado:              true,
-        factura_consecutivo: String(pagos.length + 1),
-        folio_factura:       form.folio_factura || null,
-        notas:               form.observaciones || null,
-        plantel_id:          null,
-      });
-      if (error) throw error;
+      setUploading(true);
+      try {
+        const mesData  = MESES_CONTRATO.find(m => m.etiqueta === form.mes_etiqueta);
+        const carpeta  = `Levantamiento Nacional/Pagos/${form.mes_etiqueta.replace(' ', '_')}`;
+        let facturaUrl: string | null = null;
+        let reciboUrl:  string | null = null;
+
+        if (fileFactura) {
+          const fn = `Factura_${form.mes_etiqueta.replace(' ', '_')}_${hoyLocal()}.${fileFactura.name.split('.').pop()}`;
+          facturaUrl = await spUpload(fileFactura, carpeta, fn);
+        }
+        if (fileRecibo) {
+          const fn = `Recibo_${form.mes_etiqueta.replace(' ', '_')}_${hoyLocal()}.${fileRecibo.name.split('.').pop()}`;
+          reciboUrl = await spUpload(fileRecibo, carpeta, fn);
+        }
+
+        const { error } = await supabase.from('levantamiento_pagos').insert({
+          mes_numero:          mesData?.mes ?? 0,
+          mes_etiqueta:        form.mes_etiqueta,
+          concepto:            form.mes_etiqueta,
+          monto_programado:    mesData?.total ?? 0,
+          monto_pagado:        parseFloat(form.monto_pagado) || null,
+          fecha_pago:          form.fecha_pago || null,
+          pagado:              true,
+          factura_consecutivo: String(pagos.length + 1),
+          folio_factura:       form.folio_factura || null,
+          notas:               [form.observaciones, facturaUrl ? `factura_url:${facturaUrl}` : '', reciboUrl ? `recibo_url:${reciboUrl}` : ''].filter(Boolean).join('||') || null,
+          plantel_id:          null,
+        });
+        if (error) throw error;
+      } finally { setUploading(false); }
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['lev_pagos'] });
       toast.success('Pago registrado ✓');
       setShowAdd(false);
       setForm({ mes_etiqueta: '', fecha_pago: '', folio_factura: '', monto_pagado: '', observaciones: '' });
+      setFileFactura(null); setFileRecibo(null);
     },
     onError: (e: any) => toast.error(e.message),
   });
@@ -1159,11 +1179,25 @@ function TabPagos({ pagos, planteles, qc }: { pagos: Pago[]; planteles: Plantel[
                 <label className="text-xs font-bold text-slate-500 uppercase block mb-1">Observaciones</label>
                 <textarea className={inputCls} rows={2} value={form.observaciones} onChange={e => set('observaciones', e.target.value)} />
               </div>
+              <div>
+                <label className="text-xs font-bold text-slate-500 uppercase block mb-1">Factura (cualquier formato) — opcional</label>
+                <input type="file" className={inputCls} onChange={e => setFileFactura(e.target.files?.[0] ?? null)} />
+              </div>
+              <div>
+                <label className="text-xs font-bold text-slate-500 uppercase block mb-1">Recibo de Pago (cualquier formato) — opcional</label>
+                <input type="file" className={inputCls} onChange={e => setFileRecibo(e.target.files?.[0] ?? null)} />
+              </div>
+              {(fileFactura || fileRecibo) && (
+                <div className="bg-blue-50 rounded-lg p-2 text-xs text-blue-700">
+                  📁 Se guardarán en: <strong>Levantamiento Nacional / Pagos / {form.mes_etiqueta || '—'}</strong>
+                </div>
+              )}
             </div>
             <div className="flex justify-end gap-2 p-5 border-t border-slate-100">
               <button onClick={() => setShowAdd(false)} className={btnSecondary}>Cancelar</button>
-              <button onClick={() => addMut.mutate()} disabled={addMut.isPending || !form.mes_etiqueta} className={btnPrimary}>
-                {addMut.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}Guardar
+              <button onClick={() => addMut.mutate()} disabled={addMut.isPending || uploading || !form.mes_etiqueta} className={btnPrimary}>
+                {(addMut.isPending || uploading) ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                {uploading ? 'Subiendo…' : 'Guardar'}
               </button>
             </div>
           </div>
