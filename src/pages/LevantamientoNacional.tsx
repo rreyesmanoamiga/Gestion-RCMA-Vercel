@@ -2068,10 +2068,11 @@ function TabReportes({ reportes, planteles, qc }: { reportes: Reporte[]; plantel
         <table className="w-full text-sm table-fixed">
           <thead className="bg-slate-50 text-slate-500 text-xs uppercase">
             <tr>
-              <th className="text-left px-4 py-3 w-[100px]">Fecha</th>
-              <th className="text-left px-4 py-3 w-[150px]">Plantel</th>
-              <th className="text-left px-4 py-3 w-[220px]">Archivo</th>
+              <th className="text-left px-4 py-3 w-[95px]">Fecha</th>
+              <th className="text-left px-4 py-3 w-[140px]">Plantel</th>
+              <th className="text-left px-4 py-3 w-[180px]">Archivo</th>
               <th className="text-left px-4 py-3">Notas</th>
+              <th className="w-[90px]"></th>
               <th className="px-4 py-3"></th>
             </tr>
           </thead>
@@ -2103,8 +2104,8 @@ function TabReportes({ reportes, planteles, qc }: { reportes: Reporte[]; plantel
                   </td>
                   <td className="px-4 py-3 text-slate-600 text-xs">{r.archivo_nombre}</td>
                   <td className="px-4 py-3 text-slate-400 text-xs break-words whitespace-normal align-top">{r.notas ?? '—'}</td>
-                  <td className="px-4 py-3">
-                    <div className="flex items-center gap-2">
+                  <td className="px-4 py-3 align-top">
+                    <div className="flex items-center justify-end gap-2">
                       {r.onedrive_url && (
                         <a href={r.onedrive_url} target="_blank" rel="noreferrer" className="text-slate-400 hover:text-[#0C3B6E]">
                           <Eye className="w-4 h-4" />
@@ -2114,7 +2115,7 @@ function TabReportes({ reportes, planteles, qc }: { reportes: Reporte[]; plantel
                         <Edit2 className="w-4 h-4" />
                       </button>
                       <button onClick={() => setDeleteReporte(r)} className="text-slate-400 hover:text-red-500">
-                        <X className="w-4 h-4" />
+                        <Trash2 className="w-4 h-4" />
                       </button>
                     </div>
                   </td>
