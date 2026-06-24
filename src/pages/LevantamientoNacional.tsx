@@ -2071,7 +2071,7 @@ function TabReportes({ reportes, planteles, qc }: { reportes: Reporte[]; plantel
               <th className="text-left px-4 py-3">Fecha</th>
               <th className="text-left px-4 py-3">Plantel</th>
               <th className="text-left px-4 py-3">Archivo</th>
-              <th className="text-left px-4 py-3">Ruta OneDrive</th>
+              <th className="text-left px-4 py-3">Notas</th>
               <th className="px-4 py-3"></th>
             </tr>
           </thead>
@@ -2102,7 +2102,7 @@ function TabReportes({ reportes, planteles, qc }: { reportes: Reporte[]; plantel
                     })()}
                   </td>
                   <td className="px-4 py-3 text-slate-600 text-xs">{r.archivo_nombre}</td>
-                  <td className="px-4 py-3 text-slate-400 text-xs">{r.onedrive_path ?? '—'}</td>
+                  <td className="px-4 py-3 text-slate-400 text-xs">{r.notas ?? '—'}</td>
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-2">
                       {r.onedrive_url && (
