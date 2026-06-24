@@ -557,6 +557,21 @@ function TabReporteGeneral({ reportesGenerales, planteles, pagos, comunicados, e
           </tbody>
         </table>
       </div>
+      {deleteRG && (
+        <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 space-y-4">
+            <h3 className="font-bold text-slate-900">¿Eliminar reporte?</h3>
+            <p className="text-sm text-slate-600">Se eliminará <strong>{deleteRG.archivo_nombre}</strong>{deleteRG.onedrive_path ? ' y el archivo en OneDrive' : ''}.</p>
+            <div className="flex justify-end gap-2">
+              <button onClick={() => setDeleteRG(null)} className={btnSecondary}>Cancelar</button>
+              <button onClick={() => deleteRGMut.mutate(deleteRG)} disabled={deleteRGMut.isPending}
+                className="px-4 py-2 bg-red-600 text-white rounded-lg text-sm font-medium hover:bg-red-700 flex items-center gap-2 disabled:opacity-50">
+                {deleteRGMut.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}Eliminar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
