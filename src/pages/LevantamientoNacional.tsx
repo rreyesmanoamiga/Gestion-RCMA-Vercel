@@ -1587,6 +1587,7 @@ function TabComunicados({ comunicados, planteles, directorio, qc }: {
             eco_nombre:     info?.eco ?? null,
             asignacion:     'PROVEEDOR',
             fase:           'COMUNICADO',
+            fecha_inicio:   form.fecha_visita || null,
             updated_at:     new Date().toISOString(),
           }).select().single();
           if (errP) throw errP;
