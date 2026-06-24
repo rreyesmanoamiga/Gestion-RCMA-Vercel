@@ -112,6 +112,7 @@ interface Comunicado {
 interface Reporte {
   id: string;
   plantel_id: string | null;
+  plantel_id_2: string | null;
   fecha_reporte: string;
   archivo_nombre: string;
   onedrive_url: string | null;
@@ -1899,7 +1900,7 @@ function TabReportes({ reportes, planteles, qc }: { reportes: Reporte[]; plantel
 
   const openEdit = (r: Reporte) => {
     setEditItem(r); setFile(null);
-    setForm({ plantel_id: r.plantel_id ?? '', plantel_id_2: r.plantel_id ?? '', fecha_reporte: r.fecha_reporte, notas: r.notas ?? '' });
+    setForm({ plantel_id: r.plantel_id ?? '', plantel_id_2: r.plantel_id_2 ?? '', fecha_reporte: r.fecha_reporte, notas: r.notas ?? '' });
     setShowForm(true);
   };
 
@@ -2088,6 +2089,17 @@ function TabReportes({ reportes, planteles, qc }: { reportes: Reporte[]; plantel
                   <td className="px-4 py-3 text-slate-500 text-xs">
                     <div>{plantel?.colegio_nombre ?? 'General'}</div>
                     {plantel && <div className="text-slate-400 text-xs">{plantel.colegio_clave}</div>}
+                    {(() => {
+                      const p2id = r.plantel_id_2;
+                      if (!p2id || p2id === r.plantel_id) return null;
+                      const p2 = planteles.find(p => p.id === p2id);
+                      return p2 ? (
+                        <div className="mt-1">
+                          <div className="text-slate-600">{p2.colegio_nombre}</div>
+                          <div className="text-slate-400 text-xs">{p2.colegio_clave}</div>
+                        </div>
+                      ) : null;
+                    })()}
                   </td>
                   <td className="px-4 py-3 text-slate-600 text-xs">{r.archivo_nombre}</td>
                   <td className="px-4 py-3 text-slate-400 text-xs">{r.onedrive_path ?? '—'}</td>
