@@ -266,6 +266,22 @@ function TabReporteGeneral({ reportesGenerales, planteles, pagos, comunicados, e
     { field: 'levant_conjunto', label: 'Planta de Conjunto' },
   ];
 
+  const [deleteRG, setDeleteRG] = useState<ReporteGeneral | null>(null);
+
+  const deleteRGMut = useMutation({
+    mutationFn: async (r: ReporteGeneral) => {
+      if (r.onedrive_path && r.archivo_nombre) await spDelete(r.onedrive_path, r.archivo_nombre);
+      const { error } = await supabase.from('levantamiento_reportes_generales').delete().eq('id', r.id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['lev_reportes_generales'] });
+      toast.success('Reporte eliminado');
+      setDeleteRG(null);
+    },
+    onError: (e: any) => toast.error(e.message),
+  });
+
   const generarReporte = async () => {
     setGenerating(true);
     try {
@@ -522,11 +538,16 @@ function TabReporteGeneral({ reportesGenerales, planteles, pagos, comunicados, e
                 </td>
                 <td className="px-4 py-3 text-slate-500 text-xs">{r.archivo_nombre}</td>
                 <td className="px-4 py-3">
-                  {r.onedrive_url && (
-                    <a href={r.onedrive_url} target="_blank" rel="noreferrer" className="text-[#0C3B6E] hover:underline flex items-center gap-1 text-xs">
-                      <Eye className="w-3.5 h-3.5" />Ver PDF
-                    </a>
-                  )}
+                  <div className="flex items-center gap-2">
+                    {r.onedrive_url && (
+                      <a href={r.onedrive_url} target="_blank" rel="noreferrer" className="text-[#0C3B6E] hover:underline flex items-center gap-1 text-xs">
+                        <Eye className="w-3.5 h-3.5" />Ver PDF
+                      </a>
+                    )}
+                    <button onClick={() => setDeleteRG(r)} className="text-slate-400 hover:text-red-500 ml-2" title="Eliminar">
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
                 </td>
               </tr>
             ))}
