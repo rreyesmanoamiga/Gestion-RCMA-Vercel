@@ -1217,11 +1217,17 @@ function TabPagos({ pagos, planteles, qc }: { pagos: Pago[]; planteles: Plantel[
                     type="text"
                     inputMode="decimal"
                     className={inputCls + " pl-7 font-medium"}
-                    value={form.monto_pagado
-                      ? parseFloat(form.monto_pagado.replace(/,/g, '')).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
-                      : ''}
+                    value={form.monto_pagado}
                     onChange={e => {
                       const raw = e.target.value.replace(/[^0-9.]/g, '');
+                      set('monto_pagado', raw);
+                    }}
+                    onBlur={e => {
+                      const num = parseFloat(e.target.value.replace(/,/g, ''));
+                      if (!isNaN(num)) set('monto_pagado', num.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
+                    }}
+                    onFocus={e => {
+                      const raw = e.target.value.replace(/,/g, '');
                       set('monto_pagado', raw);
                     }}
                     placeholder="0.00"
