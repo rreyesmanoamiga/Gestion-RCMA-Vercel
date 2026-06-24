@@ -1025,6 +1025,7 @@ function TabPagos({ pagos, planteles, qc }: { pagos: Pago[]; planteles: Plantel[
   const [fileRecibo, setFileRecibo]   = useState<File | null>(null);
   const [uploading, setUploading]     = useState(false);
   const [editPago, setEditPago]       = useState<Pago | null>(null);
+  const [editFechaPago, setEditFechaPago] = useState('');
   const [editFileFactura, setEditFileFactura] = useState<File | null>(null);
   const [editFileRecibo, setEditFileRecibo]   = useState<File | null>(null);
   const [editUploading, setEditUploading]     = useState(false);
@@ -1132,14 +1133,14 @@ function TabPagos({ pagos, planteles, qc }: { pagos: Pago[]; planteles: Plantel[
         }
 
         const nuevasNotas = [obs, facturaUrl ? `factura_url:${facturaUrl}` : '', reciboUrl ? `recibo_url:${reciboUrl}` : ''].filter(Boolean).join('||') || null;
-        const { error } = await supabase.from('levantamiento_pagos').update({ notas: nuevasNotas }).eq('id', editPago.id);
+        const { error } = await supabase.from('levantamiento_pagos').update({ notas: nuevasNotas, fecha_pago: editFechaPago || null }).eq('id', editPago.id);
         if (error) throw error;
       } finally { setEditUploading(false); }
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['lev_pagos'] });
       toast.success('Pago actualizado ✓');
-      setEditPago(null); setEditFileFactura(null); setEditFileRecibo(null);
+      setEditPago(null); setEditFechaPago(''); setEditFileFactura(null); setEditFileRecibo(null);
     },
     onError: (e: any) => toast.error(e.message),
   });
@@ -1262,6 +1263,10 @@ function TabPagos({ pagos, planteles, qc }: { pagos: Pago[]; planteles: Plantel[
             </div>
             <div className="p-5 space-y-4">
               <div>
+                <label className="text-xs font-bold text-slate-500 uppercase block mb-1">Fecha de Pago</label>
+                <input type="date" className={inputCls} value={editFechaPago} onChange={e => setEditFechaPago(e.target.value)} />
+              </div>
+              <div>
                 <label className="text-xs font-bold text-slate-500 uppercase block mb-1">
                   {editPago.notas?.includes('factura_url:') ? 'Reemplazar Factura' : 'Subir Factura'} (cualquier formato)
                 </label>
@@ -1293,7 +1298,7 @@ function TabPagos({ pagos, planteles, qc }: { pagos: Pago[]; planteles: Plantel[
             </div>
             <div className="flex justify-end gap-2 p-5 border-t border-slate-100">
               <button onClick={() => setEditPago(null)} className={btnSecondary}>Cancelar</button>
-              <button onClick={() => editMut.mutate()} disabled={editMut.isPending || editUploading || (!editFileFactura && !editFileRecibo)}
+              <button onClick={() => editMut.mutate()} disabled={editMut.isPending || editUploading}
                 className={btnPrimary}>
                 {(editMut.isPending || editUploading) ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
                 {editUploading ? 'Subiendo…' : 'Guardar'}
@@ -1346,7 +1351,7 @@ function TabPagos({ pagos, planteles, qc }: { pagos: Pago[]; planteles: Plantel[
                         ? <span className="px-2 py-0.5 rounded-full text-xs font-bold bg-emerald-200 text-emerald-800">✓ Pagado</span>
                         : <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-700">Pendiente</span>}
                       {isPagado && (
-                        <button onClick={() => { setEditPago(pago!); setEditFileFactura(null); setEditFileRecibo(null); }}
+                        <button onClick={() => { setEditPago(pago!); setEditFechaPago(pago!.fecha_pago ?? ''); setEditFileFactura(null); setEditFileRecibo(null); }}
                           className="text-slate-400 hover:text-[#0C3B6E] transition-colors" title="Agregar/editar archivos">
                           <Edit2 className="w-3.5 h-3.5" />
                         </button>
