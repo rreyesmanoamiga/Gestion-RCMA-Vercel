@@ -2065,12 +2065,12 @@ function TabReportes({ reportes, planteles, qc }: { reportes: Reporte[]; plantel
       )}
 
       <div className="bg-white border border-slate-200 rounded-xl overflow-hidden">
-        <table className="w-full text-sm">
+        <table className="w-full text-sm table-fixed">
           <thead className="bg-slate-50 text-slate-500 text-xs uppercase">
             <tr>
-              <th className="text-left px-4 py-3">Fecha</th>
-              <th className="text-left px-4 py-3">Plantel</th>
-              <th className="text-left px-4 py-3">Archivo</th>
+              <th className="text-left px-4 py-3 w-[100px]">Fecha</th>
+              <th className="text-left px-4 py-3 w-[150px]">Plantel</th>
+              <th className="text-left px-4 py-3 w-[220px]">Archivo</th>
               <th className="text-left px-4 py-3">Notas</th>
               <th className="px-4 py-3"></th>
             </tr>
@@ -2102,7 +2102,7 @@ function TabReportes({ reportes, planteles, qc }: { reportes: Reporte[]; plantel
                     })()}
                   </td>
                   <td className="px-4 py-3 text-slate-600 text-xs">{r.archivo_nombre}</td>
-                  <td className="px-4 py-3 text-slate-400 text-xs">{r.notas ?? '—'}</td>
+                  <td className="px-4 py-3 text-slate-400 text-xs break-words whitespace-normal align-top">{r.notas ?? '—'}</td>
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-2">
                       {r.onedrive_url && (
