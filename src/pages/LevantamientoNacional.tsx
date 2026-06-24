@@ -25,7 +25,9 @@ const DATOS_COLEGIO: Record<string, { nombre: string; director: string; admin: s
   TIJ: { nombre: 'Mano Amiga Tijuana',           director: 'Francisco Daniel Robles Noriega',   admin: 'Juana Rosa Cornejo Ledesma'      },
   TOR: { nombre: 'Mano Amiga Torreón',           director: 'Ma. Teresa Robles Limones',         admin: 'Maria Alicia Vilchis Esquivel'   },
   VSJ: { nombre: 'Mano Amiga Villas de San Juan', director: '',                                   admin: ''                                },
-  ZOM: { nombre: 'Mano Amiga Zompopa',           director: '',                                   admin: ''                                },
+  ZOM:    { nombre: 'Mano Amiga Zompopa',    director: '',                                        admin: ''                                   },
+  CLINCOT: { nombre: 'Clínica Cotija',          director: 'Dr. Samuel Darío Pérez Soriano',  admin: ''                                   },
+  CLINLER: { nombre: 'Clínica Lerma',           director: 'Dr. Samuel Darío Pérez Soriano',  admin: ''                                   },
 };
 
 // Extrae el código corto de la clave: 'MA QRO' → 'QRO'
