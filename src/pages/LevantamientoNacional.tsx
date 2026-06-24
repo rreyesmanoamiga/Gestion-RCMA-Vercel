@@ -742,18 +742,28 @@ async function spUpload(file: File, carpeta: string, fileName: string): Promise<
 }
 
 async function spDelete(carpeta: string, fileName: string): Promise<void> {
+  // Obtener token Azure directo desde get-sharepoint-token
   const { data: s } = await (await import('@/lib/supabaseClient')).supabase.auth.getSession();
-  const token = s?.session?.access_token ?? '';
-  const SUPA_URL = import.meta.env.VITE_SUPABASE_URL as string;
-  const ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY as string;
+  const supaToken = s?.session?.access_token ?? '';
+  const SUPA_URL  = import.meta.env.VITE_SUPABASE_URL as string;
+  const ANON_KEY  = import.meta.env.VITE_SUPABASE_ANON_KEY as string;
 
-  const res = await fetch(`${SUPA_URL}/functions/v1/sharepoint-upload`, {
+  const tokenRes = await fetch(`${SUPA_URL}/functions/v1/get-sharepoint-token`, {
     method: 'POST',
-    headers: { 'Authorization': `Bearer ${token}`, 'apikey': ANON_KEY, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ action: 'delete', carpeta, fileName }),
+    headers: { 'Authorization': `Bearer ${supaToken}`, 'apikey': ANON_KEY },
   });
-  const data = await res.json().catch(() => ({}));
-  if (!res.ok && data?.error) console.error('spDelete error:', data.error);
+  const { access_token } = await tokenRes.json();
+  if (!access_token) throw new Error('No se pudo obtener token Azure');
+
+  // Borrar directo en Microsoft Graph desde el navegador
+  const USER     = 'rreyes@manoamiga.edu.mx';
+  const path     = carpeta.split('/').map(p => encodeURIComponent(p)).join('/');
+  const itemPath = `Sistema%20RCMA%20Doc/${path}/${encodeURIComponent(fileName)}`;
+  const res = await fetch(
+    `https://graph.microsoft.com/v1.0/users/${USER}/drive/root:/${itemPath}`,
+    { method: 'DELETE', headers: { 'Authorization': `Bearer ${access_token}` } }
+  );
+  if (!res.ok && res.status !== 404) throw new Error(`Delete error ${res.status}`);
 }
 
 function TabPlanteles({ planteles, loading, qc, directorio }: {
