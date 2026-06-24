@@ -1929,7 +1929,7 @@ function TabReportes({ reportes, planteles, qc }: { reportes: Reporte[]; plantel
 
           const { error } = await supabase.from('levantamiento_reportes').update({
             plantel_id:     form.plantel_id || null,
-            plantel_id_2:   form.plantel_id || null,
+            plantel_id_2:   form.plantel_id_2 || null,
             fecha_reporte:  form.fecha_reporte,
             archivo_nombre: archivoNombre,
             onedrive_url:   webUrl,
@@ -1945,7 +1945,7 @@ function TabReportes({ reportes, planteles, qc }: { reportes: Reporte[]; plantel
           const webUrl   = await spUpload(file, nuevaCarpeta, fileName);
           const { error } = await supabase.from('levantamiento_reportes').insert({
             plantel_id:     form.plantel_id || null,
-            plantel_id_2:   form.plantel_id || null,
+            plantel_id_2:   form.plantel_id_2 || null,
             fecha_reporte:  form.fecha_reporte,
             archivo_nombre: fileName,
             onedrive_url:   webUrl,
@@ -1992,7 +1992,7 @@ function TabReportes({ reportes, planteles, qc }: { reportes: Reporte[]; plantel
                 </div>
                 <div>
                   <label className="text-xs font-bold text-slate-500 uppercase block mb-1">Plantel 2 (opcional)</label>
-                  <select className={inputCls} value={form.plantel_id} onChange={e => set('plantel_id_2', e.target.value)}>
+                  <select className={inputCls} value={form.plantel_id_2} onChange={e => set('plantel_id_2', e.target.value)}>
                     <option value="">—</option>
                     {planteles.filter(p => p.id !== form.plantel_id).map(p => <option key={p.id} value={p.id}>{p.colegio_nombre}</option>)}
                   </select>
