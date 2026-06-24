@@ -37,7 +37,7 @@ import { toast } from 'sonner';
 import {
   MapPin, ClipboardList, DollarSign, FileText, Upload,
   Calendar, CheckCircle2, Circle, ChevronDown, ChevronUp,
-  Plus, X, Edit2, Save, Download, Eye, Loader2
+  Plus, X, Edit2, Save, Download, Eye, Loader2, Trash2
 } from 'lucide-react';
 import PageHeader from '@/components/shared/PageHeader';
 
@@ -231,15 +231,30 @@ Este proyecto es fundamental para el desarrollo de futuras iniciativas de mejora
 // ══════════════════════════════════════════════════════════════════════════════
 // COMPONENTE PRINCIPAL
 // ══════════════════════════════════════════════════════════════════════════════
-function TabReporteGeneral({ reportesGenerales, planteles, pagos, comunicados, entregables, qc }: {
+function TabReporteGeneral({ reportesGenerales, planteles, pagos, comunicados, entregables }: {
   reportesGenerales: ReporteGeneral[];
   planteles: Plantel[];
   pagos: Pago[];
   comunicados: Comunicado[];
   entregables: Entregable[];
-  qc: any;
 }) {
+  const qc = useQueryClient();
   const [generating, setGenerating] = useState(false);
+  const [deleteRG, setDeleteRG] = useState<ReporteGeneral | null>(null);
+
+  const deleteRGMut = useMutation({
+    mutationFn: async (r: ReporteGeneral) => {
+      if (r.onedrive_path && r.archivo_nombre) await spDelete(r.onedrive_path, r.archivo_nombre);
+      const { error } = await supabase.from('levantamiento_reportes_generales').delete().eq('id', r.id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['lev_reportes_generales'] });
+      toast.success('Reporte eliminado');
+      setDeleteRG(null);
+    },
+    onError: (e: any) => toast.error(e.message),
+  });
 
   const MESES_CONTRATO = [
     { etiqueta: 'ANTICIPO', total: 1034297.65 },
@@ -265,22 +280,6 @@ function TabReporteGeneral({ reportesGenerales, planteles, pagos, comunicados, e
     { field: 'levant_instalaciones', label: 'Levant. Instalaciones' },
     { field: 'levant_conjunto', label: 'Planta de Conjunto' },
   ];
-
-  const [deleteRG, setDeleteRG] = useState<ReporteGeneral | null>(null);
-
-  const deleteRGMut = useMutation({
-    mutationFn: async (r: ReporteGeneral) => {
-      if (r.onedrive_path && r.archivo_nombre) await spDelete(r.onedrive_path, r.archivo_nombre);
-      const { error } = await supabase.from('levantamiento_reportes_generales').delete().eq('id', r.id);
-      if (error) throw error;
-    },
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['lev_reportes_generales'] });
-      toast.success('Reporte eliminado');
-      setDeleteRG(null);
-    },
-    onError: (e: any) => toast.error(e.message),
-  });
 
   const generarReporte = async () => {
     setGenerating(true);
@@ -544,8 +543,8 @@ function TabReporteGeneral({ reportesGenerales, planteles, pagos, comunicados, e
                         <Eye className="w-3.5 h-3.5" />Ver PDF
                       </a>
                     )}
-                    <button onClick={() => setDeleteRG(r)} className="text-slate-400 hover:text-red-500 ml-2" title="Eliminar">
-                      <X className="w-4 h-4" />
+                    <button onClick={() => setDeleteRG(r)} className="p-1.5 rounded hover:bg-red-50 text-slate-400 hover:text-red-500 transition-colors" title="Eliminar">
+                      <Trash2 className="w-4 h-4" />
                     </button>
                   </div>
                 </td>
@@ -673,7 +672,7 @@ export default function LevantamientoNacional() {
       {tab === 'comunicados' && <TabComunicados comunicados={comunicados} planteles={planteles} directorio={directorio} qc={qc} />}
       {tab === 'reportes'    && <TabReportes reportes={reportes} planteles={planteles} qc={qc} />}
       {tab === 'entregables' && <TabEntregables entregables={entregables} planteles={planteles} qc={qc} />}
-      {tab === 'reporte'      && <TabReporteGeneral reportesGenerales={reportesGenerales} planteles={planteles} pagos={pagos} comunicados={comunicados} entregables={entregables} qc={qc} />}
+      {tab === 'reporte'      && <TabReporteGeneral reportesGenerales={reportesGenerales} planteles={planteles} pagos={pagos} comunicados={comunicados} entregables={entregables} />}
     </div>
   );
 }
