@@ -244,16 +244,20 @@ function TabReporteGeneral({ reportesGenerales, planteles, pagos, comunicados, e
 
   const deleteRGMut = useMutation({
     mutationFn: async (r: ReporteGeneral) => {
-      if (r.onedrive_path && r.archivo_nombre) await spDelete(r.onedrive_path, r.archivo_nombre);
+      // Borrar de OneDrive (no bloqueante si falla)
+      if (r.onedrive_path && r.archivo_nombre) {
+        try { await spDelete(r.onedrive_path, r.archivo_nombre); } catch { /* continuar */ }
+      }
+      // Borrar de la DB
       const { error } = await supabase.from('levantamiento_reportes_generales').delete().eq('id', r.id);
       if (error) throw error;
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['lev_reportes_generales'] });
-      toast.success('Reporte eliminado');
+      toast.success('Reporte eliminado ✓');
       setDeleteRG(null);
     },
-    onError: (e: any) => toast.error(e.message),
+    onError: (e: any) => toast.error('Error al eliminar: ' + e.message),
   });
 
   const MESES_CONTRATO = [
@@ -743,11 +747,13 @@ async function spDelete(carpeta: string, fileName: string): Promise<void> {
   const SUPA_URL = import.meta.env.VITE_SUPABASE_URL as string;
   const ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY as string;
 
-  await fetch(`${SUPA_URL}/functions/v1/sharepoint-upload`, {
+  const res = await fetch(`${SUPA_URL}/functions/v1/sharepoint-upload`, {
     method: 'POST',
     headers: { 'Authorization': `Bearer ${token}`, 'apikey': ANON_KEY, 'Content-Type': 'application/json' },
     body: JSON.stringify({ action: 'delete', carpeta, fileName }),
   });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok && data?.error) console.error('spDelete error:', data.error);
 }
 
 function TabPlanteles({ planteles, loading, qc, directorio }: {
