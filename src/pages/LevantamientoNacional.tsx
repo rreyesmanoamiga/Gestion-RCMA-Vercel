@@ -1209,8 +1209,16 @@ function TabPagos({ pagos, planteles, qc }: { pagos: Pago[]; planteles: Plantel[
                 <input type="date" className={inputCls} value={form.fecha_pago} onChange={e => set('fecha_pago', e.target.value)} />
               </div>
               <div>
-                <label className="text-xs font-bold text-slate-500 uppercase block mb-1">Monto Real $</label>
-                <input type="number" className={inputCls} value={form.monto_pagado} onChange={e => set('monto_pagado', e.target.value)} placeholder="Monto efectivamente pagado" />
+                <label className="text-xs font-bold text-slate-500 uppercase block mb-1">Monto Real</label>
+                <div className="relative">
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 text-sm font-medium">$</span>
+                  <input type="number" className={inputCls + " pl-7"} value={form.monto_pagado} onChange={e => set('monto_pagado', e.target.value)} placeholder="0.00" step="0.01" />
+                </div>
+                {form.monto_pagado && !isNaN(parseFloat(form.monto_pagado)) && (
+                  <p className="text-xs text-slate-500 mt-1">
+                    {parseFloat(form.monto_pagado).toLocaleString('es-MX', { style: 'currency', currency: 'MXN' })} MXN
+                  </p>
+                )}
               </div>
               <div>
                 <label className="text-xs font-bold text-slate-500 uppercase block mb-1">Observaciones</label>
