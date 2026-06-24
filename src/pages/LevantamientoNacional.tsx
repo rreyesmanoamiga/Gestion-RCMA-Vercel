@@ -2072,7 +2072,7 @@ function TabReportes({ reportes, planteles, qc }: { reportes: Reporte[]; plantel
               <th className="text-left px-4 py-3 w-[140px]">Plantel</th>
               <th className="text-left px-4 py-3 w-[180px]">Archivo</th>
               <th className="text-left px-4 py-3">Notas</th>
-              <th className="w-[90px]"></th>
+              <th className="w-[80px] pr-4"></th>
               <th className="px-4 py-3"></th>
             </tr>
           </thead>
@@ -2104,8 +2104,8 @@ function TabReportes({ reportes, planteles, qc }: { reportes: Reporte[]; plantel
                   </td>
                   <td className="px-4 py-3 text-slate-600 text-xs">{r.archivo_nombre}</td>
                   <td className="px-4 py-3 text-slate-400 text-xs break-words whitespace-normal align-top">{r.notas ?? '—'}</td>
-                  <td className="px-4 py-3 align-top">
-                    <div className="flex items-center justify-end gap-2">
+                  <td className="pr-4 py-3 align-top">
+                    <div className="flex items-center justify-end gap-2 whitespace-nowrap">
                       {r.onedrive_url && (
                         <a href={r.onedrive_url} target="_blank" rel="noreferrer" className="text-slate-400 hover:text-[#0C3B6E]">
                           <Eye className="w-4 h-4" />
