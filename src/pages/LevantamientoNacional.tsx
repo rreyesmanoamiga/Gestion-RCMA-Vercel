@@ -1091,7 +1091,7 @@ function TabPagos({ pagos, planteles, qc }: { pagos: Pago[]; planteles: Plantel[
           mes_etiqueta:        form.mes_etiqueta,
           concepto:            form.mes_etiqueta,
           monto_programado:    mesData?.total ?? 0,
-          monto_pagado:        parseFloat(form.monto_pagado) || null,
+          monto_pagado:        parseFloat(form.monto_pagado.replace(/,/g, '')) || null,
           fecha_pago:          form.fecha_pago || null,
           pagado:              true,
           factura_consecutivo: String(pagos.length + 1),
