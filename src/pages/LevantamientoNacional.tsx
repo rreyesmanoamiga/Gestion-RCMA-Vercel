@@ -2087,7 +2087,7 @@ function TabReportes({ reportes, planteles, qc }: { reportes: Reporte[]; plantel
                   </td>
                   <td className="px-4 py-3 text-slate-500 text-xs">
                     <div>{plantel?.colegio_nombre ?? 'General'}</div>
-                    {(() => { const p2 = planteles.find(p => p.id === r.plantel_id); return p2 ? <div className="text-slate-400">{p2.colegio_nombre}</div> : null; })()}
+                    {plantel && <div className="text-slate-400 text-xs">{plantel.colegio_clave}</div>}
                   </td>
                   <td className="px-4 py-3 text-slate-600 text-xs">{r.archivo_nombre}</td>
                   <td className="px-4 py-3 text-slate-400 text-xs">{r.onedrive_path ?? '—'}</td>
