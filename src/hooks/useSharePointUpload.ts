@@ -17,7 +17,7 @@ interface UploadResult {
 }
 
 const USER       = 'rreyes@manoamiga.edu.mx';
-const CHUNK_SIZE = 5 * 1024 * 1024; // 5MB — el navegador no tiene límite de RAM como Supabase
+const CHUNK_SIZE = 5 * 1024 * 1024;
 
 async function getToken(): Promise<string> {
   const { data: sessionData } = await supabase.auth.getSession();
@@ -35,11 +35,38 @@ async function getToken(): Promise<string> {
   return data.access_token;
 }
 
-async function uploadChunked(token: string, carpeta: string, fileName: string, file: File): Promise<string> {
+// Genera un link anónimo "anyone with the link can view"
+export async function generateShareLink(driveItemId: string, token: string): Promise<string | null> {
+  const res = await fetch(
+    `https://graph.microsoft.com/v1.0/users/${USER}/drive/items/${driveItemId}/createLink`,
+    {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ type: 'view', scope: 'anonymous' }),
+    }
+  );
+  if (!res.ok) return null;
+  const data = await res.json();
+  return data.link?.webUrl ?? null;
+}
+
+// Obtiene el driveItemId desde el path del archivo
+async function getDriveItemId(token: string, carpeta: string, fileName: string): Promise<string | null> {
+  const path     = carpeta.split('/').map(p => encodeURIComponent(p)).join('/');
+  const itemPath = `Sistema%20RCMA%20Doc/${path}/${encodeURIComponent(fileName)}`;
+  const res = await fetch(
+    `https://graph.microsoft.com/v1.0/users/${USER}/drive/root:/${itemPath}`,
+    { headers: { 'Authorization': `Bearer ${token}` } }
+  );
+  if (!res.ok) return null;
+  const data = await res.json();
+  return data.id ?? null;
+}
+
+async function uploadChunked(token: string, carpeta: string, fileName: string, file: File): Promise<{ webUrl: string; shareUrl: string; itemId: string }> {
   const path     = carpeta.split('/').map(p => encodeURIComponent(p)).join('/');
   const itemPath = `Sistema%20RCMA%20Doc/${path}/${encodeURIComponent(fileName)}`;
 
-  // Crear upload session en Microsoft Graph
   const sessionRes = await fetch(
     `https://graph.microsoft.com/v1.0/users/${USER}/drive/root:/${itemPath}:/createUploadSession`,
     {
@@ -53,13 +80,12 @@ async function uploadChunked(token: string, carpeta: string, fileName: string, f
 
   const totalSize = file.size;
   let webUrl = '';
+  let itemId = '';
   let start  = 0;
 
-  // Upload chunked directo desde el navegador — sin límite de tiempo de Supabase
   while (start < totalSize) {
     const end  = Math.min(start + CHUNK_SIZE, totalSize);
     const buf  = await file.slice(start, end).arrayBuffer();
-
     const chunkRes = await fetch(uploadUrl, {
       method: 'PUT',
       headers: {
@@ -69,17 +95,23 @@ async function uploadChunked(token: string, carpeta: string, fileName: string, f
       },
       body: buf,
     });
-
-    if (!chunkRes.ok && chunkRes.status !== 202) {
-      throw new Error(`Chunk error ${chunkRes.status}: ${await chunkRes.text()}`);
-    }
+    if (!chunkRes.ok && chunkRes.status !== 202) throw new Error(`Chunk error ${chunkRes.status}`);
     if (chunkRes.status === 201 || chunkRes.status === 200) {
       const item = await chunkRes.json();
       webUrl = item.webUrl ?? '';
+      itemId = item.id ?? '';
     }
     start = end;
   }
-  return webUrl;
+
+  // Generar link anónimo
+  let shareUrl = webUrl;
+  if (itemId) {
+    const anon = await generateShareLink(itemId, token);
+    if (anon) shareUrl = anon;
+  }
+
+  return { webUrl, shareUrl, itemId };
 }
 
 export function useSharePointUpload() {
@@ -107,11 +139,10 @@ export function useSharePointUpload() {
       }
 
       const token  = await getToken();
-      const webUrl = await uploadChunked(token, carpeta, nombre, file);
+      const result = await uploadChunked(token, carpeta, nombre, file);
 
-      if (!webUrl) throw new Error('No se obtuvo URL del archivo');
       toast.success('Archivo subido a SharePoint ✓');
-      return { webUrl, fileName: nombre };
+      return { webUrl: result.shareUrl, fileName: nombre };
 
     } catch (err: any) {
       toast.error('Error al subir archivo: ' + (err.message ?? 'Error desconocido'));
@@ -121,15 +152,13 @@ export function useSharePointUpload() {
     }
   };
 
-  // Para uso directo con carpeta y fileName personalizados
   const uploadCustom = async (file: File, carpeta: string, fileName: string): Promise<string | null> => {
     setUploading(true);
     try {
       const token  = await getToken();
-      const webUrl = await uploadChunked(token, carpeta, fileName, file);
-      if (!webUrl) throw new Error('No se obtuvo URL');
+      const result = await uploadChunked(token, carpeta, fileName, file);
       toast.success('Archivo subido ✓');
-      return webUrl;
+      return result.shareUrl;
     } catch (err: any) {
       toast.error('Error al subir: ' + (err.message ?? 'Error'));
       return null;
@@ -138,5 +167,46 @@ export function useSharePointUpload() {
     }
   };
 
-  return { upload, uploadCustom, uploading };
+  // Migra todos los links existentes en la DB a links anónimos
+  const migrarLinks = async (): Promise<void> => {
+    const token = await getToken();
+
+    const tablas = [
+      { tabla: 'anteproyectos',                  urlCol: 'zip_url',          pathCol: 'zip_nombre',     pathBase: null },
+      { tabla: 'levantamiento_comunicados',       urlCol: 'onedrive_url',     pathCol: 'archivo_nombre', pathBase: 'onedrive_path' },
+      { tabla: 'levantamiento_reportes',          urlCol: 'onedrive_url',     pathCol: 'archivo_nombre', pathBase: 'onedrive_path' },
+      { tabla: 'levantamiento_reportes_generales',urlCol: 'onedrive_url',     pathCol: 'archivo_nombre', pathBase: 'onedrive_path' },
+      { tabla: 'levantamiento_entregables',       urlCol: 'acta_cierre_url',  pathCol: 'acta_cierre_nombre', pathBase: null },
+    ];
+
+    let total = 0;
+    let ok    = 0;
+
+    for (const t of tablas) {
+      const { data: rows } = await supabase.from(t.tabla).select('*').not(t.urlCol, 'is', null);
+      if (!rows?.length) continue;
+
+      for (const row of rows) {
+        total++;
+        try {
+          const carpeta  = t.pathBase ? row[t.pathBase] : null;
+          const fileName = row[t.pathCol];
+          if (!carpeta || !fileName) continue;
+
+          const itemId = await getDriveItemId(token, carpeta, fileName);
+          if (!itemId) continue;
+
+          const shareUrl = await generateShareLink(itemId, token);
+          if (!shareUrl) continue;
+
+          await supabase.from(t.tabla).update({ [t.urlCol]: shareUrl }).eq('id', row.id);
+          ok++;
+        } catch { /* continuar con el siguiente */ }
+      }
+    }
+
+    toast.success(`Links migrados: ${ok}/${total} archivos actualizados`);
+  };
+
+  return { upload, uploadCustom, uploading, migrarLinks };
 }
