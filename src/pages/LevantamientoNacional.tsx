@@ -2065,14 +2065,14 @@ function TabReportes({ reportes, planteles, qc }: { reportes: Reporte[]; plantel
       )}
 
       <div className="bg-white border border-slate-200 rounded-xl overflow-hidden">
-        <table className="w-full text-sm table-fixed">
+        <table className="w-full text-sm">
           <thead className="bg-slate-50 text-slate-500 text-xs uppercase">
             <tr>
-              <th className="text-left px-4 py-3 w-[90px]">Fecha</th>
-              <th className="text-left px-4 py-3 w-[120px]">Plantel</th>
-              <th className="text-left px-4 py-3 w-[150px]">Archivo</th>
-              <th className="text-left px-4 py-3 w-[500px]">Notas</th>
-              <th className="text-right px-4 py-3 w-[90px]"></th>
+              <th className="text-left px-4 py-3 whitespace-nowrap">Fecha</th>
+              <th className="text-left px-4 py-3 whitespace-nowrap w-[130px]">Plantel</th>
+              <th className="text-left px-4 py-3 whitespace-nowrap w-[160px]">Archivo</th>
+              <th className="text-left px-4 py-3 w-full">Notas</th>
+              <th className="text-right px-4 py-3 whitespace-nowrap w-[90px]"></th>
               <th className="px-4 py-3"></th>
             </tr>
           </thead>
