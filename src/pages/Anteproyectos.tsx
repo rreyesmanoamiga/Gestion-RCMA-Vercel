@@ -120,7 +120,7 @@ function AnteproyectoForm({
   const [formData, setFormData] = useState<FormData>(INITIAL_FORM);
   const [zipFile, setZipFile]   = useState<File | null>(null);
   const { upload: spUpload, migrarLinks } = useSharePointUpload();
-  const [migrando, setMigrando] = React.useState(false);
+  const [migrando, setMigrando] = useState(false);
 
   React.useEffect(() => {
     setZipFile(null); // Siempre limpiar ZIP al abrir el modal
