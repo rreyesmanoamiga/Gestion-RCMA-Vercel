@@ -625,17 +625,11 @@ export default function Anteproyectos() {
         <div className="bg-white rounded-xl border border-slate-200 py-20 text-center">
           <FolderOpen className="w-12 h-12 text-slate-200 mx-auto mb-3" />
           <p className="text-slate-400 font-medium">No hay anteproyectos registrados.</p>
-          <button
-          onClick={async () => { setMigrando(true); try { await migrarLinks(); } finally { setMigrando(false); } }}
-          disabled={migrando}
-          className="px-4 py-2 bg-slate-600 text-white rounded-lg text-sm font-medium hover:bg-slate-700 flex items-center gap-2 disabled:opacity-50"
-          title="Actualiza los links de todos los archivos existentes para que sean accesibles sin login">
-          {migrando ? '⏳ Migrando...' : '🔗 Migrar Links OneDrive'}
-        </button>
-        <button onClick={() => setShowForm(true)}
+          <button onClick={() => setShowForm(true)}
             className="mt-4 px-4 py-2 bg-slate-900 text-white rounded-md text-sm font-medium hover:bg-slate-800 transition-colors">
             + Nuevo Anteproyecto
           </button>
+          </div>
         </div>
       ) : (
         <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
