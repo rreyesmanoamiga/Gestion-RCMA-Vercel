@@ -119,8 +119,7 @@ function AnteproyectoForm({
 }) {
   const [formData, setFormData] = useState<FormData>(INITIAL_FORM);
   const [zipFile, setZipFile]   = useState<File | null>(null);
-  const { upload: spUpload, migrarLinks } = useSharePointUpload();
-  const [migrando, setMigrando] = useState(false);
+  const { upload: spUpload } = useSharePointUpload();
 
   React.useEffect(() => {
     setZipFile(null); // Siempre limpiar ZIP al abrir el modal
@@ -550,14 +549,7 @@ export default function Anteproyectos() {
         actionLabel="Nuevo Anteproyecto"
         onAction={() => setShowForm(true)}
       />
-      <div className="flex justify-end">
-        <button
-          onClick={async () => { setMigrando(true); try { await migrarLinks(); } finally { setMigrando(false); } }}
-          disabled={migrando}
-          className="px-4 py-2 bg-slate-500 text-white rounded-lg text-sm font-medium hover:bg-slate-600 flex items-center gap-2 disabled:opacity-50">
-          {migrando ? '⏳ Migrando...' : '🔗 Migrar Links OneDrive'}
-        </button>
-      </div>
+
 
       {/* KPIs */}
       <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
