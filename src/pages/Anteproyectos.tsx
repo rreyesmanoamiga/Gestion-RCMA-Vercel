@@ -629,7 +629,6 @@ export default function Anteproyectos() {
             className="mt-4 px-4 py-2 bg-slate-900 text-white rounded-md text-sm font-medium hover:bg-slate-800 transition-colors">
             + Nuevo Anteproyecto
           </button>
-          </div>
         </div>
       ) : (
         <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
