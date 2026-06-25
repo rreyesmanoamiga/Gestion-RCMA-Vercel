@@ -149,7 +149,7 @@ export default function Sidebar({ isOpen, onToggle }) {
           )}
 
           {/* 4 — Ticket MAS */}
-          {(isAdmin || can('ver_ticket_mas')) && (
+          {(isAdmin || can('ver_ticket_mas') || can('enviar_ticket_mas')) && (
             <Link to="/ticket-mas" onClick={handleNavClick} className={navLinkClass('/ticket-mas')}>
               <FileSignature className="w-[18px] h-[18px]" />
               Ticket MAS

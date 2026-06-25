@@ -262,22 +262,19 @@ export default function TicketMAS() {
   const isAdmin   = user?.user_metadata?.role === 'admin';
   const qc        = useQueryClient();
 
-  // Solo admin o usuarios con ver_lista_ticket_mas ven el listado
-  // Usuarios con ver_ticket_mas únicamente ven el formulario para enviar
-  const canVerLista = isAdmin || can('ver_lista_ticket_mas');
+  const canVerLista  = isAdmin || can('ver_ticket_mas');
+  const soloFormulario = !isAdmin && !can('ver_ticket_mas') && can('enviar_ticket_mas');
 
   // Vista: 'form' | 'lista' | 'detalle'
-  const [vista, setVista]         = useState<'form'|'lista'|'detalle'>(isAdmin ? 'lista' : 'form');
+  const [vista, setVista] = useState<'form'|'lista'|'detalle'>('form');
   const [enviado, setEnviado]     = useState(false);
   const [loading, setLoading]     = useState(false);
   const [viewing, setViewing]     = useState<TicketMAS | null>(null);
   const [filterStatus, setFilter] = useState('todos');
 
-  // Cuando se carguen los permisos y el usuario tenga ver_ticket_mas, redirigir a lista
   useEffect(() => {
-    if (canVerLista && vista === 'form' && !isAdmin) {
-      setVista('lista');
-    }
+    if (canVerLista) setVista('lista');
+    // soloFormulario → se queda en 'form' (ya es el default)
   }, [canVerLista]);
 
   // ── Form state (llenado por colegio) ────────────────────────────────────────
@@ -358,7 +355,7 @@ export default function TicketMAS() {
       if (error) throw error;
       return (data ?? []) as TicketMAS[];
     },
-    enabled: canVerLista,
+    enabled: canVerLista && !soloFormulario,
   });
 
   const ticketsFiltrados = useMemo(() => {
@@ -798,7 +795,7 @@ export default function TicketMAS() {
   // ─────────────────────────────────────────────────────────────────────────────
   // RENDER: Formulario (usuarios y admin)
   // ─────────────────────────────────────────────────────────────────────────────
-  if (!canVerLista || vista === 'form') {
+  if (soloFormulario || vista === 'form') {
     if (enviado) {
       return (
         <div className="min-h-screen flex flex-col items-center justify-center gap-4 p-8">
