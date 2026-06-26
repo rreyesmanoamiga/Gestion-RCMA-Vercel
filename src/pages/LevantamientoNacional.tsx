@@ -639,7 +639,7 @@ export default function LevantamientoNacional() {
   });
 
   const { data: directorio = [] } = useQuery<DirectorioItem[]>({
-    queryKey: ['directorio'],
+    queryKey: ['directorio_lev'],
     queryFn: async () => {
       const { data, error } = await supabase.from('directorio').select('id,codigo,nombre,territorio,dir_nombre,dir_correo').order('nombre');
       if (error) throw error;
