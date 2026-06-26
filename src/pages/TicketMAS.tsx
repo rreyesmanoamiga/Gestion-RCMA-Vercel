@@ -626,7 +626,8 @@ export default function TicketMAS() {
         const colegioCarpeta = updatedRow.colegio?.replace(/[/\\:*?"<>|]/g, '_') ?? 'SIN_COLEGIO';
         const folioCarpeta   = updatedRow.folio ?? 'SIN_FOLIO';
         const descripCarpeta = (updatedRow.nombre_proyecto ?? updatedRow.descripcion ?? 'Sin nombre').slice(0, 60).replace(/[/\\:*?"<>|]/g, '_');
-        const raiz = `Expedientes/${colegioCarpeta}/${folioCarpeta} - ${descripCarpeta}`;
+        const anioAuth = new Date().getFullYear();
+        const raiz = `Expedientes/${anioAuth}/${colegioCarpeta}/${folioCarpeta} - ${descripCarpeta}`;
 
         // Subcarpetas a crear (archivos placeholder vacíos para forzar la creación)
         const subcarpetas = [

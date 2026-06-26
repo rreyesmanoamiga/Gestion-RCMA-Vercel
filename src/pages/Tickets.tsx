@@ -590,6 +590,71 @@ export default function Tickets() {
     [filtered]
   );
 
+  const crearExpediente = async (t: TicketRecord) => {
+    setCreandoExp(true);
+    try {
+      // Usar fecha del ticket (fecha de autorización) para el año de la carpeta
+      const anio = t.fecha ? new Date(t.fecha + 'T12:00:00').getFullYear()
+                 : t.created_at ? new Date(t.created_at).getFullYear()
+                 : new Date().getFullYear();
+      const colegioCarpeta = (t.colegio ?? 'SIN_COLEGIO').replace(/[/\\:*?"<>|]/g, '_');
+      const folioCarpeta   = t.folio ?? 'SIN_FOLIO';
+      const nombreCarpeta  = (t.nombre_proyecto ?? 'Sin nombre').slice(0, 60).replace(/[/\\:*?"<>|]/g, '_');
+      const raiz = `Expedientes/${anio}/${colegioCarpeta}/${folioCarpeta} - ${nombreCarpeta}`;
+
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token    = sessionData?.session?.access_token ?? '';
+      const SUPA_URL = import.meta.env.VITE_SUPABASE_URL as string;
+      const ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY as string;
+
+      const spUp = async (file: File, carpeta: string, fileName: string) => {
+        const fd = new FormData();
+        fd.append('file', file); fd.append('carpeta', carpeta); fd.append('fileName', fileName);
+        const res = await fetch(`${SUPA_URL}/functions/v1/sharepoint-upload`, {
+          method: 'POST', headers: { 'Authorization': `Bearer ${token}`, 'apikey': ANON_KEY }, body: fd,
+        });
+        return res.json();
+      };
+
+      const placeholder = new File([''], '.keep', { type: 'text/plain' });
+      const subcarpetas = [
+        `${raiz}/Coordinación RCMA/01 - Solicitud de Proyecto`,
+        `${raiz}/Coordinación RCMA/02 - Cotizaciones`,
+        `${raiz}/Coordinación RCMA/03 - Ticket MAS`,
+        `${raiz}/Coordinación RCMA/04 - Autorización`,
+        `${raiz}/ECO/01 - Proyecto Ejecutivo`,
+        `${raiz}/ECO/02 - Acta de Inicio`,
+        `${raiz}/ECO/03 - Reportes de Obra`,
+        `${raiz}/ECO/04 - Acta de Entrega`,
+        `${raiz}/ECO/05 - Cierre de Obra`,
+        `${raiz}/ECO/06 - Fotografías/Antes`,
+        `${raiz}/ECO/06 - Fotografías/Durante`,
+        `${raiz}/ECO/06 - Fotografías/Después`,
+      ];
+      for (const carpeta of subcarpetas) {
+        await spUp(placeholder, carpeta, '.keep');
+      }
+
+      let expUrl: string | null = null;
+      if (expFiles.solicitud)   { const r = await spUp(expFiles.solicitud,   `${raiz}/Coordinación RCMA/01 - Solicitud de Proyecto`, expFiles.solicitud.name);   expUrl = expUrl ?? r?.webUrl; }
+      if (expFiles.cotizaciones){ const r = await spUp(expFiles.cotizaciones, `${raiz}/Coordinación RCMA/02 - Cotizaciones`,           expFiles.cotizaciones.name); expUrl = expUrl ?? r?.webUrl; }
+      if (expFiles.ticket)      { const r = await spUp(expFiles.ticket,       `${raiz}/Coordinación RCMA/03 - Ticket MAS`,            expFiles.ticket.name);       expUrl = expUrl ?? r?.webUrl; }
+      if (expFiles.autorizacion){ const r = await spUp(expFiles.autorizacion, `${raiz}/Coordinación RCMA/04 - Autorización`,          expFiles.autorizacion.name); expUrl = expUrl ?? r?.webUrl; }
+
+      // Guardar URL base del expediente
+      const urlBase = expUrl ? expUrl.split('/Coordinaci')[0] : `https://manoamiga-my.sharepoint.com/personal/rreyes_manoamiga_edu_mx/Documents/Sistema%20RCMA%20Doc/${raiz.split('/').map(encodeURIComponent).join('/')}`;
+      await supabase.from('tickets').update({ expediente_url: urlBase }).eq('id', t.id);
+      queryClient.invalidateQueries({ queryKey: ['tickets'] });
+      toast.success('Expediente creado en OneDrive ✓');
+      setExpModal(null);
+      setExpFiles({ solicitud: null, ticket: null, cotizaciones: null, autorizacion: null });
+    } catch (e: any) {
+      toast.error('Error creando expediente: ' + e.message);
+    } finally {
+      setCreandoExp(false);
+    }
+  };
+
   if (isLoading) return (
     <div className="flex items-center justify-center py-20">
       <div className="w-8 h-8 border-4 border-slate-200 border-t-slate-800 rounded-full animate-spin" />
