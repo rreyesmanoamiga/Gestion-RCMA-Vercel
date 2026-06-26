@@ -670,19 +670,9 @@ export default function TicketMAS() {
           await spUpload(placeholder, carpeta, archivo);
         }
 
-        // Subir PDF del ticket autorizado a 03 - Ticket MAS
-        const pdfBlob  = generarPDFBlob(updatedRow);
-        const pdfFile  = new File([pdfBlob], `${folioCarpeta}_Autorizado.pdf`, { type: 'application/pdf' });
-        const pdfResult = await spUpload(pdfFile, `${raiz}/Coordinación RCMA/03 - Ticket MAS`, `${folioCarpeta}_Autorizado.pdf`);
-
-        // Guardar URL del expediente en tickets_mas Y en tickets (para que Tickets Registrados lo vea)
-        const expUrl = pdfResult?.webUrl
-          ? pdfResult.webUrl.split('/03%20-%20Ticket%20MAS')[0].split('/03 - Ticket MAS')[0]
-          : null;
-        await supabase.from('tickets_mas').update({ expediente_url: expUrl }).eq('id', updatedRow.id);
-        if (expUrl && updatedRow.folio) {
-          await supabase.from('tickets').update({ expediente_url: expUrl }).eq('folio', updatedRow.folio);
-        }
+        // Guardar placeholder en tickets_mas — la URL real se actualizará al crear el primer archivo
+        // Solo crear las carpetas, sin subir PDF
+        await supabase.from('tickets_mas').update({ expediente_url: null }).eq('id', updatedRow.id);
 
       } catch (expErr) {
         console.error('Error creando expediente en OneDrive:', expErr);
