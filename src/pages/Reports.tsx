@@ -1327,9 +1327,18 @@ export default function Reports() {
   const activeProjects = useMemo(() => projects.filter(p => p.status !== 'completado' && p.status !== 'cancelado'), [projects]);
 
   const terData = useMemo(() => {
-    const t = Array.from(new Set(tickets.map(t => t.territorio ?? 'Sin territorio'))).sort();
-    return t.map(ter => ({ territorio: ter, count: tickets.filter(t => (t.territorio ?? 'Sin territorio') === ter).length }));
-  }, [tickets]);
+    const t = Array.from(new Set([
+      ...tickets.map(t => t.territorio ?? 'Sin territorio'),
+      ...ticketsMasArr.map((t: any) => t.territorio ?? 'Sin territorio'),
+    ])).sort();
+    return t.map(ter => ({
+      territorio: ter,
+      tcmm: tickets.filter(t => (t.territorio ?? 'Sin territorio') === ter).length,
+      tmas: ticketsMasArr.filter((t: any) => (t.territorio ?? 'Sin territorio') === ter).length,
+      count: tickets.filter(t => (t.territorio ?? 'Sin territorio') === ter).length
+           + ticketsMasArr.filter((t: any) => (t.territorio ?? 'Sin territorio') === ter).length,
+    }));
+  }, [tickets, ticketsMasArr]);
 
   const handleExportPDF = () => exportResumenPDF({
     stats, projects, checklists, solicitudes, tickets: rawTicketsFull as unknown as Ticket[],
@@ -1435,20 +1444,24 @@ export default function Reports() {
       {terData.length > 0 && (
         <div className={cardClass}>
           <h3 className="font-bold text-slate-900 mb-4 flex items-center gap-2">
-            <PieChart className="w-4 h-4 text-blue-500" /> Tickets TCMM por Territorio
+            <PieChart className="w-4 h-4 text-blue-500" /> Tickets MAS por Territorio
           </h3>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
                 <tr className="text-[10px] font-black uppercase tracking-widest text-slate-400 border-b border-slate-100">
                   <th className="text-left pb-2 pr-4">Territorio</th>
-                  <th className="text-right pb-2">Tickets TCMM</th>
+                  <th className="text-right pb-2 pr-4">TCMM</th>
+                  <th className="text-right pb-2 pr-4">TMAS</th>
+                  <th className="text-right pb-2">Total</th>
                 </tr>
               </thead>
               <tbody>
-                {terData.map(({ territorio, count }) => (
+                {terData.map(({ territorio, tcmm, tmas, count }) => (
                   <tr key={territorio} className="border-b border-slate-50 hover:bg-slate-50">
                     <td className="py-2 pr-4 text-slate-700 font-medium">{territorio}</td>
+                    <td className="py-2 pr-4 text-right tabular-nums text-slate-500">{tcmm}</td>
+                    <td className="py-2 pr-4 text-right tabular-nums text-slate-500">{tmas}</td>
                     <td className="py-2 text-right tabular-nums font-bold text-slate-700">{count}</td>
                   </tr>
                 ))}
@@ -1456,7 +1469,9 @@ export default function Reports() {
               <tfoot>
                 <tr className="bg-slate-900 text-white text-xs font-bold">
                   <td className="py-2 px-2 rounded-l-lg">TOTAL</td>
-                  <td className="py-2 text-right tabular-nums pr-2 rounded-r-lg">{tickets.length}</td>
+                  <td className="py-2 pr-4 text-right tabular-nums">{tickets.length}</td>
+                  <td className="py-2 pr-4 text-right tabular-nums">{ticketsMasArr.length}</td>
+                  <td className="py-2 text-right tabular-nums pr-2 rounded-r-lg">{tickets.length + ticketsMasArr.length}</td>
                 </tr>
               </tfoot>
             </table>
