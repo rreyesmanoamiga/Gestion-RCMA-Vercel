@@ -110,6 +110,7 @@ export default function SolicitudProyecto() {
     monto_fbc:              '',
     monto_donativos:        '',
     monto_otras:            '',
+    monto_otras_detalle:    '',
   });
 
   const set = (k: string, v: string) => setForm(p => ({ ...p, [k]: v }));
@@ -142,6 +143,12 @@ export default function SolicitudProyecto() {
     if (form.tipo_iniciativa !== 'GARANTÍAS' && (!costo || costo <= 0)) {
       toast.error('Ingresa el costo aproximado del proyecto'); return;
     }
+    if (otrasMonto > 0 && !form.monto_otras_detalle.trim()) {
+      toast.error('Especifica a qué se refiere "Otras Fuentes" antes de enviar'); return;
+    }
+    if (!tieneCotizaciones || cotizacionFiles.length === 0) {
+      toast.warning('Recuerda adjuntar la cotización más adelante en cuanto la tengas disponible.');
+    }
 
     setLoading(true);
     try {
@@ -164,6 +171,7 @@ export default function SolicitudProyecto() {
         monto_fbc:              fbcMonto    || null,
         monto_donativos:        donMonto    || null,
         monto_otras:            otrasMonto  || null,
+        monto_otras_detalle:    form.monto_otras_detalle.trim() || null,
       });
       if (error) throw error;
 
@@ -230,7 +238,7 @@ export default function SolicitudProyecto() {
         <p className="text-slate-500 text-center max-w-md">
           Tu solicitud de proyecto fue recibida correctamente. Recibirás una confirmación a <strong>{form.correo_solicitante}</strong> cuando sea revisada.
         </p>
-        <button onClick={() => { setEnviado(false); setForm({ nombre_centro:'',razon_social:'',sociedad:'',centro_gestor:'',ciclo_año_fiscal:añoActual,nombre_solicitante:'',puesto_solicitante:'',correo_solicitante:'',nombre_proyecto:'',tipo_iniciativa:'',resumen_proyecto:'',fecha_inicio_propuesta:'',fecha_fin_propuesta:'',costo_aproximado:'',monto_operacion:'',monto_fbc:'',monto_donativos:'',monto_otras:''}); }}
+        <button onClick={() => { setEnviado(false); setForm({ nombre_centro:'',razon_social:'',sociedad:'',centro_gestor:'',ciclo_año_fiscal:añoActual,nombre_solicitante:'',puesto_solicitante:'',correo_solicitante:'',nombre_proyecto:'',tipo_iniciativa:'',resumen_proyecto:'',fecha_inicio_propuesta:'',fecha_fin_propuesta:'',costo_aproximado:'',monto_operacion:'',monto_fbc:'',monto_donativos:'',monto_otras:'',monto_otras_detalle:''}); setTieneCotizaciones(false); setCotizacionFiles([]); }}
           className="px-6 py-2 bg-slate-900 text-white rounded-md text-sm font-medium hover:bg-slate-800 transition-colors">
           Nueva Solicitud
         </button>
@@ -462,6 +470,20 @@ export default function SolicitudProyecto() {
                   </td>
                   <td className={tdNum}>{pct(otrasMonto)}</td>
                 </tr>
+                {otrasMonto > 0 && (
+                  <tr>
+                    <td className="border border-slate-400 px-3 py-1.5 text-[11px] font-bold text-slate-700 uppercase">
+                      ¿A qué se refiere? *
+                    </td>
+                    <td className="border border-slate-400 px-0 py-0" colSpan={2}>
+                      <input type="text" className={inputClass}
+                        required
+                        value={form.monto_otras_detalle}
+                        onChange={e => set('monto_otras_detalle', e.target.value)}
+                        placeholder="Especifica de dónde proviene este monto (ej. aportación de municipio, venta de activo, etc.)" />
+                    </td>
+                  </tr>
+                )}
                 {/* Total */}
                 <tr className="bg-slate-100">
                   <td className="border border-slate-400 px-3 py-1.5 text-[11px] font-black text-slate-800 uppercase">Total Financiamiento</td>
