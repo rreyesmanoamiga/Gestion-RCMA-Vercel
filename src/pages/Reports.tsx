@@ -20,6 +20,9 @@ interface ReqInsumo { id: string; folio?: string; estatus?: string; total_cotiza
 interface PlantelLev { id: string; colegio_clave?: string; colegio_nombre?: string; zona?: string; eco_nombre?: string; asignacion?: string; fase?: string; fecha_inicio?: string | null; fecha_termino?: string | null; }
 interface PagoLev { id: string; plantel_id?: string; mes_numero?: number; mes_etiqueta?: string; concepto?: string; monto_programado?: number; monto_pagado?: number | null; pagado?: boolean; fecha_pago?: string | null; }
 interface EntregableLev { id: string; plantel_id?: string; mecanica_suelos?: boolean; levant_arq?: boolean; levant_estructural?: boolean; levant_instalaciones?: boolean; levant_conjunto?: boolean; entregables_completos?: boolean; acta_firmada?: boolean; }
+interface NexusNota { id: string; titulo?: string; categoria?: string; colegio?: string; territorio?: string; fijada?: boolean; created_at?: string; updated_at?: string; }
+interface NexusPendiente { id: string; titulo?: string; tipo?: string; asignado_nombre?: string; asignado_cc?: string; asignado_cc_nombre?: string; prioridad?: string; fecha_limite?: string | null; estatus?: string; colegio?: string; territorio?: string; created_at?: string; }
+interface ReporteLevDiario { id: string; plantel_id?: string | null; plantel_id_2?: string | null; fecha_reporte?: string; archivo_nombre?: string; notas?: string | null; }
 interface Stats    { total: number; completed: number; avgProgress: number; }
 
 // ─── Helpers de dibujo ────────────────────────────────────────────────────────
@@ -988,9 +991,10 @@ async function loadXLSX() {
 
 async function exportMatrizExcel(data: {
   projects: unknown[]; checklists: unknown[]; tickets: unknown[];
-  pendientes: unknown[]; anteproyectos: unknown[]; solicitudes: unknown[];
+  anteproyectos: unknown[]; solicitudes: unknown[];
   minimos: unknown[]; ticketsMas: unknown[]; maintenance: unknown[];
   requisiciones: unknown[]; planteles: unknown[]; pagosLev: unknown[];
+  nexusNotas: unknown[]; nexusPendientes: unknown[]; reportesLev: unknown[];
 }) {
   const XLSX = await loadXLSX();
   const wb   = XLSX.utils.book_new();
@@ -1052,10 +1056,6 @@ async function exportMatrizExcel(data: {
   buildSheet('🎫 Tickets TCMM', 'Tickets TCMM — Sistema RCMA', ['Folio', 'Territorio', 'Colegio', 'ECO', 'Tipo', 'Estatus', 'Proveedor', 'Presupuesto', 'Plan Financ.', 'Ticket Físico', 'Fecha'],
     (data.tickets as Record<string, unknown>[]).map(t => [t.folio ?? '—', t.territorio ?? '—', t.colegio ?? '—', t.eco ?? '—', t.tipo_proyecto ?? '—', t.estatus ?? '—', t.nombre_proveedor ?? '—', num(t.presupuesto as number), t.plan_financiamiento ?? '—', t.ticket_fisico ? 'Sí' : 'No', fmt(t.fecha as string)]),
     [14, 12, 14, 26, 18, 12, 24, 16, 16, 13, 14], 7);
-
-  buildSheet('⏳ Pendientes', 'Pendientes — Sistema RCMA', ['Territorio', 'Colegio', 'Proyecto', 'ECO', 'Tipo', 'Prioridad', 'Estatus', 'Asignación', 'Presupuesto', 'Última Actualiz.'],
-    (data.pendientes as Record<string, unknown>[]).map(p => [p.territorio ?? '—', p.colegio ?? '—', p.nombre_proyecto ?? '—', p.eco ?? '—', p.tipo_proyecto ?? '—', p.prioridad ?? '—', p.estatus ?? '—', p.asignacion ?? '—', num(p.presupuesto as number), fmt(p.fecha_actualizacion as string)]),
-    [12, 14, 34, 26, 18, 12, 14, 24, 16, 18], 8);
 
   buildSheet('📐 Anteproyectos', 'Anteproyectos — Sistema RCMA', ['Territorio', 'Colegio', 'Proyecto', 'ECO', 'Tipo', 'Prioridad', 'Estatus', 'Asignación', 'Presupuesto', 'Última Actualiz.'],
     (data.anteproyectos as Record<string, unknown>[]).map(a => [a.territorio ?? '—', a.colegio ?? '—', a.nombre_proyecto ?? '—', a.eco ?? '—', a.tipo_proyecto ?? '—', a.prioridad ?? '—', a.estatus ?? '—', a.asignacion ?? '—', num(a.presupuesto as number), fmt(a.fecha_actualizacion as string)]),
@@ -1207,21 +1207,56 @@ async function exportMatrizExcel(data: {
     ] as (string | number | null | undefined)[]),
     [28, 14, 22, 18, 16, 10, 16], [3, 4]);
 
+  // ── Levantamiento Nacional — Reportes Diarios ────────────────────────────
+  buildSheet('📄 Levant. Reportes', 'Levantamiento Nacional — Reportes Diarios — Sistema RCMA',
+    ['Colegio', 'Colegio 2', 'Fecha del Reporte', 'Archivo', 'Notas'],
+    (data.reportesLev as Record<string, unknown>[]).map(r => [
+      plantelNombreById[r.plantel_id as string] ?? 'General',
+      r.plantel_id_2 ? (plantelNombreById[r.plantel_id_2 as string] ?? '—') : '—',
+      fmt(r.fecha_reporte as string), r.archivo_nombre ?? '—', r.notas ?? '—',
+    ] as (string | number | null | undefined)[]),
+    [26, 26, 16, 30, 36]);
+
+  // ── NEXUS — Notas ─────────────────────────────────────────────────────────
+  buildSheet('📝 Nexus Notas', 'NEXUS — Notas — Sistema RCMA',
+    ['Título', 'Categoría', 'Colegio', 'Territorio', 'Fijada', 'Última Actualización'],
+    (data.nexusNotas as Record<string, unknown>[]).map(n => [
+      n.titulo ?? '—', n.categoria ?? '—', n.colegio ?? '—', n.territorio ?? '—',
+      n.fijada ? 'Sí' : 'No', fmt(n.updated_at as string),
+    ] as (string | number | null | undefined)[]),
+    [32, 16, 22, 14, 10, 18]);
+
+  // ── NEXUS — Pendientes ───────────────────────────────────────────────────
+  buildSheet('✅ Nexus Pendientes', 'NEXUS — Pendientes — Sistema RCMA',
+    ['Título', 'Tipo', 'Asignado a', 'Compartido con', 'Prioridad', 'Estatus', 'Fecha Límite', 'Colegio', 'Territorio'],
+    (data.nexusPendientes as Record<string, unknown>[]).map(p => [
+      p.titulo ?? '—', p.tipo ?? '—', p.asignado_nombre ?? '—',
+      p.asignado_cc_nombre ?? (p.asignado_cc ? 'Sí' : '—'),
+      p.prioridad ?? '—', p.estatus ?? '—', fmt(p.fecha_limite as string),
+      p.colegio ?? '—', p.territorio ?? '—',
+    ] as (string | number | null | undefined)[]),
+    [32, 14, 22, 22, 12, 14, 16, 18, 12]);
+
   // Resumen ejecutivo
   const ws7: Record<string, unknown> = {};
+  const nexusPendCompartidos = (data.nexusPendientes as Record<string, unknown>[]).filter(p => !!p.asignado_cc).length;
   const resRows = [
-    { label: 'Proyectos', count: data.projects.length }, { label: 'Tickets TCMM', count: data.tickets.length },
+    { label: 'Proyectos', count: data.projects.length },
+    { label: 'Tickets Registrados (TCMM + TMAS)', count: data.tickets.length + data.ticketsMas.length },
     { label: 'Presupuesto vs Real', count: (data.projects as Record<string, unknown>[]).filter(p => p.budget != null).length },
-    { label: 'Pendientes', count: data.pendientes.length }, { label: 'Anteproyectos', count: data.anteproyectos.length },
+    { label: 'Anteproyectos', count: data.anteproyectos.length },
     { label: 'Inspecciones', count: data.checklists.length }, { label: 'Solicitudes', count: data.solicitudes.length },
     { label: 'Mínimos Indispensables', count: data.minimos.length },
-    { label: 'Ticket MAS', count: data.ticketsMas.length },
     { label: 'Mantenimiento', count: data.maintenance.length },
     { label: 'Requisiciones (Insumos)', count: data.requisiciones.length },
     { label: 'Planteles Levantamiento Nacional', count: data.planteles.length },
     { label: 'Pagos Levantamiento Nacional', count: data.pagosLev.length },
+    { label: 'Reportes Diarios Levantamiento Nacional', count: data.reportesLev.length },
+    { label: 'NEXUS — Notas', count: data.nexusNotas.length },
+    { label: 'NEXUS — Pendientes', count: data.nexusPendientes.length },
+    { label: 'NEXUS — Pendientes Compartidos', count: nexusPendCompartidos },
   ];
-  const totalGeneral = resRows.reduce((a, r) => a + r.count, 0);
+  const totalGeneral = resRows.filter(r => r.label !== 'NEXUS — Pendientes Compartidos').reduce((a, r) => a + r.count, 0);
   const sRT = { font: { bold: true, sz: 16, name: 'Calibri', color: { rgb: 'FFFFFFFF' } }, fill: { patternType: 'solid', fgColor: { rgb: 'FF0F172A' } }, alignment: { horizontal: 'left', vertical: 'center' } };
   const sRD = { font: { italic: true, sz: 10, name: 'Calibri', color: { rgb: 'FFD1D5DB' } }, fill: { patternType: 'solid', fgColor: { rgb: 'FF0F172A' } }, alignment: { horizontal: 'right', vertical: 'center' } };
   const sRH = { font: { bold: true, sz: 11, name: 'Calibri', color: { rgb: 'FFFFFFFF' } }, fill: { patternType: 'solid', fgColor: { rgb: 'FF1E40AF' } }, alignment: { horizontal: 'left', vertical: 'center' }, border: bdr };
@@ -1249,9 +1284,10 @@ async function exportMatrizExcel(data: {
 
   wb.SheetNames = [
     '📊 Resumen Ejecutivo', '📁 Proyectos', '💰 Presupuesto vs Real', '🎫 Tickets TCMM', '🎫 Ticket MAS',
-    '⏳ Pendientes', '📐 Anteproyectos', '✅ Inspecciones', '📩 Solicitudes',
+    '📐 Anteproyectos', '✅ Inspecciones', '📩 Solicitudes',
     'Minimos Indispensables', 'Minimos Detalle',
-    '🔧 Mantenimiento', '📦 Requisiciones', '🏫 Levant. Planteles', '💵 Levant. Pagos',
+    '🔧 Mantenimiento', '📦 Requisiciones', '🏫 Levant. Planteles', '💵 Levant. Pagos', '📄 Levant. Reportes',
+    '📝 Nexus Notas', '✅ Nexus Pendientes',
   ];
   XLSX.writeFile(wb, `Matriz_Sistema_RCMA_${new Date().toISOString().slice(0, 10)}.xlsx`);
 }
@@ -1319,6 +1355,18 @@ export default function Reports() {
     queryKey: ['lev_entregables-report'],
     queryFn: async () => { const { data, error } = await supabase.from('levantamiento_entregables').select('*'); if (error) throw error; return data ?? []; },
   });
+  const { data: rawReportesLev = [] } = useQuery({
+    queryKey: ['lev_reportes-report'],
+    queryFn: async () => { const { data, error } = await supabase.from('levantamiento_reportes').select('*').order('fecha_reporte', { ascending: false }); if (error) throw error; return data ?? []; },
+  });
+  const { data: rawNexusNotas = [] } = useQuery({
+    queryKey: ['nexus_notas-report'],
+    queryFn: async () => { const { data, error } = await supabase.from('nexus_notas').select('*').order('updated_at', { ascending: false }); if (error) throw error; return data ?? []; },
+  });
+  const { data: rawNexusPendientes = [] } = useQuery({
+    queryKey: ['nexus_pendientes-report'],
+    queryFn: async () => { const { data, error } = await supabase.from('nexus_pendientes').select('*').order('created_at', { ascending: false }); if (error) throw error; return data ?? []; },
+  });
 
   const projects    = rawProjects    as unknown as Project[];
   const checklists  = rawChecklists  as unknown[];
@@ -1366,10 +1414,11 @@ export default function Reports() {
 
   const handleExportExcel = () => exportMatrizExcel({
     projects: rawProjects, checklists: rawChecklists, tickets: rawTicketsFull,
-    pendientes: rawPendientes, anteproyectos: rawAnteproyectos, solicitudes: rawSolicitudesAll,
+    anteproyectos: rawAnteproyectos, solicitudes: rawSolicitudesAll,
     minimos: rawMinimos,
     ticketsMas: rawTicketsMas, maintenance: rawMaintenance,
     requisiciones: rawRequisiciones, planteles: rawPlanteles, pagosLev: rawPagosLev,
+    nexusNotas: rawNexusNotas, nexusPendientes: rawNexusPendientes, reportesLev: rawReportesLev,
   }).catch(e => console.error('Error generando Excel:', e));
 
   const handleExportEstatusColegio = () => exportEstatusColegioPDF({
