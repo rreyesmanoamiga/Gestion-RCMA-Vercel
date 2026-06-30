@@ -4,7 +4,7 @@ import { supabase } from '@/lib/supabaseClient';
 import { useQuery } from '@tanstack/react-query';
 import {
   BarChart3, Download, FileSpreadsheet, FileText,
-  PieChart, Filter, TrendingUp, ClockAlert,
+  PieChart, Filter, TrendingUp, ClockAlert, Wrench, Package, Building2,
 } from 'lucide-react';
 import PageHeader from '@/components/shared/PageHeader';
 
@@ -15,6 +15,11 @@ interface Project  { id: string; name?: string; status?: string; progress?: numb
 interface Solicitud { id: string; nombre_centro?: string; nombre_proyecto?: string; estatus?: string; created_at?: string; }
 interface Ticket   { id: string; folio?: string; territorio?: string; colegio?: string; proyecto_id?: string; presupuesto?: number; estatus?: string; tipo_proyecto?: string; nombre_proveedor?: string; plan_financiamiento?: string; fecha?: string; }
 interface Pendiente { id: string; nombre_proyecto?: string; estatus?: string; territorio?: string; colegio?: string; presupuesto?: number; prioridad?: string; }
+interface MaintenanceRecord { id: string; title?: string; status?: string; territorio?: string; colegio?: string; type?: string; priority?: string; scheduled_date?: string; created_at?: string; }
+interface ReqInsumo { id: string; folio?: string; estatus?: string; total_cotizado?: number; total_con_iva?: number; prioridad?: string; proveedores_nombres?: string[]; created_at?: string; fecha_requerida?: string; departamento?: string; }
+interface PlantelLev { id: string; colegio_clave?: string; colegio_nombre?: string; zona?: string; eco_nombre?: string; asignacion?: string; fase?: string; fecha_inicio?: string | null; fecha_termino?: string | null; }
+interface PagoLev { id: string; plantel_id?: string; mes_numero?: number; mes_etiqueta?: string; concepto?: string; monto_programado?: number; monto_pagado?: number | null; pagado?: boolean; fecha_pago?: string | null; }
+interface EntregableLev { id: string; plantel_id?: string; mecanica_suelos?: boolean; levant_arq?: boolean; levant_estructural?: boolean; levant_instalaciones?: boolean; levant_conjunto?: boolean; entregables_completos?: boolean; acta_firmada?: boolean; }
 interface Stats    { total: number; completed: number; avgProgress: number; }
 
 // ─── Helpers de dibujo ────────────────────────────────────────────────────────
@@ -181,11 +186,193 @@ async function loadJsPDF(): Promise<typeof import('jspdf').jsPDF> {
   return w.jspdf!.jsPDF;
 }
 
+function pdfHeader(doc: Doc, W: number, title: string, subtitle: string) {
+  doc.setFillColor(15, 23, 42); doc.rect(0, 0, W, 28, 'F');
+  doc.setFontSize(15); doc.setFont('helvetica', 'bold'); doc.setTextColor(255, 255, 255);
+  doc.text(title, 20, 13);
+  doc.setFontSize(8.5); doc.setFont('helvetica', 'normal'); doc.setTextColor(180, 180, 200);
+  doc.text(subtitle, 20, 21);
+}
+
+function pdfFooter(doc: Doc, label: string) {
+  const pages = doc.getNumberOfPages();
+  for (let i = 1; i <= pages; i++) {
+    doc.setPage(i);
+    const pH = (doc as any).internal.pageSize.getHeight();
+    const pW = (doc as any).internal.pageSize.getWidth();
+    doc.setFillColor(15, 23, 42); doc.rect(0, pH - 11, pW, 11, 'F');
+    doc.setFontSize(7); doc.setFont('helvetica', 'normal'); doc.setTextColor(160, 160, 180);
+    doc.text(label, 20, pH - 5);
+    doc.text('Página ' + i + ' de ' + pages, pW - 20, pH - 5, { align: 'right' });
+  }
+}
+
+// ─── Export PDF: Estatus por Colegio ──────────────────────────────────────────
+async function exportEstatusColegioPDF({ projects, tickets, ticketsMas, minimos, planteles }: {
+  projects: Project[]; tickets: Ticket[]; ticketsMas: any[]; minimos: any[]; planteles: PlantelLev[];
+}): Promise<void> {
+  const JsPDF = await loadJsPDF();
+  const doc = new JsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
+  const W = 297;
+  pdfHeader(doc, W, 'Estatus por Colegio', 'Sistema RCMA  ·  Generado el ' + new Date().toLocaleDateString('es-MX', { year: 'numeric', month: 'long', day: 'numeric' }));
+  let y = 38;
+
+  const colegios = Array.from(new Set([
+    ...projects.map(p => p.colegio).filter(Boolean) as string[],
+    ...tickets.map(t => t.colegio).filter(Boolean) as string[],
+    ...ticketsMas.map((t: any) => t.colegio).filter(Boolean) as string[],
+    ...planteles.map(p => p.colegio_nombre).filter(Boolean) as string[],
+  ])).sort();
+
+  const rows = colegios.map(col => {
+    const pColegio   = projects.filter(p => p.colegio === col);
+    const activos    = pColegio.filter(p => p.status !== 'completado' && p.status !== 'cancelado').length;
+    const completos  = pColegio.filter(p => p.status === 'completado').length;
+    const presupuesto = pColegio.reduce((s, p) => s + (p.budget ?? 0), 0);
+    const tTcmm      = tickets.filter(t => t.colegio === col).length;
+    const tMasPend   = ticketsMas.filter((t: any) => t.colegio === col && (t.estatus === 'pendiente' || t.estatus === 'en_revision')).length;
+    const minCol     = minimos.filter((m: any) => m.colegio === col);
+    const minCumple  = minCol.filter((m: any) => m.resultado === 'completo').length;
+    const pctMin     = minCol.length > 0 ? Math.round((minCumple / minCol.length) * 100) : null;
+    const plantel    = planteles.find(p => p.colegio_nombre === col);
+    return [
+      col,
+      String(activos), String(completos),
+      fmtMXN(presupuesto),
+      String(tTcmm), String(tMasPend),
+      pctMin != null ? pctMin + '%' : '—',
+      plantel?.fase ?? '—',
+    ];
+  });
+
+  y = drawTable(doc, y, W, [
+    { label: 'Colegio',                x: 20  },
+    { label: 'Proy. Activos',          x: 120, align: 'center' },
+    { label: 'Proy. Completados',      x: 148, align: 'center' },
+    { label: 'Presupuesto',            x: 184, align: 'right'  },
+    { label: 'Tickets TCMM',           x: 218, align: 'center' },
+    { label: 'MAS Pendientes',         x: 242, align: 'center' },
+    { label: '% Mínimos OK',           x: 264, align: 'center' },
+    { label: 'Fase Levantamiento',     x: 278 },
+  ], rows, 200, 210);
+
+  pdfFooter(doc, 'Sistema RCMA  ·  Colegios Mano Amiga  ·  Documento confidencial');
+  doc.save('estatus-por-colegio-' + Date.now() + '.pdf');
+}
+
+// ─── Export PDF: Reporte de Incidencias ───────────────────────────────────────
+async function exportIncidenciasPDF({ projects, pendientes, ticketsMas, minimos, pagosLev, planteles }: {
+  projects: Project[]; pendientes: Pendiente[]; ticketsMas: any[]; minimos: any[];
+  pagosLev: PagoLev[]; planteles: PlantelLev[];
+}): Promise<void> {
+  const JsPDF = await loadJsPDF();
+  const doc = new JsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+  const W = 210;
+  pdfHeader(doc, W, 'Reporte de Incidencias', 'Sistema RCMA  ·  Generado el ' + new Date().toLocaleDateString('es-MX', { year: 'numeric', month: 'long', day: 'numeric' }));
+  let y = 38;
+
+  const sectionTitle = (title: string, color: [number,number,number]) => {
+    if (y > 270) { doc.addPage(); y = 20; }
+    doc.setFillColor(...color); doc.rect(18, y - 4, W - 36, 9, 'F');
+    doc.setFontSize(9.5); doc.setFont('helvetica', 'bold'); doc.setTextColor(255, 255, 255);
+    doc.text(title, 22, y + 2); y += 11;
+  };
+  const emptyMsg = (msg: string) => {
+    doc.setFontSize(8.5); doc.setFont('helvetica', 'normal'); doc.setTextColor(150, 150, 150);
+    doc.text(msg, 20, y); y += 8;
+  };
+
+  // 1. Tickets MAS vencidos (+12h sin revisión)
+  sectionTitle('1. Tickets MAS Vencidos (más de 12h sin revisión)', [220, 38, 38]);
+  const tmasVencidos = ticketsMas.filter((t: any) => {
+    if (t.estatus !== 'pendiente') return false;
+    if (!t.created_at) return false;
+    return (Date.now() - new Date(t.created_at).getTime()) > 12 * 60 * 60 * 1000;
+  });
+  if (tmasVencidos.length > 0) {
+    const rows = tmasVencidos.slice(0, 30).map((t: any) => [
+      t.folio ?? '—', t.colegio ?? '—', t.territorio ?? '—',
+      t.created_at ? new Date(t.created_at).toLocaleDateString('es-MX') : '—',
+    ]);
+    y = drawTable(doc, y, W, [
+      { label: 'Folio', x: 20 }, { label: 'Colegio', x: 65 }, { label: 'Territorio', x: 140 }, { label: 'Fecha', x: 170 },
+    ], rows, 30, 297);
+  } else emptyMsg('Sin tickets MAS vencidos. ✓');
+  y += 4;
+
+  // 2. Proyectos urgentes con avance bajo
+  sectionTitle('2. Proyectos Urgentes con Avance Menor a 30%', [202, 138, 4]);
+  const urgentesBajoAvance = projects.filter(p => p.priority === 'urgente' && p.status !== 'completado' && p.status !== 'cancelado' && (p.progress ?? 0) < 30);
+  if (urgentesBajoAvance.length > 0) {
+    const rows = urgentesBajoAvance.slice(0, 30).map(p => [
+      p.folio ?? '—', p.name ?? '—', p.colegio ?? '—', (p.progress ?? 0) + '%',
+    ]);
+    y = drawTable(doc, y, W, [
+      { label: 'Folio', x: 20 }, { label: 'Proyecto', x: 50 }, { label: 'Colegio', x: 140 }, { label: 'Avance', x: 175, align: 'right' },
+    ], rows, 30, 297);
+  } else emptyMsg('Sin proyectos urgentes con avance bajo. ✓');
+  y += 4;
+
+  // 3. Pendientes de prioridad alta/urgente
+  sectionTitle('3. Pendientes de Prioridad Alta o Urgente', [202, 138, 4]);
+  const pendUrgentes = pendientes.filter(p => p.prioridad === 'alta' || p.prioridad === 'urgente');
+  if (pendUrgentes.length > 0) {
+    const rows = pendUrgentes.slice(0, 30).map(p => [
+      p.colegio ?? '—', p.nombre_proyecto ?? '—', p.territorio ?? '—', p.prioridad ?? '—',
+    ]);
+    y = drawTable(doc, y, W, [
+      { label: 'Colegio', x: 20 }, { label: 'Pendiente', x: 60 }, { label: 'Territorio', x: 150 }, { label: 'Prioridad', x: 175 },
+    ], rows, 30, 297);
+  } else emptyMsg('Sin pendientes de prioridad alta o urgente. ✓');
+  y += 4;
+
+  // 4. Mínimos Indispensables con incumplimientos críticos (P1)
+  sectionTitle('4. Mínimos Indispensables — Incumplimientos Críticos (P1)', [220, 38, 38]);
+  const ITEM_PRIO_INC: Record<string, string> = {
+    puertas_ancho:'P1',pasillos:'P1',tablero:'P1',circuitos:'P1',polo_tierra:'P1',agua_red:'P1',gas:'P1',pasillos_libres:'P1',const_pc:'P1',pipc:'P1',seg_estr:'P1',extintores:'P1',senal_emerg:'P1',cisterna_limp:'P1',cert_extinct:'P1',
+  };
+  const minP1Criticos = minimos.filter((m: any) => {
+    const its = Array.isArray(m.items) ? m.items : [];
+    return its.some((i: any) => (ITEM_PRIO_INC[i.id] ?? 'P3') === 'P1' && i.estado === 'no_cumple');
+  });
+  if (minP1Criticos.length > 0) {
+    const rows = minP1Criticos.slice(0, 30).map((m: any) => {
+      const its = Array.isArray(m.items) ? m.items : [];
+      const p1nc = its.filter((i: any) => (ITEM_PRIO_INC[i.id] ?? 'P3') === 'P1' && i.estado === 'no_cumple').length;
+      return [m.colegio ?? '—', m.territorio ?? '—', String(p1nc)];
+    });
+    y = drawTable(doc, y, W, [
+      { label: 'Colegio', x: 20 }, { label: 'Territorio', x: 110 }, { label: 'Pendientes P1', x: 160, align: 'right' },
+    ], rows, 30, 297);
+  } else emptyMsg('Sin incumplimientos críticos P1. ✓');
+  y += 4;
+
+  // 5. Pagos de Levantamiento Nacional vencidos
+  sectionTitle('5. Pagos de Levantamiento Nacional Vencidos', [220, 38, 38]);
+  const plantelById = Object.fromEntries(planteles.map(p => [p.id, p]));
+  const pagosVencidos = pagosLev.filter(p => !p.pagado);
+  if (pagosVencidos.length > 0) {
+    const rows = pagosVencidos.slice(0, 30).map(p => [
+      plantelById[p.plantel_id ?? '']?.colegio_nombre ?? '—',
+      p.mes_etiqueta ?? '—', p.concepto ?? '—',
+      p.monto_programado != null ? fmtMXN(p.monto_programado) : '—',
+    ]);
+    y = drawTable(doc, y, W, [
+      { label: 'Colegio', x: 20 }, { label: 'Mes', x: 90 }, { label: 'Concepto', x: 115 }, { label: 'Monto', x: 175, align: 'right' },
+    ], rows, 30, 297);
+  } else emptyMsg('Sin pagos pendientes de Levantamiento Nacional. ✓');
+
+  pdfFooter(doc, 'Sistema RCMA  ·  Colegios Mano Amiga  ·  Documento confidencial');
+  doc.save('reporte-incidencias-' + Date.now() + '.pdf');
+}
+
 // ─── Export PDF mejorado ──────────────────────────────────────────────────────
-async function exportResumenPDF({ stats, projects, checklists, solicitudes, tickets, pendientes, ticketsMas, minimos, anteproyectos, solicitudesAll }: {
+async function exportResumenPDF({ stats, projects, checklists, solicitudes, tickets, pendientes, ticketsMas, minimos, anteproyectos, solicitudesAll, maintenance, requisiciones, planteles, pagosLev, entregablesLev }: {
   stats: Stats; projects: Project[]; checklists: unknown[];
   solicitudes: Solicitud[]; tickets: Ticket[]; pendientes: Pendiente[];
   ticketsMas: any[]; minimos: any[]; anteproyectos: any[]; solicitudesAll: any[];
+  maintenance: MaintenanceRecord[]; requisiciones: ReqInsumo[];
+  planteles: PlantelLev[]; pagosLev: PagoLev[]; entregablesLev: EntregableLev[];
 }): Promise<void> {
   const JsPDF = await loadJsPDF();
   const doc = new JsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
@@ -637,6 +824,123 @@ async function exportResumenPDF({ stats, projects, checklists, solicitudes, tick
     y += 2;
   }
 
+  // ─── SECCIÓN 11: Mantenimiento ────────────────────────────────────────────
+  if (y > getH() - 40) { doc.addPage(); y = 20; }
+  section('11. Mantenimiento');
+
+  const mantPendiente = maintenance.filter(m => m.status !== 'completado').length;
+  const mantCompletado = maintenance.filter(m => m.status === 'completado').length;
+  const mantUrgente = maintenance.filter(m => m.priority === 'alta' && m.status !== 'completado').length;
+
+  y = drawKPIBoxes(doc, 20, y, W, [
+    { label: 'Total Mantenimientos', value: String(maintenance.length), color: [15, 23, 42]   },
+    { label: 'Pendientes',           value: String(mantPendiente),      color: [245, 158, 11] },
+    { label: 'Completados',          value: String(mantCompletado),     color: [22, 163, 74]  },
+    { label: 'Prioridad Alta',       value: String(mantUrgente),        color: [220, 38, 38]  },
+  ]);
+  y += 4;
+
+  if (maintenance.length > 0) {
+    const mantRows = maintenance.slice(0, 30).map(m => [
+      m.title ?? '—', m.colegio ?? '—', m.territorio ?? '—', m.type ?? '—',
+      m.priority ?? '—',
+      m.status === 'completado' ? 'Completado' : (m.status ?? '—'),
+      m.scheduled_date ? new Date(m.scheduled_date + 'T12:00:00').toLocaleDateString('es-MX') : '—',
+    ]);
+    y = drawTable(doc, y, W, [
+      { label: 'Título',     x: 20  },
+      { label: 'Colegio',    x: 80  },
+      { label: 'Territorio', x: 140 },
+      { label: 'Tipo',       x: 165 },
+      { label: 'Prioridad',  x: 195 },
+      { label: 'Estatus',    x: 222 },
+      { label: 'Fecha Prog.',x: 255 },
+    ], mantRows, 30, 210);
+  } else {
+    doc.setFontSize(9); doc.setFont('helvetica', 'normal'); doc.setTextColor(150, 150, 150);
+    doc.text('Sin mantenimientos registrados.', 20, y); y += 10;
+  }
+  y += 4;
+
+  // ─── SECCIÓN 12: Insumos — Requisiciones ──────────────────────────────────
+  if (y > getH() - 40) { doc.addPage(); y = 20; }
+  section('12. Insumos — Requisiciones');
+
+  const reqPendCot = requisiciones.filter(r => r.estatus === 'pendiente_cotizacion').length;
+  const reqAutoriz = requisiciones.filter(r => r.estatus === 'autorizado').length;
+  const reqSurtido = requisiciones.filter(r => r.estatus === 'surtido').length;
+  const reqMontoTotal = requisiciones.reduce((s, r) => s + (r.total_con_iva ?? r.total_cotizado ?? 0), 0);
+
+  y = drawKPIBoxes(doc, 20, y, W, [
+    { label: 'Total Requisiciones', value: String(requisiciones.length), color: [15, 23, 42]   },
+    { label: 'Pend. Cotización',    value: String(reqPendCot),           color: [245, 158, 11] },
+    { label: 'Autorizadas',         value: String(reqAutoriz),           color: [6, 182, 212]  },
+    { label: 'Surtidas',            value: String(reqSurtido),           color: [22, 163, 74]  },
+    { label: 'Monto Total',         value: fmtMXN(reqMontoTotal),        color: [99, 102, 241] },
+  ]);
+  y += 4;
+
+  if (requisiciones.length > 0) {
+    const reqLbl: Record<string,string> = { pendiente_cotizacion:'Pend. Cotización', cotizacion_recibida:'Cotización Recibida', en_autorizacion:'En Autorización', autorizado:'Autorizado', surtido:'Surtido' };
+    const reqRows = requisiciones.slice(0, 30).map(r => [
+      r.folio ?? '—',
+      (r.proveedores_nombres ?? []).join(', ') || 'Sin proveedor',
+      reqLbl[r.estatus ?? ''] ?? (r.estatus ?? '—'),
+      r.prioridad ?? '—',
+      (r.total_con_iva ?? r.total_cotizado) != null ? fmtMXN(r.total_con_iva ?? r.total_cotizado ?? 0) : '—',
+      r.created_at ? new Date(r.created_at).toLocaleDateString('es-MX') : '—',
+    ]);
+    y = drawTable(doc, y, W, [
+      { label: 'Folio',      x: 20  },
+      { label: 'Proveedor',  x: 60  },
+      { label: 'Estatus',    x: 150 },
+      { label: 'Prioridad',  x: 195 },
+      { label: 'Monto',      x: 225, align: 'right' },
+      { label: 'Fecha',      x: 260 },
+    ], reqRows, 30, 210);
+  } else {
+    doc.setFontSize(9); doc.setFont('helvetica', 'normal'); doc.setTextColor(150, 150, 150);
+    doc.text('Sin requisiciones registradas.', 20, y); y += 10;
+  }
+  y += 4;
+
+  // ─── SECCIÓN 13: Levantamiento Nacional ───────────────────────────────────
+  if (y > getH() - 40) { doc.addPage(); y = 20; }
+  section('13. Levantamiento Nacional');
+
+  const entregablesCompletos = entregablesLev.filter(e => e.entregables_completos).length;
+  const pctEntregables = entregablesLev.length > 0 ? Math.round((entregablesCompletos / entregablesLev.length) * 100) : 0;
+  const pagosPendientes = pagosLev.filter(p => !p.pagado).length;
+  const montoPagosPend = pagosLev.filter(p => !p.pagado).reduce((s, p) => s + (p.monto_programado ?? 0), 0);
+
+  y = drawKPIBoxes(doc, 20, y, W, [
+    { label: 'Planteles Totales',    value: String(planteles.length),    color: [15, 23, 42]   },
+    { label: '% Entregables OK',     value: pctEntregables + '%',        color: pctEntregables >= 80 ? [22,163,74] : pctEntregables >= 50 ? [202,138,4] : [220,38,38] },
+    { label: 'Pagos Pendientes',     value: String(pagosPendientes),     color: [245, 158, 11] },
+    { label: 'Monto Pend. de Pago',  value: fmtMXN(montoPagosPend),      color: [220, 38, 38]  },
+  ]);
+  y += 4;
+
+  if (planteles.length > 0) {
+    const plantRows = planteles.slice(0, 30).map(p => [
+      p.colegio_nombre ?? '—', p.zona ?? '—', p.eco_nombre ?? '—',
+      p.asignacion ?? '—', p.fase ?? '—',
+    ]);
+    doc.setFontSize(9); doc.setFont('helvetica', 'bold'); doc.setTextColor(30, 30, 30);
+    doc.text('Planteles', 20, y); y += 5;
+    y = drawTable(doc, y, W, [
+      { label: 'Colegio',     x: 20  },
+      { label: 'Zona',        x: 110 },
+      { label: 'ECO',         x: 145 },
+      { label: 'Asignación',  x: 200 },
+      { label: 'Fase',        x: 245 },
+    ], plantRows, 30, 210);
+  } else {
+    doc.setFontSize(9); doc.setFont('helvetica', 'normal'); doc.setTextColor(150, 150, 150);
+    doc.text('Sin planteles registrados en Levantamiento Nacional.', 20, y); y += 10;
+  }
+  y += 4;
+
   // ─── PIE DE PÁGINA ─────────────────────────────────────────────────────────
   const pages = doc.getNumberOfPages();
   for (let i = 1; i <= pages; i++) {
@@ -672,7 +976,8 @@ async function loadXLSX() {
 async function exportMatrizExcel(data: {
   projects: unknown[]; checklists: unknown[]; tickets: unknown[];
   pendientes: unknown[]; anteproyectos: unknown[]; solicitudes: unknown[];
-  minimos: unknown[];
+  minimos: unknown[]; ticketsMas: unknown[]; maintenance: unknown[];
+  requisiciones: unknown[]; planteles: unknown[]; pagosLev: unknown[];
 }) {
   const XLSX = await loadXLSX();
   const wb   = XLSX.utils.book_new();
@@ -834,6 +1139,61 @@ async function exportMatrizExcel(data: {
     minimosDetalle,
     [22, 14, 18, 22, 48, 12, 14, 32, 22, 18]);
 
+  // ── Ticket MAS ────────────────────────────────────────────────────────────
+  const tmasLbl: Record<string,string> = { autorizado:'Autorizado', pendiente:'Pendiente', en_revision:'En Revisión', cancelado:'Cancelado' };
+  buildSheet('🎫 Ticket MAS', 'Ticket MAS — Sistema RCMA',
+    ['Folio', 'Colegio', 'Territorio', 'Clasificación', 'Solicitante', 'Estatus', 'Fecha'],
+    (data.ticketsMas as Record<string, unknown>[]).map(t => [
+      t.folio ?? '—', t.colegio ?? '—', t.territorio ?? '—', t.clasificacion ?? '—',
+      t.nombre_solicitante ?? '—', tmasLbl[t.estatus as string] ?? (t.estatus ?? '—'),
+      fmt(t.created_at as string),
+    ] as (string | number | null | undefined)[]),
+    [14, 24, 12, 18, 22, 14, 14]);
+
+  // ── Mantenimiento ─────────────────────────────────────────────────────────
+  buildSheet('🔧 Mantenimiento', 'Mantenimiento — Sistema RCMA',
+    ['Título', 'Colegio', 'Territorio', 'Tipo', 'Prioridad', 'Estatus', 'Fecha Programada'],
+    (data.maintenance as Record<string, unknown>[]).map(m => [
+      m.title ?? '—', m.colegio ?? '—', m.territorio ?? '—', m.type ?? '—',
+      m.priority ?? '—', m.status === 'completado' ? 'Completado' : (m.status ?? '—'),
+      fmt(m.scheduled_date as string),
+    ] as (string | number | null | undefined)[]),
+    [30, 24, 12, 16, 12, 14, 16]);
+
+  // ── Insumos — Requisiciones ──────────────────────────────────────────────
+  const reqLblXl: Record<string,string> = { pendiente_cotizacion:'Pend. Cotización', cotizacion_recibida:'Cotización Recibida', en_autorizacion:'En Autorización', autorizado:'Autorizado', surtido:'Surtido' };
+  buildSheet('📦 Requisiciones', 'Insumos — Requisiciones — Sistema RCMA',
+    ['Folio', 'Proveedor(es)', 'Departamento', 'Prioridad', 'Estatus', 'Total (s/IVA)', 'Total (c/IVA)', 'Fecha'],
+    (data.requisiciones as Record<string, unknown>[]).map(r => [
+      r.folio ?? '—', ((r.proveedores_nombres as string[] | undefined) ?? []).join(', ') || 'Sin proveedor',
+      r.departamento ?? '—', r.prioridad ?? '—',
+      reqLblXl[r.estatus as string] ?? (r.estatus ?? '—'),
+      num(r.total_cotizado as number), num(r.total_con_iva as number),
+      fmt(r.created_at as string),
+    ] as (string | number | null | undefined)[]),
+    [14, 30, 18, 12, 18, 16, 16, 14], [5, 6]);
+
+  // ── Levantamiento Nacional — Planteles ───────────────────────────────────
+  buildSheet('🏫 Levant. Planteles', 'Levantamiento Nacional — Planteles — Sistema RCMA',
+    ['Colegio', 'Zona', 'ECO', 'Asignación', 'Fase', 'Fecha Inicio', 'Fecha Término'],
+    (data.planteles as Record<string, unknown>[]).map(p => [
+      p.colegio_nombre ?? '—', p.zona ?? '—', p.eco_nombre ?? '—',
+      p.asignacion ?? '—', p.fase ?? '—',
+      fmt(p.fecha_inicio as string), fmt(p.fecha_termino as string),
+    ] as (string | number | null | undefined)[]),
+    [30, 12, 22, 18, 16, 16, 16]);
+
+  // ── Levantamiento Nacional — Pagos ───────────────────────────────────────
+  const plantelNombreById = Object.fromEntries((data.planteles as Record<string, unknown>[]).map(p => [p.id, p.colegio_nombre]));
+  buildSheet('💵 Levant. Pagos', 'Levantamiento Nacional — Pagos — Sistema RCMA',
+    ['Colegio', 'Mes', 'Concepto', 'Monto Programado', 'Monto Pagado', 'Pagado', 'Fecha de Pago'],
+    (data.pagosLev as Record<string, unknown>[]).map(p => [
+      plantelNombreById[p.plantel_id as string] ?? '—', p.mes_etiqueta ?? '—', p.concepto ?? '—',
+      num(p.monto_programado as number), num(p.monto_pagado as number),
+      p.pagado ? 'Sí' : 'No', fmt(p.fecha_pago as string),
+    ] as (string | number | null | undefined)[]),
+    [28, 14, 22, 18, 16, 10, 16], [3, 4]);
+
   // Resumen ejecutivo
   const ws7: Record<string, unknown> = {};
   const resRows = [
@@ -842,6 +1202,11 @@ async function exportMatrizExcel(data: {
     { label: 'Pendientes', count: data.pendientes.length }, { label: 'Anteproyectos', count: data.anteproyectos.length },
     { label: 'Inspecciones', count: data.checklists.length }, { label: 'Solicitudes', count: data.solicitudes.length },
     { label: 'Mínimos Indispensables', count: data.minimos.length },
+    { label: 'Ticket MAS', count: data.ticketsMas.length },
+    { label: 'Mantenimiento', count: data.maintenance.length },
+    { label: 'Requisiciones (Insumos)', count: data.requisiciones.length },
+    { label: 'Planteles Levantamiento Nacional', count: data.planteles.length },
+    { label: 'Pagos Levantamiento Nacional', count: data.pagosLev.length },
   ];
   const totalGeneral = resRows.reduce((a, r) => a + r.count, 0);
   const sRT = { font: { bold: true, sz: 16, name: 'Calibri', color: { rgb: 'FFFFFFFF' } }, fill: { patternType: 'solid', fgColor: { rgb: 'FF0F172A' } }, alignment: { horizontal: 'left', vertical: 'center' } };
@@ -869,7 +1234,12 @@ async function exportMatrizExcel(data: {
   ws7['!merges'] = [{ s: { r: 0, c: 0 }, e: { r: 0, c: 1 } }, { s: { r: 1, c: 0 }, e: { r: 1, c: 1 } }];
   XLSX.utils.book_append_sheet(wb, ws7 as import('xlsx').WorkSheet, '📊 Resumen Ejecutivo');
 
-  wb.SheetNames = ['📊 Resumen Ejecutivo', '📁 Proyectos', '💰 Presupuesto vs Real', '🎫 Tickets TCMM', '⏳ Pendientes', '📐 Anteproyectos', '✅ Inspecciones', '📩 Solicitudes', 'Minimos Indispensables', 'Minimos Detalle'];
+  wb.SheetNames = [
+    '📊 Resumen Ejecutivo', '📁 Proyectos', '💰 Presupuesto vs Real', '🎫 Tickets TCMM', '🎫 Ticket MAS',
+    '⏳ Pendientes', '📐 Anteproyectos', '✅ Inspecciones', '📩 Solicitudes',
+    'Minimos Indispensables', 'Minimos Detalle',
+    '🔧 Mantenimiento', '📦 Requisiciones', '🏫 Levant. Planteles', '💵 Levant. Pagos',
+  ];
   XLSX.writeFile(wb, `Matriz_Sistema_RCMA_${new Date().toISOString().slice(0, 10)}.xlsx`);
 }
 
@@ -916,11 +1286,37 @@ export default function Reports() {
     queryFn: async () => { const { data, error } = await supabase.from('tickets_mas').select('*').order('created_at', { ascending: false }).limit(500); if (error) throw error; return data ?? []; },
   });
 
+  const { data: rawMaintenance = [] } = useQuery({
+    queryKey: ['maintenance-report'],
+    queryFn: () => db.MaintenanceRecord.list('-created_at', 500),
+  });
+  const { data: rawRequisiciones = [] } = useQuery({
+    queryKey: ['insumos_requisiciones-report'],
+    queryFn: async () => { const { data, error } = await supabase.from('insumos_requisiciones').select('*').order('created_at', { ascending: false }).limit(500); if (error) throw error; return data ?? []; },
+  });
+  const { data: rawPlanteles = [] } = useQuery({
+    queryKey: ['lev_planteles-report'],
+    queryFn: async () => { const { data, error } = await supabase.from('levantamiento_planteles').select('*').order('colegio_nombre'); if (error) throw error; return data ?? []; },
+  });
+  const { data: rawPagosLev = [] } = useQuery({
+    queryKey: ['lev_pagos-report'],
+    queryFn: async () => { const { data, error } = await supabase.from('levantamiento_pagos').select('*'); if (error) throw error; return data ?? []; },
+  });
+  const { data: rawEntregablesLev = [] } = useQuery({
+    queryKey: ['lev_entregables-report'],
+    queryFn: async () => { const { data, error } = await supabase.from('levantamiento_entregables').select('*'); if (error) throw error; return data ?? []; },
+  });
+
   const projects    = rawProjects    as unknown as Project[];
   const checklists  = rawChecklists  as unknown[];
   const solicitudes = rawSolicitudes as unknown as Solicitud[];
   const tickets     = rawTickets     as unknown as Ticket[];
   const pendientes  = rawPendientes  as unknown as Pendiente[];
+  const maintenance = rawMaintenance as unknown as MaintenanceRecord[];
+  const requisiciones = rawRequisiciones as unknown as ReqInsumo[];
+  const planteles    = rawPlanteles    as unknown as PlantelLev[];
+  const pagosLev      = rawPagosLev      as unknown as PagoLev[];
+  const ticketsMasArr = rawTicketsMas    as unknown as any[];
 
   const stats = useMemo((): Stats => ({
     total:       projects.length,
@@ -942,13 +1338,27 @@ export default function Reports() {
     minimos:       rawMinimos       as any[],
     anteproyectos: rawAnteproyectos as any[],
     solicitudesAll: rawSolicitudesAll as any[],
+    maintenance, requisiciones, planteles, pagosLev,
+    entregablesLev: rawEntregablesLev as unknown as EntregableLev[],
   }).catch(e => { console.error('Error generando PDF:', e); alert('Error al generar PDF: ' + (e?.message ?? e)); });
 
   const handleExportExcel = () => exportMatrizExcel({
     projects: rawProjects, checklists: rawChecklists, tickets: rawTicketsFull,
     pendientes: rawPendientes, anteproyectos: rawAnteproyectos, solicitudes: rawSolicitudesAll,
     minimos: rawMinimos,
+    ticketsMas: rawTicketsMas, maintenance: rawMaintenance,
+    requisiciones: rawRequisiciones, planteles: rawPlanteles, pagosLev: rawPagosLev,
   }).catch(e => console.error('Error generando Excel:', e));
+
+  const handleExportEstatusColegio = () => exportEstatusColegioPDF({
+    projects, tickets: rawTicketsFull as unknown as Ticket[], ticketsMas: ticketsMasArr,
+    minimos: rawMinimos as any[], planteles,
+  }).catch(e => { console.error('Error generando reporte de estatus por colegio:', e); alert('Error al generar el reporte: ' + (e?.message ?? e)); });
+
+  const handleExportIncidencias = () => exportIncidenciasPDF({
+    projects, pendientes, ticketsMas: ticketsMasArr, minimos: rawMinimos as any[],
+    pagosLev, planteles,
+  }).catch(e => { console.error('Error generando reporte de incidencias:', e); alert('Error al generar el reporte: ' + (e?.message ?? e)); });
 
   return (
     <div className="space-y-6 max-w-7xl mx-auto p-4">
@@ -984,6 +1394,41 @@ export default function Reports() {
             <ClockAlert className="w-8 h-8 text-amber-100" />
           </div>
           <p className="text-xs text-slate-400 mt-1">{tickets.length} tickets TCMM</p>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className={`${cardClass} border-l-4 border-l-orange-500`}>
+          <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Mantenimiento Pendiente</p>
+          <div className="flex items-center justify-between">
+            <h3 className="text-3xl font-black text-slate-900">{maintenance.filter(m => m.status !== 'completado').length}</h3>
+            <Wrench className="w-8 h-8 text-orange-50" />
+          </div>
+          <p className="text-xs text-slate-400 mt-1">{maintenance.length} registrados en total</p>
+        </div>
+        <div className={`${cardClass} border-l-4 border-l-teal-500`}>
+          <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Requisiciones (Insumos)</p>
+          <div className="flex items-center justify-between">
+            <h3 className="text-3xl font-black text-slate-900">{requisiciones.filter(r => r.estatus !== 'surtido').length}</h3>
+            <Package className="w-8 h-8 text-teal-50" />
+          </div>
+          <p className="text-xs text-slate-400 mt-1">{requisiciones.length} registradas en total</p>
+        </div>
+        <div className={`${cardClass} border-l-4 border-l-indigo-500`}>
+          <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Planteles Levantamiento</p>
+          <div className="flex items-center justify-between">
+            <h3 className="text-3xl font-black text-slate-900">{planteles.length}</h3>
+            <Building2 className="w-8 h-8 text-indigo-50" />
+          </div>
+          <p className="text-xs text-slate-400 mt-1">Levantamiento Nacional</p>
+        </div>
+        <div className={`${cardClass} border-l-4 border-l-red-500`}>
+          <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Pagos Pendientes (Lev.)</p>
+          <div className="flex items-center justify-between">
+            <h3 className="text-3xl font-black text-slate-900">{pagosLev.filter(p => !p.pagado).length}</h3>
+            <ClockAlert className="w-8 h-8 text-red-50" />
+          </div>
+          <p className="text-xs text-slate-400 mt-1">{pagosLev.length} pagos en total</p>
         </div>
       </div>
 
@@ -1034,10 +1479,10 @@ export default function Reports() {
             <button className={btnOutline} onClick={handleExportExcel}>
               <FileSpreadsheet className="w-4 h-4 text-green-600" /> Matriz RCMA (.xlsx)
             </button>
-            <button className={btnOutline} disabled title="Próximamente">
+            <button className={btnOutline} onClick={handleExportEstatusColegio}>
               <PieChart className="w-4 h-4 text-blue-600" /> Estatus por Colegio
             </button>
-            <button className={btnOutline} disabled title="Próximamente">
+            <button className={btnOutline} onClick={handleExportIncidencias}>
               <Filter className="w-4 h-4 text-slate-600" /> Reporte de Incidencias
             </button>
           </div>
