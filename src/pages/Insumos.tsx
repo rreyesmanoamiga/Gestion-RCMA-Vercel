@@ -13,6 +13,8 @@ import {
   ShieldCheck, Clock, AlertCircle, ChevronDown, ChevronUp, Upload, FileArchive,
 } from 'lucide-react';
 
+const REQ_PAGE_SIZE = 20;
+
 // ─── Types ────────────────────────────────────────────────────────────────────
 interface Proveedor   { id: string; nombre: string; contacto: string; correo: string; telefono: string; activo: boolean; notas: string; }
 interface Producto    { id: string; codigo: string; nombre: string; descripcion: string; unidad: string; categoria: string; precio_referencia: number; activo: boolean; }
@@ -287,6 +289,7 @@ export default function Insumos() {
 
   const [tab, setTab]         = useState<'requisiciones' | 'productos' | 'proveedores'>('requisiciones');
   const [search, setSearch]   = useState('');
+  const [reqVisibleCount, setReqVisibleCount] = useState(REQ_PAGE_SIZE);
   const [expanded, setExpanded] = useState<string | null>(null);
 
   // ── Modals ────────────────────────────────────────────────────────────────
@@ -546,6 +549,10 @@ export default function Insumos() {
     (r.proveedores_nombres ?? []).some(p => p.toLowerCase().includes(search.toLowerCase()))
   ), [requisiciones, search]);
 
+  const visibleReq    = useMemo(() => filteredReq.slice(0, reqVisibleCount), [filteredReq, reqVisibleCount]);
+  const hasMoreReq     = reqVisibleCount < filteredReq.length;
+  const remainingReq   = filteredReq.length - reqVisibleCount;
+
   // ─────────────────────────────────────────────────────────────────────────
   return (
     <div className="space-y-5">
@@ -598,7 +605,7 @@ export default function Insumos() {
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
           <input className="pl-9 pr-4 py-2 border border-slate-300 rounded-lg text-sm w-full max-w-sm focus:ring-2 focus:ring-slate-900 focus:outline-none"
             placeholder="Buscar por folio o proveedor..."
-            value={search} onChange={e => setSearch(e.target.value)} />
+            value={search} onChange={e => { setSearch(e.target.value); setReqVisibleCount(REQ_PAGE_SIZE); }} />
         </div>
       )}
 
@@ -612,7 +619,7 @@ export default function Insumos() {
               <p className="text-sm font-semibold text-slate-500">Sin requisiciones aún</p>
             </div>
           )}
-          {filteredReq.map(req => {
+          {visibleReq.map(req => {
             const isOpen = expanded === req.id;
             return (
               <div key={req.id} className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
@@ -734,6 +741,21 @@ export default function Insumos() {
               </div>
             );
           })}
+
+          {hasMoreReq && (
+            <div className="flex flex-col items-center gap-2 pt-2">
+              <button
+                onClick={() => setReqVisibleCount(v => v + REQ_PAGE_SIZE)}
+                className="flex items-center gap-2 px-5 py-2.5 bg-white border border-slate-300 rounded-lg text-sm font-medium text-slate-700 hover:bg-slate-50 hover:border-slate-400 transition-colors shadow-sm"
+              >
+                <ChevronDown className="w-4 h-4" />
+                Cargar más ({remainingReq} restante{remainingReq !== 1 ? 's' : ''})
+              </button>
+              <p className="text-xs text-slate-400">
+                Mostrando {visibleReq.length} de {filteredReq.length} requisiciones
+              </p>
+            </div>
+          )}
         </div>
       )}
 

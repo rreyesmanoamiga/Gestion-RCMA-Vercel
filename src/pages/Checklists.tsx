@@ -6,6 +6,9 @@ import {
   X, FileDown, Trash2, ChevronDown, ChevronUp,
   CheckCircle2, XCircle, Clock, MinusCircle,
 } from 'lucide-react';
+
+const INSP_PAGE_SIZE = 21;
+const MIN_PAGE_SIZE  = 20;
 import { toast } from 'sonner';
 import { db } from '@/lib/db';
 import { supabase } from '@/lib/supabaseClient';
@@ -1113,6 +1116,7 @@ export default function Checklists() {
   const [filterCol,  setFilterCol]  = useState('');
   const [filterMat,  setFilterMat]  = useState('');
   const [formOpen,   setFormOpen]   = useState(false);
+  const [inspVisibleCount, setInspVisibleCount] = useState(INSP_PAGE_SIZE);
 
   const { upload: spUpload } = useSharePointUpload();
   const pendingChecklistPhotos = React.useRef<{ colegio:string; territorio:string; items:any[]; photos:(File|null)[] } | null>(null);
@@ -1132,6 +1136,10 @@ export default function Checklists() {
     if (filterMat)  list = list.filter(c => c.material === filterMat);
     return list;
   }, [checklists, search, filterTerr, filterCol, filterMat]);
+
+  const visibleInsp     = useMemo(() => filtered.slice(0, inspVisibleCount), [filtered, inspVisibleCount]);
+  const hasMoreInsp      = inspVisibleCount < filtered.length;
+  const remainingInsp    = filtered.length - inspVisibleCount;
 
   const createMutation = useMutation({
     mutationFn: (d: Record<string, unknown>) => db.Checklist.create(d),
@@ -1163,6 +1171,7 @@ export default function Checklists() {
   const [showForm,    setShowForm]    = useState(false);
   const [expandedId,  setExpandedId]  = useState<string | null>(null);
   const [confirmDel,  setConfirmDel]  = useState<string | null>(null);
+  const [minVisibleCount, setMinVisibleCount] = useState(MIN_PAGE_SIZE);
 
   const [formColegio,   setFormColegio]   = useState('');
   const [formInspector, setFormInspector] = useState('');
@@ -1188,6 +1197,10 @@ export default function Checklists() {
     if (mFilterCol)  list = list.filter(e => e.colegio === mFilterCol);
     return list;
   }, [minimosRaw, mSearch, mFilterTerr, mFilterCol]);
+
+  const visibleMin     = useMemo(() => evaluaciones.slice(0, minVisibleCount), [evaluaciones, minVisibleCount]);
+  const hasMoreMin      = minVisibleCount < evaluaciones.length;
+  const remainingMin    = evaluaciones.length - minVisibleCount;
 
   const mColegiosFiltrados = useMemo(() =>
     mFilterTerr ? COLEGIOS.filter(c => c.territorio === mFilterTerr) : COLEGIOS, [mFilterTerr]);
@@ -1320,17 +1333,17 @@ export default function Checklists() {
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
               <input type="text" placeholder="Buscar inspección..."
                 className="w-full pl-9 pr-3 py-2 border border-slate-300 rounded-md text-sm focus:ring-2 focus:ring-slate-900 focus:outline-none bg-white"
-                value={search} onChange={e => setSearch(e.target.value)} />
+                value={search} onChange={e => { setSearch(e.target.value); setInspVisibleCount(INSP_PAGE_SIZE); }} />
             </div>
-            <select className={selectClass} value={filterTerr} onChange={e => { setFilterTerr(e.target.value); setFilterCol(''); }}>
+            <select className={selectClass} value={filterTerr} onChange={e => { setFilterTerr(e.target.value); setFilterCol(''); setInspVisibleCount(INSP_PAGE_SIZE); }}>
               <option value="">Todos los Territorios</option>
               {TERRITORIOS.map(t => <option key={t} value={t}>{t}</option>)}
             </select>
-            <select className={selectClass} value={filterCol} onChange={e => setFilterCol(e.target.value)}>
+            <select className={selectClass} value={filterCol} onChange={e => { setFilterCol(e.target.value); setInspVisibleCount(INSP_PAGE_SIZE); }}>
               <option value="">Todos los Colegios</option>
               {colegiosFiltrados.map(c => <option key={c.colegio} value={c.colegio}>{c.colegio}</option>)}
             </select>
-            <select className={selectClass} value={filterMat} onChange={e => setFilterMat(e.target.value)}>
+            <select className={selectClass} value={filterMat} onChange={e => { setFilterMat(e.target.value); setInspVisibleCount(INSP_PAGE_SIZE); }}>
               <option value="">Todos los Materiales</option>
               {MATERIALES.map(m => <option key={m} value={m}>{abreviarMaterial(m)}</option>)}
             </select>
@@ -1347,7 +1360,7 @@ export default function Checklists() {
             <EmptyState icon={ClipboardCheck} title="No hay inspecciones" description="Crea tu primera inspección con el botón Nueva Inspección" />
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-              {filtered.map(c => (
+              {visibleInsp.map(c => (
                 <div key={c.id} onClick={() => navigate(`/checklists/${c.id}`)}
                   className="bg-white rounded-xl border border-slate-200 p-4 cursor-pointer hover:shadow-md hover:border-slate-300 transition-all duration-200 flex flex-col gap-3">
                   <div className="flex items-start justify-between gap-2">
@@ -1364,6 +1377,21 @@ export default function Checklists() {
                   </div>
                 </div>
               ))}
+            </div>
+          )}
+
+          {hasMoreInsp && (
+            <div className="flex flex-col items-center gap-2 mt-6">
+              <button
+                onClick={() => setInspVisibleCount(v => v + INSP_PAGE_SIZE)}
+                className="flex items-center gap-2 px-5 py-2.5 bg-white border border-slate-300 rounded-lg text-sm font-medium text-slate-700 hover:bg-slate-50 hover:border-slate-400 transition-colors shadow-sm"
+              >
+                <ChevronDown className="w-4 h-4" />
+                Cargar más ({remainingInsp} restante{remainingInsp !== 1 ? 's' : ''})
+              </button>
+              <p className="text-xs text-slate-400">
+                Mostrando {visibleInsp.length} de {filtered.length} inspecciones
+              </p>
             </div>
           )}
 
@@ -1407,13 +1435,13 @@ export default function Checklists() {
             <div className="relative flex-1 min-w-[180px]">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
               <input className="w-full pl-9 pr-3 py-2 border border-slate-300 rounded-md text-sm focus:ring-2 focus:ring-slate-900 focus:outline-none bg-white"
-                placeholder="Buscar colegio..." value={mSearch} onChange={e => setMSearch(e.target.value)} />
+                placeholder="Buscar colegio..." value={mSearch} onChange={e => { setMSearch(e.target.value); setMinVisibleCount(MIN_PAGE_SIZE); }} />
             </div>
-            <select className={selectClass} value={mFilterTerr} onChange={e => { setMFilterTerr(e.target.value); setMFilterCol(''); }}>
+            <select className={selectClass} value={mFilterTerr} onChange={e => { setMFilterTerr(e.target.value); setMFilterCol(''); setMinVisibleCount(MIN_PAGE_SIZE); }}>
               <option value="">Todos los territorios</option>
               {TERRITORIOS.map(t => <option key={t} value={t}>{t}</option>)}
             </select>
-            <select className={selectClass} value={mFilterCol} onChange={e => setMFilterCol(e.target.value)}>
+            <select className={selectClass} value={mFilterCol} onChange={e => { setMFilterCol(e.target.value); setMinVisibleCount(MIN_PAGE_SIZE); }}>
               <option value="">Todos los colegios</option>
               {mColegiosFiltrados.map(c => <option key={c.colegio} value={c.colegio}>{c.colegio}</option>)}
             </select>
@@ -1430,7 +1458,7 @@ export default function Checklists() {
             </div>
           ) : (
             <div className="space-y-3">
-              {evaluaciones.map(ev => {
+              {visibleMin.map(ev => {
                 const resCfg = RESULTADO_CFG[ev.resultado] ?? RESULTADO_CFG.incompleto;
                 const isExp  = expandedId === ev.id;
                 const cumple = ev.items?.filter(i => i.estado === 'cumple').length ?? 0;
@@ -1545,6 +1573,21 @@ export default function Checklists() {
                   </div>
                 );
               })}
+            </div>
+          )}
+
+          {hasMoreMin && (
+            <div className="flex flex-col items-center gap-2 mt-4">
+              <button
+                onClick={() => setMinVisibleCount(v => v + MIN_PAGE_SIZE)}
+                className="flex items-center gap-2 px-5 py-2.5 bg-white border border-slate-300 rounded-lg text-sm font-medium text-slate-700 hover:bg-slate-50 hover:border-slate-400 transition-colors shadow-sm"
+              >
+                <ChevronDown className="w-4 h-4" />
+                Cargar más ({remainingMin} restante{remainingMin !== 1 ? 's' : ''})
+              </button>
+              <p className="text-xs text-slate-400">
+                Mostrando {visibleMin.length} de {evaluaciones.length} evaluaciones
+              </p>
             </div>
           )}
 

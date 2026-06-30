@@ -10,6 +10,8 @@ import {
   Send, CheckCircle, Eye, X, Printer, ClipboardList,
   ChevronDown, FileCheck, Clock, Trash2, Ban, RefreshCw, AlertCircle, FolderPlus, Loader2
 } from 'lucide-react';
+
+const TMAS_PAGE_SIZE = 20;
 import PageHeader from '@/components/shared/PageHeader';
 
 // ─── Firma del coordinador (base64) ──────────────────────────────────────────
@@ -271,6 +273,7 @@ export default function TicketMAS() {
   const [loading, setLoading]     = useState(false);
   const [viewing, setViewing]     = useState<TicketMAS | null>(null);
   const [filterStatus, setFilter] = useState('todos');
+  const [tmasVisibleCount, setTmasVisibleCount] = useState(TMAS_PAGE_SIZE);
 
   useEffect(() => {
     if (canVerLista) setVista('lista');
@@ -362,6 +365,10 @@ export default function TicketMAS() {
     if (filterStatus === 'todos') return tickets;
     return tickets.filter(t => t.estatus === filterStatus);
   }, [tickets, filterStatus]);
+
+  const ticketsVisibles = useMemo(() => ticketsFiltrados.slice(0, tmasVisibleCount), [ticketsFiltrados, tmasVisibleCount]);
+  const hasMoreTickets    = tmasVisibleCount < ticketsFiltrados.length;
+  const remainingTickets  = ticketsFiltrados.length - tmasVisibleCount;
 
   // ── Enviar ticket ─────────────────────────────────────────────────────────────
   const handleSubmit = async () => {
@@ -1041,7 +1048,7 @@ export default function TicketMAS() {
 
         <div className="flex items-center gap-3 flex-wrap">
           {['todos','pendiente','en_revision','autorizado','cancelado'].map(s => (
-            <button key={s} onClick={() => setFilter(s)}
+            <button key={s} onClick={() => { setFilter(s); setTmasVisibleCount(TMAS_PAGE_SIZE); }}
               className={`px-3 py-1.5 rounded-full text-xs font-semibold border transition ${filterStatus === s ? 'bg-slate-900 text-white border-slate-900' : 'bg-white text-slate-600 border-slate-300 hover:border-slate-500'}`}>
               {s === 'todos' ? 'Todos' : ESTATUS_STYLE[s]?.label}
             </button>
@@ -1072,7 +1079,7 @@ export default function TicketMAS() {
                 </tr>
               </thead>
               <tbody>
-                {ticketsFiltrados.map((t, i) => {
+                {ticketsVisibles.map((t, i) => {
                   const vencido = isVencido(t);
                   return (
                   <tr key={t.id} className={`${i % 2 === 0 ? 'bg-white' : 'bg-slate-50'} ${vencido ? 'border-l-4 border-l-red-400' : ''}`}>
@@ -1136,6 +1143,21 @@ export default function TicketMAS() {
               </tbody>
             </table>
             </div>
+
+            {hasMoreTickets && (
+              <div className="flex flex-col items-center gap-2 py-4 border-t border-slate-100">
+                <button
+                  onClick={() => setTmasVisibleCount(v => v + TMAS_PAGE_SIZE)}
+                  className="flex items-center gap-2 px-5 py-2.5 bg-white border border-slate-300 rounded-lg text-sm font-medium text-slate-700 hover:bg-slate-50 hover:border-slate-400 transition-colors shadow-sm"
+                >
+                  <ChevronDown className="w-4 h-4" />
+                  Cargar más ({remainingTickets} restante{remainingTickets !== 1 ? 's' : ''})
+                </button>
+                <p className="text-xs text-slate-400">
+                  Mostrando {ticketsVisibles.length} de {ticketsFiltrados.length} tickets
+                </p>
+              </div>
+            )}
           </div>
         )}
 
