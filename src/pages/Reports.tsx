@@ -186,12 +186,20 @@ async function loadJsPDF(): Promise<typeof import('jspdf').jsPDF> {
   return w.jspdf!.jsPDF;
 }
 
-function pdfHeader(doc: Doc, W: number, title: string, subtitle: string) {
+async function pdfHeader(doc: Doc, W: number, title: string, subtitle: string) {
   doc.setFillColor(15, 23, 42); doc.rect(0, 0, W, 28, 'F');
   doc.setFontSize(15); doc.setFont('helvetica', 'bold'); doc.setTextColor(255, 255, 255);
   doc.text(title, 20, 13);
   doc.setFontSize(8.5); doc.setFont('helvetica', 'normal'); doc.setTextColor(180, 180, 200);
   doc.text(subtitle, 20, 21);
+  try {
+    const logoImg = await new Promise<string>((res, rej) => {
+      const img = new Image(); img.crossOrigin = 'anonymous';
+      img.onload = () => { const c = document.createElement('canvas'); c.width = img.width; c.height = img.height; c.getContext('2d')!.drawImage(img, 0, 0); res(c.toDataURL('image/png')); };
+      img.onerror = rej; img.src = '/logo.png';
+    });
+    doc.addImage(logoImg, 'PNG', W - 32, 2, 22, 22);
+  } catch { /* sin logo */ }
 }
 
 function pdfFooter(doc: Doc, label: string) {
@@ -214,7 +222,7 @@ async function exportEstatusColegioPDF({ projects, tickets, ticketsMas, minimos,
   const JsPDF = await loadJsPDF();
   const doc = new JsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
   const W = 297;
-  pdfHeader(doc, W, 'Estatus por Colegio', 'Sistema RCMA  ·  Generado el ' + new Date().toLocaleDateString('es-MX', { year: 'numeric', month: 'long', day: 'numeric' }));
+  await pdfHeader(doc, W, 'Estatus por Colegio', 'Sistema RCMA  ·  Generado el ' + new Date().toLocaleDateString('es-MX', { year: 'numeric', month: 'long', day: 'numeric' }));
   let y = 38;
 
   const colegios = Array.from(new Set([
@@ -223,6 +231,11 @@ async function exportEstatusColegioPDF({ projects, tickets, ticketsMas, minimos,
     ...ticketsMas.map((t: any) => t.colegio).filter(Boolean) as string[],
     ...planteles.map(p => p.colegio_nombre).filter(Boolean) as string[],
   ])).sort();
+
+  const FASE_LABELS: Record<string, string> = {
+    COMUNICADO: 'Comunicado', FASE1: 'Fase 1 – Campo', FASE2: 'Fase 2 – Gab.',
+    FASE3: 'Fase 3 – Rev.', FASE4: 'Fase 4 – ECO', FASE5: 'Fase 5 – Cierre',
+  };
 
   const rows = colegios.map(col => {
     const pColegio   = projects.filter(p => p.colegio === col);
@@ -241,19 +254,19 @@ async function exportEstatusColegioPDF({ projects, tickets, ticketsMas, minimos,
       fmtMXN(presupuesto),
       String(tTcmm), String(tMasPend),
       pctMin != null ? pctMin + '%' : '—',
-      plantel?.fase ?? '—',
+      plantel ? (FASE_LABELS[plantel.fase ?? ''] ?? plantel.fase ?? '—') : '—',
     ];
   });
 
   y = drawTable(doc, y, W, [
-    { label: 'Colegio',                x: 20  },
-    { label: 'Proy. Activos',          x: 120, align: 'center' },
-    { label: 'Proy. Completados',      x: 148, align: 'center' },
-    { label: 'Presupuesto',            x: 184, align: 'right'  },
-    { label: 'Tickets TCMM',           x: 218, align: 'center' },
-    { label: 'MAS Pendientes',         x: 242, align: 'center' },
-    { label: '% Mínimos OK',           x: 264, align: 'center' },
-    { label: 'Fase Levantamiento',     x: 278 },
+    { label: 'Colegio',            x: 20  },
+    { label: 'Activos',            x: 88,  align: 'center' },
+    { label: 'Completados',        x: 110, align: 'center' },
+    { label: 'Presupuesto',        x: 142, align: 'right'  },
+    { label: 'Tickets TCMM',       x: 172, align: 'center' },
+    { label: 'MAS Pend.',          x: 198, align: 'center' },
+    { label: '% Mínimos OK',       x: 224, align: 'center' },
+    { label: 'Fase Levantamiento', x: 248 },
   ], rows, 200, 210);
 
   pdfFooter(doc, 'Sistema RCMA  ·  Colegios Mano Amiga  ·  Documento confidencial');
@@ -268,7 +281,7 @@ async function exportIncidenciasPDF({ projects, pendientes, ticketsMas, minimos,
   const JsPDF = await loadJsPDF();
   const doc = new JsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
   const W = 210;
-  pdfHeader(doc, W, 'Reporte de Incidencias', 'Sistema RCMA  ·  Generado el ' + new Date().toLocaleDateString('es-MX', { year: 'numeric', month: 'long', day: 'numeric' }));
+  await pdfHeader(doc, W, 'Reporte de Incidencias', 'Sistema RCMA  ·  Generado el ' + new Date().toLocaleDateString('es-MX', { year: 'numeric', month: 'long', day: 'numeric' }));
   let y = 38;
 
   const sectionTitle = (title: string, color: [number,number,number]) => {
