@@ -5,9 +5,11 @@ import { supabase } from '@/lib/supabaseClient';
 import { Link } from 'react-router-dom';
 import {
   DollarSign, TrendingUp, TrendingDown, Minus,
-  ChevronRight, Filter, BarChart3
+  ChevronRight, Filter, BarChart3, ChevronDown
 } from 'lucide-react';
 import PageHeader from '@/components/shared/PageHeader';
+
+const PAGE_SIZE = 20;
 
 interface Project {
   id: string; name?: string; status?: string; budget?: number;
@@ -23,6 +25,7 @@ const selectClass = "h-10 px-3 py-2 bg-white border border-slate-300 rounded-md 
 export default function Presupuestos() {
   const [filtroTerritorio, setFiltroTerritorio] = useState('all');
   const [filtroEstado, setFiltroEstado]         = useState('all');
+  const [visibleCount, setVisibleCount]         = useState(PAGE_SIZE);
 
   const { data: raw = [], isLoading } = useQuery({
     queryKey: ['projects'],
@@ -53,6 +56,10 @@ export default function Presupuestos() {
     if (filtroEstado === 'ahorro'    && (p.costo_real == null || p.costo_real >= (p.budget ?? 0))) return false;
     return true;
   }), [projects, filtroTerritorio, filtroEstado]);
+
+  const visible   = useMemo(() => filtered.slice(0, visibleCount), [filtered, visibleCount]);
+  const hasMore   = visibleCount < filtered.length;
+  const remaining = filtered.length - visibleCount;
 
   const territorios = [...new Set(projects.map(p => p.territorio).filter(Boolean))] as string[];
 
@@ -130,11 +137,11 @@ export default function Presupuestos() {
       {/* Filtros */}
       <div className="flex gap-3 flex-wrap items-center">
         <Filter className="w-4 h-4 text-slate-400" />
-        <select className={selectClass} value={filtroTerritorio} onChange={e => setFiltroTerritorio(e.target.value)}>
+        <select className={selectClass} value={filtroTerritorio} onChange={e => { setFiltroTerritorio(e.target.value); setVisibleCount(PAGE_SIZE); }}>
           <option value="all">Todos los territorios</option>
           {territorios.map(t => <option key={t} value={t}>{t}</option>)}
         </select>
-        <select className={selectClass} value={filtroEstado} onChange={e => setFiltroEstado(e.target.value)}>
+        <select className={selectClass} value={filtroEstado} onChange={e => { setFiltroEstado(e.target.value); setVisibleCount(PAGE_SIZE); }}>
           <option value="all">Todos</option>
           <option value="con_real">Con costo real</option>
           <option value="sin_real">Sin costo real</option>
@@ -163,7 +170,7 @@ export default function Presupuestos() {
                   No hay proyectos con presupuesto registrado.
                 </td></tr>
               )}
-              {filtered.map(p => {
+              {visible.map(p => {
                 const tieneReal   = p.costo_real != null && p.costo_real > 0;
                 const diff        = tieneReal ? p.costo_real! - p.budget! : null;
                 const sobrecosto  = diff !== null && diff > 0;
@@ -225,6 +232,21 @@ export default function Presupuestos() {
           </table>
         </div>
       </div>
+
+      {hasMore && (
+        <div className="flex flex-col items-center gap-2">
+          <button
+            onClick={() => setVisibleCount(v => v + PAGE_SIZE)}
+            className="flex items-center gap-2 px-5 py-2.5 bg-white border border-slate-300 rounded-lg text-sm font-medium text-slate-700 hover:bg-slate-50 hover:border-slate-400 transition-colors shadow-sm"
+          >
+            <ChevronDown className="w-4 h-4" />
+            Cargar más ({remaining} restante{remaining !== 1 ? 's' : ''})
+          </button>
+          <p className="text-xs text-slate-400">
+            Mostrando {visible.length} de {filtered.length} proyectos
+          </p>
+        </div>
+      )}
     </div>
   );
 }

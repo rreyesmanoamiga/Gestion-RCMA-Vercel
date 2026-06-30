@@ -43,6 +43,8 @@ import {
 } from 'lucide-react';
 import PageHeader from '@/components/shared/PageHeader';
 
+const REPORTES_PAGE_SIZE = 20;
+
 // ─── Types ────────────────────────────────────────────────────────────────────
 interface Plantel {
   id: string;
@@ -1875,6 +1877,7 @@ function TabReportes({ reportes, planteles, qc }: { reportes: Reporte[]; plantel
   const [file, setFile]           = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
   const [deleteReporte, setDeleteReporte] = useState<Reporte | null>(null);
+  const [visibleCount, setVisibleCount]   = useState(REPORTES_PAGE_SIZE);
   const set = (k: string, v: string) => setForm(f => ({ ...f, [k]: v }));
 
   const carpetaDesde = (fecha: string) =>
@@ -1968,6 +1971,10 @@ function TabReportes({ reportes, planteles, qc }: { reportes: Reporte[]; plantel
   });
 
   const carpetaPreview = carpetaDesde(form.fecha_reporte);
+
+  const visibleReportes = useMemo(() => reportes.slice(0, visibleCount), [reportes, visibleCount]);
+  const hasMoreReportes  = visibleCount < reportes.length;
+  const remainingReportes = reportes.length - visibleCount;
 
   return (
     <div className="space-y-4">
@@ -2080,7 +2087,7 @@ function TabReportes({ reportes, planteles, qc }: { reportes: Reporte[]; plantel
             {reportes.length === 0 && (
               <tr><td colSpan={5} className="text-center py-8 text-slate-400">Sin reportes subidos</td></tr>
             )}
-            {reportes.map(r => {
+            {visibleReportes.map(r => {
               const plantel = planteles.find(p => p.id === r.plantel_id);
               return (
                 <tr key={r.id} className="hover:bg-slate-50">
@@ -2125,6 +2132,21 @@ function TabReportes({ reportes, planteles, qc }: { reportes: Reporte[]; plantel
           </tbody>
         </table>
       </div>
+
+      {hasMoreReportes && (
+        <div className="flex flex-col items-center gap-2 mt-4">
+          <button
+            onClick={() => setVisibleCount(v => v + REPORTES_PAGE_SIZE)}
+            className="flex items-center gap-2 px-5 py-2.5 bg-white border border-slate-300 rounded-lg text-sm font-medium text-slate-700 hover:bg-slate-50 hover:border-slate-400 transition-colors shadow-sm"
+          >
+            <ChevronDown className="w-4 h-4" />
+            Cargar más ({remainingReportes} restante{remainingReportes !== 1 ? 's' : ''})
+          </button>
+          <p className="text-xs text-slate-400">
+            Mostrando {visibleReportes.length} de {reportes.length} reportes
+          </p>
+        </div>
+      )}
     </div>
   );
 }
