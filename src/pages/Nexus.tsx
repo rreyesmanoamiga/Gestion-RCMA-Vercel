@@ -228,7 +228,7 @@ export default function Nexus() {
   });
 
   // ── Form Pendiente ────────────────────────────────────────────────────────
-  const [pendForm, setPendForm] = useState({ titulo:'',descripcion:'',tipo:'personal',asignado_a:'',asignado_nombre:'',prioridad:'normal',fecha_limite:'',estatus:'pendiente',proyecto_id:'',proyecto_nombre:'',ticket_id:'',ticket_folio:'',colegio:'',territorio:'' });
+  const [pendForm, setPendForm] = useState({ titulo:'',descripcion:'',tipo:'personal',asignado_a:'',asignado_nombre:'',asignado_cc:'',asignado_cc_nombre:'',prioridad:'normal',fecha_limite:'',estatus:'pendiente',proyecto_id:'',proyecto_nombre:'',ticket_id:'',ticket_folio:'',colegio:'',territorio:'' });
   const [sinProyecto, setSinProyecto] = useState(false);
 
   // Usuarios: colegio seleccionado + FMA siempre disponible
@@ -357,7 +357,7 @@ export default function Nexus() {
           )}
 
           {/* Proyecto / Ticket */}
-          {(p.proyecto_nombre||p.ticket_mas_folio) && (
+          {(p.proyecto_nombre||p.ticket_folio) && (
             <div className="flex flex-wrap gap-1.5 mb-2">
               {p.proyecto_nombre && <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-blue-700 bg-blue-50 border border-blue-200 px-2 py-0.5 rounded-full"><ClipboardList className="w-3 h-3"/>{p.proyecto_nombre}</span>}
               {p.ticket_folio && <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-purple-700 bg-purple-50 border border-purple-200 px-2 py-0.5 rounded-full"><Link2 className="w-3 h-3"/>{p.ticket_folio}</span>}
