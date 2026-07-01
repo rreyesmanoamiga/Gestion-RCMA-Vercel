@@ -139,6 +139,9 @@ function TicketForm({
 
   if (!open) return null;
 
+  const isTMAS = formData.folio_num.startsWith('TMAS-');
+  const roClass = "w-full px-3 py-2 border border-slate-200 rounded-md text-sm bg-slate-50 text-slate-600 cursor-default select-none";
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     const folio = formData.folio_num.trim() || null;
@@ -180,65 +183,94 @@ function TicketForm({
           {/* Folio */}
           <div>
             <label className={labelClass}>Folio de Ticket</label>
-            <input type="text" className="w-full px-3 py-2 border border-slate-300 rounded-md text-sm focus:ring-2 focus:ring-slate-900 focus:outline-none bg-white text-slate-900"
-              value={formData.folio_num}
-              onChange={e => setFormData(p => ({ ...p, folio_num: e.target.value }))}
-              placeholder="Ej. TCMM-2026-001" />
+            <input type="text" className={roClass} readOnly value={formData.folio_num} />
           </div>
 
           {/* Tipo + Estatus */}
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className={labelClass}>Tipo de Proyecto *</label>
-              <select required className={inputClass} value={formData.tipo_proyecto}
-                onChange={e => setFormData(p => ({ ...p, tipo_proyecto: e.target.value }))}>
-                <option value="">Seleccionar...</option>
-                {TIPOS_PROYECTO.map(t => <option key={t} value={t}>{t}</option>)}
-              </select>
+              {isTMAS ? (
+                <select required className={inputClass} value={formData.tipo_proyecto}
+                  onChange={e => setFormData(p => ({ ...p, tipo_proyecto: e.target.value }))}>
+                  <option value="">Seleccionar...</option>
+                  {TIPOS_PROYECTO.map(t => <option key={t} value={t}>{t}</option>)}
+                </select>
+              ) : (
+                <select required className={inputClass} value={formData.tipo_proyecto}
+                  onChange={e => setFormData(p => ({ ...p, tipo_proyecto: e.target.value }))}>
+                  <option value="">Seleccionar...</option>
+                  {TIPOS_PROYECTO.map(t => <option key={t} value={t}>{t}</option>)}
+                </select>
+              )}
             </div>
             <div>
               <label className={labelClass}>Estatus *</label>
-              <select className={inputClass} value={formData.estatus}
-                onChange={e => setFormData(p => ({ ...p, estatus: e.target.value }))}>
-                <option value="aprobado">Aprobado</option>
-                <option value="cancelado">Cancelado</option>
-              </select>
+              {isTMAS ? (
+                <input type="text" className={roClass} readOnly value={formData.estatus === 'aprobado' ? 'Aprobado' : formData.estatus === 'cancelado' ? 'Cancelado' : formData.estatus} />
+              ) : (
+                <select className={inputClass} value={formData.estatus}
+                  onChange={e => setFormData(p => ({ ...p, estatus: e.target.value }))}>
+                  <option value="aprobado">Aprobado</option>
+                  <option value="cancelado">Cancelado</option>
+                </select>
+              )}
             </div>
           </div>
 
           {/* Territorio + Colegio */}
-          <ColegioSelector
-            territorio={formData.territorio}
-            colegio={formData.colegio}
-            onTerritorioChange={val => setFormData(p => ({ ...p, territorio: val, colegio: '', eco: '' }))}
-            onColegioChange={val => {
-              const c = COLEGIOS.find(c => c.colegio === val);
-              setFormData(p => ({ ...p, colegio: val, eco: c?.eco ?? '' }));
-            }}
-          />
+          {isTMAS ? (
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className={labelClass}>Territorio</label>
+                <input type="text" className={roClass} readOnly value={formData.territorio} />
+              </div>
+              <div>
+                <label className={labelClass}>Colegio</label>
+                <input type="text" className={roClass} readOnly value={formData.colegio} />
+              </div>
+            </div>
+          ) : (
+            <ColegioSelector
+              territorio={formData.territorio}
+              colegio={formData.colegio}
+              onTerritorioChange={val => setFormData(p => ({ ...p, territorio: val, colegio: '', eco: '' }))}
+              onColegioChange={val => {
+                const c = COLEGIOS.find(c => c.colegio === val);
+                setFormData(p => ({ ...p, colegio: val, eco: c?.eco ?? '' }));
+              }}
+            />
+          )}
 
           {/* ECO */}
           <div>
             <label className={labelClass}>ECO (Automático)</label>
-            <input type="text" readOnly className="w-full px-3 py-2 border border-slate-200 rounded-md text-sm bg-slate-50 font-semibold text-slate-600 cursor-default"
-              value={formData.eco} placeholder="Se asigna según el colegio" />
+            <input type="text" readOnly className={roClass} value={formData.eco} placeholder="Se asigna según el colegio" />
           </div>
 
           {/* Proveedor + Asignación */}
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className={labelClass}>Nombre del Proveedor</label>
-              <input type="text" className={inputClass} value={formData.nombre_proveedor}
-                onChange={e => setFormData(p => ({ ...p, nombre_proveedor: e.target.value }))}
-                placeholder="Proveedor o empresa" />
+              {isTMAS ? (
+                <input type="text" className={roClass} readOnly value={formData.nombre_proveedor} />
+              ) : (
+                <input type="text" className={inputClass} value={formData.nombre_proveedor}
+                  onChange={e => setFormData(p => ({ ...p, nombre_proveedor: e.target.value }))}
+                  placeholder="Proveedor o empresa" />
+              )}
             </div>
             <div>
               <label className={labelClass}>Asignación</label>
-              <select className={inputClass} value={formData.asignacion}
-                onChange={e => setFormData(p => ({ ...p, asignacion: e.target.value }))}>
-                <option value="">Seleccionar...</option>
-                {ASIGNACIONES.map(a => <option key={a} value={a}>{a}</option>)}
-              </select>
+              {isTMAS ? (
+                <input type="text" className={roClass} readOnly value={formData.asignacion || '—'} />
+              ) : (
+                <select className={inputClass} value={formData.asignacion}
+                  onChange={e => setFormData(p => ({ ...p, asignacion: e.target.value }))}>
+                  <option value="">Seleccionar...</option>
+                  {ASIGNACIONES.map(a => <option key={a} value={a}>{a}</option>)}
+                </select>
+              )}
             </div>
           </div>
 
@@ -246,15 +278,23 @@ function TicketForm({
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className={labelClass}>Fecha</label>
-              <input type="date" className={inputClass} value={formData.fecha}
-                onChange={e => setFormData(p => ({ ...p, fecha: e.target.value }))} />
+              {isTMAS ? (
+                <input type="text" className={roClass} readOnly value={formData.fecha} />
+              ) : (
+                <input type="date" className={inputClass} value={formData.fecha}
+                  onChange={e => setFormData(p => ({ ...p, fecha: e.target.value }))} />
+              )}
             </div>
             <div>
               <label className={labelClass}>Costo / Presupuesto (MXN)</label>
-              <input type="text" className={inputClass}
-                value={formatMXN(formData.presupuesto)}
-                onChange={e => setFormData(p => ({ ...p, presupuesto: parseMXN(e.target.value) }))}
-                placeholder="$0.00" />
+              {isTMAS ? (
+                <input type="text" className={roClass} readOnly value={formatMXN(formData.presupuesto)} />
+              ) : (
+                <input type="text" className={inputClass}
+                  value={formatMXN(formData.presupuesto)}
+                  onChange={e => setFormData(p => ({ ...p, presupuesto: parseMXN(e.target.value) }))}
+                  placeholder="$0.00" />
+              )}
             </div>
           </div>
 
@@ -262,11 +302,15 @@ function TicketForm({
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className={labelClass}>¿Cuenta con Ticket Físico?</label>
-              <select className={inputClass} value={formData.ticket_fisico}
-                onChange={e => setFormData(p => ({ ...p, ticket_fisico: e.target.value }))}>
-                <option value="si">Sí</option>
-                <option value="no">No</option>
-              </select>
+              {isTMAS ? (
+                <input type="text" className={roClass} readOnly value="Sí" />
+              ) : (
+                <select className={inputClass} value={formData.ticket_fisico}
+                  onChange={e => setFormData(p => ({ ...p, ticket_fisico: e.target.value }))}>
+                  <option value="si">Sí</option>
+                  <option value="no">No</option>
+                </select>
+              )}
             </div>
             <div>
               <label className={labelClass}>Plan de Financiamiento</label>
@@ -277,6 +321,12 @@ function TicketForm({
               </select>
             </div>
           </div>
+
+          {isTMAS && (
+            <p className="text-[11px] text-slate-400 italic">
+              Los campos en gris se sincronizan automáticamente desde el Ticket MAS. Solo puedes editar Tipo de Proyecto y Plan de Financiamiento.
+            </p>
+          )}
 
 
           {/* Notas */}
