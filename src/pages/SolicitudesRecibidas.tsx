@@ -1,11 +1,11 @@
 import React, { useState, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabaseClient';
-import { useSharePointUpload } from '@/hooks/useSharePointUpload';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
-import { ChevronDown, CheckCircle, Eye, X, Building2, User, Mail, Calendar, DollarSign, Printer, Trash2 } from 'lucide-react';
+import { ChevronDown, CheckCircle, Eye, X, Building2, User, Mail, Calendar, DollarSign, Printer, Trash2, Ban } from 'lucide-react';
+import { useSharePointUpload, renameCarpetaSharePoint } from '@/hooks/useSharePointUpload';
 import PageHeader from '@/components/shared/PageHeader';
 
 const CAR_CORREOS: Record<string, string> = {
@@ -130,6 +130,7 @@ export default function SolicitudesRecibidas() {
   const [visibleCount, setVisibleCount]   = useState(PAGE_SIZE);
   const [viewing, setViewing]             = useState<Solicitud | null>(null);
   const [deletingId, setDeletingId]       = useState<string | null>(null);
+  const [cancelandoId, setCancelandoId]   = useState<Solicitud | null>(null);
   const [cotModal, setCotModal]           = useState<any>(null);
   const [cotFiles, setCotFiles]           = useState<File[]>([]);
   const { upload: spUpload, uploading: spUploading } = useSharePointUpload();
@@ -234,6 +235,36 @@ export default function SolicitudesRecibidas() {
     onError: () => toast.error('Error al eliminar la solicitud'),
   });
 
+  const cancelarMutation = useMutation({
+    mutationFn: async (sol: Solicitud) => {
+      // 1. Actualizar estatus en BD
+      const { error } = await supabase
+        .from('solicitudes')
+        .update({ estatus: 'cancelada' })
+        .eq('id', sol.id);
+      if (error) throw error;
+
+      // 2. Intentar renombrar carpeta de cotizaciones en OneDrive
+      if (sol.nombre_centro && sol.nombre_proyecto) {
+        const referencia    = sol.nombre_proyecto.replace(/[^a-zA-Z0-9]/g, '_').slice(0, 40);
+        const carpeta       = `Cotizaciones/${sol.nombre_centro}/${referencia}`;
+        const nuevoNombre   = `${referencia} — CANCELADA`;
+        const renombrado    = await renameCarpetaSharePoint(carpeta, nuevoNombre);
+        if (!renombrado) {
+          // No bloqueante: aviso informativo
+          toast.warning('Solicitud cancelada, pero no se pudo renombrar la carpeta en OneDrive (puede que no exista o sin cotizaciones previas).');
+        }
+      }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['solicitudes'] });
+      setCancelandoId(null);
+      setViewing(null);
+      toast.success('Solicitud cancelada correctamente');
+    },
+    onError: () => toast.error('Error al cancelar la solicitud'),
+  });
+
   const filtered = useMemo(() =>
     solicitudes.filter(s => filterEstatus === 'all' || s.estatus === filterEstatus),
     [solicitudes, filterEstatus]
@@ -244,9 +275,10 @@ export default function SolicitudesRecibidas() {
   const remaining = filtered.length - visibleCount;
 
   const kpis = useMemo(() => ({
-    total:    solicitudes.length,
-    nuevas:   solicitudes.filter(s => s.estatus === 'pendiente').length,
-    recibidas: solicitudes.filter(s => s.estatus === 'recibida').length,
+    total:      solicitudes.length,
+    nuevas:     solicitudes.filter(s => s.estatus === 'pendiente').length,
+    recibidas:  solicitudes.filter(s => s.estatus === 'recibida').length,
+    canceladas: solicitudes.filter(s => s.estatus === 'cancelada').length,
   }), [solicitudes]);
 
   if (isLoading) return (
@@ -264,11 +296,12 @@ export default function SolicitudesRecibidas() {
       />
 
       {/* KPIs */}
-      <div className="grid grid-cols-3 gap-4">
+      <div className="grid grid-cols-4 gap-4">
         {[
-          { label: 'Total Solicitudes', value: kpis.total,     color: 'text-slate-900'   },
-          { label: 'Pendientes',        value: kpis.nuevas,    color: 'text-amber-600'   },
-          { label: 'Recibidas',         value: kpis.recibidas, color: 'text-emerald-600' },
+          { label: 'Total Solicitudes', value: kpis.total,      color: 'text-slate-900'   },
+          { label: 'Pendientes',        value: kpis.nuevas,     color: 'text-amber-600'   },
+          { label: 'Recibidas',         value: kpis.recibidas,  color: 'text-emerald-600' },
+          { label: 'Canceladas',        value: kpis.canceladas, color: 'text-red-600'     },
         ].map(({ label, value, color }) => (
           <div key={label} className="bg-white rounded-xl border border-slate-200 p-4 shadow-sm">
             <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">{label}</p>
@@ -284,6 +317,7 @@ export default function SolicitudesRecibidas() {
           <option value="all">Todas</option>
           <option value="pendiente">Pendientes</option>
           <option value="recibida">Recibidas</option>
+          <option value="cancelada">Canceladas</option>
         </select>
         {filtered.length > 0 && (
           <span className="h-10 flex items-center text-sm text-slate-500">
@@ -302,17 +336,17 @@ export default function SolicitudesRecibidas() {
         <div className="space-y-3">
           {visible.map(s => (
             <div key={s.id} className={`bg-white rounded-xl border shadow-sm hover:shadow-md transition-all duration-200 p-5 ${
-              s.estatus === 'pendiente' ? 'border-amber-200' : 'border-slate-200'
+              s.estatus === 'pendiente' ? 'border-amber-200' : s.estatus === 'cancelada' ? 'border-red-200 opacity-75' : 'border-slate-200'
             }`}>
               <div className="flex flex-col md:flex-row md:items-start justify-between gap-4">
                 <div className="flex-1 space-y-2">
                   <div className="flex flex-wrap items-center gap-2">
                     <span className={`text-xs font-bold px-2.5 py-0.5 rounded-full border ${
-                      s.estatus === 'pendiente'
-                        ? 'bg-amber-50 text-amber-700 border-amber-200'
-                        : 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                      s.estatus === 'pendiente'  ? 'bg-amber-50 text-amber-700 border-amber-200' :
+                      s.estatus === 'cancelada'  ? 'bg-red-50 text-red-700 border-red-200' :
+                                                   'bg-emerald-50 text-emerald-700 border-emerald-200'
                     }`}>
-                      {s.estatus === 'pendiente' ? 'Pendiente' : 'Recibida'}
+                      {s.estatus === 'pendiente' ? 'Pendiente' : s.estatus === 'cancelada' ? 'Cancelada' : 'Recibida'}
                     </span>
                     {s.tipo_iniciativa && (
                       <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 uppercase">
@@ -360,6 +394,12 @@ export default function SolicitudesRecibidas() {
                       disabled={recibirMutation.isPending}
                       className="flex items-center gap-1.5 px-3 py-2 bg-emerald-600 text-white rounded-md text-sm font-bold hover:bg-emerald-700 transition-colors disabled:opacity-50">
                       <CheckCircle className="w-4 h-4" /> Recibida
+                    </button>
+                  )}
+                  {s.estatus !== 'cancelada' && (
+                    <button onClick={() => setCancelandoId(s)}
+                      className="flex items-center gap-1.5 px-3 py-2 border border-red-200 text-red-600 rounded-md text-sm font-medium hover:bg-red-50 transition-colors">
+                      <Ban className="w-4 h-4" /> Cancelar
                     </button>
                   )}
                   <button onClick={() => setDeletingId(s.id)}
@@ -482,6 +522,12 @@ export default function SolicitudesRecibidas() {
                   className="px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-200 rounded-md transition-colors">
                   Cerrar
                 </button>
+                {viewing.estatus !== 'cancelada' && (
+                  <button onClick={() => { setCancelandoId(viewing); setViewing(null); }}
+                    className="flex items-center gap-2 px-4 py-2 border border-red-300 text-red-600 rounded-md text-sm font-medium hover:bg-red-50 transition-colors">
+                    <Ban className="w-4 h-4" /> Cancelar solicitud
+                  </button>
+                )}
                 {viewing.estatus === 'pendiente' && (
                   <button onClick={() => recibirMutation.mutate(viewing.id)}
                     disabled={recibirMutation.isPending}
@@ -517,6 +563,38 @@ export default function SolicitudesRecibidas() {
         </div>
       )}
     </div>
+
+      {/* Modal confirmar cancelación */}
+      {cancelandoId && (
+        <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/50 p-4">
+          <div className="bg-white rounded-lg shadow-xl max-w-sm w-full p-6">
+            <div className="flex items-center gap-3 mb-3">
+              <div className="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center">
+                <Ban className="w-5 h-5 text-red-600" />
+              </div>
+              <h2 className="text-lg font-bold text-slate-900">¿Cancelar solicitud?</h2>
+            </div>
+            <p className="text-sm text-slate-600 mb-1">
+              <span className="font-semibold">{cancelandoId.nombre_proyecto}</span>
+            </p>
+            <p className="text-sm text-slate-500">
+              La solicitud quedará como <span className="font-bold text-red-600">Cancelada</span> pero seguirá visible en el registro. Si había cotizaciones en OneDrive, la carpeta se renombrará con el sufijo <span className="font-mono text-xs bg-slate-100 px-1 rounded">— CANCELADA</span>.
+            </p>
+            <div className="flex justify-end gap-3 mt-6">
+              <button onClick={() => setCancelandoId(null)}
+                className="px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100 rounded-md transition-colors">
+                Volver
+              </button>
+              <button onClick={() => cancelarMutation.mutate(cancelandoId)}
+                disabled={cancelarMutation.isPending}
+                className="px-4 py-2 text-sm font-bold bg-red-600 text-white hover:bg-red-700 rounded-md disabled:opacity-50 transition-colors flex items-center gap-2">
+                <Ban className="w-4 h-4" />
+                {cancelarMutation.isPending ? 'Cancelando...' : 'Sí, cancelar'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
     {/* ── Modal Cotizaciones ─────────────────────────────────────────────── */}
     {cotModal && (

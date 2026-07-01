@@ -114,6 +114,26 @@ async function uploadChunked(token: string, carpeta: string, fileName: string, f
   return { webUrl, shareUrl, itemId };
 }
 
+// Renombra una carpeta en OneDrive (para marcarla como CANCELADA)
+export async function renameCarpetaSharePoint(carpeta: string, nuevoNombre: string): Promise<boolean> {
+  try {
+    const token    = await getToken();
+    const segments = carpeta.split('/').map(p => encodeURIComponent(p)).join('/');
+    const path     = `Sistema%20RCMA%20Doc/${segments}`;
+    const res = await fetch(
+      `https://graph.microsoft.com/v1.0/users/${USER}/drive/root:/${path}`,
+      {
+        method: 'PATCH',
+        headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: nuevoNombre }),
+      }
+    );
+    return res.ok;
+  } catch {
+    return false;
+  }
+}
+
 export function useSharePointUpload() {
   const [uploading, setUploading] = useState(false);
 
