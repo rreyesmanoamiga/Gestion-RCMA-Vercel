@@ -795,6 +795,32 @@ export default function TicketMAS() {
         } catch { /* no bloqueante */ }
       }
 
+      // Si el TMAS estaba autorizado: cancelar Ticket Registrado y eliminar Proyecto vinculado
+      if (cancelModal.estatus === 'autorizado' && cancelModal.folio) {
+        // 1. Obtener el ticket registrado por folio para saber su proyecto_id
+        const { data: ticketReg } = await supabase
+          .from('tickets')
+          .select('id, proyecto_id')
+          .eq('folio', cancelModal.folio)
+          .maybeSingle();
+
+        if (ticketReg) {
+          // 2. Cancelar el ticket registrado
+          await supabase.from('tickets')
+            .update({ estatus: 'cancelado' })
+            .eq('id', ticketReg.id);
+
+          // 3. Eliminar el proyecto vinculado si existe
+          if (ticketReg.proyecto_id) {
+            await supabase.from('projects').delete().eq('id', ticketReg.proyecto_id);
+          }
+        }
+
+        // Refrescar la lista de tickets registrados
+        qc.invalidateQueries({ queryKey: ['tickets'] });
+        qc.invalidateQueries({ queryKey: ['projects'] });
+      }
+
       // Actualizar caché inmediatamente para que el badge cambie al instante
       qc.setQueryData(['tickets_mas'], (old: TicketMAS[] | undefined) =>
         (old ?? []).map(t =>

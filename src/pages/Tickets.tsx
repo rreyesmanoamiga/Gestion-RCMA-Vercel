@@ -279,55 +279,6 @@ function TicketForm({
           </div>
 
 
-          {/* Nombre del Proyecto — siempre obligatorio, crea proyecto automáticamente */}
-          <div className="mt-4 p-4 bg-blue-50 border border-blue-200 rounded-xl">
-            <div className="flex items-center gap-2 mb-3">
-              <FolderKanban className="w-4 h-4 text-blue-600" />
-              <div>
-                <p className="text-sm font-bold text-blue-900">Nombre del Proyecto *</p>
-                <p className="text-xs text-blue-600">Se creará un proyecto vinculado automáticamente al guardar</p>
-              </div>
-            </div>
-            <input
-              type="text"
-              required
-              className="w-full px-3 py-2 border border-blue-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none bg-white text-slate-900"
-              value={formData.nombre_proyecto}
-              onChange={e => setFormData(p => ({ ...p, nombre_proyecto: e.target.value }))}
-              placeholder="Ej. Impermeabilización Aula 4 — MA MTY"
-            />
-            <div className="mt-2 grid grid-cols-2 gap-1">
-              {[
-                ['Territorio', formData.territorio || '—'],
-                ['Colegio',    formData.colegio    || '—'],
-                ['Tipo',       formData.tipo_proyecto || '—'],
-                ['Presupuesto',formData.presupuesto ? '$' + Number(formData.presupuesto).toLocaleString('es-MX') : '—'],
-              ].map(([k, v]) => (
-                <div key={k} className="text-[10px] text-blue-700 bg-blue-100/60 rounded px-2 py-1">
-                  <span className="font-bold">{k}:</span> {v}
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {/* Vincular proyecto existente (solo si ya tiene uno) */}
-          {ticket?.proyecto_id && (
-          <div>
-            <label className={labelClass}>
-              <span className="flex items-center gap-1.5"><Link2 className="w-3 h-3" /> Proyecto vinculado</span>
-            </label>
-            <select className={inputClass} value={formData.proyecto_id}
-              onChange={e => setFormData(p => ({ ...p, proyecto_id: e.target.value }))}>
-              <option value="">Sin vincular</option>
-              {projects.map(p => (
-                <option key={p.id} value={p.id}>
-                  {p.folio ? `${p.folio} — ` : ''}{p.name}
-                </option>
-              ))}
-            </select>
-          </div>
-          )}
-
           {/* Notas */}
           <div>
             <label className={labelClass}>Notas</label>
