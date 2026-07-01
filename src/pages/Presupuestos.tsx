@@ -32,7 +32,7 @@ export default function Presupuestos() {
     queryFn: () => db.Project.list('-created_at', 500),
   });
 
-  const projects = (raw as unknown as Project[]).filter(p => p.budget != null && p.budget > 0);
+  const projects = (raw as unknown as Project[]).filter(p => p.budget != null && p.budget > 0 && p.status !== 'cancelado');
 
   // Mapa proyecto_id → folio del ticket vinculado (para proyectos TMAS sin folio en project.folio)
   const { data: rawTickets = [] } = useQuery({
