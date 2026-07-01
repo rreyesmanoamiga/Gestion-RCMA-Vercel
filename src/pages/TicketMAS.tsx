@@ -620,6 +620,7 @@ export default function TicketMAS() {
           folio:         updatedRow.folio         ?? null,
           type:          'Mantenimiento',
           progress:      0,
+          budget:        updatedRow.cot1_importe  ?? null,
         }).select().single();
 
         if (!projError && proyecto) {
