@@ -376,7 +376,30 @@ export default function Nexus() {
           <div className="text-xs text-slate-500 space-y-0.5">
             {p.tipo==='compartido'&&p.asignado_nombre && <p className="font-semibold text-teal-600 text-xs">→ <span className="font-black">{p.asignado_nombre}</span></p>}
             {p.tipo==='compartido'&&p.asignado_cc_nombre && <p className="text-slate-400 text-[10px]">Con conocimiento de: {p.asignado_cc_nombre}</p>}
-            {p.fecha_limite && <p className="text-amber-600 font-semibold">📅 {fmtDate(p.fecha_limite)}</p>}
+            {p.fecha_limite && (() => {
+              const limite = new Date(p.fecha_limite); limite.setHours(23,59,59,0);
+              const ahora  = new Date();
+              const manana = new Date(ahora); manana.setDate(manana.getDate() + 1); manana.setHours(23,59,59,0);
+              const vencido    = limite < ahora;
+              const porVencer  = !vencido && limite <= manana;
+              return (
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  <p className={`font-semibold text-sm ${vencido ? 'text-red-600' : porVencer ? 'text-amber-600' : 'text-amber-600'}`}>
+                    📅 {fmtDate(p.fecha_limite)}
+                  </p>
+                  {vencido && (
+                    <span className="text-[10px] font-black px-1.5 py-0.5 rounded-full bg-red-100 text-red-700 animate-pulse">
+                      🔴 VENCIDO
+                    </span>
+                  )}
+                  {porVencer && (
+                    <span className="text-[10px] font-black px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-700">
+                      🟡 Vence hoy/mañana
+                    </span>
+                  )}
+                </div>
+              );
+            })()}
             {hasComents && coment.lastDate && (
               <p className="text-slate-400 text-[10px]">Actualizado: {fmtDate(coment.lastDate)}</p>
             )}

@@ -70,7 +70,29 @@ export default function ProjectDetail() {
   const folioDisplay = project?.folio || (ticketVinculado as any)?.folio || null;
 
   const updateMutation = useMutation({
-    mutationFn: (formData: Record<string, unknown>) => db.Project.update(id!, formData),
+    mutationFn: async (formData: Record<string, unknown>) => {
+      await db.Project.update(id!, formData);
+      // Si el status cambia a completado, notificar por correo
+      if (formData.status === 'completado' && project?.status !== 'completado') {
+        const territorio = (formData.territorio ?? project?.territorio) as string ?? '';
+        const correoCAR  = territorio === 'NORTE'  ? 'jalvarado@manoamiga.edu.mx'
+                         : territorio === 'MEXICO' ? 'gromero@manoamiga.edu.mx' : '';
+        await supabase.functions.invoke('notify-proyecto-completado', {
+          body: {
+            nombre_proyecto: formData.name ?? project?.name,
+            colegio:         formData.colegio ?? project?.colegio,
+            territorio,
+            responsable:     formData.responsible ?? project?.responsible,
+            presupuesto:     formData.budget ?? project?.budget,
+            costo_real:      formData.costo_real ?? project?.costo_real,
+            folio:           project?.folio,
+            correo_admin:    'rreyes@manoamiga.edu.mx',
+            correo_car:      correoCAR,
+            site_url:        window.location.origin,
+          },
+        });
+      }
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['projects', id] });
       queryClient.invalidateQueries({ queryKey: ['projects'] });

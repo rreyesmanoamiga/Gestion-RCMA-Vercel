@@ -4,7 +4,7 @@ import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import {FolderKanban, ClipboardCheck, Wrench, AlertTriangle, ArrowRight,
   Building2, MapPin, TicketCheck, FolderOpen, CalendarDays, ClockAlert,
-  ChevronRight, Activity, type LucideIcon, BookOpen } from 'lucide-react';
+  ChevronRight, Activity, type LucideIcon, BookOpen, Bell } from 'lucide-react';
 import { supabase } from '@/lib/supabaseClient';
 import StatusBadge from '@/components/shared/StatusBadge';
 import { COLEGIOS, type Colegio } from '@/lib/colegios';
@@ -154,6 +154,44 @@ export default function Dashboard() {
     refetchInterval: 60000,
   });
 
+  // ─── Alertas: Tickets MAS vencidos (+12h sin atender) ─────────────────────
+  const { data: tmasVencidos = [] } = useQuery({
+    queryKey: ['tmas_vencidos_dashboard'],
+    queryFn: async () => {
+      const hace12h = new Date(Date.now() - 12 * 60 * 60 * 1000).toISOString();
+      const { data } = await supabase
+        .from('tickets_mas')
+        .select('id, folio, colegio, territorio, nombre_proyecto, created_at')
+        .eq('estatus', 'pendiente')
+        .lt('created_at', hace12h)
+        .order('created_at', { ascending: true })
+        .limit(10);
+      return data ?? [];
+    },
+    refetchInterval: 60000,
+  });
+
+  // ─── Alertas: Pagos de Levantamiento pendientes ────────────────────────────
+  const { data: pagosPendientes = [] } = useQuery({
+    queryKey: ['pagos_lev_pendientes_dashboard'],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from('levantamiento_pagos')
+        .select('id, mes_etiqueta, concepto, monto_programado, plantel_id')
+        .eq('pagado', false)
+        .limit(10);
+      return data ?? [];
+    },
+    refetchInterval: 300000,
+  });
+
+  // ─── Alertas: NEXUS vencidos ───────────────────────────────────────────────
+  const hoy = new Date(); hoy.setHours(0, 0, 0, 0);
+  const nexusVencidos = useMemo(() =>
+    (nexusPendientes as any[]).filter(p => p.fecha_limite && new Date(p.fecha_limite) < hoy),
+    [nexusPendientes]
+  );
+
   // ─── KPIs ──────────────────────────────────────────────────────────────────
   const stats = useMemo(() => ({
     activeProjects:     projects.filter(p => p.status === 'en_proceso' || p.status === 'en_espera').length,
@@ -261,6 +299,77 @@ export default function Dashboard() {
           <img src="/logo.png" alt="Mano Amiga" className="h-16 w-auto object-contain" />
         </div>
       </div>
+
+      {/* ─── ALERTAS ACTIVAS ─────────────────────────────────────────────────── */}
+      {(tmasVencidos.length > 0 || nexusVencidos.length > 0 || pagosPendientes.length > 0 || stats.urgentItems > 0) && (
+        <div className="bg-red-50 border border-red-200 rounded-xl p-4">
+          <div className="flex items-center gap-2 mb-3">
+            <Bell className="w-4 h-4 text-red-600" />
+            <h2 className="text-sm font-black text-red-800 uppercase tracking-wide">
+              Alertas Activas — {tmasVencidos.length + nexusVencidos.length + pagosPendientes.length + stats.urgentItems} pendiente{(tmasVencidos.length + nexusVencidos.length + pagosPendientes.length + stats.urgentItems) !== 1 ? 's' : ''}
+            </h2>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+
+            {/* Tickets MAS vencidos */}
+            {tmasVencidos.length > 0 && (
+              <Link to="/ticket-mas" className="flex items-start gap-3 bg-white rounded-lg border border-red-200 p-3 hover:shadow-sm transition-all">
+                <div className="w-8 h-8 rounded-lg bg-red-100 flex items-center justify-center shrink-0">
+                  <TicketCheck className="w-4 h-4 text-red-600" />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-xs font-black text-red-700 uppercase">Tickets MAS sin atender</p>
+                  <p className="text-2xl font-black text-red-600">{tmasVencidos.length}</p>
+                  <p className="text-[10px] text-red-500">+12h sin revisión</p>
+                </div>
+              </Link>
+            )}
+
+            {/* Proyectos urgentes */}
+            {stats.urgentItems > 0 && (
+              <Link to="/proyectos" className="flex items-start gap-3 bg-white rounded-lg border border-orange-200 p-3 hover:shadow-sm transition-all">
+                <div className="w-8 h-8 rounded-lg bg-orange-100 flex items-center justify-center shrink-0">
+                  <AlertTriangle className="w-4 h-4 text-orange-600" />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-xs font-black text-orange-700 uppercase">Proyectos Urgentes</p>
+                  <p className="text-2xl font-black text-orange-600">{stats.urgentItems}</p>
+                  <p className="text-[10px] text-orange-500">Requieren acción inmediata</p>
+                </div>
+              </Link>
+            )}
+
+            {/* NEXUS vencidos */}
+            {nexusVencidos.length > 0 && (
+              <Link to="/nexus" className="flex items-start gap-3 bg-white rounded-lg border border-red-200 p-3 hover:shadow-sm transition-all">
+                <div className="w-8 h-8 rounded-lg bg-red-100 flex items-center justify-center shrink-0">
+                  <ClockAlert className="w-4 h-4 text-red-600" />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-xs font-black text-red-700 uppercase">NEXUS Vencidos</p>
+                  <p className="text-2xl font-black text-red-600">{nexusVencidos.length}</p>
+                  <p className="text-[10px] text-red-500">Fecha límite superada</p>
+                </div>
+              </Link>
+            )}
+
+            {/* Pagos Levantamiento pendientes */}
+            {pagosPendientes.length > 0 && (
+              <Link to="/levantamiento" className="flex items-start gap-3 bg-white rounded-lg border border-amber-200 p-3 hover:shadow-sm transition-all">
+                <div className="w-8 h-8 rounded-lg bg-amber-100 flex items-center justify-center shrink-0">
+                  <CalendarDays className="w-4 h-4 text-amber-600" />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-xs font-black text-amber-700 uppercase">Pagos Lev. Pendientes</p>
+                  <p className="text-2xl font-black text-amber-600">{pagosPendientes.length}</p>
+                  <p className="text-[10px] text-amber-500">Levantamiento Nacional</p>
+                </div>
+              </Link>
+            )}
+
+          </div>
+        </div>
+      )}
 
       {/* ─── KPIs ────────────────────────────────────────────────────────────── */}
       <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
