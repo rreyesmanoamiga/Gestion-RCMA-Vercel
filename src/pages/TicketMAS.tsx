@@ -810,10 +810,12 @@ export default function TicketMAS() {
             .update({ estatus: 'cancelado' })
             .eq('id', ticketReg.id);
 
-          // 3. Eliminar el proyecto vinculado si existe
-          if (ticketReg.proyecto_id) {
-            await supabase.from('projects').delete().eq('id', ticketReg.proyecto_id);
-          }
+            // 3. Cancelar el proyecto vinculado (no eliminar, conservar el registro)
+            if (ticketReg.proyecto_id) {
+              await supabase.from('projects')
+                .update({ status: 'cancelado' })
+                .eq('id', ticketReg.proyecto_id);
+            }
         }
 
         // Refrescar la lista de tickets registrados
