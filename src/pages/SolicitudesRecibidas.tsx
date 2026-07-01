@@ -244,7 +244,18 @@ export default function SolicitudesRecibidas() {
         .eq('id', sol.id);
       if (error) throw error;
 
-      // 2. Intentar renombrar carpeta de cotizaciones en OneDrive
+      // 2. Enviar notificación por correo al solicitante y al admin
+      await supabase.functions.invoke('send-solicitud-cancelada', {
+        body: {
+          correo:      sol.correo_solicitante,
+          nombre:      sol.nombre_solicitante,
+          proyecto:    sol.nombre_proyecto,
+          centro:      sol.nombre_centro,
+          correoAdmin: 'rreyes@manoamiga.edu.mx',
+        },
+      });
+
+      // 3. Intentar renombrar carpeta de cotizaciones en OneDrive
       if (sol.nombre_centro && sol.nombre_proyecto) {
         const referencia    = sol.nombre_proyecto.replace(/[^a-zA-Z0-9]/g, '_').slice(0, 40);
         const carpeta       = `Cotizaciones/${sol.nombre_centro}/${referencia}`;
