@@ -282,7 +282,7 @@ function TabReporteGeneral({ reportesGenerales, planteles, pagos, comunicados, e
   ];
 
     const fmt = (n: number) => '$' + n.toLocaleString('es-MX', { minimumFractionDigits: 2 });
-  const totalPagado = pagos.reduce((s, p) => s + (p.monto_pagado ?? 0), 0);
+  const totalPagado = pagos.filter(p => p.pagado).reduce((s, p) => s + (p.monto_pagado ?? 0), 0);
   const totalContrato = 10342976.48;
 
   const CHECKS = [
@@ -407,16 +407,18 @@ function TabReporteGeneral({ reportesGenerales, planteles, pagos, comunicados, e
 
       MESES_CONTRATO.forEach((m, i) => {
         const pago = pagos.find(p => p.mes_etiqueta === m.etiqueta);
+        const pagado = !!pago?.pagado;
         np(7);
-        if (pago) { doc.setFillColor(236, 253, 245); doc.rect(ML, y - 3, TW, 7, 'F'); }
+        if (pagado) { doc.setFillColor(236, 253, 245); doc.rect(ML, y - 3, TW, 7, 'F'); }
+        else if (pago) { doc.setFillColor(255, 251, 235); doc.rect(ML, y - 3, TW, 7, 'F'); }
         else if (i % 2 === 0) { doc.setFillColor(248, 250, 252); doc.rect(ML, y - 3, TW, 7, 'F'); }
-        doc.setFont('helvetica', pago ? 'bold' : 'normal'); doc.setFontSize(8); doc.setTextColor(30, 30, 30);
+        doc.setFont('helvetica', pagado ? 'bold' : 'normal'); doc.setFontSize(8); doc.setTextColor(30, 30, 30);
         doc.text(m.etiqueta, ML + 2, y + 1);
         doc.text(fmt(m.total), ML + 30, y + 1);
         doc.text(pago?.factura_consecutivo ?? '—', ML + 68, y + 1);
         doc.text(pago?.fecha_pago ? new Date(pago.fecha_pago + 'T12:00:00').toLocaleDateString('es-MX') : '—', ML + 85, y + 1);
         doc.text(truncateText(pago?.folio_factura ?? '—', 44), ML + 112, y + 1);
-        if (pago?.monto_pagado) { doc.setTextColor(22, 163, 74); doc.text(fmt(pago.monto_pagado), ML + 160, y + 1); doc.setTextColor(30, 30, 30); }
+        if (pago?.monto_pagado) { doc.setTextColor(pagado ? 22 : 180, pagado ? 163 : 130, pagado ? 74 : 30); doc.text(fmt(pago.monto_pagado), ML + 160, y + 1); doc.setTextColor(30, 30, 30); }
         else doc.text('—', ML + 160, y + 1);
         y += 7;
       });
@@ -1091,7 +1093,7 @@ function TabPagos({ pagos, planteles, qc, puedeCrear, puedeEliminar }: { pagos: 
   const mesesDisponibles = MESES_CONTRATO.filter(m => !mesesPagados.has(m.etiqueta));
 
   // KPIs reales
-  const totalPagado   = pagos.reduce((s, p) => s + (p.monto_pagado ?? 0), 0);
+  const totalPagado   = pagos.filter(p => p.pagado).reduce((s, p) => s + (p.monto_pagado ?? 0), 0);
   const totalPendiente = TOTAL_CONTRATO - totalPagado;
 
   const addMut = useMutation({
@@ -1121,7 +1123,7 @@ function TabPagos({ pagos, planteles, qc, puedeCrear, puedeEliminar }: { pagos: 
           monto_programado:    mesData?.total ?? 0,
           monto_pagado:        parseFloat(form.monto_pagado.replace(/,/g, '')) || null,
           fecha_pago:          form.fecha_pago || null,
-          pagado:              true,
+          pagado:              !!reciboUrl,
           factura_consecutivo: String(pagos.length + 1),
           folio_factura:       form.folio_factura || null,
           notas:               [form.observaciones, facturaUrl ? `factura_url:${facturaUrl}` : '', reciboUrl ? `recibo_url:${reciboUrl}` : ''].filter(Boolean).join('||') || null,
@@ -1162,7 +1164,7 @@ function TabPagos({ pagos, planteles, qc, puedeCrear, puedeEliminar }: { pagos: 
         }
 
         const nuevasNotas = [obs, facturaUrl ? `factura_url:${facturaUrl}` : '', reciboUrl ? `recibo_url:${reciboUrl}` : ''].filter(Boolean).join('||') || null;
-        const { error } = await supabase.from('levantamiento_pagos').update({ notas: nuevasNotas, fecha_pago: editFechaPago || null, monto_pagado: parseFloat(editMontoPagado.replace(/,/g, '')) || null }).eq('id', editPago.id);
+        const { error } = await supabase.from('levantamiento_pagos').update({ notas: nuevasNotas, fecha_pago: editFechaPago || null, monto_pagado: parseFloat(editMontoPagado.replace(/,/g, '')) || null, pagado: !!reciboUrl }).eq('id', editPago.id);
         if (error) throw error;
       } finally { setEditUploading(false); }
     },
@@ -1274,8 +1276,13 @@ function TabPagos({ pagos, planteles, qc, puedeCrear, puedeEliminar }: { pagos: 
                 <input type="file" className={inputCls} onChange={e => setFileFactura(e.target.files?.[0] ?? null)} />
               </div>
               <div>
-                <label className="text-xs font-bold text-slate-500 uppercase block mb-1">Recibo de Pago (cualquier formato) — opcional</label>
+                <label className="text-xs font-bold text-slate-500 uppercase block mb-1">Ficha de Pago / Comprobante de Transferencia — opcional</label>
                 <input type="file" className={inputCls} onChange={e => setFileRecibo(e.target.files?.[0] ?? null)} />
+                <p className="text-[11px] text-slate-400 mt-1">
+                  {fileRecibo
+                    ? '✓ Al guardar, este mes quedará marcado como Pagado.'
+                    : 'Si no subes la ficha de pago ahora, el mes quedará como Pendiente hasta que la agregues.'}
+                </p>
               </div>
               {(fileFactura || fileRecibo) && (
                 <div className="bg-blue-50 rounded-lg p-2 text-xs text-blue-700">
@@ -1339,15 +1346,21 @@ function TabPagos({ pagos, planteles, qc, puedeCrear, puedeEliminar }: { pagos: 
               </div>
               <div>
                 <label className="text-xs font-bold text-slate-500 uppercase block mb-1">
-                  {editPago.notas?.includes('recibo_url:') ? 'Reemplazar Recibo de Pago' : 'Subir Recibo de Pago'} (cualquier formato)
+                  {editPago.notas?.includes('recibo_url:') ? 'Reemplazar Ficha de Pago' : 'Subir Ficha de Pago / Comprobante de Transferencia'} (cualquier formato)
                 </label>
                 {editPago.notas?.includes('recibo_url:') && (
                   <a href={editPago.notas.match(/recibo_url:([^|]+)/)?.[1] ?? '#'} target="_blank" rel="noreferrer"
                     className="flex items-center gap-1 text-xs text-[#0C3B6E] hover:underline mb-1">
-                    <Eye className="w-3 h-3" />Ver recibo actual
+                    <Eye className="w-3 h-3" />Ver ficha de pago actual
                   </a>
                 )}
                 <input type="file" className={inputCls} onChange={e => setEditFileRecibo(e.target.files?.[0] ?? null)} />
+                {!editPago.notas?.includes('recibo_url:') && !editFileRecibo && (
+                  <p className="text-[11px] text-amber-600 mt-1">Este mes seguirá como Pendiente hasta que subas la ficha de pago.</p>
+                )}
+                {editFileRecibo && (
+                  <p className="text-[11px] text-emerald-600 mt-1">✓ Al guardar, este mes quedará marcado como Pagado.</p>
+                )}
               </div>
               {(editFileFactura || editFileRecibo) && (
                 <div className="bg-blue-50 rounded-lg p-2 text-xs text-blue-700">
@@ -1385,12 +1398,12 @@ function TabPagos({ pagos, planteles, qc, puedeCrear, puedeEliminar }: { pagos: 
           <tbody className="divide-y divide-slate-100">
             {MESES_CONTRATO.map(m => {
               const pago = getPago(m.etiqueta);
-              const isPagado = !!pago;
+              const isPagado = !!pago?.pagado;
               const factCons = pago?.factura_consecutivo ?? '—';
               const folio    = pago?.folio_factura ?? '—';
 
               return (
-                <tr key={m.etiqueta} className={isPagado ? 'bg-emerald-50' : 'hover:bg-slate-50'}>
+                <tr key={m.etiqueta} className={isPagado ? 'bg-emerald-50' : pago ? 'bg-amber-50/40' : 'hover:bg-slate-50'}>
                   <td className="px-3 py-3 font-bold text-slate-800">{m.etiqueta}</td>
                   <td className="px-3 py-3 text-right text-slate-600">{fmt(m.subtotal)}</td>
                   <td className="px-3 py-3 text-right text-slate-500">{fmt(m.iva)}</td>
@@ -1398,24 +1411,26 @@ function TabPagos({ pagos, planteles, qc, puedeCrear, puedeEliminar }: { pagos: 
                   <td className="px-3 py-3 text-slate-600">
                     {pago?.fecha_pago ? new Date(pago.fecha_pago + 'T12:00:00').toLocaleDateString('es-MX') : '—'}
                   </td>
-                  <td className="px-3 py-3 text-slate-500 text-xs">{isPagado ? folio : '—'}</td>
+                  <td className="px-3 py-3 text-slate-500 text-xs">{pago ? folio : '—'}</td>
                   <td className="px-3 py-3 text-right font-medium">
-                    {isPagado && pago.monto_pagado != null
-                      ? <span className="text-emerald-700">{fmt(pago.monto_pagado)}</span>
+                    {pago?.monto_pagado != null
+                      ? <span className={isPagado ? 'text-emerald-700' : 'text-amber-700'}>{fmt(pago.monto_pagado)}</span>
                       : <span className="text-slate-300">—</span>}
                   </td>
                   <td className="px-3 py-3 text-center">
                     <div className="flex items-center justify-center gap-2">
                       {isPagado
                         ? <span className="px-2 py-0.5 rounded-full text-xs font-bold bg-emerald-200 text-emerald-800">✓ Pagado</span>
-                        : <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-700">Pendiente</span>}
-                      {isPagado && (
+                        : pago
+                        ? <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-700" title="Falta subir la ficha de pago">Falta ficha de pago</span>
+                        : <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-slate-100 text-slate-500">Pendiente</span>}
+                      {pago && (
                         <button onClick={() => { setEditPago(pago!); setEditFechaPago(pago!.fecha_pago ?? ''); setEditMontoPagado(pago!.monto_pagado != null ? String(pago!.monto_pagado) : ''); setEditFileFactura(null); setEditFileRecibo(null); }}
                           className="text-slate-400 hover:text-[#0C3B6E] transition-colors" title="Agregar/editar archivos">
                           <Edit2 className="w-3.5 h-3.5" />
                         </button>
                       )}
-                      {isPagado && pago?.notas?.includes('factura_url:') && (
+                      {pago?.notas?.includes('factura_url:') && (
                         <a href={pago.notas.match(/factura_url:([^|]+)/)?.[1]} target="_blank" rel="noreferrer"
                           className="text-slate-400 hover:text-[#0C3B6E]" title="Ver Factura">
                           <Eye className="w-3.5 h-3.5" />
