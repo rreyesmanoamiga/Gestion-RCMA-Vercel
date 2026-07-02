@@ -331,19 +331,19 @@ export default function Auditoria() {
 
   return (
     <div className="space-y-5">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-2">
-        <PageHeader
-          title="Auditoría del Sistema"
-          subtitle="Registro completo de acciones: usuarios, invitaciones, solicitudes, tickets y proyectos"
-        />
-        <div className="flex gap-2 shrink-0 -mt-6 sm:mt-0">
-          <button onClick={handleExportPDF} disabled={exportando || filtered.length === 0} className={btnOutline + " disabled:opacity-40"}>
-            <FileDown className="w-4 h-4 text-red-600" /> PDF
-          </button>
-          <button onClick={handleExportExcel} disabled={exportando || filtered.length === 0} className={btnOutline + " disabled:opacity-40"}>
-            <FileSpreadsheet className="w-4 h-4 text-emerald-600" /> Excel
-          </button>
-        </div>
+      <PageHeader
+        title="Auditoría del Sistema"
+        subtitle="Registro completo de acciones: usuarios, invitaciones, solicitudes, tickets y proyectos"
+      />
+
+      {/* Barra de exportación */}
+      <div className="flex justify-end gap-2">
+        <button onClick={handleExportPDF} disabled={exportando || filtered.length === 0} className={btnOutline + " disabled:opacity-40"}>
+          <FileDown className="w-4 h-4 text-red-600" /> {exportando ? 'Generando...' : 'PDF'}
+        </button>
+        <button onClick={handleExportExcel} disabled={exportando || filtered.length === 0} className={btnOutline + " disabled:opacity-40"}>
+          <FileSpreadsheet className="w-4 h-4 text-emerald-600" /> {exportando ? 'Generando...' : 'Excel'}
+        </button>
       </div>
 
       {/* Rango de fechas */}
