@@ -621,6 +621,9 @@ export default function TicketMAS() {
           type:          'Mantenimiento',
           progress:      0,
           budget:        updatedRow.cot1_importe  ?? null,
+          start_date:    updatedRow.fecha_inicio_estimada ?? null,
+          end_date:      updatedRow.fecha_fin_estimada    ?? null,
+          responsible:   updatedRow.cot1_proveedor        ?? null,
         }).select().single();
 
         if (!projError && proyecto) {
