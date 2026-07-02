@@ -228,8 +228,17 @@ function LoginPage() {
     e.preventDefault();
     setLoading(true);
     setError('');
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
-    if (error) setError(error.message);
+    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+    if (error) {
+      setError(error.message);
+    } else if (data?.user) {
+      logAudit({
+        accion: 'login',
+        modulo: 'usuarios',
+        registro_id:  data.user.id,
+        registro_ref: data.user.email ?? null,
+      });
+    }
     setLoading(false);
   };
 

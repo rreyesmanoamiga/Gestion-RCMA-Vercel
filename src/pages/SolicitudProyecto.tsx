@@ -90,6 +90,7 @@ export default function SolicitudProyecto() {
   const [loading, setLoading]   = useState(false);
   const [tieneCotizaciones, setTieneCotizaciones] = useState(false);
   const [cotizacionFiles, setCotizacionFiles]     = useState<File[]>([]);
+  const [dragActive, setDragActive]               = useState(false);
   const { upload: spUpload, uploading: spUploading } = useSharePointUpload();
 
   const [form, setForm] = useState({
@@ -551,20 +552,32 @@ export default function SolicitudProyecto() {
                   <p className="text-xs text-slate-500">
                     Adjunta tus cotizaciones (PDF, imágenes, Word, etc.). Se subirán a SharePoint automáticamente al enviar la solicitud.
                   </p>
-                  <label className={`flex items-center gap-3 cursor-pointer border-2 border-dashed rounded-lg px-4 py-3 transition
-                    ${cotizacionFiles.length > 0 ? 'border-teal-400 bg-teal-50' : 'border-slate-300 hover:border-teal-400 hover:bg-slate-50'}`}>
+                  <label
+                    onDragOver={e => { e.preventDefault(); e.stopPropagation(); setDragActive(true); }}
+                    onDragLeave={e => { e.preventDefault(); e.stopPropagation(); setDragActive(false); }}
+                    onDrop={e => {
+                      e.preventDefault(); e.stopPropagation(); setDragActive(false);
+                      const EXT_PERMITIDAS = ['.pdf', '.doc', '.docx', '.xls', '.xlsx', '.jpg', '.jpeg', '.png', '.zip'];
+                      const dropped = Array.from(e.dataTransfer.files ?? []).filter(f =>
+                        EXT_PERMITIDAS.some(ext => f.name.toLowerCase().endsWith(ext))
+                      );
+                      if (dropped.length === 0) { toast.error('Formato no permitido. Usa PDF, Word, Excel, imagen o ZIP.'); return; }
+                      setCotizacionFiles(prev => [...prev, ...dropped]);
+                    }}
+                    className={`flex items-center gap-3 cursor-pointer border-2 border-dashed rounded-lg px-4 py-3 transition
+                    ${dragActive ? 'border-teal-500 bg-teal-100 scale-[1.01]' : cotizacionFiles.length > 0 ? 'border-teal-400 bg-teal-50' : 'border-slate-300 hover:border-teal-400 hover:bg-slate-50'}`}>
                     <svg className="w-5 h-5 text-teal-500 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
                     </svg>
                     <div className="flex-1 min-w-0">
                       {cotizacionFiles.length === 0
-                        ? <span className="text-sm text-slate-500">Seleccionar archivos de cotización...</span>
-                        : <span className="text-sm text-teal-700 font-semibold">{cotizacionFiles.length} archivo{cotizacionFiles.length > 1 ? 's' : ''} seleccionado{cotizacionFiles.length > 1 ? 's' : ''}</span>
+                        ? <span className="text-sm text-slate-500">Arrastra tus archivos aquí o haz clic para seleccionarlos...</span>
+                        : <span className="text-sm text-teal-700 font-semibold">{cotizacionFiles.length} archivo{cotizacionFiles.length > 1 ? 's' : ''} seleccionado{cotizacionFiles.length > 1 ? 's' : ''} — arrastra más para agregar</span>
                       }
                     </div>
                     <input type="file" multiple accept=".pdf,.doc,.docx,.xls,.xlsx,.jpg,.jpeg,.png,.zip"
                       className="hidden"
-                      onChange={e => setCotizacionFiles(Array.from(e.target.files ?? []))} />
+                      onChange={e => setCotizacionFiles(prev => [...prev, ...Array.from(e.target.files ?? [])])} />
                   </label>
 
                   {cotizacionFiles.length > 0 && (

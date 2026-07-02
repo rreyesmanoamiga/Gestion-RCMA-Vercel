@@ -71,29 +71,17 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
   }, [user, doSignOut]);
 
   useEffect(() => {
-    // El primer evento recibido tras montar es siempre la restauración de la
-    // sesión existente (Supabase puede notificarlo como SIGNED_IN o
-    // INITIAL_SESSION según el caso) — nunca debe contarse como un login real.
-    let esPrimerEvento = true;
-
+    // Este listener SOLO sincroniza el estado de sesión (user/loading).
+    // El registro de auditoría del login se hace explícitamente en el
+    // formulario de inicio de sesión (App.jsx), no aquí — el evento
+    // 'SIGNED_IN' puede repetirse por revalidaciones internas de Supabase
+    // (llamadas a getUser(), functions.invoke(), subidas a OneDrive, etc.)
+    // y no es una señal confiable de que el usuario acaba de iniciar sesión.
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (event: AuthChangeEvent, session: Session | null) => {
-        const fuePrimerEvento = esPrimerEvento;
-        esPrimerEvento = false;
-
+      (_event: AuthChangeEvent, session: Session | null) => {
         setError(null);
         setUser(session?.user ?? null);
         setLoading(false);
-
-        // Solo registrar login real: no es el primer evento (restauración de sesión)
-        if (event === 'SIGNED_IN' && session?.user && !fuePrimerEvento) {
-          logAudit({
-            accion: 'login',
-            modulo: 'usuarios',
-            registro_id:  session.user.id,
-            registro_ref: session.user.email ?? null,
-          });
-        }
       }
     );
 
