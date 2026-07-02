@@ -89,6 +89,8 @@ export default function ProjectForm({ open, onClose, onSubmit, project = null }:
 
   if (!open) return null;
 
+  const isTMAS = (formData.ticket_number ?? '').startsWith('TMAS-');
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     const folio = (formData.ticket_number as string)?.trim() || null;
@@ -132,50 +134,52 @@ export default function ProjectForm({ open, onClose, onSubmit, project = null }:
           {/* Folio de Ticket */}
           <div>
             <label className={labelClass}>Folio de Ticket (opcional)</label>
-            <input
-              type="text"
-              className="w-full px-3 py-2 border border-slate-300 rounded-md text-sm focus:ring-2 focus:ring-slate-900 focus:outline-none bg-white text-slate-900"
+            <input type="text" className={readOnlyClass} readOnly
               value={formData.ticket_number}
-              onChange={e => setFormData(prev => ({ ...prev, ticket_number: e.target.value }))}
-              placeholder="Ej. TCMM-2026-001"
-            />
+              placeholder="Ej. TCMM-2026-001" />
           </div>
 
           {/* Nombre */}
           <div>
             <label className={labelClass}>Nombre del Proyecto *</label>
-            <input
-              type="text"
-              required
-              className={inputClass}
-              value={formData.name}
-              onChange={e => setFormData(prev => ({ ...prev, name: e.target.value }))}
-              placeholder="Ej. Impermeabilización de Aula 4"
-            />
+            {isTMAS ? (
+              <input type="text" className={readOnlyClass} readOnly value={formData.name} />
+            ) : (
+              <input type="text" required className={inputClass} value={formData.name}
+                onChange={e => setFormData(prev => ({ ...prev, name: e.target.value }))}
+                placeholder="Ej. Impermeabilización de Aula 4" />
+            )}
           </div>
 
-          <ColegioSelector
-            territorio={formData.territorio}
-            colegio={formData.colegio}
-            onTerritorioChange={val => {
-              setFormData(prev => ({ ...prev, territorio: val, colegio: '', eco: '' }));
-            }}
-            onColegioChange={val => {
-              const colegioData = COLEGIOS.find(c => c.colegio === val);
-              setFormData(prev => ({ ...prev, colegio: val, eco: colegioData?.eco ?? '' }));
-            }}
-            required
-          />
+          {/* Territorio + Colegio */}
+          {isTMAS ? (
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className={labelClass}>Territorio</label>
+                <input type="text" className={readOnlyClass} readOnly value={formData.territorio} />
+              </div>
+              <div>
+                <label className={labelClass}>Colegio</label>
+                <input type="text" className={readOnlyClass} readOnly value={formData.colegio} />
+              </div>
+            </div>
+          ) : (
+            <ColegioSelector
+              territorio={formData.territorio}
+              colegio={formData.colegio}
+              onTerritorioChange={val => setFormData(prev => ({ ...prev, territorio: val, colegio: '', eco: '' }))}
+              onColegioChange={val => {
+                const colegioData = COLEGIOS.find(c => c.colegio === val);
+                setFormData(prev => ({ ...prev, colegio: val, eco: colegioData?.eco ?? '' }));
+              }}
+              required
+            />
+          )}
 
           <div>
             <label className={labelClass}>Responsable ECO (Automático)</label>
-            <input
-              type="text"
-              readOnly
-              className={readOnlyClass}
-              value={formData.eco}
-              placeholder="Se asigna según el colegio seleccionado"
-            />
+            <input type="text" readOnly className={readOnlyClass} value={formData.eco}
+              placeholder="Se asigna según el colegio seleccionado" />
           </div>
 
           <div className="grid grid-cols-2 gap-3">
@@ -201,11 +205,16 @@ export default function ProjectForm({ open, onClose, onSubmit, project = null }:
             </div>
           </div>
 
+          {/* Responsable de Ejecución */}
           <div>
             <label className={labelClass}>Responsable de Ejecución</label>
-            <input type="text" className={inputClass} value={formData.responsible}
-              onChange={e => setFormData(prev => ({ ...prev, responsible: e.target.value }))}
-              placeholder="Persona a cargo" />
+            {isTMAS ? (
+              <input type="text" className={readOnlyClass} readOnly value={formData.responsible} />
+            ) : (
+              <input type="text" className={inputClass} value={formData.responsible}
+                onChange={e => setFormData(prev => ({ ...prev, responsible: e.target.value }))}
+                placeholder="Persona a cargo" />
+            )}
           </div>
 
           <div className="grid grid-cols-2 gap-3">
@@ -224,10 +233,14 @@ export default function ProjectForm({ open, onClose, onSubmit, project = null }:
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className={labelClass}>Presupuesto (MXN)</label>
-              <input type="text" className={inputClass}
-                value={formatMXN(formData.budget)}
-                onChange={e => setFormData(prev => ({ ...prev, budget: parseMXN(e.target.value) }))}
-                placeholder="$0.00" />
+              {isTMAS ? (
+                <input type="text" className={readOnlyClass} readOnly value={formatMXN(formData.budget)} />
+              ) : (
+                <input type="text" className={inputClass}
+                  value={formatMXN(formData.budget)}
+                  onChange={e => setFormData(prev => ({ ...prev, budget: parseMXN(e.target.value) }))}
+                  placeholder="$0.00" />
+              )}
             </div>
             <div>
               <label className={labelClass}>Progreso (%)</label>
@@ -236,12 +249,23 @@ export default function ProjectForm({ open, onClose, onSubmit, project = null }:
             </div>
           </div>
 
+          {/* Descripción Técnica */}
           <div>
             <label className={labelClass}>Descripción Técnica Detallada</label>
-            <textarea className={`${inputClass} h-20 resize-none`} value={formData.notes}
-              onChange={e => setFormData(prev => ({ ...prev, notes: e.target.value }))}
-              placeholder="Describe la descripción técnica del proyecto..." />
+            {isTMAS ? (
+              <textarea className={`${readOnlyClass} h-20 resize-none`} readOnly value={formData.notes} />
+            ) : (
+              <textarea className={`${inputClass} h-20 resize-none`} value={formData.notes}
+                onChange={e => setFormData(prev => ({ ...prev, notes: e.target.value }))}
+                placeholder="Describe la descripción técnica del proyecto..." />
+            )}
           </div>
+
+          {isTMAS && (
+            <p className="text-[11px] text-slate-400 italic">
+              Los campos en gris se sincronizan automáticamente desde el Ticket MAS. Solo puedes editar Estado, Prioridad, Fechas y Progreso.
+            </p>
+          )}
 
           <div className="pt-6 border-t border-slate-100 flex justify-end gap-3 mt-4">
             <button
