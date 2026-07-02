@@ -35,10 +35,10 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
 
   const doSignOut = useCallback(async (motivo: 'manual' | 'inactividad'): Promise<void> => {
     const current = userRef.current;
-    const { error } = await supabase.auth.signOut();
-    if (error) { setError(error); return; }
+    // Registrar el logout ANTES de cerrar sesión — una vez cerrada,
+    // ya no hay usuario autenticado para validar el registro de auditoría.
     if (current) {
-      logAudit({
+      await logAudit({
         accion: 'logout',
         modulo: 'usuarios',
         registro_id:  current.id,
@@ -46,6 +46,8 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
         detalle: { motivo },
       });
     }
+    const { error } = await supabase.auth.signOut();
+    if (error) setError(error);
   }, []);
 
   // ── Cierre automático por inactividad (2 horas) ────────────────────────────
@@ -69,16 +71,22 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
   }, [user, doSignOut]);
 
   useEffect(() => {
-    // onAuthStateChange dispara INITIAL_SESSION al montar
-    // por lo que getSession() es redundante y genera race condition
+    // El primer evento recibido tras montar es siempre la restauración de la
+    // sesión existente (Supabase puede notificarlo como SIGNED_IN o
+    // INITIAL_SESSION según el caso) — nunca debe contarse como un login real.
+    let esPrimerEvento = true;
+
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       (event: AuthChangeEvent, session: Session | null) => {
+        const fuePrimerEvento = esPrimerEvento;
+        esPrimerEvento = false;
+
         setError(null);
         setUser(session?.user ?? null);
         setLoading(false);
 
-        // Solo registrar login real (no la sesión inicial al cargar la página)
-        if (event === 'SIGNED_IN' && session?.user) {
+        // Solo registrar login real: no es el primer evento (restauración de sesión)
+        if (event === 'SIGNED_IN' && session?.user && !fuePrimerEvento) {
           logAudit({
             accion: 'login',
             modulo: 'usuarios',
