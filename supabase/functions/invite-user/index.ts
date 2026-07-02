@@ -207,6 +207,19 @@ serve(async (req) => {
       html
     );
 
+    // Registrar en auditoría: quién invitó a quién
+    try {
+      await supabaseAdmin.from('auditoria_sistema').insert({
+        usuario_id:     caller.id,
+        usuario_nombre: caller.user_metadata?.full_name ?? caller.email,
+        usuario_email:  caller.email,
+        accion:         'invitacion_enviada',
+        modulo:         'usuarios',
+        registro_id:    (data as any)?.user?.id ?? null,
+        registro_ref:   email,
+      });
+    } catch { /* no bloqueante */ }
+
     return new Response(
       JSON.stringify({ success: true }),
       { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }

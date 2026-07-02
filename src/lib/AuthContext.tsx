@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { supabase } from './supabaseClient';
+import { logAudit } from './audit';
 import type { User, AuthError, AuthChangeEvent, Session } from '@supabase/supabase-js';
 
 interface AuthContextType {
@@ -29,10 +30,20 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
     // onAuthStateChange dispara INITIAL_SESSION al montar
     // por lo que getSession() es redundante y genera race condition
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (_event: AuthChangeEvent, session: Session | null) => {
+      (event: AuthChangeEvent, session: Session | null) => {
         setError(null);
         setUser(session?.user ?? null);
         setLoading(false);
+
+        // Solo registrar login real (no la sesión inicial al cargar la página)
+        if (event === 'SIGNED_IN' && session?.user) {
+          logAudit({
+            accion: 'login',
+            modulo: 'usuarios',
+            registro_id:  session.user.id,
+            registro_ref: session.user.email ?? null,
+          });
+        }
       }
     );
 

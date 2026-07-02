@@ -28,6 +28,7 @@ function getFirstRoute(permissions, isAdmin) {
 }
 
 import { supabase } from '@/lib/supabaseClient';
+import { logAudit } from '@/lib/audit';
 import PageNotFound from './lib/PageNotFound';
 import AppLayout from '@/components/layout/AppLayout';
 import Dashboard from '@/pages/Dashboard';
@@ -44,6 +45,7 @@ import SolicitudesRecibidas from '@/pages/SolicitudesRecibidas';
 import Reports from '@/pages/Reports';
 import UserManagement from '@/pages/UserManagement';
 import Accesos from '@/pages/Accesos';
+import Auditoria from '@/pages/Auditoria';
 import CalendarioMantenimiento from '@/pages/CalendarioMantenimiento';
 import Presupuestos from '@/pages/Presupuestos';
 
@@ -123,8 +125,18 @@ function SetPasswordPage() {
     setLoading(true);
     setError('');
     const { error } = await supabase.auth.updateUser({ password });
-    if (error) setError(error.message);
-    else setSuccess(true);
+    if (error) {
+      setError(error.message);
+    } else {
+      setSuccess(true);
+      const { data: { user } } = await supabase.auth.getUser();
+      logAudit({
+        accion: 'invitacion_aceptada',
+        modulo: 'usuarios',
+        registro_id:  user?.id ?? null,
+        registro_ref: user?.email ?? null,
+      });
+    }
     setLoading(false);
   };
 
@@ -382,6 +394,7 @@ function AuthenticatedApp() {
           <Route path="/reportes"            element={<Reports />} />
           <Route path="/usuarios"           element={<UserManagement />} />
           <Route path="/accesos"            element={<Accesos />} />
+          <Route path="/auditoria"          element={<Auditoria />} />
           <Route path="/calendario"         element={<CalendarioMantenimiento />} />
           <Route path="/presupuestos"       element={<Presupuestos />} />
           

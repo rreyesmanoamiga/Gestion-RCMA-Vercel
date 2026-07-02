@@ -9,6 +9,7 @@ import {
 } from 'lucide-react';
 import ProjectForm from '@/components/projects/ProjectForm';
 import { supabase } from '@/lib/supabaseClient';
+import { logAudit } from '@/lib/audit';
 import StatusBadge from '@/components/shared/StatusBadge';
 import PriorityBadge from '@/components/shared/PriorityBadge';
 import { toast } from 'sonner';
@@ -72,6 +73,25 @@ export default function ProjectDetail() {
   const updateMutation = useMutation({
     mutationFn: async (formData: Record<string, unknown>) => {
       await db.Project.update(id!, formData);
+
+      // Auditoría: distinguir completar / cancelar / editar / actualizar costo real
+      const statusAnterior = project?.status;
+      const statusNuevo    = formData.status as string | undefined;
+      const accionAudit =
+        statusNuevo === 'completado' && statusAnterior !== 'completado' ? 'completar' :
+        statusNuevo === 'cancelado'  && statusAnterior !== 'cancelado'  ? 'cancelar'  :
+        'editar';
+      logAudit({
+        accion:       accionAudit,
+        modulo:       'proyectos',
+        registro_id:  id ?? null,
+        registro_ref: (formData.name as string) ?? project?.name ?? null,
+        detalle: {
+          status_anterior: statusAnterior, status_nuevo: statusNuevo,
+          budget: formData.budget, costo_real: formData.costo_real,
+        },
+      });
+
       // Si el status cambia a completado, notificar por correo
       if (formData.status === 'completado' && project?.status !== 'completado') {
         const territorio = (formData.territorio ?? project?.territorio) as string ?? '';
@@ -104,7 +124,15 @@ export default function ProjectDetail() {
   });
 
   const deleteMutation = useMutation({
-    mutationFn: () => db.Project.delete(id!),
+    mutationFn: async () => {
+      await db.Project.delete(id!);
+      logAudit({
+        accion:       'eliminar',
+        modulo:       'proyectos',
+        registro_id:  id ?? null,
+        registro_ref: project?.name ?? null,
+      });
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['projects'] });
       navigate('/proyectos');

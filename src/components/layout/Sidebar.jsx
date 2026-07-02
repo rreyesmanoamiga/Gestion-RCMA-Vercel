@@ -20,7 +20,7 @@ import {
   FileSignature,
   BarChart3,
   // --- ICONO AGREGADO ---
-  BookUser, Package, Layers,
+  BookUser, Package, Layers, ShieldAlert,
 } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 
@@ -249,6 +249,14 @@ export default function Sidebar({ isOpen, onToggle }) {
             <Link to="/accesos" onClick={handleNavClick} className={navLinkClass('/accesos')}>
               <Lock className="w-[18px] h-[18px]" />
               Accesos
+            </Link>
+          )}
+
+          {/* 15 — Auditoría */}
+          {isAdmin && (
+            <Link to="/auditoria" onClick={handleNavClick} className={navLinkClass('/auditoria')}>
+              <ShieldAlert className="w-[18px] h-[18px]" />
+              Auditoría
             </Link>
           )}
 

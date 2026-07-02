@@ -1,5 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { supabase } from '@/lib/supabaseClient';
+import { logAudit } from '@/lib/audit';
 import { useSharePointUpload } from '@/hooks/useSharePointUpload';
 import { toast } from 'sonner';
 import { Send, CheckCircle } from 'lucide-react';
@@ -111,6 +112,7 @@ export default function SolicitudProyecto() {
     monto_donativos:        '',
     monto_otras:            '',
     monto_otras_detalle:    '',
+    en_nombre_de:           '',
   });
 
   const set = (k: string, v: string) => setForm(p => ({ ...p, [k]: v }));
@@ -152,7 +154,7 @@ export default function SolicitudProyecto() {
 
     setLoading(true);
     try {
-      const { error } = await supabase.from('solicitudes').insert({
+      const { data: nuevaSolicitud, error } = await supabase.from('solicitudes').insert({
         nombre_centro:          form.nombre_centro,
         razon_social:           form.razon_social,
         sociedad:               form.sociedad,
@@ -172,8 +174,17 @@ export default function SolicitudProyecto() {
         monto_donativos:        donMonto    || null,
         monto_otras:            otrasMonto  || null,
         monto_otras_detalle:    form.monto_otras_detalle.trim() || null,
-      });
+      }).select('id').single();
       if (error) throw error;
+
+      logAudit({
+        accion:       'crear',
+        modulo:       'solicitudes',
+        registro_id:  nuevaSolicitud?.id ?? null,
+        registro_ref: form.nombre_proyecto,
+        detalle:      { solicitante: form.nombre_solicitante, centro: form.nombre_centro },
+        en_nombre_de: form.en_nombre_de.trim() || null,
+      });
 
       // Subir cotizaciones a SharePoint si las tienen
       if (tieneCotizaciones && cotizacionFiles.length > 0) {
@@ -238,7 +249,7 @@ export default function SolicitudProyecto() {
         <p className="text-slate-500 text-center max-w-md">
           Tu solicitud de proyecto fue recibida correctamente. Recibirás una confirmación a <strong>{form.correo_solicitante}</strong> cuando sea revisada.
         </p>
-        <button onClick={() => { setEnviado(false); setForm({ nombre_centro:'',razon_social:'',sociedad:'',centro_gestor:'',ciclo_año_fiscal:añoActual,nombre_solicitante:'',puesto_solicitante:'',correo_solicitante:'',nombre_proyecto:'',tipo_iniciativa:'',resumen_proyecto:'',fecha_inicio_propuesta:'',fecha_fin_propuesta:'',costo_aproximado:'',monto_operacion:'',monto_fbc:'',monto_donativos:'',monto_otras:'',monto_otras_detalle:''}); setTieneCotizaciones(false); setCotizacionFiles([]); }}
+        <button onClick={() => { setEnviado(false); setForm({ nombre_centro:'',razon_social:'',sociedad:'',centro_gestor:'',ciclo_año_fiscal:añoActual,nombre_solicitante:'',puesto_solicitante:'',correo_solicitante:'',nombre_proyecto:'',tipo_iniciativa:'',resumen_proyecto:'',fecha_inicio_propuesta:'',fecha_fin_propuesta:'',costo_aproximado:'',monto_operacion:'',monto_fbc:'',monto_donativos:'',monto_otras:'',monto_otras_detalle:'',en_nombre_de:''}); setTieneCotizaciones(false); setCotizacionFiles([]); }}
           className="px-6 py-2 bg-slate-900 text-white rounded-md text-sm font-medium hover:bg-slate-800 transition-colors">
           Nueva Solicitud
         </button>
@@ -343,6 +354,15 @@ export default function SolicitudProyecto() {
                     <input required type="email" className={inputClass} value={form.correo_solicitante}
                       onChange={e => set('correo_solicitante', e.target.value)}
                       placeholder="correo@ejemplo.com — recibirás confirmación aquí" />
+                  </td>
+                </tr>
+                {/* Fila 8: Llenado a nombre de otra persona (opcional, para auditoría) */}
+                <tr>
+                  <td className={tdLabel}>¿Llenando a nombre de otra persona?</td>
+                  <td className={tdInput} colSpan={4}>
+                    <input className={inputClass} value={form.en_nombre_de}
+                      onChange={e => set('en_nombre_de', e.target.value)}
+                      placeholder="Opcional — si estás capturando esta solicitud por otra persona, escribe su nombre aquí" />
                   </td>
                 </tr>
               </tbody>
