@@ -47,24 +47,32 @@ serve(async (req) => {
     const smtpUser    = Deno.env.get('SMTP_USER') ?? '';
     const supabase    = createClient(supabaseUrl, serviceKey);
 
-    const hoy     = new Date(); hoy.setHours(0,0,0,0);
-    const manana  = new Date(hoy); manana.setDate(manana.getDate() + 1);
-    const pasado  = new Date(hoy); pasado.setDate(pasado.getDate() + 2);
+    // Tipo de envío: 'vencidos' (8am) o 'por_vencer' (7pm). Sin body = ambos (compatibilidad)
+    let tipo = 'todos';
+    try {
+      const body = await req.json();
+      if (body?.tipo === 'vencidos' || body?.tipo === 'por_vencer') tipo = body.tipo;
+    } catch { /* sin body */ }
+
+    // Fecha con horario de México (UTC-6), porque el cron corre en UTC
+    const ahoraMX = new Date(Date.now() - 6 * 60 * 60 * 1000);
+    const hoy     = new Date(ahoraMX); hoy.setUTCHours(0,0,0,0);
+    const pasado  = new Date(hoy); pasado.setUTCDate(pasado.getUTCDate() + 2);
 
     // Pendientes que vencen hoy o mañana (y no completados)
-    const { data: porVencer } = await supabase
+    const { data: porVencer } = tipo !== 'vencidos' ? await supabase
       .from('nexus_pendientes')
       .select('id, titulo, asignado_a, asignado_nombre, fecha_limite, prioridad, colegio, territorio, tipo')
       .neq('estatus', 'completado')
       .gte('fecha_limite', hoy.toISOString().slice(0,10))
-      .lt('fecha_limite',  pasado.toISOString().slice(0,10));
+      .lt('fecha_limite',  pasado.toISOString().slice(0,10)) : { data: [] };
 
     // Pendientes ya vencidos
-    const { data: vencidos } = await supabase
+    const { data: vencidos } = tipo !== 'por_vencer' ? await supabase
       .from('nexus_pendientes')
       .select('id, titulo, asignado_a, asignado_nombre, fecha_limite, prioridad, colegio, territorio, tipo')
       .neq('estatus', 'completado')
-      .lt('fecha_limite', hoy.toISOString().slice(0,10));
+      .lt('fecha_limite', hoy.toISOString().slice(0,10)) : { data: [] };
 
     const allPendientes = [...(vencidos ?? []), ...(porVencer ?? [])];
     if (allPendientes.length === 0) {
@@ -116,14 +124,34 @@ serve(async (req) => {
           <a href="${siteUrl}/nexus" style="display:inline-block;background:#0f172a;color:#fff;padding:10px 22px;border-radius:8px;font-size:13px;font-weight:700;text-decoration:none;">Ver NEXUS →</a>
         </td></tr>
         <tr><td style="background:#f8fafc;padding:16px 32px;border-top:1px solid #e2e8f0;">
-          <p style="margin:0;color:#94a3b8;font-size:11px;text-align:center;">Sistema RCMA · ${smtpUser} · Recordatorio automático diario 8:00 AM</p>
+          <p style="margin:0;color:#94a3b8;font-size:11px;text-align:center;">Sistema RCMA · ${smtpUser} · Recordatorio automático ${tipo === 'vencidos' ? '8:00 AM — Vencidos' : tipo === 'por_vencer' ? '7:00 PM — Próximos a vencer' : 'diario'}</p>
         </td></tr>
       </table>
     </td></tr>
   </table>
 </body></html>`;
 
-    await sendEmail(adminEmail, `⏰ [RCMA] NEXUS: ${allPendientes.length} pendiente${allPendientes.length !== 1 ? 's' : ''} por atender`, html);
+    const asunto = tipo === 'vencidos'
+      ? `🔴 [RCMA] NEXUS: ${allPendientes.length} pendiente${allPendientes.length !== 1 ? 's' : ''} VENCIDO${allPendientes.length !== 1 ? 'S' : ''}`
+      : tipo === 'por_vencer'
+      ? `🟡 [RCMA] NEXUS: ${allPendientes.length} pendiente${allPendientes.length !== 1 ? 's' : ''} por vencer (hoy/mañana)`
+      : `⏰ [RCMA] NEXUS: ${allPendientes.length} pendiente${allPendientes.length !== 1 ? 's' : ''} por atender`;
+    await sendEmail(adminEmail, asunto, html);
+
+    // Notificación interna en el sistema para el admin
+    try {
+      const { data: adminProfile } = await supabase.from('profiles').select('id').eq('email', adminEmail).maybeSingle();
+      if (adminProfile?.id) {
+        await supabase.from('notificaciones').insert({
+          usuario_id: adminProfile.id,
+          tipo:       tipo === 'vencidos' ? 'urgente' : 'alerta',
+          titulo:     asunto,
+          mensaje:    `${allPendientes.length} pendiente(s) en NEXUS requieren atención.`,
+          link:       '/nexus',
+          modulo:     'nexus',
+        });
+      }
+    } catch { /* no bloqueante */ }
 
     return new Response(
       JSON.stringify({ success: true, enviados: allPendientes.length }),

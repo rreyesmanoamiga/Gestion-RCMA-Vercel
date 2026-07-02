@@ -307,6 +307,16 @@ function TabReporteGeneral({ reportesGenerales, planteles, pagos, comunicados, e
       const doc = new JsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
       const W = 210; const ML = 14; const TW = 182;
       let y = 0;
+
+      // Trunca un texto con "…" si excede el ancho disponible en la columna
+      const truncateText = (text: string, maxWidth: number): string => {
+        let txt = text;
+        if ((doc as any).getTextWidth(txt) <= maxWidth) return txt;
+        while (txt.length > 1 && (doc as any).getTextWidth(txt + '…') > maxWidth) {
+          txt = txt.slice(0, -1);
+        }
+        return txt + '…';
+      };
       const fecha = hoyLocal();
       const fechaLabel = new Date(fecha + 'T12:00:00').toLocaleDateString('es-MX', { day: 'numeric', month: 'long', year: 'numeric' });
 
@@ -386,11 +396,11 @@ function TabReporteGeneral({ reportesGenerales, planteles, pagos, comunicados, e
       doc.setFillColor(12, 59, 110); doc.rect(ML, y - 3, TW, 7, 'F');
       doc.setFontSize(7.5); doc.setFont('helvetica', 'bold'); doc.setTextColor(255, 255, 255);
       doc.text('Mes', ML + 2, y + 1.5);
-      doc.text('Total Contrato', ML + 35, y + 1.5);
-      doc.text('Fact. Cons.', ML + 80, y + 1.5);
-      doc.text('Fecha Pago', ML + 108, y + 1.5);
-      doc.text('Folio', ML + 138, y + 1.5);
-      doc.text('Monto Real', ML + 158, y + 1.5); y += 8;
+      doc.text('Total Contrato', ML + 30, y + 1.5);
+      doc.text('Fact.', ML + 68, y + 1.5);
+      doc.text('Fecha Pago', ML + 85, y + 1.5);
+      doc.text('Folio', ML + 112, y + 1.5);
+      doc.text('Monto Real', ML + 160, y + 1.5); y += 8;
 
       MESES_CONTRATO.forEach((m, i) => {
         const pago = pagos.find(p => p.mes_etiqueta === m.etiqueta);
@@ -399,12 +409,12 @@ function TabReporteGeneral({ reportesGenerales, planteles, pagos, comunicados, e
         else if (i % 2 === 0) { doc.setFillColor(248, 250, 252); doc.rect(ML, y - 3, TW, 7, 'F'); }
         doc.setFont('helvetica', pago ? 'bold' : 'normal'); doc.setFontSize(8); doc.setTextColor(30, 30, 30);
         doc.text(m.etiqueta, ML + 2, y + 1);
-        doc.text(fmt(m.total), ML + 35, y + 1);
-        doc.text(pago?.factura_consecutivo ?? '—', ML + 80, y + 1);
-        doc.text(pago?.fecha_pago ? new Date(pago.fecha_pago + 'T12:00:00').toLocaleDateString('es-MX') : '—', ML + 108, y + 1);
-        doc.text(pago?.folio_factura ?? '—', ML + 138, y + 1);
-        if (pago?.monto_pagado) { doc.setTextColor(22, 163, 74); doc.text(fmt(pago.monto_pagado), ML + 158, y + 1); doc.setTextColor(30, 30, 30); }
-        else doc.text('—', ML + 158, y + 1);
+        doc.text(fmt(m.total), ML + 30, y + 1);
+        doc.text(pago?.factura_consecutivo ?? '—', ML + 68, y + 1);
+        doc.text(pago?.fecha_pago ? new Date(pago.fecha_pago + 'T12:00:00').toLocaleDateString('es-MX') : '—', ML + 85, y + 1);
+        doc.text(truncateText(pago?.folio_factura ?? '—', 44), ML + 112, y + 1);
+        if (pago?.monto_pagado) { doc.setTextColor(22, 163, 74); doc.text(fmt(pago.monto_pagado), ML + 160, y + 1); doc.setTextColor(30, 30, 30); }
+        else doc.text('—', ML + 160, y + 1);
         y += 7;
       });
       // Totales
@@ -412,9 +422,9 @@ function TabReporteGeneral({ reportesGenerales, planteles, pagos, comunicados, e
       doc.setFillColor(220, 230, 245); doc.rect(ML, y - 3, TW, 8, 'F');
       doc.setFont('helvetica', 'bold'); doc.setFontSize(8.5); doc.setTextColor(12, 59, 110);
       doc.text('TOTAL CONTRATO', ML + 2, y + 2);
-      doc.text(fmt(totalContrato), ML + 35, y + 2);
-      doc.text('TOTAL PAGADO', ML + 108, y + 2);
-      doc.setTextColor(22, 163, 74); doc.text(fmt(totalPagado), ML + 158, y + 2); y += 12;
+      doc.text(fmt(totalContrato), ML + 30, y + 2);
+      doc.text('TOTAL PAGADO', ML + 85, y + 2);
+      doc.setTextColor(22, 163, 74); doc.text(fmt(totalPagado), ML + 160, y + 2); y += 12;
 
       // ── SECCIÓN 3: COMUNICADOS ────────────────────────────────────────
       seccion('3. Comunicados Enviados');

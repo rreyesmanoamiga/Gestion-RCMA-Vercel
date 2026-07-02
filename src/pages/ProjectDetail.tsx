@@ -10,6 +10,7 @@ import {
 import ProjectForm from '@/components/projects/ProjectForm';
 import { supabase } from '@/lib/supabaseClient';
 import { logAudit } from '@/lib/audit';
+import { notifyByEmail } from '@/lib/notifications';
 import StatusBadge from '@/components/shared/StatusBadge';
 import PriorityBadge from '@/components/shared/PriorityBadge';
 import { toast } from 'sonner';
@@ -97,6 +98,26 @@ export default function ProjectDetail() {
         const territorio = (formData.territorio ?? project?.territorio) as string ?? '';
         const correoCAR  = territorio === 'NORTE'  ? 'jalvarado@manoamiga.edu.mx'
                          : territorio === 'MEXICO' ? 'gromero@manoamiga.edu.mx' : '';
+        const nombreProyecto = (formData.name as string) ?? project?.name ?? 'Proyecto';
+        const colegioProyecto = (formData.colegio as string) ?? project?.colegio ?? '';
+
+        notifyByEmail('rreyes@manoamiga.edu.mx', {
+          tipo:    'exito',
+          titulo:  `Proyecto Completado: ${nombreProyecto}`,
+          mensaje: `${colegioProyecto} — Cerrado correctamente`,
+          link:    `/proyectos/${id}`,
+          modulo:  'proyectos',
+        });
+        if (correoCAR) {
+          notifyByEmail(correoCAR, {
+            tipo:    'exito',
+            titulo:  `Proyecto Completado en tu territorio: ${nombreProyecto}`,
+            mensaje: `${colegioProyecto} — Cerrado correctamente`,
+            link:    `/proyectos/${id}`,
+            modulo:  'proyectos',
+          });
+        }
+
         await supabase.functions.invoke('notify-proyecto-completado', {
           body: {
             nombre_proyecto: formData.name ?? project?.name,

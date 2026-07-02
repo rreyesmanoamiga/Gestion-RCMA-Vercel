@@ -8,6 +8,7 @@ import { toast } from 'sonner';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { logAudit } from '@/lib/audit';
+import { notifyByEmail } from '@/lib/notifications';
 import {
   Plus, X, Pencil, Trash2, CheckCircle2, Clock, AlertCircle,
   MessageSquare, Send, FileText, Pin, Search, Download,
@@ -275,6 +276,13 @@ export default function Nexus() {
             asignado_por:userName, siteUrl:window.location.origin,
             es_directo:true,
           }});
+          notifyByEmail(pendForm.asignado_a, {
+            tipo:    pendForm.prioridad === 'urgente' ? 'urgente' : 'info',
+            titulo:  `Nuevo pendiente asignado: ${pendForm.titulo}`,
+            mensaje: `${userName} te asignó un pendiente${pendForm.fecha_limite ? ' con fecha límite ' + fmtDate(pendForm.fecha_limite) : ''}.`,
+            link:    '/nexus',
+            modulo:  'nexus',
+          });
           // Correo al CC — con conocimiento de
           if(pendForm.asignado_cc){
             await supabase.functions.invoke('notify-nexus-asignacion',{body:{
@@ -287,6 +295,13 @@ export default function Nexus() {
               es_directo:false,
               responsable_nombre:pendForm.asignado_nombre||pendForm.asignado_a,
             }});
+            notifyByEmail(pendForm.asignado_cc, {
+              tipo:    'info',
+              titulo:  `En copia: ${pendForm.titulo}`,
+              mensaje: `${userName} te puso en copia de un pendiente asignado a ${pendForm.asignado_nombre || pendForm.asignado_a}.`,
+              link:    '/nexus',
+              modulo:  'nexus',
+            });
           }
         } 
       } 
