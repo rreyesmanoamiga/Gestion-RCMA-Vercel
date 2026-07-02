@@ -19,5 +19,8 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
     persistSession:   true,
     storageKey:       'ma-app-auth',
     autoRefreshToken: true,
+    // sessionStorage en vez de localStorage: la sesión muere al cerrar
+    // el navegador/pestaña, en vez de sobrevivir indefinidamente.
+    storage:          typeof window !== 'undefined' ? window.sessionStorage : undefined,
   },
 });

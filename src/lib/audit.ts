@@ -3,6 +3,7 @@ import { supabase } from './supabaseClient';
 
 export type AuditAccion =
   | 'login'
+  | 'logout'
   | 'invitacion_enviada'
   | 'invitacion_aceptada'
   | 'crear'

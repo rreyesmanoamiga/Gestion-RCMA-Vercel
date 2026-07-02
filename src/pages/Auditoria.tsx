@@ -3,7 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabaseClient';
 import { usePermissions } from '@/hooks/usePermissions';
 import {
-  ShieldAlert, Filter, LogIn, UserPlus, CheckCircle2, PlusCircle,
+  ShieldAlert, Filter, LogIn, LogOut, UserPlus, CheckCircle2, PlusCircle,
   Pencil, Ban, Trash2, Award, ChevronDown, User as UserIcon,
 } from 'lucide-react';
 import PageHeader from '@/components/shared/PageHeader';
@@ -28,6 +28,7 @@ interface AuditRow {
 
 const ACCION_META: Record<string, { label: string; icon: React.ElementType; color: string }> = {
   login:               { label: 'Inicio de sesión',       icon: LogIn,        color: 'bg-slate-100 text-slate-600' },
+  logout:              { label: 'Cierre de sesión',       icon: LogOut,       color: 'bg-slate-100 text-slate-500' },
   invitacion_enviada:  { label: 'Invitación enviada',      icon: UserPlus,     color: 'bg-blue-50 text-blue-600' },
   invitacion_aceptada: { label: 'Invitación aceptada',     icon: CheckCircle2, color: 'bg-emerald-50 text-emerald-600' },
   crear:               { label: 'Creación',                icon: PlusCircle,   color: 'bg-teal-50 text-teal-600' },
