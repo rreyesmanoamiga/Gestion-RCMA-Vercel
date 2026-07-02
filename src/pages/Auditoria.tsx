@@ -5,12 +5,114 @@ import { usePermissions } from '@/hooks/usePermissions';
 import {
   ShieldAlert, Filter, LogIn, LogOut, UserPlus, CheckCircle2, PlusCircle,
   Pencil, Ban, Trash2, Award, ChevronDown, User as UserIcon,
+  FileDown, FileSpreadsheet, Calendar,
 } from 'lucide-react';
 import PageHeader from '@/components/shared/PageHeader';
 
-const cardClass  = "bg-white rounded-xl border border-slate-200 shadow-sm p-5";
+type Doc = import('jspdf').jsPDF;
+
+const cardClass   = "bg-white rounded-xl border border-slate-200 shadow-sm p-5";
 const selectClass = "px-3 py-2 border border-slate-300 rounded-md text-sm bg-white focus:ring-2 focus:ring-slate-900 focus:outline-none";
-const PAGE_SIZE = 30;
+const btnOutline  = "inline-flex items-center gap-2 px-4 py-2 border border-slate-300 rounded-md text-sm font-bold text-slate-700 hover:bg-slate-50 transition-colors";
+const PAGE_SIZE   = 30;
+
+// ─── Helpers de exportación — mismo formato institucional que Reportes ────────
+async function loadJsPDF(): Promise<typeof import('jspdf').jsPDF> {
+  const w = window as Window & { jspdf?: { jsPDF: typeof import('jspdf').jsPDF } };
+  if (w.jspdf?.jsPDF) return w.jspdf.jsPDF;
+  await new Promise<void>((resolve, reject) => {
+    const s = document.createElement('script');
+    s.src = 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js';
+    s.onload = () => resolve(); s.onerror = () => reject(new Error('jsPDF load error'));
+    document.head.appendChild(s);
+  });
+  return w.jspdf!.jsPDF;
+}
+
+async function loadXLSX() {
+  type XLSXType = typeof import('xlsx');
+  const w = window as Window & { XLSX?: XLSXType; XlsxStyle?: XLSXType };
+  if (w.XLSX?.utils) return w.XLSX;
+  if (w.XlsxStyle?.utils) return w.XlsxStyle;
+  await new Promise<void>((resolve, reject) => {
+    const s = document.createElement('script');
+    s.src = 'https://unpkg.com/xlsx-js-style@1.2.0/dist/xlsx.bundle.js';
+    s.onload = () => resolve(); s.onerror = () => reject(new Error('XLSX load error'));
+    document.head.appendChild(s);
+  });
+  const lib = (w.XLSX?.utils ? w.XLSX : w.XlsxStyle) as XLSXType;
+  if (!lib?.utils) throw new Error('xlsx-js-style no cargó correctamente');
+  return lib;
+}
+
+async function pdfHeader(doc: Doc, W: number, title: string, subtitle: string) {
+  doc.setFillColor(15, 23, 42); doc.rect(0, 0, W, 28, 'F');
+  doc.setFontSize(15); doc.setFont('helvetica', 'bold'); doc.setTextColor(255, 255, 255);
+  doc.text(title, 20, 13);
+  doc.setFontSize(8.5); doc.setFont('helvetica', 'normal'); doc.setTextColor(180, 180, 200);
+  doc.text(subtitle, 20, 21);
+  try {
+    const logoImg = await new Promise<string>((res, rej) => {
+      const img = new Image(); img.crossOrigin = 'anonymous';
+      img.onload = () => { const c = document.createElement('canvas'); c.width = img.width; c.height = img.height; c.getContext('2d')!.drawImage(img, 0, 0); res(c.toDataURL('image/png')); };
+      img.onerror = rej; img.src = '/logo.png';
+    });
+    doc.addImage(logoImg, 'PNG', W - 32, 2, 22, 22);
+  } catch { /* sin logo */ }
+}
+
+function pdfFooter(doc: Doc, label: string) {
+  const pages = doc.getNumberOfPages();
+  for (let i = 1; i <= pages; i++) {
+    doc.setPage(i);
+    const pH = (doc as any).internal.pageSize.getHeight();
+    const pW = (doc as any).internal.pageSize.getWidth();
+    doc.setFillColor(15, 23, 42); doc.rect(0, pH - 11, pW, 11, 'F');
+    doc.setFontSize(7); doc.setFont('helvetica', 'normal'); doc.setTextColor(160, 160, 180);
+    doc.text(label, 20, pH - 5);
+    doc.text('Página ' + i + ' de ' + pages, pW - 20, pH - 5, { align: 'right' });
+  }
+}
+
+function drawTable(
+  doc: Doc, y: number, W: number,
+  headers: { label: string; x: number; align?: 'left' | 'right' | 'center' }[],
+  rows: string[][],
+  maxRows = 40,
+  pageH = 297
+): number {
+  const doc2 = doc as any;
+  doc.setFillColor(241, 245, 249); doc.rect(18, y - 4, W - 36, 9, 'F');
+  doc.setFontSize(8); doc.setFont('helvetica', 'bold'); doc.setTextColor(100, 116, 139);
+  headers.forEach(h => doc.text(h.label, h.x, y, { align: h.align ?? 'left' }));
+  y += 7;
+  doc.setDrawColor(220, 220, 220); doc.line(20, y, W - 20, y); y += 2;
+  doc.setFont('helvetica', 'normal'); doc.setTextColor(30, 30, 30);
+  rows.slice(0, maxRows).forEach((row, i) => {
+    if (y > pageH - 32) { doc.addPage(); y = 20; }
+    if (i % 2 === 0) { doc.setFillColor(248, 250, 252); doc.rect(18, y - 4, W - 36, 8, 'F'); }
+    doc.setFontSize(8);
+    row.forEach((cell, ci) => {
+      const h = headers[ci];
+      const nextX = ci < headers.length - 1 ? headers[ci + 1].x : (W - 18);
+      const maxW  = nextX - h.x - 2;
+      let txt = String(cell ?? '—');
+      if (doc2.getTextWidth && doc2.getTextWidth(txt) > maxW) {
+        while (txt.length > 1 && doc2.getTextWidth(txt + '…') > maxW) {
+          txt = txt.slice(0, -1);
+        }
+        txt = txt + '…';
+      }
+      doc.text(txt, h.x, y, { align: h.align ?? 'left' });
+    });
+    y += 8;
+  });
+  if (rows.length > maxRows) {
+    y += 2; doc.setFontSize(8); doc.setTextColor(100, 116, 139);
+    doc.text(`Mostrando ${maxRows} de ${rows.length} registros.`, 20, y); y += 6;
+  }
+  return y;
+}
 
 interface AuditRow {
   id:             string;
@@ -48,12 +150,130 @@ const MODULO_LABEL: Record<string, string> = {
   presupuestos: 'Presupuestos',
 };
 
+// ─── Export PDF: Reporte de Auditoría ─────────────────────────────────────────
+async function exportAuditoriaPDF(rows: AuditRow[], desde: string, hasta: string): Promise<void> {
+  const JsPDF = await loadJsPDF();
+  const doc = new JsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
+  const W = 297;
+  const rangoLabel = desde && hasta
+    ? `Del ${new Date(desde + 'T12:00:00').toLocaleDateString('es-MX')} al ${new Date(hasta + 'T12:00:00').toLocaleDateString('es-MX')}`
+    : 'Todos los registros';
+  await pdfHeader(doc, W, 'Reporte de Auditoría del Sistema', 'Sistema RCMA  ·  ' + rangoLabel + '  ·  Generado el ' + new Date().toLocaleDateString('es-MX', { year: 'numeric', month: 'long', day: 'numeric' }));
+  let y = 38;
+
+  const rowsData = rows.map(r => [
+    new Date(r.created_at).toLocaleString('es-MX', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }),
+    ACCION_META[r.accion]?.label ?? r.accion,
+    MODULO_LABEL[r.modulo] ?? r.modulo,
+    r.usuario_nombre ?? r.usuario_email ?? '—',
+    r.registro_ref ?? '—',
+    r.en_nombre_de ?? '—',
+  ]);
+
+  y = drawTable(doc, y, W, [
+    { label: 'Fecha y Hora',    x: 20  },
+    { label: 'Acción',          x: 62  },
+    { label: 'Módulo',          x: 100 },
+    { label: 'Usuario',         x: 140 },
+    { label: 'Registro',        x: 195 },
+    { label: 'A Nombre De',     x: 250 },
+  ], rowsData, 300, 210);
+
+  pdfFooter(doc, `Sistema RCMA · Colegios Mano Amiga · Documento confidencial · ${rows.length} registros`);
+  doc.save(`auditoria-sistema-${Date.now()}.pdf`);
+}
+
+// ─── Export Excel: Reporte de Auditoría ───────────────────────────────────────
+async function exportAuditoriaExcel(rows: AuditRow[], desde: string, hasta: string): Promise<void> {
+  const XLSX = await loadXLSX();
+  const wb   = XLSX.utils.book_new();
+  const now  = new Date().toLocaleDateString('es-MX', { year: 'numeric', month: 'long', day: 'numeric' });
+  const rangoLabel = desde && hasta
+    ? `Del ${new Date(desde + 'T12:00:00').toLocaleDateString('es-MX')} al ${new Date(hasta + 'T12:00:00').toLocaleDateString('es-MX')}`
+    : 'Todos los registros';
+
+  const bdr = {
+    top:    { style: 'thin', color: { rgb: 'FFD1D5DB' } },
+    bottom: { style: 'thin', color: { rgb: 'FFD1D5DB' } },
+    left:   { style: 'thin', color: { rgb: 'FFD1D5DB' } },
+    right:  { style: 'thin', color: { rgb: 'FFD1D5DB' } },
+  };
+  const sTitle    = { font: { bold: true, sz: 13, name: 'Calibri', color: { rgb: 'FFFFFFFF' } }, fill: { patternType: 'solid', fgColor: { rgb: 'FF0F172A' } }, alignment: { horizontal: 'left', vertical: 'center' } };
+  const sSubtitle = { font: { italic: true, sz: 9, name: 'Calibri', color: { rgb: 'FFD1D5DB' } }, fill: { patternType: 'solid', fgColor: { rgb: 'FF0F172A' } }, alignment: { horizontal: 'right', vertical: 'center' } };
+  const sHead     = { font: { bold: true, sz: 9, name: 'Calibri', color: { rgb: 'FFFFFFFF' } }, fill: { patternType: 'solid', fgColor: { rgb: 'FF1E293B' } }, alignment: { horizontal: 'center', vertical: 'center', wrapText: true }, border: bdr };
+  const sCell     = { font: { sz: 9, name: 'Calibri' }, alignment: { vertical: 'center', wrapText: true }, border: bdr };
+  const sCellAlt  = { ...sCell, fill: { patternType: 'solid', fgColor: { rgb: 'FFF8FAFC' } } };
+
+  const headers = ['Fecha y Hora', 'Acción', 'Módulo', 'Usuario', 'Correo', 'Registro Afectado', 'A Nombre De', 'Detalle'];
+  const dataRows = rows.map(r => [
+    new Date(r.created_at).toLocaleString('es-MX'),
+    ACCION_META[r.accion]?.label ?? r.accion,
+    MODULO_LABEL[r.modulo] ?? r.modulo,
+    r.usuario_nombre ?? '—',
+    r.usuario_email ?? '—',
+    r.registro_ref ?? '—',
+    r.en_nombre_de ?? '—',
+    r.detalle ? Object.entries(r.detalle).filter(([, v]) => v != null && v !== '').map(([k, v]) => `${k}: ${v}`).join(' | ') : '—',
+  ]);
+
+  const aoa: (string | number)[][] = [
+    ['REPORTE DE AUDITORÍA DEL SISTEMA — SISTEMA RCMA', rangoLabel],
+    [],
+    headers,
+    ...dataRows,
+  ];
+
+  const ws = XLSX.utils.aoa_to_sheet(aoa);
+  ws['!merges'] = [{ s: { r: 0, c: 0 }, e: { r: 0, c: 3 } }, { s: { r: 0, c: 4 }, e: { r: 0, c: 7 } }];
+  ws['!cols'] = [{ wch: 18 }, { wch: 16 }, { wch: 16 }, { wch: 22 }, { wch: 26 }, { wch: 30 }, { wch: 20 }, { wch: 50 }];
+  ws['!rows'] = [{ hpt: 22 }, { hpt: 4 }, { hpt: 20 }];
+
+  if (ws['A1']) ws['A1'].s = sTitle;
+  if (ws['E1']) ws['E1'].s = sSubtitle;
+  headers.forEach((_, i) => {
+    const cellRef = XLSX.utils.encode_cell({ r: 2, c: i });
+    if (ws[cellRef]) ws[cellRef].s = sHead;
+  });
+  dataRows.forEach((_, ri) => {
+    headers.forEach((__, ci) => {
+      const cellRef = XLSX.utils.encode_cell({ r: 3 + ri, c: ci });
+      if (ws[cellRef]) ws[cellRef].s = ri % 2 === 0 ? sCell : sCellAlt;
+    });
+  });
+
+  XLSX.utils.book_append_sheet(wb, ws as import('xlsx').WorkSheet, '🛡️ Auditoría');
+  XLSX.writeFile(wb, `Auditoria_Sistema_RCMA_${now.replace(/\s/g, '_')}.xlsx`);
+}
+
 export default function Auditoria() {
   const { isAdmin } = usePermissions();
   const [filterModulo, setFilterModulo] = useState('all');
   const [filterAccion, setFilterAccion] = useState('all');
   const [filterUsuario, setFilterUsuario] = useState('all');
+  const [fechaDesde, setFechaDesde] = useState('');
+  const [fechaHasta, setFechaHasta] = useState('');
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
+  const [exportando, setExportando] = useState(false);
+
+  const aplicarPreset = (preset: 'hoy' | 'semana' | 'mes' | 'mesAnterior' | 'todo') => {
+    const hoy = new Date();
+    const fmt = (d: Date) => d.toISOString().slice(0, 10);
+    if (preset === 'todo')  { setFechaDesde(''); setFechaHasta(''); return; }
+    if (preset === 'hoy')   { const s = fmt(hoy); setFechaDesde(s); setFechaHasta(s); return; }
+    if (preset === 'semana') {
+      const inicio = new Date(hoy); inicio.setDate(hoy.getDate() - 7);
+      setFechaDesde(fmt(inicio)); setFechaHasta(fmt(hoy)); return;
+    }
+    if (preset === 'mes') {
+      const inicio = new Date(hoy.getFullYear(), hoy.getMonth(), 1);
+      setFechaDesde(fmt(inicio)); setFechaHasta(fmt(hoy)); return;
+    }
+    if (preset === 'mesAnterior') {
+      const inicio = new Date(hoy.getFullYear(), hoy.getMonth() - 1, 1);
+      const fin    = new Date(hoy.getFullYear(), hoy.getMonth(), 0);
+      setFechaDesde(fmt(inicio)); setFechaHasta(fmt(fin)); return;
+    }
+  };
 
   const { data: rows = [], isLoading } = useQuery({
     queryKey: ['auditoria_sistema'],
@@ -74,15 +294,31 @@ export default function Auditoria() {
     [rows]
   );
 
-  const filtered = useMemo(() => rows.filter(r =>
-    (filterModulo === 'all'  || r.modulo === filterModulo) &&
-    (filterAccion === 'all'  || r.accion === filterAccion) &&
-    (filterUsuario === 'all' || r.usuario_email === filterUsuario)
-  ), [rows, filterModulo, filterAccion, filterUsuario]);
+  const filtered = useMemo(() => rows.filter(r => {
+    const fecha = r.created_at.slice(0, 10);
+    return (filterModulo === 'all'  || r.modulo === filterModulo) &&
+      (filterAccion === 'all'  || r.accion === filterAccion) &&
+      (filterUsuario === 'all' || r.usuario_email === filterUsuario) &&
+      (!fechaDesde || fecha >= fechaDesde) &&
+      (!fechaHasta || fecha <= fechaHasta);
+  }), [rows, filterModulo, filterAccion, filterUsuario, fechaDesde, fechaHasta]);
 
   const visible   = useMemo(() => filtered.slice(0, visibleCount), [filtered, visibleCount]);
   const hasMore   = visibleCount < filtered.length;
   const remaining = filtered.length - visibleCount;
+
+  const handleExportPDF = async () => {
+    setExportando(true);
+    try { await exportAuditoriaPDF(filtered, fechaDesde, fechaHasta); }
+    catch (e) { console.error(e); alert('Error al generar el PDF de auditoría'); }
+    finally { setExportando(false); }
+  };
+  const handleExportExcel = async () => {
+    setExportando(true);
+    try { await exportAuditoriaExcel(filtered, fechaDesde, fechaHasta); }
+    catch (e) { console.error(e); alert('Error al generar el Excel de auditoría'); }
+    finally { setExportando(false); }
+  };
 
   if (!isAdmin) {
     return (
@@ -95,10 +331,43 @@ export default function Auditoria() {
 
   return (
     <div className="space-y-5">
-      <PageHeader
-        title="Auditoría del Sistema"
-        subtitle="Registro completo de acciones: usuarios, invitaciones, solicitudes, tickets y proyectos"
-      />
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-2">
+        <PageHeader
+          title="Auditoría del Sistema"
+          subtitle="Registro completo de acciones: usuarios, invitaciones, solicitudes, tickets y proyectos"
+        />
+        <div className="flex gap-2 shrink-0 -mt-6 sm:mt-0">
+          <button onClick={handleExportPDF} disabled={exportando || filtered.length === 0} className={btnOutline + " disabled:opacity-40"}>
+            <FileDown className="w-4 h-4 text-red-600" /> PDF
+          </button>
+          <button onClick={handleExportExcel} disabled={exportando || filtered.length === 0} className={btnOutline + " disabled:opacity-40"}>
+            <FileSpreadsheet className="w-4 h-4 text-emerald-600" /> Excel
+          </button>
+        </div>
+      </div>
+
+      {/* Rango de fechas */}
+      <div className="flex flex-wrap items-center gap-2">
+        <Calendar className="w-4 h-4 text-slate-400" />
+        {[
+          { key: 'hoy',         label: 'Hoy' },
+          { key: 'semana',      label: 'Últimos 7 días' },
+          { key: 'mes',         label: 'Este mes' },
+          { key: 'mesAnterior', label: 'Mes anterior' },
+          { key: 'todo',        label: 'Todo' },
+        ].map(p => (
+          <button key={p.key} onClick={() => aplicarPreset(p.key as any)}
+            className="px-3 py-1.5 rounded-full text-xs font-semibold border border-slate-300 bg-white text-slate-600 hover:border-slate-500 transition-colors">
+            {p.label}
+          </button>
+        ))}
+        <span className="text-slate-300">|</span>
+        <input type="date" className={selectClass} value={fechaDesde}
+          onChange={e => { setFechaDesde(e.target.value); setVisibleCount(PAGE_SIZE); }} />
+        <span className="text-slate-400 text-sm">a</span>
+        <input type="date" className={selectClass} value={fechaHasta}
+          onChange={e => { setFechaHasta(e.target.value); setVisibleCount(PAGE_SIZE); }} />
+      </div>
 
       {/* Filtros */}
       <div className="flex flex-wrap gap-3 items-center">
