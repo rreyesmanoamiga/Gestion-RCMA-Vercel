@@ -34,10 +34,6 @@ const PERMISSION_DEFS: PermissionDef[] = [
   { key: 'crear_calendario',          label: 'Crear Eventos',             group: 'Calendario',            default: false },
   { key: 'editar_calendario',         label: 'Editar Eventos',            group: 'Calendario',            default: false },
   { key: 'eliminar_calendario',       label: 'Eliminar Eventos',          group: 'Calendario',            default: false },
-  { key: 'ver_pendientes',            label: 'Ver Pendientes',            group: 'Pendientes',            default: true  },
-  { key: 'crear_pendientes',          label: 'Crear Pendientes',          group: 'Pendientes',            default: false },
-  { key: 'editar_pendientes',         label: 'Editar Pendientes',         group: 'Pendientes',            default: false },
-  { key: 'eliminar_pendientes',       label: 'Eliminar Pendientes',       group: 'Pendientes',            default: false },
   { key: 'ver_solicitud_proyecto',    label: 'Ver Solicitud de Proyecto', group: 'Solicitud de Proyecto', default: true  },
   { key: 'enviar_solicitud_proyecto', label: 'Enviar Solicitud',          group: 'Solicitud de Proyecto', default: true  },
   { key: 'ver_reportes',              label: 'Ver Reportes',              group: 'Reportes',              default: true  },
@@ -47,7 +43,10 @@ const PERMISSION_DEFS: PermissionDef[] = [
   { key: 'ver_insumos',               label: 'Ver Insumos',               group: 'Insumos',               default: false },
   { key: 'vobo_insumos',              label: 'VoBo Insumos',              group: 'Insumos',               default: false },
   { key: 'ver_nexus',                 label: 'Ver NEXUS',                 group: 'NEXUS',                 default: false },
-  { key: 'ver_levantamiento',         label: 'Ver Levantamiento Nacional', group: 'Levantamiento Nacional', default: false },
+  { key: 'ver_levantamiento',         label: 'Ver Levantamiento Nacional',        group: 'Levantamiento Nacional', default: false },
+  { key: 'descargar_levantamiento',   label: 'Descargar Reportes/PDFs',           group: 'Levantamiento Nacional', default: false },
+  { key: 'crear_levantamiento',       label: 'Crear/Editar (Comunicados, Pagos, Planteles)', group: 'Levantamiento Nacional', default: false },
+  { key: 'eliminar_levantamiento',    label: 'Eliminar Registros',                group: 'Levantamiento Nacional', default: false },
 ];
 
 export const PERMISSIONS: Record<string, string> = Object.fromEntries(

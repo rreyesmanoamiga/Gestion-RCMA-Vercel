@@ -42,6 +42,7 @@ import {
   Plus, X, Edit2, Save, Download, Eye, Loader2, Trash2
 } from 'lucide-react';
 import PageHeader from '@/components/shared/PageHeader';
+import { usePermissions } from '@/hooks/usePermissions';
 
 const REPORTES_PAGE_SIZE = 20;
 
@@ -236,12 +237,13 @@ Este proyecto es fundamental para el desarrollo de futuras iniciativas de mejora
 // ══════════════════════════════════════════════════════════════════════════════
 // COMPONENTE PRINCIPAL
 // ══════════════════════════════════════════════════════════════════════════════
-function TabReporteGeneral({ reportesGenerales, planteles, pagos, comunicados, entregables }: {
+function TabReporteGeneral({ reportesGenerales, planteles, pagos, comunicados, entregables, puedeEliminar }: {
   reportesGenerales: ReporteGeneral[];
   planteles: Plantel[];
   pagos: Pago[];
   comunicados: Comunicado[];
   entregables: Entregable[];
+  puedeEliminar: boolean;
 }) {
   const qc = useQueryClient();
   const [generating, setGenerating] = useState(false);
@@ -249,6 +251,7 @@ function TabReporteGeneral({ reportesGenerales, planteles, pagos, comunicados, e
 
   const deleteRGMut = useMutation({
     mutationFn: async (r: ReporteGeneral) => {
+      if (!puedeEliminar) throw new Error('No tienes permiso para eliminar registros de Levantamiento Nacional.');
       // Borrar de OneDrive (no bloqueante si falla)
       if (r.onedrive_path && r.archivo_nombre) {
         try { await spDelete(r.onedrive_path, r.archivo_nombre); } catch { /* continuar */ }
@@ -562,9 +565,11 @@ function TabReporteGeneral({ reportesGenerales, planteles, pagos, comunicados, e
                         <Eye className="w-3.5 h-3.5" />Ver PDF
                       </a>
                     )}
+                    {puedeEliminar && (
                     <button onClick={() => setDeleteRG(r)} className="p-1.5 rounded hover:bg-red-50 text-slate-400 hover:text-red-500 transition-colors" title="Eliminar">
                       <Trash2 className="w-4 h-4" />
                     </button>
+                    )}
                   </div>
                 </td>
               </tr>
@@ -594,6 +599,10 @@ function TabReporteGeneral({ reportesGenerales, planteles, pagos, comunicados, e
 export default function LevantamientoNacional() {
   const [tab, setTab] = useState('comunicados');
   const qc = useQueryClient();
+  const { can, isAdmin } = usePermissions();
+  const puedeCrear      = isAdmin || can('crear_levantamiento');
+  const puedeEliminar   = isAdmin || can('eliminar_levantamiento');
+  const puedeDescargar  = isAdmin || can('descargar_levantamiento');
 
   // ─── Queries ──────────────────────────────────────────────────────────────
   const { data: planteles = [], isLoading: loadingP } = useQuery<Plantel[]>({
@@ -701,12 +710,12 @@ export default function LevantamientoNacional() {
       </div>
 
       {/* Tab Content */}
-      {tab === 'planteles'   && <TabPlanteles planteles={planteles} loading={loadingP} qc={qc} directorio={directorio} />}
-      {tab === 'pagos'       && <TabPagos pagos={pagos} planteles={planteles} qc={qc} />}
-      {tab === 'comunicados' && <TabComunicados comunicados={comunicados} planteles={planteles} directorio={directorio} qc={qc} />}
-      {tab === 'reportes'    && <TabReportes reportes={reportes} planteles={planteles} qc={qc} />}
-      {tab === 'entregables' && <TabEntregables entregables={entregables} planteles={planteles} qc={qc} />}
-      {tab === 'reporte'      && <TabReporteGeneral reportesGenerales={reportesGenerales} planteles={planteles} pagos={pagos} comunicados={comunicados} entregables={entregables} />}
+      {tab === 'planteles'   && <TabPlanteles planteles={planteles} loading={loadingP} qc={qc} directorio={directorio} puedeCrear={puedeCrear} puedeEliminar={puedeEliminar} />}
+      {tab === 'pagos'       && <TabPagos pagos={pagos} planteles={planteles} qc={qc} puedeCrear={puedeCrear} puedeEliminar={puedeEliminar} />}
+      {tab === 'comunicados' && <TabComunicados comunicados={comunicados} planteles={planteles} directorio={directorio} qc={qc} puedeCrear={puedeCrear} puedeEliminar={puedeEliminar} puedeDescargar={puedeDescargar} />}
+      {tab === 'reportes'    && <TabReportes reportes={reportes} planteles={planteles} qc={qc} puedeCrear={puedeCrear} puedeEliminar={puedeEliminar} puedeDescargar={puedeDescargar} />}
+      {tab === 'entregables' && <TabEntregables entregables={entregables} planteles={planteles} qc={qc} puedeCrear={puedeCrear} />}
+      {tab === 'reporte'      && <TabReporteGeneral reportesGenerales={reportesGenerales} planteles={planteles} pagos={pagos} comunicados={comunicados} entregables={entregables} puedeEliminar={puedeEliminar} />}
     </div>
   );
 }
@@ -796,8 +805,9 @@ async function spDelete(carpeta: string, fileName: string): Promise<void> {
   if (!res.ok && res.status !== 404) throw new Error(`Delete error ${res.status}`);
 }
 
-function TabPlanteles({ planteles, loading, qc, directorio }: {
+function TabPlanteles({ planteles, loading, qc, directorio, puedeCrear, puedeEliminar }: {
   planteles: Plantel[]; loading: boolean; qc: any; directorio: DirectorioItem[];
+  puedeCrear: boolean; puedeEliminar: boolean;
 }) {
   const [showForm, setShowForm]   = useState(false);
   const [editItem, setEditItem]   = useState<Plantel | null>(null);
@@ -842,6 +852,7 @@ function TabPlanteles({ planteles, loading, qc, directorio }: {
 
   const saveMut = useMutation({
     mutationFn: async () => {
+      if (!puedeCrear) throw new Error('No tienes permiso para crear o editar planteles.');
       if (!colegio) throw new Error('Selecciona un colegio');
       const info  = COLEGIOS.find(c => c.colegio === colegio);
       const datos = DATOS_COLEGIO[codigoCorto(colegio)];
@@ -877,9 +888,11 @@ function TabPlanteles({ planteles, loading, qc, directorio }: {
 
   return (
     <div className="space-y-4">
+      {puedeCrear && (
       <div className="flex justify-end">
         <button onClick={openNew} className={btnPrimary}><Plus className="w-4 h-4" />Agregar Plantel</button>
       </div>
+      )}
 
       {/* Modal */}
       {showForm && (
@@ -1031,7 +1044,7 @@ function TabPlanteles({ planteles, loading, qc, directorio }: {
 // ══════════════════════════════════════════════════════════════════════════════
 // TAB: PAGOS (Flujograma)
 // ══════════════════════════════════════════════════════════════════════════════
-function TabPagos({ pagos, planteles, qc }: { pagos: Pago[]; planteles: Plantel[]; qc: any }) {
+function TabPagos({ pagos, planteles, qc, puedeCrear, puedeEliminar }: { pagos: Pago[]; planteles: Plantel[]; qc: any; puedeCrear: boolean; puedeEliminar: boolean }) {
   const [showAdd, setShowAdd] = useState(false);
   const [form, setForm] = useState({ mes_etiqueta: '', fecha_pago: '', folio_factura: '', monto_pagado: '', observaciones: '' });
   const [fileFactura, setFileFactura] = useState<File | null>(null);
@@ -1083,6 +1096,7 @@ function TabPagos({ pagos, planteles, qc }: { pagos: Pago[]; planteles: Plantel[
 
   const addMut = useMutation({
     mutationFn: async () => {
+      if (!puedeCrear) throw new Error('No tienes permiso para registrar pagos.');
       if (!form.mes_etiqueta) throw new Error('Selecciona el mes');
       setUploading(true);
       try {
@@ -1128,6 +1142,7 @@ function TabPagos({ pagos, planteles, qc }: { pagos: Pago[]; planteles: Plantel[
 
   const editMut = useMutation({
     mutationFn: async () => {
+      if (!puedeCrear) throw new Error('No tienes permiso para editar pagos.');
       if (!editPago) return;
       setEditUploading(true);
       try {
@@ -1179,11 +1194,13 @@ function TabPagos({ pagos, planteles, qc }: { pagos: Pago[]; planteles: Plantel[
         </div>
       </div>
 
+      {puedeCrear && (
       <div className="flex justify-end">
         <button onClick={() => setShowAdd(true)} disabled={mesesDisponibles.length === 0} className={btnPrimary}>
           <Plus className="w-4 h-4" />Registrar Pago
         </button>
       </div>
+      )}
 
       {/* Modal registrar pago */}
       {showAdd && (
@@ -1559,8 +1576,9 @@ async function buildPDFBlob(plantel: Plantel, c: { fecha_emision: string; fecha_
   return doc.output('blob') as Blob;
 }
 
-function TabComunicados({ comunicados, planteles, directorio, qc }: {
+function TabComunicados({ comunicados, planteles, directorio, qc, puedeCrear, puedeEliminar, puedeDescargar }: {
   comunicados: Comunicado[]; planteles: Plantel[]; directorio: DirectorioItem[]; qc: any;
+  puedeCrear: boolean; puedeEliminar: boolean; puedeDescargar: boolean;
 }) {
   const [showForm, setShowForm]     = useState(false);
   const [previewCom, setPreviewCom] = useState<Comunicado | null>(null);
@@ -1582,6 +1600,7 @@ function TabComunicados({ comunicados, planteles, directorio, qc }: {
 
   const saveMut = useMutation({
     mutationFn: async () => {
+      if (!puedeCrear) throw new Error('No tienes permiso para crear comunicados.');
       if (!colegio) throw new Error('Selecciona un colegio');
       setSaving(true);
       try {
@@ -1643,6 +1662,7 @@ function TabComunicados({ comunicados, planteles, directorio, qc }: {
 
   const deleteMut = useMutation({
     mutationFn: async (c: Comunicado) => {
+      if (!puedeEliminar) throw new Error('No tienes permiso para eliminar comunicados.');
       if (c.onedrive_path && c.archivo_nombre) await spDelete(c.onedrive_path, c.archivo_nombre);
       const { error } = await supabase.from('levantamiento_comunicados').delete().eq('id', c.id);
       if (error) throw error;
@@ -1733,9 +1753,11 @@ function TabComunicados({ comunicados, planteles, directorio, qc }: {
 
   return (
     <div className="space-y-4">
+      {puedeCrear && (
       <div className="flex justify-end">
         <button onClick={() => setShowForm(true)} className={btnPrimary}><Plus className="w-4 h-4" />Nuevo Comunicado</button>
       </div>
+      )}
 
       {/* Modal Nuevo Comunicado */}
       {showForm && (
@@ -1866,7 +1888,7 @@ function TabComunicados({ comunicados, planteles, directorio, qc }: {
                     <div className="flex items-center gap-2">
                       <button onClick={() => handlePreview(c)} className="text-slate-400 hover:text-[#0C3B6E]" title="Vista previa"><Eye className="w-4 h-4" /></button>
                       <button onClick={() => handlePrint(c)} className="text-slate-400 hover:text-[#0C3B6E]" title="Imprimir"><Download className="w-4 h-4" /></button>
-                      <button onClick={() => setDeleteCom(c)} className="text-slate-400 hover:text-red-500" title="Eliminar"><X className="w-4 h-4" /></button>
+                      {puedeEliminar && <button onClick={() => setDeleteCom(c)} className="text-slate-400 hover:text-red-500" title="Eliminar"><X className="w-4 h-4" /></button>}
                     </div>
                   </td>
                 </tr>
@@ -1879,7 +1901,7 @@ function TabComunicados({ comunicados, planteles, directorio, qc }: {
   );
 }
 
-function TabReportes({ reportes, planteles, qc }: { reportes: Reporte[]; planteles: Plantel[]; qc: any }) {
+function TabReportes({ reportes, planteles, qc, puedeCrear, puedeEliminar, puedeDescargar }: { reportes: Reporte[]; planteles: Plantel[]; qc: any; puedeCrear: boolean; puedeEliminar: boolean; puedeDescargar: boolean }) {
   const hoy = hoyLocal();
   const [showForm, setShowForm]   = useState(false);
   const [editItem, setEditItem]   = useState<Reporte | null>(null);
@@ -1897,6 +1919,7 @@ function TabReportes({ reportes, planteles, qc }: { reportes: Reporte[]; plantel
 
   const deleteMut = useMutation({
     mutationFn: async (r: Reporte) => {
+      if (!puedeEliminar) throw new Error('No tienes permiso para eliminar reportes.');
       if (r.onedrive_path && r.archivo_nombre) await spDelete(r.onedrive_path, r.archivo_nombre);
       const { error } = await supabase.from('levantamiento_reportes').delete().eq('id', r.id);
       if (error) throw error;
@@ -1919,6 +1942,7 @@ function TabReportes({ reportes, planteles, qc }: { reportes: Reporte[]; plantel
 
   const saveMut = useMutation({
     mutationFn: async () => {
+      if (!puedeCrear) throw new Error('No tienes permiso para crear o editar reportes.');
       setUploading(true);
       try {
         const nuevaCarpeta = carpetaDesde(form.fecha_reporte);
@@ -1988,9 +2012,11 @@ function TabReportes({ reportes, planteles, qc }: { reportes: Reporte[]; plantel
 
   return (
     <div className="space-y-4">
+      {puedeCrear && (
       <div className="flex justify-end">
         <button onClick={openNew} className={btnPrimary}><Upload className="w-4 h-4" />Subir Reporte</button>
       </div>
+      )}
 
       {showForm && (
         <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
@@ -2128,12 +2154,16 @@ function TabReportes({ reportes, planteles, qc }: { reportes: Reporte[]; plantel
                           <Eye className="w-4 h-4" />
                         </a>
                       )}
+                      {puedeCrear && (
                       <button onClick={() => openEdit(r)} className="text-slate-400 hover:text-[#0C3B6E]">
                         <Edit2 className="w-4 h-4" />
                       </button>
+                      )}
+                      {puedeEliminar && (
                       <button onClick={() => setDeleteReporte(r)} className="text-slate-400 hover:text-red-500">
                         <Trash2 className="w-4 h-4" />
                       </button>
+                      )}
                     </div>
                   </td>
                 </tr>
@@ -2163,7 +2193,7 @@ function TabReportes({ reportes, planteles, qc }: { reportes: Reporte[]; plantel
 
 // TAB: ENTREGABLES (Checklist)
 // ══════════════════════════════════════════════════════════════════════════════
-function TabEntregables({ entregables, planteles, qc }: { entregables: Entregable[]; planteles: Plantel[]; qc: any }) {
+function TabEntregables({ entregables, planteles, qc, puedeCrear }: { entregables: Entregable[]; planteles: Plantel[]; qc: any; puedeCrear: boolean }) {
   const [actaModal, setActaModal]   = useState<{ entId: string; plantelNombre: string } | null>(null);
   const [actaFile, setActaFile]     = useState<File | null>(null);
   const [actaUploading, setActaUploading] = useState(false);
@@ -2178,6 +2208,7 @@ function TabEntregables({ entregables, planteles, qc }: { entregables: Entregabl
 
   const updateMut = useMutation({
     mutationFn: async ({ id, field, value }: { id: string; field: string; value: boolean }) => {
+      if (!puedeCrear) throw new Error('No tienes permiso para editar entregables.');
       const { error } = await supabase.from('levantamiento_entregables')
         .update({ [field]: value, updated_at: new Date().toISOString() }).eq('id', id);
       if (error) throw error;
@@ -2188,6 +2219,7 @@ function TabEntregables({ entregables, planteles, qc }: { entregables: Entregabl
 
   const createMut = useMutation({
     mutationFn: async (plantelId: string) => {
+      if (!puedeCrear) throw new Error('No tienes permiso para crear entregables.');
       const { error } = await supabase.from('levantamiento_entregables').insert({ plantel_id: plantelId });
       if (error) throw error;
     },
@@ -2197,6 +2229,7 @@ function TabEntregables({ entregables, planteles, qc }: { entregables: Entregabl
 
   const actaMut = useMutation({
     mutationFn: async () => {
+      if (!puedeCrear) throw new Error('No tienes permiso para subir actas de cierre.');
       if (!actaModal) return;
       setActaUploading(true);
       try {
