@@ -19,7 +19,12 @@ export type AuditModulo =
   | 'tickets_mas'
   | 'tickets'
   | 'proyectos'
-  | 'presupuestos';
+  | 'presupuestos'
+  | 'insumos'
+  | 'checklists'
+  | 'mantenimiento'
+  | 'nexus'
+  | 'anteproyectos';
 
 interface LogAuditParams {
   accion:       AuditAccion;

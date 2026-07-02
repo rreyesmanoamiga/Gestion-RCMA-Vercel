@@ -7,6 +7,7 @@ import { TERRITORIOS, getColegiosByTerritorio } from '@/lib/colegios';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
+import { logAudit } from '@/lib/audit';
 import {
   Plus, X, Pencil, Trash2, CheckCircle2, Clock, AlertCircle,
   MessageSquare, Send, FileText, Pin, Search, Download,
@@ -223,7 +224,11 @@ export default function Nexus() {
 
   const saveNota = useMutation({
     mutationFn: async()=>{ if(editNota){await supabase.from('nexus_notas').update({...notaForm,updated_at:new Date().toISOString()}).eq('id',editNota.id);} else{await supabase.from('nexus_notas').insert(notaForm);} },
-    onSuccess:()=>{ qc.invalidateQueries({queryKey:['nexus_notas']}); toast.success('Nota guardada'); setShowNota(false); setEditNota(null); },
+    onSuccess:()=>{
+      qc.invalidateQueries({queryKey:['nexus_notas']}); toast.success('Nota guardada'); setShowNota(false);
+      logAudit({ accion: editNota ? 'editar' : 'crear', modulo: 'nexus', registro_id: editNota?.id ?? null, registro_ref: notaForm.titulo ?? null });
+      setEditNota(null);
+    },
     onError:(e:any)=>toast.error(e.message),
   });
 
@@ -285,6 +290,13 @@ export default function Nexus() {
           }
         } 
       } 
+      logAudit({
+        accion:       editPend ? 'editar' : 'crear',
+        modulo:       'nexus',
+        registro_id:  editPend?.id ?? null,
+        registro_ref: pendForm.titulo,
+        detalle:      { tipo: pendForm.tipo, asignado_a: pendForm.asignado_nombre || pendForm.asignado_a || null, prioridad: pendForm.prioridad },
+      });
     },
     onSuccess:()=>{ qc.invalidateQueries({queryKey:['nexus_pendientes']}); toast.success('Pendiente guardado'); setShowPend(false); setEditPend(null); },
     onError:(e:any)=>toast.error(e.message),
@@ -307,11 +319,19 @@ export default function Nexus() {
           });
         }
       }
+      logAudit({ accion: 'completar', modulo: 'nexus', registro_id: p.id, registro_ref: p.titulo });
     },
     onSuccess: () => { qc.invalidateQueries({queryKey:['nexus_pendientes']}); toast.success('Pendiente completado ✓'); }
   });
 
-  const deleteMutation = useMutation({ mutationFn:async({type,id}:{type:'nota'|'pendiente';id:string})=>{ if(type==='nota') await supabase.from('nexus_notas').delete().eq('id',id); else{ await supabase.from('nexus_comentarios').delete().eq('pendiente_id',id); await supabase.from('nexus_pendientes').delete().eq('id',id); } }, onSuccess:()=>{ qc.invalidateQueries({queryKey:['nexus_notas']}); qc.invalidateQueries({queryKey:['nexus_pendientes']}); toast.success('Eliminado'); setConfirmDel(null); } });
+  const deleteMutation = useMutation({
+    mutationFn: async({type,id}:{type:'nota'|'pendiente';id:string})=>{
+      if(type==='nota') await supabase.from('nexus_notas').delete().eq('id',id);
+      else{ await supabase.from('nexus_comentarios').delete().eq('pendiente_id',id); await supabase.from('nexus_pendientes').delete().eq('id',id); }
+      logAudit({ accion: 'eliminar', modulo: 'nexus', registro_id: id, registro_ref: type });
+    },
+    onSuccess:()=>{ qc.invalidateQueries({queryKey:['nexus_notas']}); qc.invalidateQueries({queryKey:['nexus_pendientes']}); toast.success('Eliminado'); setConfirmDel(null); }
+  });
 
   // Marcar comentarios como leídos cuando se abre el pendiente
   const marcarComentariosLeidos = async (pendienteId: string) => {

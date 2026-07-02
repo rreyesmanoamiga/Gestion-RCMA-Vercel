@@ -6,6 +6,7 @@ import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { ChevronDown, CheckCircle, Eye, X, Building2, User, Mail, Calendar, DollarSign, Printer, Trash2, Ban } from 'lucide-react';
 import { useSharePointUpload, renameCarpetaSharePoint } from '@/hooks/useSharePointUpload';
+import { logAudit } from '@/lib/audit';
 import PageHeader from '@/components/shared/PageHeader';
 
 const CAR_CORREOS: Record<string, string> = {
@@ -213,6 +214,14 @@ export default function SolicitudesRecibidas() {
           correoAdmin: 'rreyes@manoamiga.edu.mx',
         },
       });
+
+      logAudit({
+        accion:       'editar',
+        modulo:       'solicitudes',
+        registro_id:  sol.id,
+        registro_ref: sol.nombre_proyecto,
+        detalle:      { estatus_nuevo: 'recibida' },
+      });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['solicitudes'] });
@@ -224,8 +233,15 @@ export default function SolicitudesRecibidas() {
 
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
+      const sol = solicitudes.find(s => s.id === id);
       const { error } = await supabase.from('solicitudes').delete().eq('id', id);
       if (error) throw error;
+      logAudit({
+        accion:       'eliminar',
+        modulo:       'solicitudes',
+        registro_id:  id,
+        registro_ref: sol?.nombre_proyecto ?? null,
+      });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['solicitudes'] });
@@ -243,6 +259,13 @@ export default function SolicitudesRecibidas() {
         .update({ estatus: 'cancelada' })
         .eq('id', sol.id);
       if (error) throw error;
+
+      logAudit({
+        accion:       'cancelar',
+        modulo:       'solicitudes',
+        registro_id:  sol.id,
+        registro_ref: sol.nombre_proyecto,
+      });
 
       // 2. Enviar notificación por correo al solicitante y al admin
       await supabase.functions.invoke('send-solicitud-cancelada', {

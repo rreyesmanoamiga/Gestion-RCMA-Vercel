@@ -11,6 +11,7 @@ import PageHeader from '@/components/shared/PageHeader';
 import PriorityBadge from '@/components/shared/PriorityBadge';
 import ColegioSelector from '@/components/shared/ColegioSelector';
 import { COLEGIOS, TERRITORIOS } from '@/lib/colegios';
+import { logAudit } from '@/lib/audit';
 
 const PAGE_SIZE = 20;
 
@@ -404,6 +405,12 @@ export default function Anteproyectos() {
       } else {
         queryClient.invalidateQueries({ queryKey: ['anteproyectos'] });
         toast.success('Anteproyecto creado');
+        logAudit({
+          accion:       'crear',
+          modulo:       'anteproyectos',
+          registro_id:  result?.id ?? null,
+          registro_ref: result?.nombre_proyecto ?? null,
+        });
       }
       setShowForm(false);
     },
@@ -430,6 +437,13 @@ export default function Anteproyectos() {
       } else {
         queryClient.invalidateQueries({ queryKey: ['anteproyectos'] });
         toast.success('Anteproyecto actualizado');
+        logAudit({
+          accion:       'editar',
+          modulo:       'anteproyectos',
+          registro_id:  result?.id ?? null,
+          registro_ref: result?.nombre_proyecto ?? null,
+          detalle:      { estatus: result?.estatus },
+        });
       }
       setEditingAnteproyecto(null);
     },
@@ -456,6 +470,13 @@ export default function Anteproyectos() {
 
       const { error } = await supabase.from('anteproyectos').delete().eq('id', id);
       if (error) throw error;
+
+      logAudit({
+        accion:       'eliminar',
+        modulo:       'anteproyectos',
+        registro_id:  id,
+        registro_ref: ant?.nombre_proyecto ?? null,
+      });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['anteproyectos'] });

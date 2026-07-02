@@ -8,6 +8,7 @@ import { es } from 'date-fns/locale';
 import StatusBadge from '@/components/shared/StatusBadge';
 import PriorityBadge from '@/components/shared/PriorityBadge';
 import MaintenanceForm from '@/components/maintenance/MaintenanceForm';
+import { logAudit } from '@/lib/audit';
 
 const btnOutline = "flex items-center gap-1.5 px-3 py-1.5 border border-slate-300 rounded-md text-sm font-medium text-slate-700 hover:bg-slate-50 transition-colors";
 const btnDanger  = "flex items-center gap-1.5 px-3 py-1.5 border border-red-200 rounded-md text-sm font-medium text-red-600 hover:bg-red-50 transition-colors";
@@ -63,9 +64,17 @@ export default function MaintenanceDetail() {
   const updateMutation = useMutation({
     mutationFn: (payload: Record<string, unknown>) =>
       db.MaintenanceRecord.update(recordId!, payload),
-    onSuccess: () => {
+    onSuccess: (_data, payload) => {
       queryClient.invalidateQueries({ queryKey: ['maintenance'] });
       setEditing(false);
+      const statusNuevo = payload.status as string | undefined;
+      logAudit({
+        accion:       statusNuevo === 'completado' && record?.status !== 'completado' ? 'completar' : 'editar',
+        modulo:       'mantenimiento',
+        registro_id:  recordId ?? null,
+        registro_ref: (payload.title as string) ?? record?.title ?? null,
+        detalle:      { status_anterior: record?.status, status_nuevo: statusNuevo },
+      });
     },
   });
 
@@ -73,6 +82,12 @@ export default function MaintenanceDetail() {
     mutationFn: () => db.MaintenanceRecord.delete(recordId!),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['maintenance'] });
+      logAudit({
+        accion:       'eliminar',
+        modulo:       'mantenimiento',
+        registro_id:  recordId ?? null,
+        registro_ref: record?.title ?? null,
+      });
       navigate('/mantenimiento');
     },
   });

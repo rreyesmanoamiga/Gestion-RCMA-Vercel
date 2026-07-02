@@ -7,6 +7,7 @@ import { toast } from 'sonner';
 import PageHeader from '@/components/shared/PageHeader';
 import StatusBadge from '@/components/shared/StatusBadge';
 import MaintenanceForm from '@/components/maintenance/MaintenanceForm';
+import { logAudit } from '@/lib/audit';
 
 const PAGE_SIZE = 20;
 
@@ -48,6 +49,12 @@ export default function Maintenance() {
       } else {
         queryClient.invalidateQueries({ queryKey: ['maintenance'] });
         toast.success('Mantenimiento creado correctamente');
+        logAudit({
+          accion:       'crear',
+          modulo:       'mantenimiento',
+          registro_id:  result?.id ?? null,
+          registro_ref: result?.title ?? result?.colegio ?? null,
+        });
       }
       setShowForm(false);
     },

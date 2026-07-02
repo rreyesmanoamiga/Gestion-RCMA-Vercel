@@ -13,6 +13,7 @@ import { toast } from 'sonner';
 import { db } from '@/lib/db';
 import { supabase } from '@/lib/supabaseClient';
 import { useSharePointUpload } from '@/hooks/useSharePointUpload';
+import { logAudit } from '@/lib/audit';
 import EvidenciaUploader from '@/components/EvidenciaUploader';
 import { TERRITORIOS, COLEGIOS } from '@/lib/colegios';
 import PageHeader from '@/components/shared/PageHeader';
@@ -1143,10 +1144,16 @@ export default function Checklists() {
 
   const createMutation = useMutation({
     mutationFn: (d: Record<string, unknown>) => db.Checklist.create(d),
-    onSuccess: async () => {
+    onSuccess: async (created: any) => {
       qc.invalidateQueries({ queryKey: ['checklists'] });
       setFormOpen(false);
       toast.success('Inspección creada');
+      logAudit({
+        accion:       'crear',
+        modulo:       'checklists',
+        registro_id:  created?.id ?? null,
+        registro_ref: created?.titulo ?? created?.colegio ?? null,
+      });
       // Upload pending photos to SharePoint
       const pending = pendingChecklistPhotos.current;
       if (pending) {
@@ -1214,6 +1221,12 @@ export default function Checklists() {
         resultado: calcResultado(formItems),
       });
       if (error) throw error;
+      logAudit({
+        accion:       'crear',
+        modulo:       'checklists',
+        registro_ref: formColegio,
+        detalle:      { inspector: formInspector, resultado: calcResultado(formItems) },
+      });
     },
     onSuccess: async () => {
       qc.invalidateQueries({ queryKey: ['minimos_indispensables'] });
@@ -1235,8 +1248,15 @@ export default function Checklists() {
 
   const deleteMinMutation = useMutation({
     mutationFn: async (id: string) => {
+      const evalItem = minimosRaw.find(e => e.id === id);
       const { error } = await supabase.from('minimos_indispensables').delete().eq('id', id);
       if (error) throw error;
+      logAudit({
+        accion:       'eliminar',
+        modulo:       'checklists',
+        registro_id:  id,
+        registro_ref: evalItem?.colegio ?? null,
+      });
     },
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['minimos_indispensables'] }); toast.success('Eliminado'); setConfirmDel(null); },
     onError: () => toast.error('Error al eliminar'),

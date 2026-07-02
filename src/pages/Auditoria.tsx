@@ -142,12 +142,17 @@ const ACCION_META: Record<string, { label: string; icon: React.ElementType; colo
 };
 
 const MODULO_LABEL: Record<string, string> = {
-  usuarios:     'Usuarios',
-  solicitudes:  'Solicitudes',
-  tickets_mas:  'Ticket MAS',
-  tickets:      'Tickets Registrados',
-  proyectos:    'Proyectos',
-  presupuestos: 'Presupuestos',
+  usuarios:      'Usuarios',
+  solicitudes:   'Solicitudes',
+  tickets_mas:   'Ticket MAS',
+  tickets:       'Tickets Registrados',
+  proyectos:     'Proyectos',
+  presupuestos:  'Presupuestos',
+  insumos:       'Insumos',
+  checklists:    'Checklists',
+  mantenimiento: 'Mantenimiento',
+  nexus:         'NEXUS',
+  anteproyectos: 'Anteproyectos',
 };
 
 // ─── Export PDF: Reporte de Auditoría ─────────────────────────────────────────

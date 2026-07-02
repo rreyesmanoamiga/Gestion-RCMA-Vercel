@@ -4,6 +4,7 @@ import { supabase } from '@/lib/supabaseClient';
 import { useAuth } from '@/lib/AuthContext';
 import { usePermissions } from '@/hooks/usePermissions';
 import { useSharePointUpload } from '@/hooks/useSharePointUpload';
+import { logAudit } from '@/lib/audit';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
@@ -369,6 +370,13 @@ export default function Insumos() {
           reqItems.filter(it => it.nombre_producto).map(it => ({ ...it, requisicion_id: req.id }))
         );
       }
+      logAudit({
+        accion:       'crear',
+        modulo:       'insumos',
+        registro_id:  req.id,
+        registro_ref: folio,
+        detalle:      { proveedores: provNombres.join(', '), prioridad: reqPrioridad },
+      });
       return req;
     },
     onSuccess: (req) => {
@@ -384,6 +392,7 @@ export default function Insumos() {
   const [pricingItems, setPricingItems] = useState<ReqItem[]>([]);
   const [linkCotizacion, setLinkCotizacion] = useState('');
   const [ivaPercent, setIvaPercent] = useState('16');
+  const [cotizacionFile, setCotizacionFile] = useState<File | null>(null);
 
   const openPricing = async (req: Requisicion) => {
     const items = await getItems(req.id);
@@ -421,6 +430,13 @@ export default function Insumos() {
       for (const it of items) {
         if (it.id) await supabase.from('insumos_items').update({ precio_cotizado: it.precio_cotizado }).eq('id', it.id);
       }
+      logAudit({
+        accion:       'editar',
+        modulo:       'insumos',
+        registro_id:  req.id,
+        registro_ref: req.folio,
+        detalle:      { total_con_iva: totalIVA, estatus_nuevo: 'cotizacion_recibida' },
+      });
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['insumos_requisiciones'] });
@@ -480,6 +496,13 @@ export default function Insumos() {
           siteUrl: window.location.origin,
         },
       });
+      logAudit({
+        accion:       'autorizar',
+        modulo:       'insumos',
+        registro_id:  req.id,
+        registro_ref: req.folio,
+        detalle:      { vobo_por: nombre, total_con_iva: req.total_con_iva ?? req.total_cotizado },
+      });
     },
     onSuccess: async (_data: void, req: Requisicion) => {
       qc.invalidateQueries({ queryKey: ['insumos_requisiciones'] });
@@ -532,9 +555,16 @@ export default function Insumos() {
 
   const deleteReqMutation = useMutation({
     mutationFn: async (id: string) => {
+      const req = requisiciones.find(r => r.id === id);
       await supabase.from('insumos_items').delete().eq('requisicion_id', id);
       const { error } = await supabase.from('insumos_requisiciones').delete().eq('id', id);
       if (error) throw error;
+      logAudit({
+        accion:       'eliminar',
+        modulo:       'insumos',
+        registro_id:  id,
+        registro_ref: req?.folio ?? null,
+      });
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['insumos_requisiciones'] });
