@@ -5,6 +5,7 @@ import { supabase } from '@/lib/supabaseClient';
 import { useAuth } from '@/lib/AuthContext';
 import { usePermissions } from '@/hooks/usePermissions';
 import { toast } from 'sonner';
+import { logAudit } from '@/lib/audit';
 
 interface Actividad {
   id: number | string;
@@ -139,7 +140,10 @@ const inputClass = "w-full px-3 py-2 border border-slate-300 rounded-md text-sm 
 export default function CalendarioMantenimiento() {
   const hoy = new Date();
   const { user } = useAuth();
-  const { isAdmin } = usePermissions();
+  const { isAdmin, can } = usePermissions();
+  const puedeCrear    = isAdmin || can('crear_calendario');
+  const puedeEditar   = isAdmin || can('editar_calendario');
+  const puedeEliminar = isAdmin || can('eliminar_calendario');
   const qc = useQueryClient();
 
   const [año, setAño] = useState(hoy.getFullYear());
@@ -210,10 +214,12 @@ export default function CalendarioMantenimiento() {
 
   const setNotifHoraMutation = useMutation({
     mutationFn: async (hora: number) => {
+      if (!puedeEditar) throw new Error('No tienes permiso para editar la configuración del calendario.');
       const { error } = await supabase
         .from('maintenance_settings')
         .upsert({ key: 'notif_hora', value: String(hora) });
       if (error) throw error;
+      logAudit({ accion: 'editar', modulo: 'calendario', registro_ref: 'Horario de notificación', detalle: { hora } });
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['maintenanceNotifHora'] });
@@ -224,10 +230,12 @@ export default function CalendarioMantenimiento() {
 
   const toggleAdminNotifMutation = useMutation({
     mutationFn: async (activo: boolean) => {
+      if (!puedeEditar) throw new Error('No tienes permiso para editar la configuración del calendario.');
       const { error } = await supabase
         .from('maintenance_settings')
         .upsert({ key: 'admin_notif_activo', value: activo ? 'true' : 'false' });
       if (error) throw error;
+      logAudit({ accion: 'editar', modulo: 'calendario', registro_ref: 'Notificaciones de admin', detalle: { activo } });
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['maintenanceAdminSettings'] });
@@ -249,12 +257,14 @@ export default function CalendarioMantenimiento() {
 
   const addMutation = useMutation({
     mutationFn: async (data: typeof form) => {
+      if (!puedeCrear) throw new Error('No tienes permiso para crear actividades de mantenimiento.');
       const categoria = data.categoria === '__custom__' ? data.categoriaCustom : data.categoria;
       const { error } = await supabase.from('custom_maintenance').insert({
         categoria, actividad: data.actividad, tipo: data.tipo,
         frecuencia: data.frecuencia, frecuencia_dias: data.frecuenciaDias, descripcion: data.descripcion,
       });
       if (error) throw error;
+      logAudit({ accion: 'crear', modulo: 'calendario', registro_ref: data.actividad, detalle: { categoria, tipo: data.tipo } });
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['customMaintenance'] });
@@ -267,8 +277,10 @@ export default function CalendarioMantenimiento() {
 
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
+      if (!puedeEliminar) throw new Error('No tienes permiso para eliminar actividades de mantenimiento.');
       const { error } = await supabase.from('custom_maintenance').delete().eq('id', id);
       if (error) throw error;
+      logAudit({ accion: 'eliminar', modulo: 'calendario', registro_id: id, registro_ref: 'Actividad de mantenimiento' });
     },
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['customMaintenance'] }); toast.success('Eliminado'); },
     onError: () => toast.error('Error al eliminar'),
@@ -276,12 +288,14 @@ export default function CalendarioMantenimiento() {
 
   const updateMutation = useMutation({
     mutationFn: async ({ id, data }: { id: string; data: typeof form }) => {
+      if (!puedeEditar) throw new Error('No tienes permiso para editar actividades de mantenimiento.');
       const categoria = data.categoria === '__custom__' ? data.categoriaCustom : data.categoria;
       const { error } = await supabase.from('custom_maintenance').update({
         categoria, actividad: data.actividad, tipo: data.tipo,
         frecuencia: data.frecuencia, frecuencia_dias: data.frecuenciaDias, descripcion: data.descripcion,
       }).eq('id', id);
       if (error) throw error;
+      logAudit({ accion: 'editar', modulo: 'calendario', registro_id: id, registro_ref: data.actividad });
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['customMaintenance'] });
@@ -294,9 +308,11 @@ export default function CalendarioMantenimiento() {
 
   const addRecipientMutation = useMutation({
     mutationFn: async (data: { email: string; nombre: string; actividades_ids: number[] | null }) => {
+      if (!puedeCrear) throw new Error('No tienes permiso para agregar destinatarios de notificación.');
       const { error } = await supabase.from('maintenance_notification_recipients')
         .insert({ email: data.email.toLowerCase().trim(), nombre: data.nombre.trim(), activo: true, actividades_ids: data.actividades_ids });
       if (error) throw error;
+      logAudit({ accion: 'crear', modulo: 'calendario', registro_ref: `Destinatario: ${data.nombre}`, detalle: { email: data.email } });
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['maintenanceRecipients'] });
@@ -313,8 +329,10 @@ export default function CalendarioMantenimiento() {
 
   const toggleRecipientMutation = useMutation({
     mutationFn: async ({ id, activo }: { id: string; activo: boolean }) => {
+      if (!puedeEditar) throw new Error('No tienes permiso para editar destinatarios de notificación.');
       const { error } = await supabase.from('maintenance_notification_recipients').update({ activo }).eq('id', id);
       if (error) throw error;
+      logAudit({ accion: 'editar', modulo: 'calendario', registro_id: id, registro_ref: 'Destinatario', detalle: { activo } });
     },
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['maintenanceRecipients'] }); toast.success('Estado actualizado'); },
     onError: () => toast.error('Error al actualizar'),
@@ -322,8 +340,10 @@ export default function CalendarioMantenimiento() {
 
   const deleteRecipientMutation = useMutation({
     mutationFn: async (id: string) => {
+      if (!puedeEliminar) throw new Error('No tienes permiso para eliminar destinatarios de notificación.');
       const { error } = await supabase.from('maintenance_notification_recipients').delete().eq('id', id);
       if (error) throw error;
+      logAudit({ accion: 'eliminar', modulo: 'calendario', registro_id: id, registro_ref: 'Destinatario' });
     },
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['maintenanceRecipients'] }); toast.success('Destinatario eliminado'); },
     onError: () => toast.error('Error al eliminar'),
@@ -332,6 +352,7 @@ export default function CalendarioMantenimiento() {
   // ── Guardar override de actividad base ────────────────────────────────────
   const upsertBaseOverrideMutation = useMutation({
     mutationFn: async ({ baseId, data }: { baseId: number; data: typeof form }) => {
+      if (!puedeEditar) throw new Error('No tienes permiso para editar actividades base del calendario.');
       const categoria = data.categoria === '__custom__' ? data.categoriaCustom : data.categoria;
       const { error } = await supabase.from('custom_maintenance').upsert({
         base_id: baseId,
@@ -339,6 +360,7 @@ export default function CalendarioMantenimiento() {
         frecuencia: data.frecuencia, frecuencia_dias: data.frecuenciaDias, descripcion: data.descripcion,
       }, { onConflict: 'base_id' });
       if (error) throw error;
+      logAudit({ accion: 'editar', modulo: 'calendario', registro_ref: data.actividad, detalle: { base_id: baseId } });
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['customMaintenance'] });
@@ -446,10 +468,12 @@ export default function CalendarioMantenimiento() {
                 className="px-4 py-2 rounded-md text-sm font-medium border border-slate-300 text-slate-700 hover:bg-slate-50 transition-colors">
                 Gestionar
               </button>
+              {puedeCrear && (
               <button onClick={() => setShowModal(true)}
                 className="px-4 py-2 rounded-md text-sm font-medium bg-slate-900 text-white hover:bg-slate-800 transition-colors flex items-center gap-2">
                 <Plus className="w-4 h-4" /> Agregar
               </button>
+              )}
             </>
           )}
         </div>
@@ -578,6 +602,7 @@ export default function CalendarioMantenimiento() {
                   <div className="flex items-center gap-1 shrink-0 mt-0.5">
                     {act.esPersonalizada ? (
                       <>
+                        {puedeEditar && (
                         <button
                           onClick={() => {
                             setEditingItem(act);
@@ -592,6 +617,8 @@ export default function CalendarioMantenimiento() {
                           title="Editar">
                           <Pencil className="w-3.5 h-3.5" />
                         </button>
+                        )}
+                        {puedeEliminar && (
                         <button
                           onClick={() => { if (confirm('¿Eliminar este mantenimiento?')) deleteMutation.mutate(String(act.id)); }}
                           disabled={deleteMutation.isPending}
@@ -599,6 +626,7 @@ export default function CalendarioMantenimiento() {
                           title="Eliminar">
                           <Trash2 className="w-3.5 h-3.5" />
                         </button>
+                        )}
                       </>
                     ) : (
                       <span title="Actividad base — no editable" className="p-1.5 text-slate-200">

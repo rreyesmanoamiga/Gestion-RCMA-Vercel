@@ -154,6 +154,7 @@ const MODULO_LABEL: Record<string, string> = {
   nexus:         'NEXUS',
   anteproyectos: 'Anteproyectos',
   levantamiento: 'Levantamiento Nacional',
+  calendario:    'Calendario de Mantenimiento',
 };
 
 // ─── Export PDF: Reporte de Auditoría ─────────────────────────────────────────

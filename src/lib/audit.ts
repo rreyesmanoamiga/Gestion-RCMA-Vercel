@@ -25,7 +25,8 @@ export type AuditModulo =
   | 'mantenimiento'
   | 'nexus'
   | 'anteproyectos'
-  | 'levantamiento';
+  | 'levantamiento'
+  | 'calendario';
 
 interface LogAuditParams {
   accion:       AuditAccion;
