@@ -110,7 +110,7 @@ serve(async (req) => {
     </div>
   </div>
 </body></html>`;
-      await sendEmail(adminEmail, `✅ VoBo Autorizado — ${folio} | Insumos FMA`, htmlAuth);
+      await sendEmail(adminEmail, ['arodriguez@manoamiga.edu.mx'], `✅ VoBo Autorizado — ${folio} | Insumos FMA`, htmlAuth);
       return new Response(JSON.stringify({ success: true }), { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     }
 
