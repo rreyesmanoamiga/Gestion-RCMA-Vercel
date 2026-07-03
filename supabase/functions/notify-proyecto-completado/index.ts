@@ -5,7 +5,7 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-async function sendEmail(to: string, subject: string, html: string) {
+async function sendEmail(to: string, cc: string[], subject: string, html: string) {
   const smtpHost = Deno.env.get('SMTP_HOST') ?? 'smtp.office365.com';
   const smtpPort = parseInt(Deno.env.get('SMTP_PORT') ?? '587');
   const smtpUser = Deno.env.get('SMTP_USER') ?? '';
@@ -22,10 +22,13 @@ async function sendEmail(to: string, subject: string, html: string) {
   await tw(btoa(smtpUser)); await tr(); await tw(btoa(smtpPass)); await tr();
   await tw(`MAIL FROM:<${smtpUser}>`); await tr();
   await tw(`RCPT TO:<${to}>`); await tr();
+  for (const ccAddr of cc) { if (ccAddr) { await tw(`RCPT TO:<${ccAddr}>`); await tr(); } }
   await tw('DATA'); await tr();
+  const ccHeader = cc.filter(Boolean).join(', ');
   const msg = [
     `From: Sistema RCMA <${smtpUser}>`,
     `To: ${to}`,
+    ...(ccHeader ? [`Cc: ${ccHeader}`] : []),
     `Subject: ${subject}`,
     'MIME-Version: 1.0',
     'Content-Type: text/html; charset=UTF-8',
@@ -59,7 +62,7 @@ serve(async (req) => {
       : 'Exacto (0%)';
     const diffColor    = diff == null ? '#64748b' : diff > 0 ? '#dc2626' : diff < 0 ? '#16a34a' : '#64748b';
 
-    const buildHtml = (esAdmin: boolean) => `<!DOCTYPE html>
+    const buildHtml = () => `<!DOCTYPE html>
 <html lang="es"><head><meta charset="UTF-8"></head>
 <body style="margin:0;padding:0;background:#f1f5f9;font-family:Arial,sans-serif;">
   <table width="100%" cellpadding="0" cellspacing="0" style="background:#f1f5f9;padding:40px 0;">
@@ -74,10 +77,7 @@ serve(async (req) => {
         </td></tr>
         <tr><td style="padding:32px 36px;">
           <p style="color:#475569;font-size:15px;line-height:1.6;margin:0 0 20px;">
-            ${esAdmin
-              ? 'El siguiente proyecto ha sido marcado como <strong>Completado</strong> en el Sistema RCMA:'
-              : `Hola,<br><br>El proyecto <strong>${nombre_proyecto ?? '—'}</strong> en tu territorio ha sido marcado como <strong>Completado</strong>.`
-            }
+            El siguiente proyecto ha sido marcado como <strong>Completado</strong> en el Sistema RCMA:
           </p>
           <table width="100%" cellpadding="0" cellspacing="0" style="border:1px solid #e2e8f0;border-radius:8px;overflow:hidden;margin-bottom:24px;">
             <tr style="background:#f8fafc;">
@@ -120,26 +120,18 @@ serve(async (req) => {
 </body></html>`;
 
     const errores: string[] = [];
+    const adminEmail = correo_admin || 'rreyes@manoamiga.edu.mx';
+    const ccList = [correo_car ?? '', 'arodriguez@manoamiga.edu.mx', 'ecastaneda@manoamiga.edu.mx']
+      .filter(c => c && c !== adminEmail);
 
-    if (correo_admin) {
-      try {
-        await sendEmail(
-          correo_admin,
-          `✅ [RCMA] Proyecto completado: ${nombre_proyecto ?? '—'} — ${colegio ?? ''}`,
-          buildHtml(true)
-        );
-      } catch (e) { errores.push(`admin: ${e instanceof Error ? e.message : 'error'}`); }
-    }
-
-    if (correo_car && correo_car !== correo_admin) {
-      try {
-        await sendEmail(
-          correo_car,
-          `✅ [RCMA] Proyecto completado en tu territorio: ${nombre_proyecto ?? '—'} — ${colegio ?? ''}`,
-          buildHtml(false)
-        );
-      } catch (e) { errores.push(`car: ${e instanceof Error ? e.message : 'error'}`); }
-    }
+    try {
+      await sendEmail(
+        adminEmail,
+        ccList,
+        `✅ [RCMA] Proyecto completado: ${nombre_proyecto ?? '—'} — ${colegio ?? ''}`,
+        buildHtml()
+      );
+    } catch (e) { errores.push(`envío: ${e instanceof Error ? e.message : 'error'}`); }
 
     return new Response(
       JSON.stringify({ success: errores.length === 0, errores }),

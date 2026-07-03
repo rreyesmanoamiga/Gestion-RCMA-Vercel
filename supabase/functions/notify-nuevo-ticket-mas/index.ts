@@ -77,6 +77,7 @@ serve(async (req) => {
     const carTerritorio = correo_car ?? (territorio ? CAR_CORREOS[territorio] ?? '' : '');
     const ccList = [
       'arodriguez@manoamiga.edu.mx',
+      'ecastaneda@manoamiga.edu.mx',
       'jalvarado@manoamiga.edu.mx',
       'gromero@manoamiga.edu.mx',
     ].filter((addr, i, arr) => addr && arr.indexOf(addr) === i); // deduplicar

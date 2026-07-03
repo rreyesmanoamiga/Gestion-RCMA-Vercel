@@ -5,7 +5,7 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-async function sendEmail(to: string, subject: string, html: string) {
+async function sendEmail(to: string, cc: string[], subject: string, html: string) {
   const smtpHost = Deno.env.get('SMTP_HOST') ?? 'smtp.office365.com';
   const smtpPort = parseInt(Deno.env.get('SMTP_PORT') ?? '587');
   const smtpUser = Deno.env.get('SMTP_USER') ?? '';
@@ -52,13 +52,18 @@ async function sendEmail(to: string, subject: string, html: string) {
   await tlsRead();
   await tlsWrite(`RCPT TO:<${to}>`);
   await tlsRead();
+  for (const ccAddr of cc) {
+    if (ccAddr) { await tlsWrite(`RCPT TO:<${ccAddr}>`); await tlsRead(); }
+  }
   await tlsWrite('DATA');
   await tlsRead();
 
   const boundary = 'boundary_' + Date.now();
+  const ccHeader = cc.filter(Boolean).join(', ');
   const message = [
     `From: Sistema RCMA <${smtpUser}>`,
     `To: ${to}`,
+    ...(ccHeader ? [`Cc: ${ccHeader}`] : []),
     `Subject: ${subject}`,
     'MIME-Version: 1.0',
     `Content-Type: multipart/alternative; boundary="${boundary}"`,
@@ -84,7 +89,7 @@ serve(async (req) => {
   }
 
   try {
-    const { correo, nombre, proyecto, centro, correoAdmin } = await req.json();
+    const { correo, nombre, proyecto, centro, territorio, correoAdmin } = await req.json();
 
     if (!correo) {
       return new Response(
@@ -93,10 +98,18 @@ serve(async (req) => {
       );
     }
 
+    const CAR_CORREOS: Record<string, string> = {
+      NORTE:  'jalvarado@manoamiga.edu.mx',
+      MEXICO: 'gromero@manoamiga.edu.mx',
+    };
+    const adminEmail = correoAdmin || Deno.env.get('ADMIN_EMAIL') || 'rreyes@manoamiga.edu.mx';
+    const carEmail    = territorio ? (CAR_CORREOS[territorio] ?? '') : '';
+    const ccList      = [adminEmail, carEmail].filter(Boolean).filter((c, i, arr) => arr.indexOf(c) === i && c !== correo);
+
     const smtpUser = Deno.env.get('SMTP_USER') ?? '';
     const fecha    = new Date().toLocaleDateString('es-MX', { year: 'numeric', month: 'long', day: 'numeric' });
 
-    const buildHtml = (destinatario: string, esAdmin: boolean) => `
+    const html = `
     <!DOCTYPE html>
     <html lang="es">
     <head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"></head>
@@ -115,7 +128,7 @@ serve(async (req) => {
             <tr>
               <td style="background:#dc2626;padding:16px 40px;">
                 <p style="margin:0;color:#ffffff;font-size:14px;font-weight:600;">
-                  ❌ ${esAdmin ? `Solicitud CANCELADA — ${proyecto ?? 'Proyecto'}` : 'Tu solicitud ha sido cancelada'}
+                  ❌ Solicitud cancelada — ${proyecto ?? 'Proyecto'}
                 </p>
               </td>
             </tr>
@@ -123,16 +136,10 @@ serve(async (req) => {
             <tr>
               <td style="padding:40px;">
                 <p style="color:#475569;font-size:15px;line-height:1.6;margin:0 0 8px;">
-                  ${esAdmin
-                    ? `Esta es una notificación automática del Sistema RCMA.`
-                    : `Hola <strong>${nombre ?? 'solicitante'}</strong>,`
-                  }
+                  Hola <strong>${nombre ?? 'solicitante'}</strong>,
                 </p>
                 <p style="color:#475569;font-size:15px;line-height:1.6;margin:0 0 24px;">
-                  ${esAdmin
-                    ? `Se ha cancelado la siguiente solicitud de proyecto en el Sistema RCMA:`
-                    : `La Coordinación de Obras de <strong>Colegios Mano Amiga</strong> ha registrado la <strong>cancelación</strong> de tu solicitud de proyecto:`
-                  }
+                  La Coordinación de Obras de <strong>Colegios Mano Amiga</strong> ha registrado la <strong>cancelación</strong> de la solicitud de proyecto:
                 </p>
                 <!-- Tabla de datos -->
                 <table width="100%" cellpadding="0" cellspacing="0" style="border:1px solid #e2e8f0;border-radius:8px;overflow:hidden;margin-bottom:32px;">
@@ -160,10 +167,7 @@ serve(async (req) => {
                   </tr>
                 </table>
                 <p style="color:#475569;font-size:14px;line-height:1.6;margin:0 0 8px;">
-                  ${esAdmin
-                    ? `La solicitud permanece en el sistema con estatus <strong>Cancelada</strong> para referencia futura.`
-                    : `Si tienes alguna duda sobre esta cancelación, comunícate directamente con la Coordinación de Obras escribiendo a <a href="mailto:${smtpUser}" style="color:#1e40af;">${smtpUser}</a>.`
-                  }
+                  Si tienes alguna duda sobre esta cancelación, comunícate directamente con la Coordinación de Obras escribiendo a <a href="mailto:${smtpUser}" style="color:#1e40af;">${smtpUser}</a>.
                 </p>
               </td>
             </tr>
@@ -181,38 +185,12 @@ serve(async (req) => {
     </body>
     </html>`;
 
-    const errores: string[] = [];
-
-    // 1. Correo al solicitante
-    try {
-      await sendEmail(
-        correo,
-        `❌ Solicitud cancelada: ${proyecto ?? 'Tu proyecto'} — Colegios Mano Amiga`,
-        buildHtml(correo, false)
-      );
-    } catch (e) {
-      errores.push(`solicitante: ${e instanceof Error ? e.message : 'error'}`);
-    }
-
-    // 2. Correo al admin (rreyes) si se proporcionó y es diferente
-    if (correoAdmin && correoAdmin !== correo) {
-      try {
-        await sendEmail(
-          correoAdmin,
-          `❌ [RCMA] Solicitud cancelada: ${proyecto ?? 'Proyecto'} — ${centro ?? ''}`,
-          buildHtml(correoAdmin, true)
-        );
-      } catch (e) {
-        errores.push(`admin: ${e instanceof Error ? e.message : 'error'}`);
-      }
-    }
-
-    if (errores.length > 0) {
-      return new Response(
-        JSON.stringify({ success: false, errores }),
-        { status: 207, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
+    await sendEmail(
+      correo,
+      ccList,
+      `❌ Solicitud cancelada: ${proyecto ?? 'Tu proyecto'} — Colegios Mano Amiga`,
+      html
+    );
 
     return new Response(
       JSON.stringify({ success: true }),

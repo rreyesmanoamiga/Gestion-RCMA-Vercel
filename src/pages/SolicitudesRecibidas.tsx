@@ -42,6 +42,33 @@ interface Solicitud {
   recibida_at?:          string;
 }
 
+// Territorios por colegio (nombre completo → territorio)
+const COLEGIO_TERRITORIO: Record<string, string> = {
+  'Mano Amiga Acapulco':          'MEXICO',
+  'Mano Amiga Aguascalientes':     'NORTE',
+  'Mano Amiga Cancún':             'MEXICO',
+  'Mano Amiga Chalco':             'MEXICO',
+  'Mano Amiga La Cima':            'NORTE',
+  'Mano Amiga Conkal':             'MEXICO',
+  'Mano Amiga Guadalajara':        'NORTE',
+  'Mano Amiga León':               'NORTE',
+  'Mano Amiga Lerma':              'MEXICO',
+  'Mano Amiga Morelia':            'MEXICO',
+  'Mano Amiga Monterrey':          'NORTE',
+  'Mano Amiga Piedras Negras':     'NORTE',
+  'Mano Amiga Puebla':             'MEXICO',
+  'Mano Amiga Querétaro':          'MEXICO',
+  'Mano Amiga Santa Catarina':     'NORTE',
+  'Mano Amiga Tapachula':          'MEXICO',
+  'Mano Amiga Tijuana':            'NORTE',
+  'Mano Amiga Torreón':            'NORTE',
+  'Mano Amiga Villas de San Juan': 'NORTE',
+  'ZOM':                           'MEXICO',
+  'FIA':                           'FMA',
+  'FMA':                           'FMA',
+  'AUN':                           'FMA',
+};
+
 const fmx = (n?: number | null) =>
   n != null ? Number(n).toLocaleString('es-MX', { style: 'currency', currency: 'MXN' }) : '—';
 
@@ -211,6 +238,7 @@ export default function SolicitudesRecibidas() {
           nombre:      sol.nombre_solicitante,
           proyecto:    sol.nombre_proyecto,
           centro:      sol.nombre_centro,
+          territorio:  sol.nombre_centro ? (COLEGIO_TERRITORIO[sol.nombre_centro] ?? '') : '',
           correoAdmin: 'rreyes@manoamiga.edu.mx',
         },
       });
@@ -274,6 +302,7 @@ export default function SolicitudesRecibidas() {
           nombre:      sol.nombre_solicitante,
           proyecto:    sol.nombre_proyecto,
           centro:      sol.nombre_centro,
+          territorio:  sol.nombre_centro ? (COLEGIO_TERRITORIO[sol.nombre_centro] ?? '') : '',
           correoAdmin: 'rreyes@manoamiga.edu.mx',
         },
       });

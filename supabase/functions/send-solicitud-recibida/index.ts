@@ -5,7 +5,7 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-async function sendEmail(to: string, subject: string, html: string) {
+async function sendEmail(to: string, cc: string[], subject: string, html: string) {
   const smtpHost = Deno.env.get('SMTP_HOST') ?? 'smtp.office365.com';
   const smtpPort = parseInt(Deno.env.get('SMTP_PORT') ?? '587');
   const smtpUser = Deno.env.get('SMTP_USER') ?? '';
@@ -52,13 +52,18 @@ async function sendEmail(to: string, subject: string, html: string) {
   await tlsRead();
   await tlsWrite(`RCPT TO:<${to}>`);
   await tlsRead();
+  for (const ccAddr of cc) {
+    if (ccAddr) { await tlsWrite(`RCPT TO:<${ccAddr}>`); await tlsRead(); }
+  }
   await tlsWrite('DATA');
   await tlsRead();
 
   const boundary = 'boundary_' + Date.now();
+  const ccHeader = cc.filter(Boolean).join(', ');
   const message = [
     `From: Sistema RCMA <${smtpUser}>`,
     `To: ${to}`,
+    ...(ccHeader ? [`Cc: ${ccHeader}`] : []),
     `Subject: ${subject}`,
     'MIME-Version: 1.0',
     `Content-Type: multipart/alternative; boundary="${boundary}"`,
@@ -84,7 +89,7 @@ serve(async (req) => {
   }
 
   try {
-    const { correo, nombre, proyecto, centro } = await req.json();
+    const { correo, nombre, proyecto, centro, territorio } = await req.json();
 
     if (!correo) {
       return new Response(
@@ -92,6 +97,14 @@ serve(async (req) => {
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
+
+    const CAR_CORREOS: Record<string, string> = {
+      NORTE:  'jalvarado@manoamiga.edu.mx',
+      MEXICO: 'gromero@manoamiga.edu.mx',
+    };
+    const adminEmail = Deno.env.get('ADMIN_EMAIL') ?? 'rreyes@manoamiga.edu.mx';
+    const carEmail    = territorio ? (CAR_CORREOS[territorio] ?? '') : '';
+    const ccList      = [adminEmail, carEmail].filter(Boolean).filter((c, i, arr) => arr.indexOf(c) === i && c !== correo);
 
     const smtpUser = Deno.env.get('SMTP_USER') ?? '';
     const siteUrl  = Deno.env.get('SITE_URL')  ?? '';
@@ -176,6 +189,7 @@ serve(async (req) => {
 
     await sendEmail(
       correo,
+      ccList,
       `✅ Solicitud recibida: ${proyecto ?? 'Tu proyecto'} — Colegios Mano Amiga`,
       html
     );
