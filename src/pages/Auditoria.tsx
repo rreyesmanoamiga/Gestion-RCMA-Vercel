@@ -153,6 +153,7 @@ const MODULO_LABEL: Record<string, string> = {
   mantenimiento: 'Mantenimiento',
   nexus:         'NEXUS',
   anteproyectos: 'Anteproyectos',
+  levantamiento: 'Levantamiento Nacional',
 };
 
 // ─── Export PDF: Reporte de Auditoría ─────────────────────────────────────────

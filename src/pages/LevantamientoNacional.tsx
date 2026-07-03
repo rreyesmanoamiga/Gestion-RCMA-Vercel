@@ -43,6 +43,7 @@ import {
 } from 'lucide-react';
 import PageHeader from '@/components/shared/PageHeader';
 import { usePermissions } from '@/hooks/usePermissions';
+import { logAudit } from '@/lib/audit';
 
 const REPORTES_PAGE_SIZE = 20;
 
@@ -259,6 +260,7 @@ function TabReporteGeneral({ reportesGenerales, planteles, pagos, comunicados, e
       // Borrar de la DB
       const { error } = await supabase.from('levantamiento_reportes_generales').delete().eq('id', r.id);
       if (error) throw error;
+      logAudit({ accion: 'eliminar', modulo: 'levantamiento', registro_id: r.id, registro_ref: r.archivo_nombre ?? 'Reporte General' });
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['lev_reportes_generales'] });
@@ -873,9 +875,11 @@ function TabPlanteles({ planteles, loading, qc, directorio, puedeCrear, puedeEli
       if (editItem) {
         const { error } = await supabase.from('levantamiento_planteles').update(payload).eq('id', editItem.id);
         if (error) throw error;
+        logAudit({ accion: 'editar', modulo: 'levantamiento', registro_id: editItem.id, registro_ref: datos?.nombre ?? colegio, detalle: { fase: form.fase, asignacion: form.asignacion } });
       } else {
         const { error } = await supabase.from('levantamiento_planteles').insert(payload);
         if (error) throw error;
+        logAudit({ accion: 'crear', modulo: 'levantamiento', registro_ref: datos?.nombre ?? colegio, detalle: { fase: form.fase, asignacion: form.asignacion } });
       }
     },
     onSuccess: () => {
@@ -1130,6 +1134,12 @@ function TabPagos({ pagos, planteles, qc, puedeCrear, puedeEliminar }: { pagos: 
           plantel_id:          null,
         });
         if (error) throw error;
+        logAudit({
+          accion:       'crear',
+          modulo:       'levantamiento',
+          registro_ref: `Pago ${form.mes_etiqueta}`,
+          detalle:      { monto: form.monto_pagado, pagado: !!reciboUrl, folio_factura: form.folio_factura },
+        });
       } finally { setUploading(false); }
     },
     onSuccess: () => {
@@ -1166,6 +1176,13 @@ function TabPagos({ pagos, planteles, qc, puedeCrear, puedeEliminar }: { pagos: 
         const nuevasNotas = [obs, facturaUrl ? `factura_url:${facturaUrl}` : '', reciboUrl ? `recibo_url:${reciboUrl}` : ''].filter(Boolean).join('||') || null;
         const { error } = await supabase.from('levantamiento_pagos').update({ notas: nuevasNotas, fecha_pago: editFechaPago || null, monto_pagado: parseFloat(editMontoPagado.replace(/,/g, '')) || null, pagado: !!reciboUrl }).eq('id', editPago.id);
         if (error) throw error;
+        logAudit({
+          accion:       reciboUrl ? 'completar' : 'editar',
+          modulo:       'levantamiento',
+          registro_id:  editPago.id,
+          registro_ref: `Pago ${editPago.mes_etiqueta}`,
+          detalle:      { pagado: !!reciboUrl, monto: editMontoPagado },
+        });
       } finally { setEditUploading(false); }
     },
     onSuccess: () => {
@@ -1665,6 +1682,7 @@ function TabComunicados({ comunicados, planteles, directorio, qc, puedeCrear, pu
           archivo_nombre:  fileName,
         });
         if (error) throw error;
+        logAudit({ accion: 'crear', modulo: 'levantamiento', registro_ref: `Comunicado ${colegio}`, detalle: { fecha_emision: form.fecha_emision, director: dirNombre } });
       } finally { setSaving(false); }
     },
     onSuccess: () => {
@@ -1681,6 +1699,7 @@ function TabComunicados({ comunicados, planteles, directorio, qc, puedeCrear, pu
       if (c.onedrive_path && c.archivo_nombre) await spDelete(c.onedrive_path, c.archivo_nombre);
       const { error } = await supabase.from('levantamiento_comunicados').delete().eq('id', c.id);
       if (error) throw error;
+      logAudit({ accion: 'eliminar', modulo: 'levantamiento', registro_id: c.id, registro_ref: c.archivo_nombre ?? 'Comunicado' });
     },
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['lev_comunicados'] }); toast.success('Comunicado eliminado'); setDeleteCom(null); },
     onError: (e: any) => toast.error(e.message),
@@ -1938,6 +1957,7 @@ function TabReportes({ reportes, planteles, qc, puedeCrear, puedeEliminar, puede
       if (r.onedrive_path && r.archivo_nombre) await spDelete(r.onedrive_path, r.archivo_nombre);
       const { error } = await supabase.from('levantamiento_reportes').delete().eq('id', r.id);
       if (error) throw error;
+      logAudit({ accion: 'eliminar', modulo: 'levantamiento', registro_id: r.id, registro_ref: r.archivo_nombre ?? 'Reporte' });
     },
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['lev_reportes'] }); toast.success('Reporte eliminado'); setDeleteReporte(null); },
     onError: (e: any) => toast.error(e.message),
@@ -1990,6 +2010,7 @@ function TabReportes({ reportes, planteles, qc, puedeCrear, puedeEliminar, puede
             notas:          form.notas || null,
           }).eq('id', editItem.id);
           if (error) throw error;
+          logAudit({ accion: 'editar', modulo: 'levantamiento', registro_id: editItem.id, registro_ref: archivoNombre ?? 'Reporte' });
 
         } else {
           // NUEVO reporte
@@ -2006,6 +2027,7 @@ function TabReportes({ reportes, planteles, qc, puedeCrear, puedeEliminar, puede
             notas:          form.notas || null,
           });
           if (error) throw error;
+          logAudit({ accion: 'crear', modulo: 'levantamiento', registro_ref: fileName, detalle: { fecha_reporte: form.fecha_reporte } });
         }
       } finally {
         setUploading(false);
@@ -2227,6 +2249,7 @@ function TabEntregables({ entregables, planteles, qc, puedeCrear }: { entregable
       const { error } = await supabase.from('levantamiento_entregables')
         .update({ [field]: value, updated_at: new Date().toISOString() }).eq('id', id);
       if (error) throw error;
+      logAudit({ accion: 'editar', modulo: 'levantamiento', registro_id: id, registro_ref: 'Entregable', detalle: { [field]: value } });
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ['lev_entregables'] }),
     onError: (e: any) => toast.error(e.message),
@@ -2237,6 +2260,7 @@ function TabEntregables({ entregables, planteles, qc, puedeCrear }: { entregable
       if (!puedeCrear) throw new Error('No tienes permiso para crear entregables.');
       const { error } = await supabase.from('levantamiento_entregables').insert({ plantel_id: plantelId });
       if (error) throw error;
+      logAudit({ accion: 'crear', modulo: 'levantamiento', registro_ref: 'Entregable', detalle: { plantel_id: plantelId } });
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ['lev_entregables'] }),
     onError: (e: any) => toast.error(e.message),
@@ -2263,6 +2287,7 @@ function TabEntregables({ entregables, planteles, qc, puedeCrear }: { entregable
         const { error } = await supabase.from('levantamiento_entregables')
           .update(updatePayload).eq('id', actaModal.entId);
         if (error) throw error;
+        logAudit({ accion: 'completar', modulo: 'levantamiento', registro_id: actaModal.entId, registro_ref: `Acta de Cierre — ${actaModal.plantelNombre}` });
       } finally {
         setActaUploading(false);
       }

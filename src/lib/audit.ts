@@ -24,7 +24,8 @@ export type AuditModulo =
   | 'checklists'
   | 'mantenimiento'
   | 'nexus'
-  | 'anteproyectos';
+  | 'anteproyectos'
+  | 'levantamiento';
 
 interface LogAuditParams {
   accion:       AuditAccion;
