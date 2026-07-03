@@ -415,8 +415,8 @@ export default function Nexus() {
               const limite = new Date(p.fecha_limite); limite.setHours(23,59,59,0);
               const ahora  = new Date();
               const manana = new Date(ahora); manana.setDate(manana.getDate() + 1); manana.setHours(23,59,59,0);
-              const vencido    = limite < ahora;
-              const porVencer  = !vencido && limite <= manana;
+              const vencido    = p.estatus !== 'completado' && limite < ahora;
+              const porVencer  = p.estatus !== 'completado' && !vencido && limite <= manana;
               return (
                 <div className="flex items-center gap-1.5 flex-wrap">
                   <p className={`font-semibold text-sm ${vencido ? 'text-red-600' : porVencer ? 'text-amber-600' : 'text-amber-600'}`}>
