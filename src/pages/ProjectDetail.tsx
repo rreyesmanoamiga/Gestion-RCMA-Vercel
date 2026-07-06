@@ -14,6 +14,7 @@ import { notifyByEmail } from '@/lib/notifications';
 import StatusBadge from '@/components/shared/StatusBadge';
 import PriorityBadge from '@/components/shared/PriorityBadge';
 import { toast } from 'sonner';
+import { usePermissions } from '@/hooks/usePermissions';
 
 const btnDanger  = "inline-flex items-center gap-2 px-4 py-2 border border-red-200 text-red-600 rounded-md text-sm font-bold hover:bg-red-50 transition-colors";
 const btnOutline = "inline-flex items-center gap-2 px-4 py-2 border border-slate-300 rounded-md text-sm font-bold text-slate-700 hover:bg-slate-50 transition-colors disabled:opacity-40 disabled:cursor-not-allowed";
@@ -42,6 +43,9 @@ export default function ProjectDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const { isAdmin, can } = usePermissions();
+  const puedeEditar   = isAdmin || can('editar_proyectos');
+  const puedeEliminar = isAdmin || can('eliminar_proyectos');
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [showEdit, setShowEdit] = useState(false);
   const [showCostoReal, setShowCostoReal] = useState(false);
@@ -73,6 +77,7 @@ export default function ProjectDetail() {
 
   const updateMutation = useMutation({
     mutationFn: async (formData: Record<string, unknown>) => {
+      if (!puedeEditar) throw new Error('No tienes permiso para editar proyectos.');
       await db.Project.update(id!, formData);
 
       // Auditoría: distinguir completar / cancelar / editar / actualizar costo real
@@ -137,6 +142,7 @@ export default function ProjectDetail() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['projects', id] });
       queryClient.invalidateQueries({ queryKey: ['projects'] });
+      queryClient.invalidateQueries({ queryKey: ['proyectos_nexus'] });
       setShowEdit(false);
       setShowCostoReal(false);
       toast.success('Proyecto actualizado correctamente');
@@ -146,6 +152,7 @@ export default function ProjectDetail() {
 
   const deleteMutation = useMutation({
     mutationFn: async () => {
+      if (!puedeEliminar) throw new Error('No tienes permiso para eliminar proyectos.');
       await db.Project.delete(id!);
       logAudit({
         accion:       'eliminar',
@@ -156,6 +163,7 @@ export default function ProjectDetail() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['projects'] });
+      queryClient.invalidateQueries({ queryKey: ['proyectos_nexus'] });
       navigate('/proyectos');
     },
   });
@@ -206,12 +214,16 @@ export default function ProjectDetail() {
           <ArrowLeft className="w-4 h-4" /> Volver a Proyectos
         </Link>
         <div className="flex gap-2">
+          {puedeEditar && (
           <button className={btnOutline} onClick={() => setShowEdit(true)}>
             <Pencil className="w-4 h-4" /> Editar
           </button>
+          )}
+          {puedeEliminar && (
           <button className={btnDanger} onClick={() => setShowDeleteConfirm(true)}>
             <Trash2 className="w-4 h-4" /> Eliminar
           </button>
+          )}
         </div>
       </div>
 

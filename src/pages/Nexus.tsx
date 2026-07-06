@@ -193,7 +193,7 @@ export default function Nexus() {
   // ── Queries ───────────────────────────────────────────────────────────────
   const { data: allUsers = [] } = useQuery({ queryKey:['sys_users_nexus'], queryFn: async()=>{ const {data}=await supabase.from('user_permissions').select('user_email, nombre, territorio, colegio, puesto').neq('user_email',userEmail); return (data??[]) as SysUser[]; }, enabled:isAdmin });
 
-  const { data: rawProyectos = [] } = useQuery({ queryKey:['proyectos_nexus'], queryFn: async()=>{ const {data}=await supabase.from('projects').select('id, name, territorio, colegio').order('name'); return data??[]; }, enabled:isAdmin });
+  const { data: rawProyectos = [] } = useQuery({ queryKey:['proyectos_nexus'], queryFn: async()=>{ const {data}=await supabase.from('projects').select('id, name, territorio, colegio, status').in('status', ['en_proceso','pausado','en_espera']).order('name'); return data??[]; } });
 
   const { data: rawTickets = [] } = useQuery({ queryKey:['tickets_nexus'], queryFn: async()=>{ const {data}=await supabase.from('tickets').select('id, folio, colegio, territorio').order('folio',{ascending:false}); return data??[]; }, enabled:isAdmin });
 

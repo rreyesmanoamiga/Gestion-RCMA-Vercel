@@ -269,6 +269,9 @@ export default function TicketMAS() {
 
   const canVerLista  = isAdmin || can('ver_ticket_mas');
   const soloFormulario = !isAdmin && !can('ver_ticket_mas') && can('enviar_ticket_mas');
+  const puedeCrear     = isAdmin || can('enviar_ticket_mas');
+  const puedeAutorizar = isAdmin || can('autorizar_ticket_mas');
+  const puedeCancelar  = isAdmin || can('cancelar_ticket_mas');
 
   // Vista: 'form' | 'lista' | 'detalle'
   const [vista, setVista] = useState<'form'|'lista'|'detalle'>('form');
@@ -375,6 +378,7 @@ export default function TicketMAS() {
 
   // ── Enviar ticket ─────────────────────────────────────────────────────────────
   const handleSubmit = async () => {
+    if (!puedeCrear) { toast.error('No tienes permiso para crear Ticket MAS.'); return; }
     if (!form.colegio || !form.nombre_solicitante || !form.correo_solicitante || !form.descripcion || !form.clasificacion || !form.nombre_proyecto) {
       toast.error('Completa los campos obligatorios marcados con *');
       return;
@@ -564,6 +568,7 @@ export default function TicketMAS() {
   };
 
   const handleAutorizar = async () => {
+    if (!puedeAutorizar) { toast.error('No tienes permiso para autorizar Ticket MAS.'); return; }
     if (!viewing || !adminFieldsComplete) return;
     const confirm = window.confirm(`¿Autorizar el ticket ${viewing.folio}?`);
     if (!confirm) return;
@@ -665,6 +670,8 @@ export default function TicketMAS() {
           // Vincular el proyecto creado al ticket registrado
           await supabase.from('tickets').update({ proyecto_id: proyecto.id })
             .eq('folio', updatedRow.folio);
+          // Refrescar la lista de proyectos disponibles para vincular en NEXUS
+          qc.invalidateQueries({ queryKey: ['proyectos_nexus'] });
         }
       }
 
@@ -811,6 +818,7 @@ export default function TicketMAS() {
 
   // ── Cancelar con motivo ───────────────────────────────────────────────────────
   const handleCancelar = async () => {
+    if (!puedeCancelar) { toast.error('No tienes permiso para cancelar Ticket MAS.'); return; }
     if (!cancelModal || !motivoCancel.trim()) { toast.error('Escribe el motivo'); return; }
     setCancelLoading(true);
     try {
@@ -1238,8 +1246,8 @@ export default function TicketMAS() {
                             <FolderPlus className="w-4 h-4" />
                           </a>
                         )}
-                        {/* Cancelar — solo admin */}
-                        {isAdmin && t.estatus !== 'cancelado' && (
+                        {/* Cancelar */}
+                        {puedeCancelar && t.estatus !== 'cancelado' && (
                           <button onClick={() => { setCancelModal(t); setMotivoCancel(''); }} title="Cancelar"
                             className="p-1.5 rounded hover:bg-red-50 text-red-500 transition">
                             <Ban className="w-4 h-4" />
@@ -1482,7 +1490,8 @@ export default function TicketMAS() {
             <div className="px-4 pb-4">
               <button
                 onClick={handleAutorizar}
-                disabled={!adminFieldsComplete}
+                disabled={!adminFieldsComplete || !puedeAutorizar}
+                title={!puedeAutorizar ? 'No tienes permiso para autorizar' : undefined}
                 className="w-full flex items-center justify-center gap-2 py-3 bg-emerald-600 text-white font-bold text-sm rounded-xl hover:bg-emerald-700 disabled:opacity-40 disabled:cursor-not-allowed transition"
               >
                 <CheckCircle className="w-5 h-5" />

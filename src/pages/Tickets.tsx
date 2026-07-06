@@ -12,6 +12,8 @@ import { toast } from 'sonner';
 import PageHeader from '@/components/shared/PageHeader';
 import ColegioSelector from '@/components/shared/ColegioSelector';
 import { COLEGIOS, TERRITORIOS } from '@/lib/colegios';
+import { usePermissions } from '@/hooks/usePermissions';
+import { logAudit } from '@/lib/audit';
 
 const PAGE_SIZE = 20;
 
@@ -356,6 +358,10 @@ function TicketForm({
 
 // ─── Página principal ─────────────────────────────────────────────────────────
 export default function Tickets() {
+  const { isAdmin, can } = usePermissions();
+  const puedeCrear    = isAdmin || can('crear_tickets');
+  const puedeEditar   = isAdmin || can('editar_tickets');
+  const puedeEliminar = isAdmin || can('eliminar_tickets');
   const [showForm, setShowForm]               = useState(false);
   const [editingTicket, setEditingTicket]     = useState<TicketRecord | null>(null);
   const [deletingId, setDeletingId]           = useState<string | null>(null);
@@ -422,6 +428,7 @@ export default function Tickets() {
 
   const createMutation = useMutation({
     mutationFn: async (data: Record<string, unknown>) => {
+      if (!puedeCrear) throw new Error('No tienes permiso para crear tickets.');
       const nombreProyecto = (data.nombre_proyecto || data._nombre_proyecto) as string | null;
 
       // Limpiar campos internos antes de insertar
@@ -464,11 +471,13 @@ export default function Tickets() {
         .select()
         .single();
       if (error) throw error;
+      logAudit({ accion: 'crear', modulo: 'tickets', registro_id: result?.id ?? null, registro_ref: result?.folio ?? nombreProyecto ?? null });
       return { result, crearProyecto: !!nombreProyecto };
     },
     onSuccess: (res) => {
       queryClient.invalidateQueries({ queryKey: ['tickets'] });
       queryClient.invalidateQueries({ queryKey: ['projects'] });
+      queryClient.invalidateQueries({ queryKey: ['proyectos_nexus'] });
       setShowForm(false);
       if (res.crearProyecto) {
         toast.success('✅ Ticket y Proyecto creados y vinculados correctamente');
@@ -481,6 +490,7 @@ export default function Tickets() {
 
   const updateMutation = useMutation({
     mutationFn: async ({ id, data }: { id: string; data: Record<string, unknown> }) => {
+      if (!puedeEditar) throw new Error('No tienes permiso para editar tickets.');
       const crearProyecto  = data._crear_proyecto  as boolean;
       const nombreProyecto = data._nombre_proyecto as string | null;
 
@@ -530,11 +540,19 @@ export default function Tickets() {
         }
       }
 
+      logAudit({
+        accion:       ticketData.estatus === 'cancelado' ? 'cancelar' : 'editar',
+        modulo:       'tickets',
+        registro_id:  id,
+        registro_ref: result?.folio ?? null,
+      });
+
       return result;
     },
     onSuccess: (_, { id, data }) => {
       queryClient.invalidateQueries({ queryKey: ['tickets'] });
       queryClient.invalidateQueries({ queryKey: ['projects'] });
+      queryClient.invalidateQueries({ queryKey: ['proyectos_nexus'] });
       setEditingTicket(null);
       if (data.estatus === 'cancelado') {
         const ticket = tickets.find(t => t.id === id);
@@ -552,8 +570,11 @@ export default function Tickets() {
 
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
+      if (!puedeEliminar) throw new Error('No tienes permiso para eliminar tickets.');
+      const ticket = tickets.find(t => t.id === id);
       const { error } = await supabase.from('tickets').delete().eq('id', id);
       if (error) throw error;
+      logAudit({ accion: 'eliminar', modulo: 'tickets', registro_id: id, registro_ref: ticket?.folio ?? null });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['tickets'] });
@@ -667,8 +688,7 @@ export default function Tickets() {
       <PageHeader
         title="Tickets Registrados"
         subtitle="Control y seguimiento de tickets de obra y mantenimiento"
-        actionLabel="Nuevo Ticket"
-        onAction={() => setShowForm(true)}
+        {...(puedeCrear ? { actionLabel: 'Nuevo Ticket', onAction: () => setShowForm(true) } : {})}
       />
 
       {/* KPIs */}
@@ -721,10 +741,12 @@ export default function Tickets() {
         <div className="bg-white rounded-xl border border-slate-200 py-20 text-center">
           <FileCheck className="w-12 h-12 text-slate-200 mx-auto mb-3" />
           <p className="text-slate-400 font-medium">No hay tickets registrados.</p>
+          {puedeCrear && (
           <button onClick={() => setShowForm(true)}
             className="mt-4 px-4 py-2 bg-slate-900 text-white rounded-md text-sm font-medium hover:bg-slate-800 transition-colors">
             + Nuevo Ticket
           </button>
+          )}
         </div>
       ) : (
         <div className="space-y-3">
@@ -818,14 +840,18 @@ export default function Tickets() {
                           <FolderPlus className="w-3.5 h-3.5" />
                         </button>
                       )}
+                      {puedeEditar && (
                       <button onClick={() => setEditingTicket(t)}
                         className="p-1.5 rounded-md border border-slate-200 text-slate-500 hover:bg-slate-100 transition-colors">
                         <Pencil className="w-3.5 h-3.5" />
                       </button>
+                      )}
+                      {puedeEliminar && (
                       <button onClick={() => setDeletingId(t.id)}
                         className="p-1.5 rounded-md border border-red-200 text-red-500 hover:bg-red-50 transition-colors">
                         <Trash2 className="w-3.5 h-3.5" />
                       </button>
+                      )}
                     </div>
                   </div>
                 </div>

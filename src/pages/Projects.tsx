@@ -13,6 +13,8 @@ import StatusBadge from '@/components/shared/StatusBadge';
 import PriorityBadge from '@/components/shared/PriorityBadge';
 import ProjectForm from '@/components/projects/ProjectForm';
 import { COLEGIOS, TERRITORIOS } from '@/lib/colegios';
+import { usePermissions } from '@/hooks/usePermissions';
+import { logAudit } from '@/lib/audit';
 
 const PAGE_SIZE   = 20;
 const selectClass = "h-10 px-3 py-2 bg-white border border-slate-300 rounded-md text-sm focus:ring-2 focus:ring-slate-400 focus:outline-none text-slate-700";
@@ -42,6 +44,8 @@ interface Project {
 }
 
 export default function Projects() {
+  const { isAdmin, can } = usePermissions();
+  const puedeCrear = isAdmin || can('crear_proyectos');
   const [showForm, setShowForm]                 = useState(false);
   const [filterStatuses, setFilterStatuses]         = useState<Set<string>>(new Set());
   const [filterTipoProyecto, setFilterTipoProyecto] = useState('all');
@@ -78,18 +82,23 @@ export default function Projects() {
   }, [tickets]);
 
   const createMutation = useMutation({
-    mutationFn: (data: Record<string, unknown>) => db.Project.create(data),
+    mutationFn: (data: Record<string, unknown>) => {
+      if (!puedeCrear) throw new Error('No tienes permiso para crear proyectos.');
+      return db.Project.create(data);
+    },
     onSuccess: (result: any) => {
       queryClient.invalidateQueries({ queryKey: ['projects'] });
+      queryClient.invalidateQueries({ queryKey: ['proyectos_nexus'] });
       setShowForm(false);
       if (result?._offline) {
         toast.warning('📶 Sin conexión — Proyecto guardado localmente, se sincronizará cuando haya internet');
       } else {
         toast.success('Proyecto creado correctamente');
+        logAudit({ accion: 'crear', modulo: 'proyectos', registro_id: result?.id ?? null, registro_ref: result?.name ?? null });
       }
     },
-    onError: () => {
-      toast.error('Error al crear el proyecto');
+    onError: (e: any) => {
+      toast.error(e?.message ?? 'Error al crear el proyecto');
     },
   });
 
@@ -142,8 +151,7 @@ export default function Projects() {
       <PageHeader
         title="Proyectos"
         subtitle="Gestión de proyectos de construcción y mantenimiento"
-        actionLabel="Nuevo Proyecto"
-        onAction={() => setShowForm(true)}
+        {...(puedeCrear ? { actionLabel: 'Nuevo Proyecto', onAction: () => setShowForm(true) } : {})}
       />
 
       <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-6">
@@ -251,8 +259,7 @@ export default function Projects() {
           icon={FolderKanban}
           title="No hay proyectos"
           description="Crea tu primer proyecto para comenzar a gestionar tus obras y mantenimientos."
-          actionLabel="Crear Proyecto"
-          onAction={() => setShowForm(true)}
+          {...(puedeCrear ? { actionLabel: 'Crear Proyecto', onAction: () => setShowForm(true) } : {})}
         />
       ) : (
         <>
