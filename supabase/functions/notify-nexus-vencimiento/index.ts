@@ -140,10 +140,10 @@ serve(async (req) => {
 
     // Notificación interna en el sistema para el admin
     try {
-      const { data: adminProfile } = await supabase.from('profiles').select('id').eq('email', adminEmail).maybeSingle();
-      if (adminProfile?.id) {
+      const { data: adminPerm } = await supabase.from('user_permissions').select('user_id').eq('user_email', adminEmail).maybeSingle();
+      if (adminPerm?.user_id) {
         await supabase.from('notificaciones').insert({
-          usuario_id: adminProfile.id,
+          usuario_id: adminPerm.user_id,
           tipo:       tipo === 'vencidos' ? 'urgente' : 'alerta',
           titulo:     asunto,
           mensaje:    `${allPendientes.length} pendiente(s) en NEXUS requieren atención.`,

@@ -39,9 +39,9 @@ export async function notify({ usuario_id, tipo = 'info', titulo, mensaje, link,
 export async function notifyByEmail(email: string | null | undefined, params: Omit<NotifyParams, 'usuario_id'>): Promise<void> {
   if (!email) return;
   try {
-    const { data: profile } = await supabase.from('profiles').select('id').eq('email', email).maybeSingle();
-    if (!profile?.id) return;
-    await notify({ ...params, usuario_id: profile.id });
+    const { data: perm } = await supabase.from('user_permissions').select('user_id').eq('user_email', email).maybeSingle();
+    if (!perm?.user_id) return;
+    await notify({ ...params, usuario_id: perm.user_id });
   } catch (e) {
     console.warn('No se pudo resolver el destinatario de la notificación:', e);
   }

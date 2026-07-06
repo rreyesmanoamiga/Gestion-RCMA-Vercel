@@ -149,6 +149,14 @@ serve(async (req) => {
     // Link real de activación con token correcto
     const actionLink = (data as any)?.properties?.action_link ?? siteUrl;
 
+    // Guardar el user_id real (auth.users.id) en user_permissions,
+    // para que las notificaciones internas puedan resolver correo → usuario_id
+    const nuevoUserId = (data as any)?.user?.id ?? null;
+    if (nuevoUserId) {
+      await supabaseAdmin.from('user_permissions')
+        .upsert({ user_email: email, user_id: nuevoUserId }, { onConflict: 'user_email' });
+    }
+
     const html = `
     <!DOCTYPE html>
     <html lang="es">
