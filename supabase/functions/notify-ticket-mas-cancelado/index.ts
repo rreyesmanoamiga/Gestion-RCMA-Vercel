@@ -66,6 +66,7 @@ serve(async (req) => {
     const smtpUser = Deno.env.get('SMTP_USER') ?? '';
 
     const ccList = [
+      'rreyes@manoamiga.edu.mx',
       'arodriguez@manoamiga.edu.mx',
       'ecastaneda@manoamiga.edu.mx',
       correo_car ?? '',

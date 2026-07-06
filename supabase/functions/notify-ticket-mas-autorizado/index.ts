@@ -75,6 +75,7 @@ serve(async (req) => {
 
     // CC fijos + CAR de zona
     const ccList = [
+      'rreyes@manoamiga.edu.mx',
       'arodriguez@manoamiga.edu.mx',
       'ecastaneda@manoamiga.edu.mx',
       correo_car ?? '',
