@@ -127,7 +127,8 @@ export default function Minutas() {
 
       if (file) {
         const anio    = new Date(form.fecha).getFullYear();
-        const carpeta = `Minutas/${anio}/${form.territorio || 'GENERAL'}`;
+        const temaCarpeta = form.asunto.trim().replace(/[/\\:*?"<>|]/g, '_').slice(0, 60);
+        const carpeta = `Minutas/${anio}/${form.territorio || 'GENERAL'}/${form.colegio || 'GENERAL'}/${temaCarpeta}`;
         const fecha   = format(new Date(), 'yyyy-MM-dd_HH-mm-ss');
         const nombre  = `${fecha}_${file.name}`;
         const webUrl  = await uploadCustom(file, carpeta, nombre);
