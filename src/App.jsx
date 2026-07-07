@@ -46,6 +46,7 @@ import Reports from '@/pages/Reports';
 import UserManagement from '@/pages/UserManagement';
 import Accesos from '@/pages/Accesos';
 import Auditoria from '@/pages/Auditoria';
+import Minutas from '@/pages/Minutas';
 import CalendarioMantenimiento from '@/pages/CalendarioMantenimiento';
 import Presupuestos from '@/pages/Presupuestos';
 
@@ -404,6 +405,7 @@ function AuthenticatedApp() {
           <Route path="/usuarios"           element={<UserManagement />} />
           <Route path="/accesos"            element={<Accesos />} />
           <Route path="/auditoria"          element={<Auditoria />} />
+          <Route path="/minutas"            element={<Minutas />} />
           <Route path="/calendario"         element={<CalendarioMantenimiento />} />
           <Route path="/presupuestos"       element={<Presupuestos />} />
           

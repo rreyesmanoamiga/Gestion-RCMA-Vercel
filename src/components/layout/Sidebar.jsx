@@ -243,6 +243,12 @@ export default function Sidebar({ isOpen, onToggle }) {
               Levantamiento Nal.
             </Link>
           )}
+          {(isAdmin || can('ver_minutas')) && (
+            <Link to="/minutas" onClick={handleNavClick} className={navLinkClass('/minutas')}>
+              <FileSignature className="w-[18px] h-[18px]" />
+              Minutas
+            </Link>
+          )}
 
           {/* 14 — Accesos */}
           {isAdmin && (

@@ -26,7 +26,8 @@ export type AuditModulo =
   | 'nexus'
   | 'anteproyectos'
   | 'levantamiento'
-  | 'calendario';
+  | 'calendario'
+  | 'minutas';
 
 interface LogAuditParams {
   accion:       AuditAccion;

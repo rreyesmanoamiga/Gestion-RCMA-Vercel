@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/lib/supabaseClient';
 import {
   Search, X, FolderKanban, TicketCheck, Inbox, BookOpen, ClipboardCheck,
-  Package, CheckSquare, Building2, Loader2,
+  Package, CheckSquare, Building2, Loader2, FileSignature,
 } from 'lucide-react';
 
 interface SearchResult {
@@ -26,6 +26,7 @@ const MODULOS_META: Record<string, { label: string; icon: React.ElementType; col
   insumos:       { label: 'Insumos',              icon: Package,        color: 'text-orange-600 bg-orange-50' },
   nexus:         { label: 'NEXUS',                icon: CheckSquare,    color: 'text-indigo-600 bg-indigo-50' },
   levantamiento: { label: 'Levantamiento Nacional', icon: Building2,    color: 'text-slate-600 bg-slate-100' },
+  minutas:       { label: 'Minutas de Reunión',     icon: FileSignature, color: 'text-blue-700 bg-blue-100' },
 };
 
 async function buscarGlobal(q: string): Promise<SearchResult[]> {
@@ -51,9 +52,11 @@ async function buscarGlobal(q: string): Promise<SearchResult[]> {
       .or(`titulo.ilike.${like},colegio.ilike.${like}`).limit(5),
     supabase.from('levantamiento_planteles').select('id,colegio_nombre,zona')
       .ilike('colegio_nombre', like).limit(5),
+    supabase.from('minutas').select('id,asunto,proyecto_nombre,colegio')
+      .or(`asunto.ilike.${like},proyecto_nombre.ilike.${like},colegio.ilike.${like}`).limit(5),
   ] as const;
 
-  const [projects, tickets, ticketsMas, solicitudes, anteproyectos, checklists, insumos, nexus, planteles] =
+  const [projects, tickets, ticketsMas, solicitudes, anteproyectos, checklists, insumos, nexus, planteles, minutasRes] =
     await Promise.allSettled(queries);
 
   const meta = (mod: string) => MODULOS_META[mod];
@@ -84,6 +87,9 @@ async function buscarGlobal(q: string): Promise<SearchResult[]> {
   });
   if (planteles.status === 'fulfilled') (planteles.value.data ?? []).forEach((p: any) => {
     results.push({ id: p.id, titulo: p.colegio_nombre ?? 'Sin nombre', subtitulo: p.zona ?? 'Levantamiento Nacional', modulo: 'levantamiento', icon: meta('levantamiento').icon, color: meta('levantamiento').color, link: '/levantamiento' });
+  });
+  if (minutasRes.status === 'fulfilled') (minutasRes.value.data ?? []).forEach((m: any) => {
+    results.push({ id: m.id, titulo: m.asunto ?? 'Sin asunto', subtitulo: [m.proyecto_nombre, m.colegio].filter(Boolean).join(' — '), modulo: 'minutas', icon: meta('minutas').icon, color: meta('minutas').color, link: '/minutas' });
   });
 
   return results;

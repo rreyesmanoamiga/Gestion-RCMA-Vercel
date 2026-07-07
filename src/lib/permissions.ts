@@ -22,6 +22,8 @@ const PERMISSION_DEFS: PermissionDef[] = [
   { key: 'eliminar_tickets',          label: 'Eliminar Tickets',          group: 'Tickets',               default: false },
   { key: 'ver_ticket_mas',            label: 'Ver Ticket MAS',            group: 'Ticket MAS',            default: false },
   { key: 'enviar_ticket_mas',         label: 'Enviar Ticket MAS',         group: 'Ticket MAS',            default: false },
+  { key: 'autorizar_ticket_mas',      label: 'Autorizar Ticket MAS',      group: 'Ticket MAS',            default: false },
+  { key: 'cancelar_ticket_mas',       label: 'Cancelar Ticket MAS',       group: 'Ticket MAS',            default: false },
   { key: 'ver_anteproyectos',         label: 'Ver Anteproyectos',         group: 'Anteproyectos',         default: true  },
   { key: 'crear_anteproyectos',       label: 'Crear Anteproyectos',       group: 'Anteproyectos',         default: false },
   { key: 'editar_anteproyectos',      label: 'Editar Anteproyectos',      group: 'Anteproyectos',         default: false },
@@ -41,12 +43,18 @@ const PERMISSION_DEFS: PermissionDef[] = [
   { key: 'editar_reportes',           label: 'Editar Reportes',           group: 'Reportes',              default: false },
   { key: 'eliminar_reportes',         label: 'Eliminar Reportes',         group: 'Reportes',              default: false },
   { key: 'ver_insumos',               label: 'Ver Insumos',               group: 'Insumos',               default: false },
+  { key: 'crear_insumos',             label: 'Crear/Editar Requisiciones', group: 'Insumos',              default: false },
   { key: 'vobo_insumos',              label: 'VoBo Insumos',              group: 'Insumos',               default: false },
+  { key: 'eliminar_insumos',          label: 'Eliminar Requisiciones',    group: 'Insumos',               default: false },
   { key: 'ver_nexus',                 label: 'Ver NEXUS',                 group: 'NEXUS',                 default: false },
   { key: 'ver_levantamiento',         label: 'Ver Levantamiento Nacional',        group: 'Levantamiento Nacional', default: false },
   { key: 'descargar_levantamiento',   label: 'Descargar Reportes/PDFs',           group: 'Levantamiento Nacional', default: false },
   { key: 'crear_levantamiento',       label: 'Crear/Editar (Comunicados, Pagos, Planteles)', group: 'Levantamiento Nacional', default: false },
   { key: 'eliminar_levantamiento',    label: 'Eliminar Registros',                group: 'Levantamiento Nacional', default: false },
+  { key: 'ver_minutas',               label: 'Ver Minutas de Reunión',            group: 'Minutas',               default: false },
+  { key: 'crear_minutas',             label: 'Subir Minutas',                     group: 'Minutas',               default: false },
+  { key: 'editar_minutas',            label: 'Editar Minutas',                    group: 'Minutas',               default: false },
+  { key: 'eliminar_minutas',          label: 'Eliminar Minutas',                  group: 'Minutas',               default: false },
 ];
 
 export const PERMISSIONS: Record<string, string> = Object.fromEntries(
