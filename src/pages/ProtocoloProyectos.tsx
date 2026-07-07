@@ -18,9 +18,10 @@ import {
 } from 'lucide-react';
 
 // ─── Archivos en Supabase Storage (bucket privado: documentos-rcma) ────────────
-const BUCKET           = 'documentos-rcma';
-const FILE_CONTRATOS   = 'REQUISITOS_CONTRATO_PROVEEDOR.pdf';
-const SIGNED_URL_TTL   = 60;
+const BUCKET              = 'documentos-rcma';
+const FILE_CONTRATOS      = 'REQUISITOS_CONTRATO_PROVEEDOR.pdf';
+const FILE_CATALOGO_AGP   = 'REQUISITOS_CONTRATOS_CATALOGO_DE_SERVICIOS_AGP.xlsx';
+const SIGNED_URL_TTL      = 60;
 
 // ─── Datos de las fases del protocolo ────────────────────────────────────────
 const FASES = [
@@ -100,13 +101,22 @@ const FASES = [
     pasos: [
       'Con base en la validación técnica del equipo ECO y la selección formal del proveedor, la Coordinación de Obras y Mantenimiento RCMA remitirá vía correo electrónico una solicitud de autorización a la Dirección correspondiente para gestionar ante OR - SER Jurídico la elaboración del instrumento contractual aplicable. El tipo de documento a elaborar será determinado según la naturaleza del proyecto: Contrato de Prestación de Servicios, Contrato de Donación o Acta de Garantía.',
       'El colegio solicitante deberá recabar la documentación corporativa y fiscal del proveedor seleccionado con base en el listado de requisitos disponible para descarga en esta fase. Dicha documentación deberá adjuntarse directamente en el correo dirigido a OR - SER Jurídico solicitando la elaboración del contrato correspondiente, con copia a: arodriguez@manoamiga.edu.mx, CAR del territorio y Coordinador de Obras y Mantenimiento RCMA.',
+      'Para la elaboración de cualquier contrato será necesario llenar el documento "Requisitos Contratos — Catálogo de Servicios AGP" disponible para descarga en esta fase, en la pestaña que corresponda al tipo de operación: Arrendamiento Cafetería, Arrendamiento, Servicios Especializados o Servicios Generales. Si tiene duda de qué pestaña llenar, la Coordinación de Obras y Mantenimiento RCMA con gusto puede asesorarle.',
+      'Para lo anterior, es MUY IMPORTANTE lo siguiente: 1) Dar un contexto detallado de la operación previamente a la Coordinación de Obras y Mantenimiento RCMA. 2) Llenar el formato anexo de forma COMPLETA. 3) Adjuntar la información solicitada COMPLETA en el mismo correo del formato.',
       'Es fundamental que el Acta de Garantía sea firmada por el proveedor antes del inicio de los trabajos, de manera simultánea a la firma del contrato. Este documento es el respaldo formal que compromete al proveedor a responder por defectos, vicios ocultos o fallas en los materiales y mano de obra durante el período de garantía establecido. Obtener la firma del Acta previo al arranque de actividades garantiza que el colegio cuente con el sustento legal necesario para exigir correcciones o reparaciones sin costo adicional en caso de que los trabajos presenten fallas, evitando que el proveedor se deslinde de su responsabilidad una vez concluida la obra.',
     ],
-    descarga: {
-      filename: FILE_CONTRATOS,
-      label: 'Requisitos para Elaboración de Contrato',
-      descripcion: 'Archivo PDF · Documentación requerida al proveedor para OR - SER Jurídico',
-    },
+    descargas: [
+      {
+        filename: FILE_CONTRATOS,
+        label: 'Requisitos para Elaboración de Contrato',
+        descripcion: 'Archivo PDF · Documentación requerida al proveedor para OR - SER Jurídico',
+      },
+      {
+        filename: FILE_CATALOGO_AGP,
+        label: 'Requisitos Contratos — Catálogo de Servicios AGP',
+        descripcion: 'Archivo Excel · Llenar la pestaña correspondiente: Arrendamiento Cafetería, Arrendamiento, Servicios Especializados o Servicios Generales',
+      },
+    ],
   },
 ];
 
@@ -209,19 +219,19 @@ export default function ProtocoloProyectos() {
                     </div>
                   ))}
 
-                {/* Bloque de descarga (solo fases con archivo adjunto) */}
-                  {(fase as any).descarga && (() => {
-                    const d = (fase as any).descarga;
-                    return (
-                      <div className={`mt-4 rounded-xl ${c.bg} border ${c.border} overflow-hidden`}>
-                        <div className={`px-4 py-2.5 border-b ${c.border} flex items-center gap-2`}>
-                          <AlertCircle className={`w-3.5 h-3.5 ${c.icon}`} />
-                          <span className={`text-xs font-bold uppercase tracking-wider ${c.icon}`}>
-                            Documento requerido para esta fase
-                          </span>
-                        </div>
-                        <div className="px-4 py-3">
+                {/* Bloque de descarga (solo fases con archivo(s) adjunto(s)) */}
+                  {(fase as any).descargas && (fase as any).descargas.length > 0 && (
+                    <div className={`mt-4 rounded-xl ${c.bg} border ${c.border} overflow-hidden`}>
+                      <div className={`px-4 py-2.5 border-b ${c.border} flex items-center gap-2`}>
+                        <AlertCircle className={`w-3.5 h-3.5 ${c.icon}`} />
+                        <span className={`text-xs font-bold uppercase tracking-wider ${c.icon}`}>
+                          {(fase as any).descargas.length > 1 ? 'Documentos requeridos para esta fase' : 'Documento requerido para esta fase'}
+                        </span>
+                      </div>
+                      <div className="px-4 py-3 space-y-2">
+                        {(fase as any).descargas.map((d: any, di: number) => (
                           <button
+                            key={di}
                             onClick={() => handleDownload(d.filename)}
                             disabled={loadingFile === d.filename}
                             className={`group flex items-center gap-3 p-3 rounded-lg border-2 border-slate-200 hover:${c.border} hover:${c.bg} transition-all duration-200 text-left w-full sm:w-auto bg-white`}
@@ -237,10 +247,10 @@ export default function ProtocoloProyectos() {
                               ? <span className={`w-4 h-4 border-2 ${c.border} border-t-transparent rounded-full animate-spin flex-shrink-0`} />
                               : <Download className={`w-4 h-4 text-slate-400 group-hover:${c.icon} flex-shrink-0 transition-colors`} />}
                           </button>
-                        </div>
+                        ))}
                       </div>
-                    );
-                  })()}
+                    </div>
+                  )}
 
                   {/* Bloque especial de correo (solo fase con correo) */}
                   {fase.correo && (
