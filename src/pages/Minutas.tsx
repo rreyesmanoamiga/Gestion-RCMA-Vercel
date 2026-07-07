@@ -117,7 +117,7 @@ export default function Minutas() {
         if (!puedeEditar) throw new Error('No tienes permiso para editar minutas.');
       } else {
         if (!puedeCrear) throw new Error('No tienes permiso para subir minutas.');
-        if (!file) throw new Error('Selecciona el archivo Word de la minuta.');
+        if (!file) throw new Error('Selecciona el archivo PDF de la minuta.');
       }
       if (!form.asunto.trim()) throw new Error('Escribe el asunto de la reunión.');
 
@@ -357,7 +357,7 @@ export default function Minutas() {
 
               <div>
                 <label className="block text-xs font-bold text-slate-500 uppercase mb-1">
-                  {editItem ? 'Reemplazar archivo Word (opcional)' : 'Archivo Word de la Minuta *'}
+                  {editItem ? 'Reemplazar archivo PDF (opcional)' : 'Archivo PDF de la Minuta *'}
                 </label>
                 {editItem?.onedrive_url && !file && (
                   <a href={editItem.onedrive_url} target="_blank" rel="noreferrer"
@@ -371,16 +371,16 @@ export default function Minutas() {
                   onDrop={e => {
                     e.preventDefault(); setDragActive(false);
                     const dropped = e.dataTransfer.files?.[0];
-                    if (dropped && (dropped.name.endsWith('.docx') || dropped.name.endsWith('.doc'))) setFile(dropped);
-                    else toast.error('Solo se aceptan archivos Word (.docx, .doc)');
+                    if (dropped && dropped.name.toLowerCase().endsWith('.pdf')) setFile(dropped);
+                    else toast.error('Solo se aceptan archivos PDF (.pdf)');
                   }}
                   className={`flex items-center gap-3 cursor-pointer border-2 border-dashed rounded-lg px-4 py-3 transition
                   ${dragActive ? 'border-blue-500 bg-blue-100' : file ? 'border-blue-400 bg-blue-50' : 'border-slate-300 hover:border-blue-400 hover:bg-slate-50'}`}>
                   <FileText className="w-5 h-5 text-blue-500 shrink-0" />
                   <span className="flex-1 text-sm text-slate-600 truncate">
-                    {file ? file.name : 'Arrastra el archivo Word aquí o haz clic para seleccionarlo'}
+                    {file ? file.name : 'Arrastra el archivo PDF aquí o haz clic para seleccionarlo'}
                   </span>
-                  <input type="file" accept=".docx,.doc" className="hidden"
+                  <input type="file" accept=".pdf" className="hidden"
                     onChange={e => setFile(e.target.files?.[0] ?? null)} />
                 </label>
               </div>
