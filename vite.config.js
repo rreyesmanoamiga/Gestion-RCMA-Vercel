@@ -35,6 +35,10 @@ export default defineConfig({
       workbox: {
         skipWaiting: true,
         clientsClaim: true,
+        // Límite de tamaño por archivo para precaché offline — el default de Workbox
+        // es 2 MB, y el sistema ya lo superó. Se sube a 5 MB para dar margen de
+        // crecimiento sin tener que tocar esto de nuevo pronto.
+        maximumFileSizeToCacheInBytes: 5 * 1024 * 1024,
         // Cachear todos los assets del build
         globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
         // Estrategia: intentar red primero, si falla usar caché
