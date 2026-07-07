@@ -470,6 +470,49 @@ export default function Nexus() {
     </div>
   );
 
+  // Lista compacta (fila por pendiente) — usada solo para Completados, donde
+  // la vista de tarjetas resultaba confusa mezclada con los activos/vencidos.
+  const PendListCompletados = ({ items }: { items:Pendiente[] }) => (
+    <div className="bg-white rounded-xl border border-slate-200 divide-y divide-slate-100 overflow-hidden">
+      {items.map(p => {
+        const pCfg   = PRIO_CFG[p.prioridad];
+        const coment = comentariosMap[p.id];
+        const hasComents = coment && coment.count > 0;
+        return (
+          <div key={p.id}
+            onClick={() => { setViewPend(p); marcarComentariosLeidos(p.id); }}
+            className="flex items-center gap-3 px-4 py-3 cursor-pointer hover:bg-slate-50 transition">
+            <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0" />
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2 flex-wrap">
+                <p className="font-bold text-sm text-slate-400 line-through truncate">{p.titulo}</p>
+                <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold border shrink-0 ${pCfg?.cls}`}>{pCfg?.label}</span>
+              </div>
+              <div className="flex items-center gap-2 flex-wrap mt-0.5">
+                {p.proyecto_nombre && <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-blue-700 bg-blue-50 border border-blue-200 px-2 py-0.5 rounded-full"><ClipboardList className="w-3 h-3"/>{p.proyecto_nombre}</span>}
+                {p.ticket_folio && <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-purple-700 bg-purple-50 border border-purple-200 px-2 py-0.5 rounded-full"><Link2 className="w-3 h-3"/>{p.ticket_folio}</span>}
+                {p.colegio && <span className="text-[10px] font-semibold text-slate-500 bg-slate-100 px-2 py-0.5 rounded-full"><Building2 className="w-2.5 h-2.5 inline mr-0.5"/>{p.colegio}</span>}
+                {hasComents && coment.lastDate && <span className="text-[10px] text-slate-400">Actualizado: {fmtDate(coment.lastDate)}</span>}
+              </div>
+            </div>
+            <div className="flex items-center gap-1 shrink-0" onClick={e => e.stopPropagation()}>
+              <button type="button" onClick={async e=>{e.stopPropagation();const items2=await supabase.from('nexus_comentarios').select('*').eq('pendiente_id',p.id).order('created_at').then(r=>r.data??[]); generarPDFPendiente(p,items2 as Comentario[]);}} className="p-1.5 text-slate-400 hover:text-teal-600 rounded-lg transition" title="PDF"><Download className="w-4 h-4"/></button>
+              {isAdmin && <button type="button" onClick={e=>{e.stopPropagation();setConfirmDel({type:'pendiente',id:p.id,titulo:p.titulo});}} className="p-1.5 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition"><Trash2 className="w-3.5 h-3.5"/></button>}
+              <div className="relative p-1.5">
+                <MessageSquare className={`w-3.5 h-3.5 ${hasComents ? 'text-teal-500' : 'text-slate-300'}`}/>
+                {hasComents && (
+                  <span className="absolute -top-0.5 -right-0.5 bg-teal-500 text-white text-[9px] font-black rounded-full w-3.5 h-3.5 flex items-center justify-center leading-none">
+                    {coment.count > 9 ? '9+' : coment.count}
+                  </span>
+                )}
+              </div>
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+
   // ─────────────────────────────────────────────────────────────────────────────
   return (
     <div className="space-y-5">
@@ -554,7 +597,7 @@ export default function Nexus() {
           {isAdmin&&(tab==='personales'?pendPersonales:pendCompartidos).filter(p=>p.estatus==='completado').length>0&&(
             <div>
               <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-3 flex items-center gap-2"><CheckCircle2 className="w-3.5 h-3.5"/>Completados — evidencia</p>
-              <PendGrid items={(tab==='personales'?pendPersonales:pendCompartidos).filter(p=>p.estatus==='completado')}/>
+              <PendListCompletados items={(tab==='personales'?pendPersonales:pendCompartidos).filter(p=>p.estatus==='completado')}/>
             </div>
           )}
         </div>
