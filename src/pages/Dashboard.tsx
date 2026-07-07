@@ -4,20 +4,20 @@ import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import {FolderKanban, ClipboardCheck, Wrench, AlertTriangle, ArrowRight,
   Building2, MapPin, TicketCheck, FolderOpen, CalendarDays, ClockAlert,
-  ChevronRight, Activity, type LucideIcon, BookOpen, Bell } from 'lucide-react';
+  ChevronRight, Activity, type LucideIcon, BookOpen, Bell, BarChart3 } from 'lucide-react';
 import { supabase } from '@/lib/supabaseClient';
 import StatusBadge from '@/components/shared/StatusBadge';
 import { COLEGIOS, type Colegio } from '@/lib/colegios';
 import {
   PieChart, Pie, Cell, Tooltip, ResponsiveContainer, Legend,
-  BarChart, Bar, XAxis, YAxis, CartesianGrid
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, LineChart, Line
 } from 'recharts';
 
 // ─── Interfaces ───────────────────────────────────────────────────────────────
 interface Project {
   id: string; name?: string; status?: string; priority?: string;
   colegio?: string; territorio?: string; location?: string; progress?: number;
-  created_at?: string;
+  created_at?: string; updated_at?: string; budget?: number; costo_real?: number;
 }
 interface Checklist {
   id: string; overall_status?: string; colegio?: string; territorio?: string;
@@ -218,6 +218,39 @@ export default function Dashboard() {
       name: STATUS_LABELS[status] ?? status, value: count, color: STATUS_COLORS[status] ?? '#94a3b8',
     }));
   }, [tickets]);
+
+  // ─── Tendencia: Proyectos completados por mes (últimos 6 meses) ────────────
+  const MESES_CORTOS = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+  const ultimosMeses = useMemo(() => {
+    const hoy = new Date();
+    return Array.from({ length: 6 }, (_, i) => {
+      const d = new Date(hoy.getFullYear(), hoy.getMonth() - (5 - i), 1);
+      return { year: d.getFullYear(), month: d.getMonth(), label: `${MESES_CORTOS[d.getMonth()]} ${String(d.getFullYear()).slice(2)}` };
+    });
+  }, []);
+
+  const proyectosCompletadosPorMes = useMemo(() =>
+    ultimosMeses.map(({ year, month, label }) => {
+      const count = projects.filter(p => {
+        if (p.status !== 'completado' || !p.updated_at) return false;
+        const d = new Date(p.updated_at);
+        return d.getFullYear() === year && d.getMonth() === month;
+      }).length;
+      return { name: label, Completados: count };
+    }), [projects, ultimosMeses]);
+
+  // ─── Tendencia: Presupuesto planeado vs costo real por mes ─────────────────
+  const presupuestoVsRealPorMes = useMemo(() =>
+    ultimosMeses.map(({ year, month, label }) => {
+      const delMes = projects.filter(p => {
+        if (p.status !== 'completado' || !p.updated_at || p.costo_real == null) return false;
+        const d = new Date(p.updated_at);
+        return d.getFullYear() === year && d.getMonth() === month;
+      });
+      const planeado = delMes.reduce((s, p) => s + (p.budget ?? 0), 0);
+      const real     = delMes.reduce((s, p) => s + (p.costo_real ?? 0), 0);
+      return { name: label, Planeado: Math.round(planeado), 'Costo Real': Math.round(real) };
+    }), [projects, ultimosMeses]);
 
   // ─── Colegios con alertas ──────────────────────────────────────────────────
   const urgentColegios = useMemo(() => {
@@ -450,6 +483,55 @@ export default function Dashboard() {
               </BarChart>
             </ResponsiveContainer>
           )}
+        </div>
+      </div>
+
+      {/* ─── Tendencias históricas (últimos 6 meses) ─────────────────────────── */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        {/* Línea — proyectos completados por mes */}
+        <div className="bg-white rounded-xl border border-slate-200 p-5">
+          <div className="flex items-center gap-2 mb-4">
+            <div className="w-7 h-7 rounded-lg bg-emerald-50 flex items-center justify-center">
+              <FolderKanban className="w-4 h-4 text-emerald-600" />
+            </div>
+            <div>
+              <h2 className="text-sm font-bold text-slate-800">Proyectos Completados por Mes</h2>
+              <p className="text-xs text-slate-400">Últimos 6 meses</p>
+            </div>
+          </div>
+          <ResponsiveContainer width="100%" height={220}>
+            <LineChart data={proyectosCompletadosPorMes} margin={{ top: 5, right: 10, left: -20, bottom: 5 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+              <XAxis dataKey="name" tick={{ fontSize: 10 }} />
+              <YAxis tick={{ fontSize: 10 }} allowDecimals={false} />
+              <Tooltip content={<CustomTooltip />} />
+              <Line type="monotone" dataKey="Completados" stroke="#10b981" strokeWidth={2.5} dot={{ r: 4, fill: '#10b981' }} />
+            </LineChart>
+          </ResponsiveContainer>
+        </div>
+
+        {/* Barras — presupuesto planeado vs costo real por mes */}
+        <div className="bg-white rounded-xl border border-slate-200 p-5">
+          <div className="flex items-center gap-2 mb-4">
+            <div className="w-7 h-7 rounded-lg bg-indigo-50 flex items-center justify-center">
+              <BarChart3 className="w-4 h-4 text-indigo-600" />
+            </div>
+            <div>
+              <h2 className="text-sm font-bold text-slate-800">Presupuesto Planeado vs. Costo Real</h2>
+              <p className="text-xs text-slate-400">Proyectos completados, últimos 6 meses</p>
+            </div>
+          </div>
+          <ResponsiveContainer width="100%" height={220}>
+            <BarChart data={presupuestoVsRealPorMes} barSize={16} margin={{ top: 5, right: 10, left: -10, bottom: 5 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+              <XAxis dataKey="name" tick={{ fontSize: 10 }} />
+              <YAxis tick={{ fontSize: 9 }} tickFormatter={(v) => `$${(v / 1000).toFixed(0)}k`} />
+              <Tooltip formatter={(v: number) => '$' + v.toLocaleString('es-MX')} />
+              <Legend wrapperStyle={{ fontSize: 11 }} />
+              <Bar dataKey="Planeado" fill="#6366f1" radius={[3, 3, 0, 0]} />
+              <Bar dataKey="Costo Real" fill="#f59e0b" radius={[3, 3, 0, 0]} />
+            </BarChart>
+          </ResponsiveContainer>
         </div>
       </div>
 

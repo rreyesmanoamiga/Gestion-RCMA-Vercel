@@ -12,6 +12,7 @@ const MIN_PAGE_SIZE  = 20;
 import { toast } from 'sonner';
 import { db } from '@/lib/db';
 import { supabase } from '@/lib/supabaseClient';
+import { savePendingChange } from '@/lib/offlineDB';
 import { useSharePointUpload } from '@/hooks/useSharePointUpload';
 import { logAudit } from '@/lib/audit';
 import EvidenciaUploader from '@/components/EvidenciaUploader';
@@ -1107,7 +1108,9 @@ async function generarReporteGeneral(evaluaciones: EvalMinimos[]) {
 export default function Checklists() {
   const navigate     = useNavigate();
   const qc           = useQueryClient();
-  const { isAdmin }  = usePermissions();
+  const { isAdmin, can }  = usePermissions();
+  const puedeCrear    = isAdmin || can('crear_checklists');
+  const puedeEliminar = isAdmin || can('eliminar_checklists');
 
   const [activeTab, setActiveTab] = useState<'inspecciones' | 'minimos'>('inspecciones');
 
@@ -1143,7 +1146,10 @@ export default function Checklists() {
   const remainingInsp    = filtered.length - inspVisibleCount;
 
   const createMutation = useMutation({
-    mutationFn: (d: Record<string, unknown>) => db.Checklist.create(d),
+    mutationFn: (d: Record<string, unknown>) => {
+      if (!puedeCrear) throw new Error('No tienes permiso para crear inspecciones.');
+      return db.Checklist.create(d);
+    },
     onSuccess: async (created: any) => {
       qc.invalidateQueries({ queryKey: ['checklists'] });
       setFormOpen(false);
@@ -1214,19 +1220,27 @@ export default function Checklists() {
 
   const createMinMutation = useMutation({
     mutationFn: async () => {
+      if (!puedeCrear) throw new Error('No tienes permiso para crear evaluaciones de mínimos.');
       const terr = COLEGIOS.find(c => c.colegio === formColegio)?.territorio ?? '';
-      const { error } = await supabase.from('minimos_indispensables').insert({
+      const payload = {
         colegio: formColegio, territorio: terr, inspector: formInspector,
         fecha: formFecha, notas: formNotas, items: formItems,
         resultado: calcResultado(formItems),
-      });
-      if (error) throw error;
-      logAudit({
-        accion:       'crear',
-        modulo:       'checklists',
-        registro_ref: formColegio,
-        detalle:      { inspector: formInspector, resultado: calcResultado(formItems) },
-      });
+      };
+      try {
+        const { error } = await supabase.from('minimos_indispensables').insert(payload);
+        if (error) throw error;
+        logAudit({
+          accion:       'crear',
+          modulo:       'checklists',
+          registro_ref: formColegio,
+          detalle:      { inspector: formInspector, resultado: calcResultado(formItems) },
+        });
+      } catch {
+        // Sin conexión — se guarda localmente y se sincroniza sola al recuperar internet
+        await savePendingChange('minimos_indispensables', 'insert', payload);
+        toast.warning('📶 Sin conexión — Evaluación guardada localmente, se sincronizará cuando haya internet');
+      }
     },
     onSuccess: async () => {
       qc.invalidateQueries({ queryKey: ['minimos_indispensables'] });
@@ -1248,6 +1262,7 @@ export default function Checklists() {
 
   const deleteMinMutation = useMutation({
     mutationFn: async (id: string) => {
+      if (!puedeEliminar) throw new Error('No tienes permiso para eliminar evaluaciones de mínimos.');
       const evalItem = minimosRaw.find(e => e.id === id);
       const { error } = await supabase.from('minimos_indispensables').delete().eq('id', id);
       if (error) throw error;
@@ -1319,8 +1334,8 @@ export default function Checklists() {
       <PageHeader
         title="Checklists"
         subtitle={activeTab === 'inspecciones' ? 'Validación visual de infraestructuras' : 'Evaluación de infraestructura mínima requerida por plantel'}
-        actionLabel={activeTab === 'inspecciones' ? 'Nueva Inspección' : (isAdmin ? 'Nueva Evaluación' : undefined)}
-        onAction={activeTab === 'inspecciones' ? () => setFormOpen(true) : (isAdmin ? () => { setShowForm(true); setFormItems(initItems()); } : undefined)}
+        actionLabel={activeTab === 'inspecciones' ? (puedeCrear ? 'Nueva Inspección' : undefined) : (puedeCrear ? 'Nueva Evaluación' : undefined)}
+        onAction={activeTab === 'inspecciones' ? (puedeCrear ? () => setFormOpen(true) : undefined) : (puedeCrear ? () => { setShowForm(true); setFormItems(initItems()); } : undefined)}
       />
 
       {/* Tabs */}

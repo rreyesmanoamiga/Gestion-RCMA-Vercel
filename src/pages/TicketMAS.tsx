@@ -303,6 +303,29 @@ export default function TicketMAS() {
     nombre_proyecto:'',
   };
   const [form, setForm] = useState({ ...FORM_INIT });
+
+  const DRAFT_KEY = 'tmas_draft_rescate';
+
+  // Si hubo un intento fallido por falta de conexión anteriormente, ofrecer recuperarlo
+  useEffect(() => {
+    const draft = localStorage.getItem(DRAFT_KEY);
+    if (draft) {
+      try {
+        const parsed = JSON.parse(draft);
+        toast.warning('Se encontró un Ticket MAS sin enviar por falta de conexión.', {
+          duration: 15000,
+          action: {
+            label: 'Recuperar',
+            onClick: () => {
+              setForm(parsed);
+              localStorage.removeItem(DRAFT_KEY);
+              toast.success('Borrador recuperado. Verifica los datos y envía de nuevo.');
+            },
+          },
+        });
+      } catch { localStorage.removeItem(DRAFT_KEY); }
+    }
+  }, []);
   const set = (k: string, v: string) => setForm(p => ({ ...p, [k]: v }));
 
   // ── Admin form state (llenado por Ricardo) ───────────────────────────────────
@@ -475,7 +498,14 @@ export default function TicketMAS() {
 
       setEnviado(true);
     } catch (e: any) {
-      toast.error(e.message ?? 'Error al enviar el ticket');
+      // Si fue por falta de conexión, guardar el borrador localmente para no perder la captura
+      const esErrorDeRed = !navigator.onLine || e?.message?.includes('fetch') || e?.message?.includes('network');
+      if (esErrorDeRed) {
+        localStorage.setItem(DRAFT_KEY, JSON.stringify(form));
+        toast.warning('📶 Sin conexión — Tu captura se guardó en este dispositivo. Vuelve a intentar enviar cuando tengas internet.', { duration: 10000 });
+      } else {
+        toast.error(e.message ?? 'Error al enviar el ticket');
+      }
     } finally {
       setLoading(false);
     }
