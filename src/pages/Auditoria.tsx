@@ -263,22 +263,26 @@ export default function Auditoria() {
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
   const [exportando, setExportando] = useState(false);
 
+  // México es UTC-6 fijo — convertir cualquier timestamp/fecha a "día calendario México"
+  const toFechaMX = (input: string | Date): string =>
+    new Date(new Date(input).getTime() - 6 * 60 * 60 * 1000).toISOString().slice(0, 10);
+
   const aplicarPreset = (preset: 'hoy' | 'semana' | 'mes' | 'mesAnterior' | 'todo') => {
-    const hoy = new Date();
+    const hoyMX = new Date(Date.now() - 6 * 60 * 60 * 1000);
     const fmt = (d: Date) => d.toISOString().slice(0, 10);
     if (preset === 'todo')  { setFechaDesde(''); setFechaHasta(''); return; }
-    if (preset === 'hoy')   { const s = fmt(hoy); setFechaDesde(s); setFechaHasta(s); return; }
+    if (preset === 'hoy')   { const s = fmt(hoyMX); setFechaDesde(s); setFechaHasta(s); return; }
     if (preset === 'semana') {
-      const inicio = new Date(hoy); inicio.setDate(hoy.getDate() - 7);
-      setFechaDesde(fmt(inicio)); setFechaHasta(fmt(hoy)); return;
+      const inicio = new Date(hoyMX); inicio.setUTCDate(hoyMX.getUTCDate() - 7);
+      setFechaDesde(fmt(inicio)); setFechaHasta(fmt(hoyMX)); return;
     }
     if (preset === 'mes') {
-      const inicio = new Date(hoy.getFullYear(), hoy.getMonth(), 1);
-      setFechaDesde(fmt(inicio)); setFechaHasta(fmt(hoy)); return;
+      const inicio = new Date(Date.UTC(hoyMX.getUTCFullYear(), hoyMX.getUTCMonth(), 1));
+      setFechaDesde(fmt(inicio)); setFechaHasta(fmt(hoyMX)); return;
     }
     if (preset === 'mesAnterior') {
-      const inicio = new Date(hoy.getFullYear(), hoy.getMonth() - 1, 1);
-      const fin    = new Date(hoy.getFullYear(), hoy.getMonth(), 0);
+      const inicio = new Date(Date.UTC(hoyMX.getUTCFullYear(), hoyMX.getUTCMonth() - 1, 1));
+      const fin    = new Date(Date.UTC(hoyMX.getUTCFullYear(), hoyMX.getUTCMonth(), 0));
       setFechaDesde(fmt(inicio)); setFechaHasta(fmt(fin)); return;
     }
   };
@@ -303,7 +307,7 @@ export default function Auditoria() {
   );
 
   const filtered = useMemo(() => rows.filter(r => {
-    const fecha = r.created_at.slice(0, 10);
+    const fecha = toFechaMX(r.created_at);
     return (filterModulo === 'all'  || r.modulo === filterModulo) &&
       (filterAccion === 'all'  || r.accion === filterAccion) &&
       (filterUsuario === 'all' || r.usuario_email === filterUsuario) &&

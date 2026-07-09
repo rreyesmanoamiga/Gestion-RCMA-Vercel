@@ -132,7 +132,13 @@ export default function Sidebar({ isOpen, onToggle }) {
             </Link>
           )}
 
-          {/* 2 — Solicitud de Proyecto */}
+          {/* 2 — Protocolo de Proyectos */}
+          <Link to="/protocolo" onClick={handleNavClick} className={navLinkClass('/protocolo')}>
+            <BookOpen className="w-[18px] h-[18px]" />
+            Protocolo de Proyectos
+          </Link>
+
+          {/* 3 — Solicitud de Proyecto */}
           {can('ver_solicitud_proyecto') && (
             <Link to="/solicitud" onClick={handleNavClick} className={navLinkClass('/solicitud')}>
               <ClipboardEdit className="w-[18px] h-[18px]" />
@@ -140,7 +146,7 @@ export default function Sidebar({ isOpen, onToggle }) {
             </Link>
           )}
 
-          {/* 3 — Solicitudes Recibidas */}
+          {/* 4 — Solicitudes Recibidas */}
           {isAdmin && (
             <Link to="/solicitudes" onClick={handleNavClick} className={navLinkClass('/solicitudes')}>
               <Inbox className="w-[18px] h-[18px]" />
@@ -148,19 +154,13 @@ export default function Sidebar({ isOpen, onToggle }) {
             </Link>
           )}
 
-          {/* 4 — Ticket MAS */}
+          {/* 5 — Ticket MAS */}
           {(isAdmin || can('ver_ticket_mas') || can('enviar_ticket_mas')) && (
             <Link to="/ticket-mas" onClick={handleNavClick} className={navLinkClass('/ticket-mas')}>
               <FileSignature className="w-[18px] h-[18px]" />
               Ticket MAS
             </Link>
           )}
-
-          {/* 5 — Protocolo de Proyectos */}
-          <Link to="/protocolo" onClick={handleNavClick} className={navLinkClass('/protocolo')}>
-            <BookOpen className="w-[18px] h-[18px]" />
-            Protocolo de Proyectos
-          </Link>
 
           {/* 6 — Tickets Registrados */}
           {can('ver_tickets') && (
@@ -178,15 +178,7 @@ export default function Sidebar({ isOpen, onToggle }) {
             </Link>
           )}
 
-          {/* 8 — Anteproyectos */}
-          {can('ver_anteproyectos') && (
-            <Link to="/anteproyectos" onClick={handleNavClick} className={navLinkClass('/anteproyectos')}>
-              <FolderOpen className="w-[18px] h-[18px]" />
-              Anteproyectos
-            </Link>
-          )}
-
-          {/* 9 — Presupuesto vs Real */}
+          {/* 8 — Presupuesto vs Real */}
           {(isAdmin || can('ver_reportes')) && (
             <Link to="/presupuestos" onClick={handleNavClick} className={navLinkClass('/presupuestos')}>
               <BarChart3 className="w-[18px] h-[18px]" />
@@ -194,55 +186,23 @@ export default function Sidebar({ isOpen, onToggle }) {
             </Link>
           )}
 
-
-          {/* 11 — Checklists */}
-          {can('ver_checklists') && (
-            <Link to="/checklists" onClick={handleNavClick} className={navLinkClass('/checklists')}>
-              <ClipboardCheck className="w-[18px] h-[18px]" />
-              Checklists
+          {/* 9 — Anteproyectos */}
+          {can('ver_anteproyectos') && (
+            <Link to="/anteproyectos" onClick={handleNavClick} className={navLinkClass('/anteproyectos')}>
+              <FolderOpen className="w-[18px] h-[18px]" />
+              Anteproyectos
             </Link>
           )}
 
-          {/* 12 — Calendario */}
-          {can('ver_calendario') && (
-            <Link to="/calendario" onClick={handleNavClick} className={navLinkClass('/calendario')}>
-              <CalendarDays className="w-[18px] h-[18px]" />
-              Calendario
-            </Link>
-          )}
-
-          {/* Insumos */}
-          {(isAdmin || can('ver_insumos')) && (
-            <Link to="/insumos" onClick={handleNavClick} className={navLinkClass('/insumos')}>
-              <Package className="w-[18px] h-[18px]" />
-              Insumos
-            </Link>
-          )}
-
-          {/* NEXUS */}
-          {(isAdmin || can('ver_nexus')) && (
-            <NexusLink navLinkClass={navLinkClass} handleNavClick={handleNavClick} userEmail={user?.email} isAdmin={isAdmin} />
-          )}
-
-          {/* 13 — Reportes */}
-          {can('ver_reportes') && (
-            <Link to="/reportes" onClick={handleNavClick} className={navLinkClass('/reportes')}>
-              <FileText className="w-[18px] h-[18px]" />
-              Reportes
-            </Link>
-          )}
-
-          {/* --- DIRECTORIO: ENTRE REPORTES Y ACCESOS --- */}
-          <Link to="/directorio" onClick={handleNavClick} className={navLinkClass('/directorio')}>
-            <BookUser className="w-[18px] h-[18px]" />
-            Directorio
-          </Link>
+          {/* 10 — Levantamiento Nal. */}
           {(isAdmin || can('ver_levantamiento')) && (
             <Link to="/levantamiento" onClick={handleNavClick} className={navLinkClass('/levantamiento')}>
               <Layers className="w-[18px] h-[18px]" />
               Levantamiento Nal.
             </Link>
           )}
+
+          {/* 11 — Minutas */}
           {(isAdmin || can('ver_minutas')) && (
             <Link to="/minutas" onClick={handleNavClick} className={navLinkClass('/minutas')}>
               <FileSignature className="w-[18px] h-[18px]" />
@@ -250,7 +210,50 @@ export default function Sidebar({ isOpen, onToggle }) {
             </Link>
           )}
 
-          {/* 14 — Accesos */}
+          {/* 12 — NEXUS */}
+          {(isAdmin || can('ver_nexus')) && (
+            <NexusLink navLinkClass={navLinkClass} handleNavClick={handleNavClick} userEmail={user?.email} isAdmin={isAdmin} />
+          )}
+
+          {/* 13 — Checklists */}
+          {can('ver_checklists') && (
+            <Link to="/checklists" onClick={handleNavClick} className={navLinkClass('/checklists')}>
+              <ClipboardCheck className="w-[18px] h-[18px]" />
+              Checklists
+            </Link>
+          )}
+
+          {/* 14 — Calendario */}
+          {can('ver_calendario') && (
+            <Link to="/calendario" onClick={handleNavClick} className={navLinkClass('/calendario')}>
+              <CalendarDays className="w-[18px] h-[18px]" />
+              Calendario
+            </Link>
+          )}
+
+          {/* 15 — Insumos */}
+          {(isAdmin || can('ver_insumos')) && (
+            <Link to="/insumos" onClick={handleNavClick} className={navLinkClass('/insumos')}>
+              <Package className="w-[18px] h-[18px]" />
+              Insumos
+            </Link>
+          )}
+
+          {/* 16 — Reportes */}
+          {can('ver_reportes') && (
+            <Link to="/reportes" onClick={handleNavClick} className={navLinkClass('/reportes')}>
+              <FileText className="w-[18px] h-[18px]" />
+              Reportes
+            </Link>
+          )}
+
+          {/* 17 — Directorio */}
+          <Link to="/directorio" onClick={handleNavClick} className={navLinkClass('/directorio')}>
+            <BookUser className="w-[18px] h-[18px]" />
+            Directorio
+          </Link>
+
+          {/* 18 — Accesos */}
           {isAdmin && (
             <Link to="/accesos" onClick={handleNavClick} className={navLinkClass('/accesos')}>
               <Lock className="w-[18px] h-[18px]" />
@@ -258,7 +261,7 @@ export default function Sidebar({ isOpen, onToggle }) {
             </Link>
           )}
 
-          {/* 15 — Auditoría */}
+          {/* 19 — Auditoría */}
           {isAdmin && (
             <Link to="/auditoria" onClick={handleNavClick} className={navLinkClass('/auditoria')}>
               <ShieldAlert className="w-[18px] h-[18px]" />
