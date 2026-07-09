@@ -191,7 +191,7 @@ export default function Minutas() {
             ccList.push(CAR_CORREOS[form.territorio].email);
           }
           try {
-            await supabase.functions.invoke('notify-minuta-subida', {
+            const { error: notifError } = await supabase.functions.invoke('notify-minuta-subida', {
               body: {
                 para: 'arodriguez@manoamiga.edu.mx',
                 cc: ccList,
@@ -203,7 +203,14 @@ export default function Minutas() {
                 onedrive_url, siteUrl: window.location.origin,
               },
             });
-          } catch { /* no bloqueante */ }
+            if (notifError) {
+              console.error('Error al enviar notificación de minuta:', notifError);
+              toast.warning('El documento se guardó, pero la notificación por correo no pudo enviarse.');
+            }
+          } catch (e) {
+            console.error('Error al enviar notificación de minuta:', e);
+            toast.warning('El documento se guardó, pero la notificación por correo no pudo enviarse.');
+          }
         }
       }
     },
