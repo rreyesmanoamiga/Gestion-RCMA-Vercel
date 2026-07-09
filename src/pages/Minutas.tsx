@@ -33,6 +33,10 @@ interface Minuta {
 
 const inputCls   = 'w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none bg-white';
 const PAGE_SIZE   = 20;
+const CAR_CORREOS: Record<string, { email: string; nombre: string }> = {
+  NORTE:  { email: 'jalvarado@manoamiga.edu.mx', nombre: 'Julián Alvarado (CAR Norte)' },
+  MEXICO: { email: 'gromero@manoamiga.edu.mx',   nombre: 'Gonzalo Romero (CAR México)' },
+};
 const FORM_INIT = {
   asunto: '', fecha: format(new Date(), 'yyyy-MM-dd'),
   proyecto_id: '', proyecto_nombre: '', territorio: '', colegio: '', notas: '',
@@ -57,6 +61,9 @@ export default function Minutas() {
   const [form, setForm]               = useState({ ...FORM_INIT });
   const [file, setFile]               = useState<File | null>(null);
   const [dragActive, setDragActive]   = useState(false);
+  const [notifAngel, setNotifAngel]   = useState(false); // maestro: activa el envío, Angel siempre va como "Para"
+  const [notifEnrique, setNotifEnrique] = useState(false);
+  const [notifCAR, setNotifCAR]       = useState(false);
 
   // ── Data ────────────────────────────────────────────────────────────────
   const { data: minutas = [], isLoading } = useQuery({
@@ -96,6 +103,9 @@ export default function Minutas() {
     setFile(null);
     setSinProyecto(false);
     setEditItem(null);
+    setNotifAngel(false);
+    setNotifEnrique(false);
+    setNotifCAR(false);
   };
 
   const openEdit = (m: Minuta) => {
@@ -160,6 +170,28 @@ export default function Minutas() {
         const { data, error } = await supabase.from('minutas').insert(payload).select('id').single();
         if (error) throw error;
         logAudit({ accion: 'crear', modulo: 'minutas', registro_id: data?.id ?? null, registro_ref: form.asunto });
+
+        // Notificar por correo — Para: Angel (si se activó) — CC: Enrique, CAR y tú
+        if (notifAngel) {
+          const ccList: string[] = ['rreyes@manoamiga.edu.mx'];
+          if (notifEnrique) ccList.push('ecastaneda@manoamiga.edu.mx');
+          if (notifCAR && form.territorio && CAR_CORREOS[form.territorio]) {
+            ccList.push(CAR_CORREOS[form.territorio].email);
+          }
+          try {
+            await supabase.functions.invoke('notify-minuta-subida', {
+              body: {
+                para: 'arodriguez@manoamiga.edu.mx',
+                cc: ccList,
+                asunto: form.asunto, fecha: form.fecha,
+                proyecto_nombre: form.proyecto_nombre || null,
+                territorio: form.territorio || null, colegio: form.colegio || null,
+                subido_por: user?.email ?? null,
+                onedrive_url, siteUrl: window.location.origin,
+              },
+            });
+          } catch { /* no bloqueante */ }
+        }
       }
     },
     onSuccess: () => {
@@ -355,6 +387,29 @@ export default function Minutas() {
                 <textarea className={inputCls + ' resize-none'} rows={2} placeholder="Observaciones adicionales..."
                   value={form.notas} onChange={e => setForm(f => ({ ...f, notas: e.target.value }))} />
               </div>
+
+              {!editItem && (
+                <div className="bg-slate-50 border border-slate-200 rounded-lg p-3 space-y-2">
+                  <label className="flex items-center gap-2 text-sm font-bold text-slate-700 cursor-pointer">
+                    <input type="checkbox" checked={notifAngel} onChange={e => setNotifAngel(e.target.checked)} className="w-4 h-4 rounded" />
+                    Notificar a Angel Rodríguez (Gerente)
+                  </label>
+                  {notifAngel && (
+                    <div className="pl-6 space-y-2 border-l-2 border-slate-200 ml-1">
+                      <p className="text-[11px] text-slate-400">Con copia a ti automáticamente, y opcionalmente a:</p>
+                      <label className="flex items-center gap-2 text-sm cursor-pointer">
+                        <input type="checkbox" checked={notifEnrique} onChange={e => setNotifEnrique(e.target.checked)} className="w-4 h-4 rounded" />
+                        Enrique Castañeda
+                      </label>
+                      <label className={`flex items-center gap-2 text-sm ${form.territorio && CAR_CORREOS[form.territorio] ? 'cursor-pointer' : 'text-slate-400 cursor-not-allowed'}`}>
+                        <input type="checkbox" checked={notifCAR} disabled={!form.territorio || !CAR_CORREOS[form.territorio]}
+                          onChange={e => setNotifCAR(e.target.checked)} className="w-4 h-4 rounded" />
+                        {form.territorio && CAR_CORREOS[form.territorio] ? CAR_CORREOS[form.territorio].nombre : 'CAR del Territorio (selecciona territorio primero)'}
+                      </label>
+                    </div>
+                  )}
+                </div>
+              )}
 
               <div>
                 <label className="block text-xs font-bold text-slate-500 uppercase mb-1">
