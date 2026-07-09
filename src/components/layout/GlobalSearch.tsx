@@ -26,7 +26,7 @@ const MODULOS_META: Record<string, { label: string; icon: React.ElementType; col
   insumos:       { label: 'Insumos',              icon: Package,        color: 'text-orange-600 bg-orange-50' },
   nexus:         { label: 'NEXUS',                icon: CheckSquare,    color: 'text-indigo-600 bg-indigo-50' },
   levantamiento: { label: 'Levantamiento Nacional', icon: Building2,    color: 'text-slate-600 bg-slate-100' },
-  minutas:       { label: 'Minutas de Reunión',     icon: FileSignature, color: 'text-blue-700 bg-blue-100' },
+  minutas:       { label: 'Minutas y Notas Técnicas', icon: FileSignature, color: 'text-blue-700 bg-blue-100' },
 };
 
 async function buscarGlobal(q: string): Promise<SearchResult[]> {

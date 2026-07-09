@@ -43,7 +43,7 @@ serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
   try {
     const {
-      para, cc, asunto, fecha, proyecto_nombre, territorio, colegio,
+      para, cc, tipo_label, asunto, fecha, proyecto_nombre, territorio, colegio,
       subido_por, onedrive_url, siteUrl,
     } = await req.json();
 
@@ -65,11 +65,11 @@ serve(async (req) => {
           <p style="margin:4px 0 0;color:#94a3b8;font-size:12px;">Coordinación de Obras — Colegios Mano Amiga</p>
         </td></tr>
         <tr><td style="background:#2563eb;padding:14px 36px;">
-          <p style="margin:0;color:#fff;font-size:14px;font-weight:700;">📄 Nueva Minuta de Reunión — ${asunto ?? '—'}</p>
+          <p style="margin:0;color:#fff;font-size:14px;font-weight:700;">📄 Nueva ${tipo_label ?? 'Minuta de Reunión'} — ${asunto ?? '—'}</p>
         </td></tr>
         <tr><td style="padding:32px 36px;">
           <p style="color:#475569;font-size:15px;line-height:1.6;margin:0 0 20px;">
-            Se ha subido una nueva minuta de reunión al Sistema RCMA:
+            Se ha subido una nueva ${(tipo_label ?? 'Minuta de Reunión').toLowerCase()} al Sistema RCMA:
           </p>
           <table width="100%" cellpadding="0" cellspacing="0" style="border:1px solid #e2e8f0;border-radius:8px;overflow:hidden;margin-bottom:28px;">
             <tr style="background:#f8fafc;">
@@ -104,7 +104,7 @@ serve(async (req) => {
   </table>
 </body></html>`;
 
-    await sendEmail(para, Array.isArray(cc) ? cc : [], `📄 [RCMA] Nueva Minuta: ${asunto ?? 'Reunión'}`, html);
+    await sendEmail(para, Array.isArray(cc) ? cc : [], `📄 [RCMA] Nueva ${tipo_label ?? 'Minuta'}: ${asunto ?? 'Reunión'}`, html);
 
     return new Response(
       JSON.stringify({ success: true }),

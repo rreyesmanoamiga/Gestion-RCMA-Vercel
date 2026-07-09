@@ -18,6 +18,7 @@ import { TERRITORIOS, getColegiosByTerritorio } from '@/lib/colegios';
 interface Minuta {
   id: string;
   created_at: string;
+  tipo: 'minuta' | 'nota_tecnica';
   asunto: string;
   fecha: string;
   proyecto_id: string | null;
@@ -31,6 +32,11 @@ interface Minuta {
   creado_por: string | null;
 }
 
+const TIPO_CFG: Record<string, { label: string; labelCorto: string; color: string; carpeta: string }> = {
+  minuta:       { label: 'Minuta de Reunión',           labelCorto: 'Minuta',       color: 'text-blue-700 bg-blue-50 border-blue-200',     carpeta: 'Minutas' },
+  nota_tecnica: { label: 'Nota Técnica de Seguimiento',  labelCorto: 'Nota Técnica', color: 'text-purple-700 bg-purple-50 border-purple-200', carpeta: 'Notas Tecnicas' },
+};
+
 const inputCls   = 'w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none bg-white';
 const PAGE_SIZE   = 20;
 const CAR_CORREOS: Record<string, { email: string; nombre: string }> = {
@@ -38,6 +44,7 @@ const CAR_CORREOS: Record<string, { email: string; nombre: string }> = {
   MEXICO: { email: 'gromero@manoamiga.edu.mx',   nombre: 'Gonzalo Romero (CAR México)' },
 };
 const FORM_INIT = {
+  tipo: 'minuta' as 'minuta' | 'nota_tecnica',
   asunto: '', fecha: format(new Date(), 'yyyy-MM-dd'),
   proyecto_id: '', proyecto_nombre: '', territorio: '', colegio: '', notas: '',
 };
@@ -53,6 +60,7 @@ export default function Minutas() {
   const puedeEliminar = isAdmin || can('eliminar_minutas');
 
   const [search, setSearch]           = useState('');
+  const [filterTipo, setFilterTipo]   = useState<'all' | 'minuta' | 'nota_tecnica'>('all');
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
   const [showForm, setShowForm]       = useState(false);
   const [editItem, setEditItem]       = useState<Minuta | null>(null);
@@ -88,11 +96,12 @@ export default function Minutas() {
   const colegiosDisponibles = useMemo(() => getColegiosByTerritorio(form.territorio), [form.territorio]);
 
   const filtered = useMemo(() => minutas.filter(m =>
-    !search ||
-    m.asunto?.toLowerCase().includes(search.toLowerCase()) ||
-    m.proyecto_nombre?.toLowerCase().includes(search.toLowerCase()) ||
-    m.colegio?.toLowerCase().includes(search.toLowerCase())
-  ), [minutas, search]);
+    (filterTipo === 'all' || m.tipo === filterTipo) &&
+    (!search ||
+      m.asunto?.toLowerCase().includes(search.toLowerCase()) ||
+      m.proyecto_nombre?.toLowerCase().includes(search.toLowerCase()) ||
+      m.colegio?.toLowerCase().includes(search.toLowerCase()))
+  ), [minutas, search, filterTipo]);
 
   const visible   = useMemo(() => filtered.slice(0, visibleCount), [filtered, visibleCount]);
   const hasMore   = visibleCount < filtered.length;
@@ -112,6 +121,7 @@ export default function Minutas() {
     setEditItem(m);
     setSinProyecto(!!(m.proyecto_nombre && !m.proyecto_id));
     setForm({
+      tipo: m.tipo ?? 'minuta',
       asunto: m.asunto, fecha: m.fecha,
       proyecto_id: m.proyecto_id ?? '', proyecto_nombre: m.proyecto_nombre ?? '',
       territorio: m.territorio ?? '', colegio: m.colegio ?? '', notas: m.notas ?? '',
@@ -127,7 +137,7 @@ export default function Minutas() {
         if (!puedeEditar) throw new Error('No tienes permiso para editar minutas.');
       } else {
         if (!puedeCrear) throw new Error('No tienes permiso para subir minutas.');
-        if (!file) throw new Error('Selecciona el archivo PDF de la minuta.');
+        if (!file) throw new Error('Selecciona el archivo PDF del documento.');
       }
       if (!form.asunto.trim()) throw new Error('Escribe el asunto de la reunión.');
 
@@ -138,7 +148,8 @@ export default function Minutas() {
       if (file) {
         const anio    = new Date(form.fecha).getFullYear();
         const temaCarpeta = form.asunto.trim().replace(/[/\\:*?"<>|]/g, '_').slice(0, 60);
-        const carpeta = `Minutas/${anio}/${form.territorio || 'GENERAL'}/${form.colegio || 'GENERAL'}/${temaCarpeta}`;
+        const carpetaRaiz = TIPO_CFG[form.tipo]?.carpeta ?? 'Minutas';
+        const carpeta = `${carpetaRaiz}/${anio}/${form.territorio || 'GENERAL'}/${form.colegio || 'GENERAL'}/${temaCarpeta}`;
         const fecha   = format(new Date(), 'yyyy-MM-dd_HH-mm-ss');
         const nombre  = `${fecha}_${file.name}`;
         const webUrl  = await uploadCustom(file, carpeta, nombre);
@@ -149,6 +160,7 @@ export default function Minutas() {
       }
 
       const payload = {
+        tipo:            form.tipo,
         asunto:          form.asunto.trim(),
         fecha:           form.fecha,
         proyecto_id:     sinProyecto ? null : (form.proyecto_id || null),
@@ -183,6 +195,7 @@ export default function Minutas() {
               body: {
                 para: 'arodriguez@manoamiga.edu.mx',
                 cc: ccList,
+                tipo_label: TIPO_CFG[form.tipo]?.label ?? 'Minuta de Reunión',
                 asunto: form.asunto, fecha: form.fecha,
                 proyecto_nombre: form.proyecto_nombre || null,
                 territorio: form.territorio || null, colegio: form.colegio || null,
@@ -196,7 +209,7 @@ export default function Minutas() {
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['minutas'] });
-      toast.success(editItem ? 'Minuta actualizada' : 'Minuta guardada correctamente');
+      toast.success(editItem ? 'Documento actualizado' : 'Documento guardado correctamente');
       setShowForm(false);
       resetForm();
     },
@@ -212,7 +225,7 @@ export default function Minutas() {
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['minutas'] });
-      toast.success('Minuta eliminada');
+      toast.success('Documento eliminado');
       setDeleteItem(null);
     },
   });
@@ -220,9 +233,25 @@ export default function Minutas() {
   return (
     <div className="space-y-5">
       <PageHeader
-        title="Minutas de Reunión"
-        subtitle="Repositorio de minutas y actas de reuniones institucionales"
+        title="Minutas y Notas Técnicas"
+        subtitle="Repositorio de minutas de reunión y notas técnicas de seguimiento"
       />
+
+      {/* Filtro por tipo */}
+      <div className="flex gap-2">
+        {[
+          { key: 'all',          label: 'Todos' },
+          { key: 'minuta',       label: 'Minutas de Reunión' },
+          { key: 'nota_tecnica', label: 'Notas Técnicas' },
+        ].map(t => (
+          <button key={t.key} onClick={() => { setFilterTipo(t.key as any); setVisibleCount(PAGE_SIZE); }}
+            className={`px-3 py-1.5 rounded-full text-xs font-bold border transition-colors ${
+              filterTipo === t.key ? 'bg-slate-900 text-white border-slate-900' : 'bg-white text-slate-500 border-slate-200 hover:border-slate-400'
+            }`}>
+            {t.label}
+          </button>
+        ))}
+      </div>
 
       <div className="flex flex-wrap items-center gap-3">
         <div className="relative flex-1 min-w-[200px] max-w-sm">
@@ -232,11 +261,11 @@ export default function Minutas() {
             placeholder="Buscar por asunto, proyecto o colegio..."
             value={search} onChange={e => { setSearch(e.target.value); setVisibleCount(PAGE_SIZE); }} />
         </div>
-        <span className="text-sm text-slate-400">{filtered.length} minuta{filtered.length !== 1 ? 's' : ''}</span>
+        <span className="text-sm text-slate-400">{filtered.length} documento{filtered.length !== 1 ? 's' : ''}</span>
         {puedeCrear && (
           <button onClick={() => { resetForm(); setShowForm(true); }}
             className="ml-auto flex items-center gap-2 px-4 py-2 bg-slate-900 text-white rounded-lg text-sm font-bold hover:bg-slate-800 transition-colors">
-            <Plus className="w-4 h-4" /> Nueva Minuta
+            <Plus className="w-4 h-4" /> Nuevo Documento
           </button>
         )}
       </div>
@@ -246,17 +275,22 @@ export default function Minutas() {
       ) : filtered.length === 0 ? (
         <div className="text-center py-16 text-slate-400 text-sm">
           <FileSignature className="w-10 h-10 mx-auto mb-2 text-slate-300" />
-          No hay minutas registradas.
+          No hay documentos registrados.
         </div>
       ) : (
         <div className="bg-white rounded-xl border border-slate-200 divide-y divide-slate-100 overflow-hidden">
-          {visible.map(m => (
+          {visible.map(m => {
+            const tipoCfg = TIPO_CFG[m.tipo] ?? TIPO_CFG.minuta;
+            return (
             <div key={m.id} className="flex items-center gap-4 px-4 py-3 hover:bg-slate-50 transition-colors">
-              <div className="w-9 h-9 rounded-lg bg-blue-50 flex items-center justify-center shrink-0">
-                <FileText className="w-4 h-4 text-blue-600" />
+              <div className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 ${m.tipo === 'nota_tecnica' ? 'bg-purple-50' : 'bg-blue-50'}`}>
+                <FileText className={`w-4 h-4 ${m.tipo === 'nota_tecnica' ? 'text-purple-600' : 'text-blue-600'}`} />
               </div>
               <div className="flex-1 min-w-0">
-                <p className="font-bold text-sm text-slate-900 truncate">{m.asunto}</p>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <p className="font-bold text-sm text-slate-900 truncate">{m.asunto}</p>
+                  <span className={`shrink-0 text-[10px] font-bold px-2 py-0.5 rounded-full border ${tipoCfg.color}`}>{tipoCfg.labelCorto}</span>
+                </div>
                 <div className="flex items-center gap-2 flex-wrap mt-1">
                   <span className="inline-flex items-center gap-1 text-[11px] text-slate-500">
                     <Calendar className="w-3 h-3" />
@@ -295,7 +329,8 @@ export default function Minutas() {
                 )}
               </div>
             </div>
-          ))}
+            );
+          })}
         </div>
       )}
 
@@ -315,7 +350,7 @@ export default function Minutas() {
         <div className="fixed inset-0 z-[100] flex items-start sm:items-center justify-center bg-black/50 p-4 overflow-y-auto">
           <div className="bg-white rounded-xl shadow-xl max-w-lg w-full my-8">
             <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100">
-              <h2 className="font-bold text-slate-900">{editItem ? 'Editar Minuta' : 'Nueva Minuta'}</h2>
+              <h2 className="font-bold text-slate-900">{editItem ? `Editar ${TIPO_CFG[form.tipo]?.label ?? 'Documento'}` : 'Nuevo Documento'}</h2>
               <button onClick={() => { setShowForm(false); resetForm(); }} className="text-slate-400 hover:text-slate-700">
                 <X className="w-5 h-5" />
               </button>
@@ -323,7 +358,21 @@ export default function Minutas() {
 
             <div className="p-5 space-y-3 max-h-[75vh] overflow-y-auto">
               <div>
-                <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Asunto / Tema de la Reunión *</label>
+                <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Tipo de Documento *</label>
+                <div className="grid grid-cols-2 gap-2">
+                  {(['minuta', 'nota_tecnica'] as const).map(t => (
+                    <label key={t} className={`flex items-center gap-2 px-3 py-2 rounded-lg border cursor-pointer text-sm transition ${form.tipo === t ? 'border-slate-900 bg-slate-50 font-semibold' : 'border-slate-200'}`}>
+                      <input type="radio" checked={form.tipo === t} onChange={() => setForm(f => ({ ...f, tipo: t }))} className="shrink-0" />
+                      {TIPO_CFG[t].label}
+                    </label>
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-500 uppercase mb-1">
+                  {form.tipo === 'nota_tecnica' ? 'Tema de la Nota Técnica *' : 'Asunto / Tema de la Reunión *'}
+                </label>
                 <input className={inputCls} placeholder="Ej. Seguimiento Barda Perimetral MA TIJ"
                   value={form.asunto} onChange={e => setForm(f => ({ ...f, asunto: e.target.value }))} />
               </div>
@@ -461,7 +510,7 @@ export default function Minutas() {
       {deleteItem && (
         <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/50 p-4">
           <div className="bg-white rounded-lg shadow-xl max-w-sm w-full p-6">
-            <h2 className="text-lg font-bold text-slate-900 mb-2">¿Eliminar minuta?</h2>
+            <h2 className="text-lg font-bold text-slate-900 mb-2">¿Eliminar documento?</h2>
             <p className="text-sm text-slate-600">
               <span className="font-semibold">{deleteItem.asunto}</span> — esta acción no se puede deshacer.
             </p>

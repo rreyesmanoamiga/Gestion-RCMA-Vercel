@@ -155,7 +155,7 @@ const MODULO_LABEL: Record<string, string> = {
   anteproyectos: 'Anteproyectos',
   levantamiento: 'Levantamiento Nacional',
   calendario:    'Calendario de Mantenimiento',
-  minutas:       'Minutas de Reunión',
+  minutas:       'Minutas y Notas Técnicas',
 };
 
 // ─── Export PDF: Reporte de Auditoría ─────────────────────────────────────────
