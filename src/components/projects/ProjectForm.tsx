@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { X, Save } from 'lucide-react';
-import { COLEGIOS } from '@/lib/colegios';
+import { useEcoLookup } from '@/hooks/useEcoLookup';
 import ColegioSelector from '@/components/shared/ColegioSelector';
 
 const inputClass    = "w-full px-3 py-2 border border-slate-300 rounded-md text-sm focus:ring-2 focus:ring-slate-900 focus:outline-none bg-white text-slate-900";
@@ -62,6 +62,7 @@ interface ProjectFormProps {
 
 export default function ProjectForm({ open, onClose, onSubmit, project = null }: ProjectFormProps) {
   const [formData, setFormData] = useState<FormData>(INITIAL_FORM);
+  const { getEco } = useEcoLookup();
 
   useEffect(() => {
     if (project) {
@@ -169,8 +170,7 @@ export default function ProjectForm({ open, onClose, onSubmit, project = null }:
               colegio={formData.colegio}
               onTerritorioChange={val => setFormData(prev => ({ ...prev, territorio: val, colegio: '', eco: '' }))}
               onColegioChange={val => {
-                const colegioData = COLEGIOS.find(c => c.colegio === val);
-                setFormData(prev => ({ ...prev, colegio: val, eco: colegioData?.eco ?? '' }));
+                setFormData(prev => ({ ...prev, colegio: val, eco: getEco(val) }));
               }}
               required
             />

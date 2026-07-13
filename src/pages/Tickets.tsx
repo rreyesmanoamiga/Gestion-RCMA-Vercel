@@ -12,6 +12,7 @@ import { toast } from 'sonner';
 import PageHeader from '@/components/shared/PageHeader';
 import ColegioSelector from '@/components/shared/ColegioSelector';
 import { COLEGIOS, TERRITORIOS } from '@/lib/colegios';
+import { useEcoLookup } from '@/hooks/useEcoLookup';
 import { usePermissions } from '@/hooks/usePermissions';
 import { logAudit } from '@/lib/audit';
 
@@ -112,6 +113,7 @@ function TicketForm({
   projects?: Project[];
 }) {
   const [formData, setFormData] = useState<FormData>(INITIAL_FORM);
+  const { getEco } = useEcoLookup();
 
   React.useEffect(() => {
     if (ticket) {
@@ -238,8 +240,7 @@ function TicketForm({
               colegio={formData.colegio}
               onTerritorioChange={val => setFormData(p => ({ ...p, territorio: val, colegio: '', eco: '' }))}
               onColegioChange={val => {
-                const c = COLEGIOS.find(c => c.colegio === val);
-                setFormData(p => ({ ...p, colegio: val, eco: c?.eco ?? '' }));
+                setFormData(p => ({ ...p, colegio: val, eco: getEco(val) }));
               }}
             />
           )}

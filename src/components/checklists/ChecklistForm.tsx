@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { X, Plus, Trash2 } from 'lucide-react';
 import { COLEGIOS } from '@/lib/colegios';
+import { useEcoLookup } from '@/hooks/useEcoLookup';
 import ColegioSelector from '@/components/shared/ColegioSelector';
 
 const inputClass  = "w-full px-3 py-2 border border-slate-300 rounded-md text-sm focus:ring-2 focus:ring-slate-900 focus:outline-none bg-white text-slate-900";
@@ -70,6 +71,7 @@ interface ChecklistFormProps {
 
 export default function ChecklistForm({ open, onClose, onSubmit, checklist = null }: ChecklistFormProps) {
   const [formData, setFormData] = useState<FormData>(INITIAL_FORM);
+  const { getEco } = useEcoLookup();
   const [errors, setErrors]     = useState<Record<string, string>>({});
   const [itemPhotos, setItemPhotos] = useState<(File | null)[]>([null]);
 
@@ -98,8 +100,7 @@ export default function ChecklistForm({ open, onClose, onSubmit, checklist = nul
   if (!open) return null;
 
   const handleColegioChange = (colegio: string) => {
-    const info = COLEGIOS.find(c => c.colegio === colegio);
-    setFormData(prev => ({ ...prev, colegio, eco: info?.eco ?? '' }));
+    setFormData(prev => ({ ...prev, colegio, eco: getEco(colegio) }));
   };
 
   const handleTerritorioChange = (territorio: string) => {
@@ -151,6 +152,7 @@ export default function ChecklistForm({ open, onClose, onSubmit, checklist = nul
   };
 
   const colegioInfo = COLEGIOS.find(c => c.colegio === formData.colegio);
+  const ecoActual = getEco(formData.colegio);
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4">
@@ -228,10 +230,10 @@ export default function ChecklistForm({ open, onClose, onSubmit, checklist = nul
                   <span className="font-semibold text-slate-400 uppercase tracking-wide">Territorio</span>
                   <span className="font-bold text-slate-700">{colegioInfo.territorio}</span>
                 </div>
-                {colegioInfo.eco !== '-' && (
+                {ecoActual && (
                   <div className="flex justify-between">
                     <span className="font-semibold text-slate-400 uppercase tracking-wide">ECO</span>
-                    <span className="font-bold text-slate-700">{colegioInfo.eco}</span>
+                    <span className="font-bold text-slate-700">{ecoActual}</span>
                   </div>
                 )}
               </div>

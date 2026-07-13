@@ -11,7 +11,9 @@ import PageHeader from '@/components/shared/PageHeader';
 import PriorityBadge from '@/components/shared/PriorityBadge';
 import ColegioSelector from '@/components/shared/ColegioSelector';
 import { COLEGIOS, TERRITORIOS } from '@/lib/colegios';
+import { useEcoLookup } from '@/hooks/useEcoLookup';
 import { logAudit } from '@/lib/audit';
+import { usePermissions } from '@/hooks/usePermissions';
 
 const PAGE_SIZE = 20;
 
@@ -121,6 +123,7 @@ function AnteproyectoForm({
   const [formData, setFormData] = useState<FormData>(INITIAL_FORM);
   const [zipFile, setZipFile]   = useState<File | null>(null);
   const { upload: spUpload } = useSharePointUpload();
+  const { getEco } = useEcoLookup();
 
   React.useEffect(() => {
     setZipFile(null); // Siempre limpiar ZIP al abrir el modal
@@ -201,8 +204,7 @@ function AnteproyectoForm({
             colegio={formData.colegio}
             onTerritorioChange={val => setFormData(p => ({ ...p, territorio: val, colegio: '', eco: '' }))}
             onColegioChange={val => {
-              const colegioData = COLEGIOS.find(c => c.colegio === val);
-              setFormData(p => ({ ...p, colegio: val, eco: colegioData?.eco ?? '' }));
+              setFormData(p => ({ ...p, colegio: val, eco: getEco(val) }));
             }}
             required
           />
@@ -339,6 +341,10 @@ function AnteproyectoForm({
 
 // ─── Página principal ─────────────────────────────────────────────────────────
 export default function Anteproyectos() {
+  const { isAdmin, can } = usePermissions();
+  const puedeCrear    = isAdmin || can('crear_anteproyectos');
+  const puedeEditar   = isAdmin || can('editar_anteproyectos');
+  const puedeEliminar = isAdmin || can('eliminar_anteproyectos');
   const [showForm, setShowForm]                       = useState(false);
   const [editingAnteproyecto, setEditingAnteproyecto] = useState<Anteproyecto | null>(null);
   const [deletingId, setDeletingId]                   = useState<string | null>(null);
@@ -390,6 +396,7 @@ export default function Anteproyectos() {
 
   const createMutation = useMutation({
     mutationFn: async (data: Record<string, unknown>) => {
+      if (!puedeCrear) throw new Error('No tienes permiso para crear anteproyectos.');
       const { data: result, error } = await supabase
         .from('anteproyectos')
         .insert({ ...data, fecha_actualizacion: new Date().toISOString() })
@@ -419,6 +426,7 @@ export default function Anteproyectos() {
 
   const updateMutation = useMutation({
     mutationFn: async ({ id, data }: { id: string; data: Record<string, unknown> }) => {
+      if (!puedeEditar) throw new Error('No tienes permiso para editar anteproyectos.');
       const { data: result, error } = await supabase
         .from('anteproyectos')
         .update({ ...data, fecha_actualizacion: new Date().toISOString() })
@@ -452,6 +460,7 @@ export default function Anteproyectos() {
 
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
+      if (!puedeEliminar) throw new Error('No tienes permiso para eliminar anteproyectos.');
       // Obtener datos del anteproyecto antes de eliminar
       const { data: ant } = await supabase
         .from('anteproyectos').select('zip_url, zip_nombre, colegio, nombre_proyecto').eq('id', id).single();
@@ -567,8 +576,7 @@ export default function Anteproyectos() {
       <PageHeader
         title="Anteproyectos"
         subtitle="Gestión de anteproyectos solicitados por los colegios"
-        actionLabel="Nuevo Anteproyecto"
-        onAction={() => setShowForm(true)}
+        {...(puedeCrear ? { actionLabel: 'Nuevo Anteproyecto', onAction: () => setShowForm(true) } : {})}
       />
 
 
@@ -646,10 +654,12 @@ export default function Anteproyectos() {
         <div className="bg-white rounded-xl border border-slate-200 py-20 text-center">
           <FolderOpen className="w-12 h-12 text-slate-200 mx-auto mb-3" />
           <p className="text-slate-400 font-medium">No hay anteproyectos registrados.</p>
+          {puedeCrear && (
           <button onClick={() => setShowForm(true)}
             className="mt-4 px-4 py-2 bg-slate-900 text-white rounded-md text-sm font-medium hover:bg-slate-800 transition-colors">
             + Nuevo Anteproyecto
           </button>
+          )}
         </div>
       ) : (
         <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
@@ -679,8 +689,8 @@ export default function Anteproyectos() {
                       {a.eco && <p className="text-[10px] text-slate-400">{a.eco}</p>}
                     </div>
                     <div className="flex gap-1.5 shrink-0">
-                      <button onClick={() => setEditingAnteproyecto(a)} className="p-1.5 rounded-md border border-slate-200 text-slate-500 hover:bg-slate-100 transition-colors"><Pencil className="w-3.5 h-3.5" /></button>
-                      <button onClick={() => setDeletingId(a.id)} className="p-1.5 rounded-md border border-red-200 text-red-500 hover:bg-red-50 transition-colors"><Trash2 className="w-3.5 h-3.5" /></button>
+                      {puedeEditar && <button onClick={() => setEditingAnteproyecto(a)} className="p-1.5 rounded-md border border-slate-200 text-slate-500 hover:bg-slate-100 transition-colors"><Pencil className="w-3.5 h-3.5" /></button>}
+                      {puedeEliminar && <button onClick={() => setDeletingId(a.id)} className="p-1.5 rounded-md border border-red-200 text-red-500 hover:bg-red-50 transition-colors"><Trash2 className="w-3.5 h-3.5" /></button>}
                     </div>
                   </div>
                   <div className="flex flex-wrap gap-2 items-center">
@@ -751,14 +761,18 @@ export default function Anteproyectos() {
                 </div>
 
                 <div className="col-span-1 flex gap-2">
+                  {puedeEditar && (
                   <button onClick={() => setEditingAnteproyecto(a)}
                     className="p-1.5 rounded-md border border-slate-200 text-slate-500 hover:bg-slate-100 transition-colors">
                     <Pencil className="w-3.5 h-3.5" />
                   </button>
+                  )}
+                  {puedeEliminar && (
                   <button onClick={() => setDeletingId(a.id)}
                     className="p-1.5 rounded-md border border-red-200 text-red-500 hover:bg-red-50 transition-colors">
                     <Trash2 className="w-3.5 h-3.5" />
                   </button>
+                  )}
                 </div>
                 </div>{/* end desktop grid */}
               </div>
