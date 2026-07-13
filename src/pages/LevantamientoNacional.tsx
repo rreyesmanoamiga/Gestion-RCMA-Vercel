@@ -1058,6 +1058,7 @@ function TabPagos({ pagos, planteles, qc, puedeCrear, puedeEliminar }: { pagos: 
   const [uploading, setUploading]     = useState(false);
   const [editPago, setEditPago]       = useState<Pago | null>(null);
   const [editFechaPago, setEditFechaPago] = useState('');
+  const [editFolioFactura, setEditFolioFactura] = useState('');
   const [editMontoPagado, setEditMontoPagado] = useState('');
   const [editFileFactura, setEditFileFactura] = useState<File | null>(null);
   const [editFileRecibo, setEditFileRecibo]   = useState<File | null>(null);
@@ -1174,21 +1175,21 @@ function TabPagos({ pagos, planteles, qc, puedeCrear, puedeEliminar }: { pagos: 
         }
 
         const nuevasNotas = [obs, facturaUrl ? `factura_url:${facturaUrl}` : '', reciboUrl ? `recibo_url:${reciboUrl}` : ''].filter(Boolean).join('||') || null;
-        const { error } = await supabase.from('levantamiento_pagos').update({ notas: nuevasNotas, fecha_pago: editFechaPago || null, monto_pagado: parseFloat(editMontoPagado.replace(/,/g, '')) || null, pagado: !!reciboUrl }).eq('id', editPago.id);
+        const { error } = await supabase.from('levantamiento_pagos').update({ notas: nuevasNotas, fecha_pago: editFechaPago || null, folio_factura: editFolioFactura.trim() || null, monto_pagado: parseFloat(editMontoPagado.replace(/,/g, '')) || null, pagado: !!reciboUrl }).eq('id', editPago.id);
         if (error) throw error;
         logAudit({
           accion:       reciboUrl ? 'completar' : 'editar',
           modulo:       'levantamiento',
           registro_id:  editPago.id,
           registro_ref: `Pago ${editPago.mes_etiqueta}`,
-          detalle:      { pagado: !!reciboUrl, monto: editMontoPagado },
+          detalle:      { pagado: !!reciboUrl, monto: editMontoPagado, folio_factura: editFolioFactura },
         });
       } finally { setEditUploading(false); }
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['lev_pagos'] });
       toast.success('Pago actualizado ✓');
-      setEditPago(null); setEditFechaPago(''); setEditMontoPagado(''); setEditFileFactura(null); setEditFileRecibo(null);
+      setEditPago(null); setEditFechaPago(''); setEditFolioFactura(''); setEditMontoPagado(''); setEditFileFactura(null); setEditFileRecibo(null);
     },
     onError: (e: any) => toast.error(e.message),
   });
@@ -1335,6 +1336,10 @@ function TabPagos({ pagos, planteles, qc, puedeCrear, puedeEliminar }: { pagos: 
                 <input type="date" className={inputCls} value={editFechaPago} onChange={e => setEditFechaPago(e.target.value)} />
               </div>
               <div>
+                <label className="text-xs font-bold text-slate-500 uppercase block mb-1">Folio de Factura</label>
+                <input className={inputCls} value={editFolioFactura} onChange={e => setEditFolioFactura(e.target.value)} placeholder="Ej: A-001" />
+              </div>
+              <div>
                 <label className="text-xs font-bold text-slate-500 uppercase block mb-1">Monto Real</label>
                 <div className="relative">
                   <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 text-sm font-medium pointer-events-none">$</span>
@@ -1442,7 +1447,7 @@ function TabPagos({ pagos, planteles, qc, puedeCrear, puedeEliminar }: { pagos: 
                         ? <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-700" title="Falta subir la ficha de pago">Falta ficha de pago</span>
                         : <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-slate-100 text-slate-500">Pendiente</span>}
                       {pago && (
-                        <button onClick={() => { setEditPago(pago!); setEditFechaPago(pago!.fecha_pago ?? ''); setEditMontoPagado(pago!.monto_pagado != null ? String(pago!.monto_pagado) : ''); setEditFileFactura(null); setEditFileRecibo(null); }}
+                        <button onClick={() => { setEditPago(pago!); setEditFechaPago(pago!.fecha_pago ?? ''); setEditMontoPagado(pago!.monto_pagado != null ? String(pago!.monto_pagado) : ''); setEditFolioFactura(pago!.folio_factura ?? ''); setEditFileFactura(null); setEditFileRecibo(null); }}
                           className="text-slate-400 hover:text-[#0C3B6E] transition-colors" title="Agregar/editar archivos">
                           <Edit2 className="w-3.5 h-3.5" />
                         </button>
