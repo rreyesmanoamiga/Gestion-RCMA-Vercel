@@ -5,7 +5,7 @@ import { db } from '@/lib/db';
 import {
   ArrowLeft, Calendar, MapPin, User, FileText, Trash2, Pencil,
   CheckCircle2, Clock, AlertTriangle, DollarSign, TrendingUp,
-  TrendingDown, Minus, Save, X,
+  TrendingDown, Minus, Save, X, ClipboardList,
 } from 'lucide-react';
 import ProjectForm from '@/components/projects/ProjectForm';
 import { supabase } from '@/lib/supabaseClient';
@@ -74,6 +74,34 @@ export default function ProjectDetail() {
   });
 
   const folioDisplay = project?.folio || (ticketVinculado as any)?.folio || null;
+
+  // ── Seguimiento NEXUS: verificar si este proyecto ya tiene uno ────────────
+  const { data: seguimientoExistente } = useQuery({
+    queryKey: ['seguimiento-existente', id],
+    queryFn: async () => {
+      const { data } = await supabase.from('nexus_seguimientos').select('id').eq('proyecto_id', id!).maybeSingle();
+      return data;
+    },
+    enabled: !!id,
+  });
+
+  const agregarSeguimientoMutation = useMutation({
+    mutationFn: async () => {
+      const { error } = await supabase.from('nexus_seguimientos').insert({
+        proyecto_id: id!, proyecto_nombre: project?.name ?? null,
+        territorio: project?.territorio ?? null, colegio: project?.colegio ?? null,
+        estatus: 'activo',
+      });
+      if (error) throw error;
+      logAudit({ accion: 'crear', modulo: 'nexus', registro_id: id ?? null, registro_ref: project?.name ?? null, detalle: { origen: 'ficha_proyecto' } });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['seguimiento-existente', id] });
+      queryClient.invalidateQueries({ queryKey: ['nexus_seguimientos'] });
+      toast.success('Proyecto agregado a Seguimiento en NEXUS');
+    },
+    onError: (e: any) => toast.error(e.message ?? 'Error al agregar a seguimiento'),
+  });
 
   const updateMutation = useMutation({
     mutationFn: async (formData: Record<string, unknown>) => {
@@ -214,6 +242,12 @@ export default function ProjectDetail() {
           <ArrowLeft className="w-4 h-4" /> Volver a Proyectos
         </Link>
         <div className="flex gap-2">
+          {puedeEditar && !seguimientoExistente && project?.status && ['en_espera','en_proceso','pausado'].includes(project.status) && (
+          <button className="inline-flex items-center gap-2 px-4 py-2 border border-teal-200 text-teal-700 bg-teal-50 rounded-md text-sm font-bold hover:bg-teal-100 transition-colors disabled:opacity-50"
+            onClick={() => agregarSeguimientoMutation.mutate()} disabled={agregarSeguimientoMutation.isPending}>
+            <ClipboardList className="w-4 h-4" /> {agregarSeguimientoMutation.isPending ? 'Agregando...' : 'Agregar a Seguimiento'}
+          </button>
+          )}
           {puedeEditar && (
           <button className={btnOutline} onClick={() => setShowEdit(true)}>
             <Pencil className="w-4 h-4" /> Editar

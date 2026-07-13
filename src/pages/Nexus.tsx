@@ -21,6 +21,7 @@ interface Nota      { id: string; titulo: string; contenido: string; categoria: 
 interface Pendiente { id: string; titulo: string; descripcion: string; tipo: string; asignado_a: string; asignado_nombre: string; asignado_cc: string; asignado_cc_nombre: string; prioridad: string; fecha_limite: string | null; estatus: string; completado_at: string | null; created_by: string; created_at: string;
   proyecto_id?: string; proyecto_nombre?: string; ticket_id?: string; ticket_folio?: string; colegio?: string; territorio?: string; }
 interface Comentario { id: string; pendiente_id: string; autor_email: string; autor_nombre: string; contenido: string; leido: boolean; created_at: string; }
+interface Seguimiento { id: string; proyecto_id: string; proyecto_nombre: string; territorio: string; colegio: string; estatus: 'activo'|'completado'; completado_at: string | null; created_at: string; }
 interface SysUser   { user_email: string; nombre: string; territorio: string; colegio: string; puesto: string; }
 
 const COLORES    = ['#0f172a','#0d8a7e','#2563eb','#7c3aed','#db2777','#ea580c','#16a34a','#d97706'];
@@ -169,6 +170,130 @@ function ComentariosPanel({ pendiente, userEmail, userName, isAdmin }: { pendien
   );
 }
 
+// ── Modal de Seguimiento de Proyecto ────────────────────────────────────────────
+function SeguimientoModal({ seguimiento, userEmail, userName, onClose }: { seguimiento:Seguimiento; userEmail:string; userName:string; onClose:()=>void }) {
+  const qc = useQueryClient();
+  const [texto, setTexto] = useState('');
+  const [showConvertir, setShowConvertir] = useState(false);
+  const [convTitulo, setConvTitulo] = useState('');
+  const [convPrioridad, setConvPrioridad] = useState('normal');
+  const [convFecha, setConvFecha] = useState('');
+  const endRef = useRef<HTMLDivElement>(null);
+
+  const { data: comentarios = [] } = useQuery({
+    queryKey: ['seguimiento_comentarios', seguimiento.id],
+    queryFn: async () => {
+      const { data } = await supabase.from('nexus_comentarios').select('*').eq('seguimiento_id', seguimiento.id).order('created_at');
+      return (data ?? []) as Comentario[];
+    },
+    refetchInterval: 15000,
+  });
+
+  const sendMutation = useMutation({
+    mutationFn: async (contenido: string) => {
+      const { error } = await supabase.from('nexus_comentarios').insert({ seguimiento_id: seguimiento.id, autor_email: userEmail, autor_nombre: userName, contenido });
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['seguimiento_comentarios', seguimiento.id] });
+      qc.invalidateQueries({ queryKey: ['seguimiento_comentarios_resumen'] });
+      setTexto('');
+      setTimeout(() => endRef.current?.scrollIntoView({ behavior: 'smooth' }), 100);
+    },
+    onError: (e: any) => toast.error(e.message ?? 'Error'),
+  });
+
+  const convertirMutation = useMutation({
+    mutationFn: async () => {
+      if (!convTitulo.trim()) throw new Error('Escribe un título para el pendiente.');
+      const { data, error } = await supabase.from('nexus_pendientes').insert({
+        titulo: convTitulo.trim(),
+        descripcion: `Generado desde el seguimiento de: ${seguimiento.proyecto_nombre}`,
+        tipo: 'personal', asignado_a: userEmail, asignado_nombre: userName,
+        prioridad: convPrioridad, fecha_limite: convFecha || null, estatus: 'pendiente',
+        proyecto_id: seguimiento.proyecto_id, proyecto_nombre: seguimiento.proyecto_nombre,
+        colegio: seguimiento.colegio, territorio: seguimiento.territorio,
+      }).select('id').single();
+      if (error) throw error;
+      logAudit({ accion: 'crear', modulo: 'nexus', registro_id: data?.id ?? null, registro_ref: convTitulo.trim(), detalle: { origen: 'seguimiento', proyecto: seguimiento.proyecto_nombre } });
+    },
+    onSuccess: () => {
+      toast.success('Pendiente creado ✓');
+      qc.invalidateQueries({ queryKey: ['nexus_pendientes'] });
+      setShowConvertir(false); setConvTitulo(''); setConvPrioridad('normal'); setConvFecha('');
+    },
+    onError: (e: any) => toast.error(e.message ?? 'Error'),
+  });
+
+  return (
+    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 p-4">
+      <div className="bg-white rounded-xl shadow-xl max-w-lg w-full max-h-[85vh] flex flex-col">
+        <div className="flex items-start justify-between px-5 py-4 border-b border-slate-100">
+          <div className="min-w-0">
+            <h2 className="font-bold text-slate-900 truncate">{seguimiento.proyecto_nombre}</h2>
+            <p className="text-xs text-slate-400 mt-0.5">{[seguimiento.territorio, seguimiento.colegio].filter(Boolean).join(' · ') || 'Sin ubicación'}</p>
+          </div>
+          <button onClick={onClose} className="text-slate-400 hover:text-slate-700 shrink-0"><X className="w-5 h-5" /></button>
+        </div>
+
+        <div className="flex-1 overflow-y-auto p-5 space-y-3">
+          {comentarios.length === 0 && <p className="text-xs text-slate-400 text-center py-6">Sin notas de seguimiento aún. Empieza escribiendo abajo.</p>}
+          {comentarios.map(c => (
+            <div key={c.id} className="bg-slate-50 rounded-lg px-3 py-2">
+              <p className="text-[10px] font-bold text-slate-500 mb-1">{c.autor_nombre} · {fmtFull(c.created_at)}</p>
+              <p className="text-sm text-slate-800 whitespace-pre-wrap">{c.contenido}</p>
+            </div>
+          ))}
+          <div ref={endRef} />
+        </div>
+
+        {seguimiento.estatus === 'completado' ? (
+          <div className="px-5 py-3 border-t border-slate-100 bg-emerald-50 text-center">
+            <p className="text-xs font-semibold text-emerald-700">✓ Proyecto completado — este seguimiento queda como evidencia histórica</p>
+          </div>
+        ) : (
+          <>
+            {showConvertir ? (
+              <div className="px-5 py-4 border-t border-slate-100 space-y-2 bg-amber-50">
+                <p className="text-xs font-bold text-amber-700 uppercase">Nuevo Pendiente desde este seguimiento</p>
+                <input className={inputCls} placeholder="Título del pendiente..." value={convTitulo} onChange={e => setConvTitulo(e.target.value)} />
+                <div className="grid grid-cols-2 gap-2">
+                  <select className={inputCls} value={convPrioridad} onChange={e => setConvPrioridad(e.target.value)}>
+                    <option value="baja">Baja</option><option value="normal">Normal</option><option value="alta">Alta</option><option value="urgente">Urgente</option>
+                  </select>
+                  <input type="date" className={inputCls} value={convFecha} onChange={e => setConvFecha(e.target.value)} />
+                </div>
+                <div className="flex gap-2">
+                  <button onClick={() => setShowConvertir(false)} className="flex-1 px-3 py-2 text-sm border border-slate-300 rounded-lg hover:bg-white transition">Cancelar</button>
+                  <button onClick={() => convertirMutation.mutate()} disabled={convertirMutation.isPending}
+                    className="flex-1 px-3 py-2 text-sm bg-slate-900 text-white rounded-lg font-bold disabled:opacity-50 hover:bg-slate-800 transition">
+                    {convertirMutation.isPending ? 'Creando...' : 'Crear Pendiente'}
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="px-5 py-3 border-t border-slate-100">
+                <button onClick={() => setShowConvertir(true)}
+                  className="w-full flex items-center justify-center gap-2 px-3 py-2 text-sm font-semibold text-amber-700 bg-amber-50 border border-amber-200 rounded-lg hover:bg-amber-100 transition">
+                  <ListChecks className="w-4 h-4" /> Agregar Pendiente desde aquí
+                </button>
+              </div>
+            )}
+
+            <div className="flex gap-2 px-5 py-4 border-t border-slate-100">
+              <textarea className={inputCls + ' resize-none'} rows={2} placeholder="Escribe una nota de seguimiento..."
+                value={texto} onChange={e => setTexto(e.target.value)}
+                onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); if (texto.trim()) sendMutation.mutate(texto.trim()); } }} />
+              <button disabled={!texto.trim() || sendMutation.isPending} onClick={() => sendMutation.mutate(texto.trim())}
+                className="p-2 bg-slate-900 text-white rounded-lg hover:bg-slate-800 disabled:opacity-40 transition shrink-0"><Send className="w-4 h-4" /></button>
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ── Componente principal ───────────────────────────────────────────────────────
 export default function Nexus() {
   const { user } = useAuth();
@@ -177,7 +302,7 @@ export default function Nexus() {
   const userEmail = user?.email ?? '';
   const userName  = user?.user_metadata?.nombre || user?.email || 'Usuario';
 
-  const [tab, setTab]         = useState<'notas'|'personales'|'compartidos'>(isAdmin?'notas':'compartidos');
+  const [tab, setTab]         = useState<'notas'|'personales'|'compartidos'|'seguimiento'>(isAdmin?'notas':'compartidos');
   const [search, setSearch]   = useState('');
   const [expandedP, setExpandedP] = useState<string|null>(null);
 
@@ -218,6 +343,39 @@ export default function Nexus() {
     }
     return map;
   }, [rawComentResumen]);
+
+  // ── Seguimiento de Proyectos ────────────────────────────────────────────────
+  const { data: seguimientos = [] } = useQuery({
+    queryKey: ['nexus_seguimientos'],
+    queryFn: async () => {
+      const { data, error } = await supabase.from('nexus_seguimientos').select('*').order('created_at', { ascending: false });
+      if (error) throw error;
+      return (data ?? []) as Seguimiento[];
+    },
+    enabled: isAdmin,
+  });
+
+  const { data: rawSeguComentResumen = [] } = useQuery({
+    queryKey: ['seguimiento_comentarios_resumen'],
+    queryFn: async () => {
+      const { data } = await supabase.from('nexus_comentarios').select('seguimiento_id, created_at').not('seguimiento_id', 'is', null).order('created_at', { ascending: false });
+      return data ?? [];
+    },
+    enabled: isAdmin,
+    refetchInterval: 30000,
+  });
+  const seguComentMap = useMemo(() => {
+    const map: Record<string, { count: number; lastDate: string }> = {};
+    for (const c of rawSeguComentResumen as any[]) {
+      if (!map[c.seguimiento_id]) { map[c.seguimiento_id] = { count: 1, lastDate: c.created_at }; }
+      else { map[c.seguimiento_id].count++; }
+    }
+    return map;
+  }, [rawSeguComentResumen]);
+
+  const [viewSeguimiento, setViewSeguimiento] = useState<Seguimiento | null>(null);
+  const seguimientosActivos    = useMemo(() => seguimientos.filter(s => s.estatus === 'activo'), [seguimientos]);
+  const seguimientosCompletados = useMemo(() => seguimientos.filter(s => s.estatus === 'completado'), [seguimientos]);
 
   // ── Form Nota ─────────────────────────────────────────────────────────────
   const [notaForm, setNotaForm] = useState({ titulo:'',contenido:'',categoria:'General',color:'#0f172a',fijada:false,territorio:'',colegio:'' });
@@ -552,6 +710,7 @@ export default function Nexus() {
         {isAdmin&&<button type="button" onClick={()=>setTab('notas')} className={`flex items-center gap-1.5 px-4 py-2 rounded-md text-sm font-semibold transition ${tab==='notas'?'bg-white text-slate-900 shadow-sm':'text-slate-500 hover:text-slate-700'}`}><FileText className="w-4 h-4"/>Notas<span className={`ml-1 text-xs px-1.5 py-0.5 rounded-full font-bold ${tab==='notas'?'bg-slate-900 text-white':'bg-slate-200 text-slate-500'}`}>{notas.length}</span></button>}
         {isAdmin&&<button type="button" onClick={()=>setTab('personales')} className={`flex items-center gap-1.5 px-4 py-2 rounded-md text-sm font-semibold transition ${tab==='personales'?'bg-white text-slate-900 shadow-sm':'text-slate-500 hover:text-slate-700'}`}><ListChecks className="w-4 h-4"/>Mis Pendientes<span className={`ml-1 text-xs px-1.5 py-0.5 rounded-full font-bold ${tab==='personales'?'bg-slate-900 text-white':'bg-slate-200 text-slate-500'}`}>{pendPersonales.filter(p=>p.estatus!=='completado').length}</span></button>}
         <button type="button" onClick={()=>setTab('compartidos')} className={`flex items-center gap-1.5 px-4 py-2 rounded-md text-sm font-semibold transition ${tab==='compartidos'?'bg-white text-slate-900 shadow-sm':'text-slate-500 hover:text-slate-700'}`}><Users className="w-4 h-4"/>{isAdmin?'Compartidos':'Mis Pendientes'}<span className={`ml-1 text-xs px-1.5 py-0.5 rounded-full font-bold ${tab==='compartidos'?'bg-slate-900 text-white':'bg-slate-200 text-slate-500'}`}>{pendCompartidos.filter(p=>p.estatus!=='completado').length}</span></button>
+        {isAdmin&&<button type="button" onClick={()=>setTab('seguimiento')} className={`flex items-center gap-1.5 px-4 py-2 rounded-md text-sm font-semibold transition ${tab==='seguimiento'?'bg-white text-slate-900 shadow-sm':'text-slate-500 hover:text-slate-700'}`}><ClipboardList className="w-4 h-4"/>Seguimiento<span className={`ml-1 text-xs px-1.5 py-0.5 rounded-full font-bold ${tab==='seguimiento'?'bg-slate-900 text-white':'bg-slate-200 text-slate-500'}`}>{seguimientosActivos.length}</span></button>}
       </div>
 
       {/* Búsqueda notas */}
@@ -598,6 +757,61 @@ export default function Nexus() {
             <div>
               <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-3 flex items-center gap-2"><CheckCircle2 className="w-3.5 h-3.5"/>Completados — evidencia</p>
               <PendListCompletados items={(tab==='personales'?pendPersonales:pendCompartidos).filter(p=>p.estatus==='completado')}/>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── Seguimiento de Proyectos ─────────────────────────────────────────── */}
+      {tab==='seguimiento'&&(
+        <div className="space-y-6">
+          <p className="text-sm text-slate-500 -mt-2">Bitácora de seguimiento por proyecto activo — se crea sola cuando un proyecto queda En Espera, En Proceso o Pausado.</p>
+
+          {seguimientosActivos.length===0 && <div className="text-center py-12"><ClipboardList className="w-10 h-10 text-slate-200 mx-auto mb-3"/><p className="text-sm font-semibold text-slate-500">No hay proyectos activos en seguimiento.</p></div>}
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+            {seguimientosActivos.map(s=>{
+              const coment = seguComentMap[s.id];
+              return (
+                <div key={s.id} onClick={()=>setViewSeguimiento(s)}
+                  className="bg-white rounded-xl border-l-4 border-l-teal-400 border border-slate-200 shadow-sm p-4 cursor-pointer hover:shadow-md transition-all">
+                  <p className="font-bold text-sm text-slate-900 line-clamp-2">{s.proyecto_nombre}</p>
+                  <div className="flex items-center gap-2 flex-wrap mt-2">
+                    {s.territorio && <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full"><MapPin className="w-2.5 h-2.5"/>{s.territorio}</span>}
+                    {s.colegio && <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-slate-500 bg-slate-100 px-2 py-0.5 rounded-full"><Building2 className="w-2.5 h-2.5"/>{s.colegio}</span>}
+                  </div>
+                  <div className="flex items-center justify-between mt-3 pt-3 border-t border-slate-100">
+                    <span className="inline-flex items-center gap-1 text-xs text-slate-500"><MessageSquare className="w-3.5 h-3.5"/>{coment?.count ?? 0} nota{(coment?.count??0)!==1?'s':''}</span>
+                    {coment?.lastDate && <span className="text-[10px] text-slate-400">Últ: {fmtDate(coment.lastDate)}</span>}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Completados — evidencia, misma lógica que Pendientes */}
+          {seguimientosCompletados.length>0&&(
+            <div>
+              <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-3 flex items-center gap-2"><CheckCircle2 className="w-3.5 h-3.5"/>Proyectos Completados — evidencia</p>
+              <div className="bg-white rounded-xl border border-slate-200 divide-y divide-slate-100 overflow-hidden">
+                {seguimientosCompletados.map(s=>{
+                  const coment = seguComentMap[s.id];
+                  return (
+                    <div key={s.id} onClick={()=>setViewSeguimiento(s)}
+                      className="flex items-center gap-3 px-4 py-3 cursor-pointer hover:bg-slate-50 transition">
+                      <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0"/>
+                      <div className="flex-1 min-w-0">
+                        <p className="font-bold text-sm text-slate-500 truncate">{s.proyecto_nombre}</p>
+                        <div className="flex items-center gap-2 flex-wrap mt-0.5">
+                          {s.colegio && <span className="text-[10px] font-semibold text-slate-400 bg-slate-100 px-2 py-0.5 rounded-full">{s.colegio}</span>}
+                          <span className="text-[10px] text-slate-400"><MessageSquare className="w-2.5 h-2.5 inline mr-0.5"/>{coment?.count ?? 0} notas</span>
+                          {s.completado_at && <span className="text-[10px] text-slate-400">Completado: {fmtDate(s.completado_at)}</span>}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
             </div>
           )}
         </div>
@@ -652,6 +866,10 @@ export default function Nexus() {
             )}
           </div>
         </Modal>
+      )}
+
+      {viewSeguimiento && (
+        <SeguimientoModal seguimiento={viewSeguimiento} userEmail={userEmail} userName={userName} onClose={() => setViewSeguimiento(null)} />
       )}
 
       {/* Ver Nota */}
