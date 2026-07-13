@@ -688,7 +688,7 @@ export default function Nexus() {
 
       {/* KPIs — solo admin */}
       {isAdmin && (
-        <div className="grid grid-cols-3 sm:grid-cols-6 gap-4">
+        <div className="grid grid-cols-3 sm:grid-cols-7 gap-4">
           {[
             { label:'Total Pendientes', val:kpis.total,       color:'text-slate-800'   },
             { label:'Activos',          val:kpis.activos,     color:'text-blue-600'    },
@@ -696,6 +696,7 @@ export default function Nexus() {
             { label:'Compartidos',      val:kpis.compartidos, color:'text-teal-600'    },
             { label:'Completados',      val:kpis.completados, color:'text-emerald-600' },
             { label:'Urgentes',         val:kpis.urgentes,    color:'text-red-500'     },
+            { label:'En Seguimiento',   val:seguimientosActivos.length, color:'text-cyan-600' },
           ].map(k=>(
             <div key={k.label} className="bg-white rounded-xl border border-slate-200 shadow-sm px-4 py-4">
               <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">{k.label}</p>
