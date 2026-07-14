@@ -8,7 +8,7 @@ import { useAuth } from '@/lib/AuthContext';
 import { usePermissions } from '@/hooks/usePermissions';
 import {
   Send, CheckCircle, Eye, X, Printer, ClipboardList,
-  ChevronDown, FileCheck, Clock, Trash2, Ban, RefreshCw, AlertCircle, FolderPlus, Loader2
+  ChevronDown, FileCheck, Clock, Trash2, Ban, RefreshCw, AlertCircle, AlertTriangle, FolderPlus, Loader2
 } from 'lucide-react';
 
 const TMAS_PAGE_SIZE = 20;
@@ -277,6 +277,7 @@ export default function TicketMAS() {
   const [vista, setVista] = useState<'form'|'lista'|'detalle'>('form');
   const [enviado, setEnviado]     = useState(false);
   const [loading, setLoading]     = useState(false);
+  const [showConfirmSend, setShowConfirmSend] = useState(false);
   const [viewing, setViewing]     = useState<TicketMAS | null>(null);
   const [filterStatus, setFilter] = useState('todos');
   const [tmasVisibleCount, setTmasVisibleCount] = useState(TMAS_PAGE_SIZE);
@@ -417,6 +418,13 @@ export default function TicketMAS() {
         return;
       }
     }
+    // No se envía todavía — se pide confirmación explícita primero,
+    // para evitar envíos accidentales antes de terminar de llenar el formulario.
+    setShowConfirmSend(true);
+  };
+
+  const doSubmit = async () => {
+    setShowConfirmSend(false);
     setLoading(true);
     try {
       // Generar folio: tomar el número máximo existente + 1 (evita duplicados por eliminados/cancelados)
@@ -1181,6 +1189,32 @@ export default function TicketMAS() {
           <Send className="w-4 h-4" />
           {loading ? 'Enviando...' : 'Enviar Ticket'}
         </button>
+
+        {showConfirmSend && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 p-4">
+            <div className="bg-white rounded-lg shadow-xl max-w-sm w-full p-6">
+              <div className="flex items-center gap-3 mb-3">
+                <div className="w-10 h-10 rounded-full bg-amber-100 flex items-center justify-center shrink-0">
+                  <AlertTriangle className="w-5 h-5 text-amber-600" />
+                </div>
+                <h2 className="text-lg font-bold text-slate-900">¿Enviar el Ticket MAS?</h2>
+              </div>
+              <p className="text-sm text-slate-600">
+                Verifica que el colegio, la descripción y las cotizaciones estén correctas antes de continuar — una vez enviado, el Coordinador será notificado de inmediato.
+              </p>
+              <div className="flex justify-end gap-3 mt-6">
+                <button onClick={() => setShowConfirmSend(false)}
+                  className="px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100 rounded-lg transition-colors">
+                  Revisar de nuevo
+                </button>
+                <button onClick={doSubmit} disabled={loading}
+                  className="px-4 py-2 text-sm font-bold bg-slate-900 text-white hover:bg-slate-800 rounded-lg disabled:opacity-50 transition-colors">
+                  {loading ? 'Enviando...' : 'Sí, enviar ticket'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     );
   }

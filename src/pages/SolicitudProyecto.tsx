@@ -3,7 +3,7 @@ import { supabase } from '@/lib/supabaseClient';
 import { logAudit } from '@/lib/audit';
 import { useSharePointUpload } from '@/hooks/useSharePointUpload';
 import { toast } from 'sonner';
-import { Send, CheckCircle } from 'lucide-react';
+import { Send, CheckCircle, AlertTriangle } from 'lucide-react';
 
 const inputClass = "w-full px-2 py-1.5 border border-slate-400 text-sm focus:ring-1 focus:ring-slate-700 focus:outline-none bg-white text-slate-900";
 const readOnlyClass = "w-full px-2 py-1.5 border border-slate-300 text-sm bg-slate-100 text-slate-700 cursor-default";
@@ -88,6 +88,7 @@ export default function SolicitudProyecto() {
   const añoActual = new Date().getFullYear().toString();
   const [enviado, setEnviado]   = useState(false);
   const [loading, setLoading]   = useState(false);
+  const [showConfirmSend, setShowConfirmSend] = useState(false);
   const [tieneCotizaciones, setTieneCotizaciones] = useState(false);
   const [cotizacionFiles, setCotizacionFiles]     = useState<File[]>([]);
   const [dragActive, setDragActive]               = useState(false);
@@ -152,7 +153,13 @@ export default function SolicitudProyecto() {
     if (!tieneCotizaciones || cotizacionFiles.length === 0) {
       toast.warning('Recuerda adjuntar la cotización más adelante en cuanto la tengas disponible.');
     }
+    // No se envía todavía — se pide confirmación explícita primero,
+    // para evitar envíos accidentales al presionar Enter entre campos.
+    setShowConfirmSend(true);
+  };
 
+  const doSubmit = async () => {
+    setShowConfirmSend(false);
     setLoading(true);
     try {
       const { data: nuevaSolicitud, error } = await supabase.from('solicitudes').insert({
@@ -613,6 +620,32 @@ export default function SolicitudProyecto() {
           </div>
         </form>
       </div>
+
+      {showConfirmSend && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 p-4">
+          <div className="bg-white rounded-lg shadow-xl max-w-sm w-full p-6">
+            <div className="flex items-center gap-3 mb-3">
+              <div className="w-10 h-10 rounded-full bg-amber-100 flex items-center justify-center shrink-0">
+                <AlertTriangle className="w-5 h-5 text-amber-600" />
+              </div>
+              <h2 className="text-lg font-bold text-slate-900">¿Enviar la solicitud?</h2>
+            </div>
+            <p className="text-sm text-slate-600">
+              Verifica que todos los campos estén correctos antes de continuar — una vez enviada, la Coordinación de Obras será notificada de inmediato.
+            </p>
+            <div className="flex justify-end gap-3 mt-6">
+              <button onClick={() => setShowConfirmSend(false)}
+                className="px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100 rounded-lg transition-colors">
+                Revisar de nuevo
+              </button>
+              <button onClick={doSubmit} disabled={loading}
+                className="px-4 py-2 text-sm font-bold bg-slate-900 text-white hover:bg-slate-800 rounded-lg disabled:opacity-50 transition-colors">
+                {loading ? 'Enviando...' : 'Sí, enviar solicitud'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
