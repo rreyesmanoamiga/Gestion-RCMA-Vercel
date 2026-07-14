@@ -1444,7 +1444,7 @@ export default function Checklists() {
         <>
           {/* Stats + botones de reporte */}
           <div className="flex flex-col sm:flex-row sm:items-center gap-3 mb-5">
-            <div className="grid grid-cols-3 gap-3 flex-1">
+            <div className="grid grid-cols-3 gap-2 sm:gap-3 flex-1">
               {[
                 { label: 'Sí Cumplen',  val: minimosRaw.filter(e => e.resultado === 'completo').length,   cls: 'bg-green-50 text-green-700 border border-green-200' },
                 { label: 'No Cumplen',  val: minimosRaw.filter(e => e.resultado === 'incompleto').length, cls: 'bg-red-50 text-red-700 border border-red-200' },
@@ -1537,7 +1537,7 @@ export default function Checklists() {
 
                     {isExp && (
                       <div className="border-t border-slate-100 px-5 py-4 space-y-4">
-                        <div className="grid grid-cols-4 gap-2">
+                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                           {(['cumple','no_cumple','en_proceso','na'] as EstadoItem[]).map(e => (
                             <div key={e} className={`rounded-lg p-3 text-center ${ESTADO_CFG[e].badge}`}>
                               <p className="text-2xl font-black">{ev.items?.filter(i => i.estado === e).length ?? 0}</p>
@@ -1660,7 +1660,7 @@ export default function Checklists() {
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-4 gap-2">
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                     {(['cumple','no_cumple','en_proceso','na'] as EstadoItem[]).map(e => (
                       <div key={e} className={`rounded-lg p-2 text-center text-xs font-bold ${ESTADO_CFG[e].badge}`}>
                         <span className="text-lg font-black block">{conteoForm[e]}</span>

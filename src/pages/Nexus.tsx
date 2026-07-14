@@ -899,7 +899,7 @@ export default function Nexus() {
       {/* Form Pendiente */}
       {showPend&&(<Modal title={editPend?'Editar Pendiente':'Nuevo Pendiente'} onClose={()=>{setShowPend(false);setEditPend(null);}} xl>
         <div className="space-y-3 overflow-y-auto max-h-[65vh] pr-1">
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div className="col-span-2"><label className="block text-xs font-bold text-slate-500 uppercase mb-1">Título *</label><input className={inputCls} value={pendForm.titulo} onChange={e=>setPendForm(f=>({...f,titulo:e.target.value}))} placeholder="¿Qué hay que hacer?"/></div>
             <div><label className="block text-xs font-bold text-slate-500 uppercase mb-1">Tipo</label><select className={inputCls} value={pendForm.tipo} onChange={e=>setPendForm(f=>({...f,tipo:e.target.value,asignado_a:'',asignado_nombre:''}))}><option value="personal">Personal (solo yo)</option><option value="compartido">Compartido (asignar a usuario)</option></select></div>
             <div>

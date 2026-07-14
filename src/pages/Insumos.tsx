@@ -792,6 +792,7 @@ export default function Insumos() {
       {/* ── Tab: Catálogo Productos ──────────────────────────────────────── */}
       {tab === 'productos' && (
         <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+          <div className="overflow-x-auto">
           <table className="w-full">
             <thead>
               <tr className="bg-slate-50 border-b border-slate-200">
@@ -821,6 +822,7 @@ export default function Insumos() {
               ))}
             </tbody>
           </table>
+          </div>
         </div>
       )}
 
@@ -937,8 +939,8 @@ export default function Insumos() {
               {reqItems.length === 0 && <p className="text-xs text-slate-400 text-center py-3">Da clic en "Agregar producto" para empezar</p>}
               <div className="space-y-2">
                 {reqItems.map((it, i) => (
-                  <div key={i} className="grid grid-cols-12 gap-2 items-start p-3 bg-slate-50 rounded-lg border border-slate-100">
-                    <div className="col-span-4">
+                  <div key={i} className="grid grid-cols-2 sm:grid-cols-12 gap-2 items-start p-3 bg-slate-50 rounded-lg border border-slate-100">
+                    <div className="col-span-2 sm:col-span-4">
                       <label className="text-[10px] text-slate-400 mb-0.5 block">Producto</label>
                       <input list={`prods-${i}`} className={inputCls} placeholder="Nombre del producto"
                         value={it.nombre_producto}
@@ -951,24 +953,24 @@ export default function Insumos() {
                         {productos.map(p => <option key={p.id} value={p.nombre} />)}
                       </datalist>
                     </div>
-                    <div className="col-span-2">
+                    <div className="col-span-1 sm:col-span-2">
                       <label className="text-[10px] text-slate-400 mb-0.5 block">Unidad</label>
                       <select className={inputCls} value={it.unidad} onChange={e => setReqItem(i, 'unidad', e.target.value)}>
                         {UNIDADES.map(u => <option key={u}>{u}</option>)}
                       </select>
                     </div>
-                    <div className="col-span-2">
+                    <div className="col-span-1 sm:col-span-2">
                       <label className="text-[10px] text-slate-400 mb-0.5 block">Cantidad</label>
                       <input type="number" min="1" step="1" className={inputCls + " text-center font-bold"} value={it.cantidad}
                         onChange={e => setReqItem(i, 'cantidad', parseFloat(e.target.value) || 1)} />
                     </div>
-                    <div className="col-span-3">
+                    <div className="col-span-2 sm:col-span-3">
                       <label className="text-[10px] text-slate-400 mb-0.5 block">Observaciones / Especificaciones</label>
                       <input className={inputCls} placeholder="Marca, presentación..."
                         value={it.observaciones ?? ''}
                         onChange={e => setReqItem(i, 'observaciones', e.target.value)} />
                     </div>
-                    <div className="col-span-1 flex items-end pb-0.5 justify-center">
+                    <div className="col-span-2 sm:col-span-1 flex items-end pb-0.5 justify-end sm:justify-center">
                       <button type="button" onClick={() => removeReqItem(i)} className="p-1.5 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition">
                         <Trash2 className="w-4 h-4" />
                       </button>
@@ -1050,7 +1052,8 @@ export default function Insumos() {
             {/* Tabla de precios */}
             <div>
               <label className="block text-xs font-bold text-slate-500 uppercase mb-2">Captura los precios unitarios de la cotización</label>
-              <div className="rounded-xl border border-slate-200 overflow-hidden">
+              <div className="rounded-xl border border-slate-200 overflow-x-auto">
+                <div className="min-w-[500px]">
                 {/* Header */}
                 <div className="grid grid-cols-12 gap-0 bg-slate-800 text-white text-xs font-bold px-3 py-2">
                   <div className="col-span-5">Producto</div>
@@ -1083,6 +1086,7 @@ export default function Insumos() {
                     </div>
                   </div>
                 ))}
+                </div>
               </div>
             </div>
 
@@ -1228,6 +1232,7 @@ function ReqDetail({ reqId, req, getItems, openPricing }: { reqId: string; req: 
         </div>
       )}
       {items.length > 0 && (
+        <div className="overflow-x-auto">
         <table className="w-full text-sm">
           <thead>
             <tr className="bg-slate-50">
@@ -1250,6 +1255,7 @@ function ReqDetail({ reqId, req, getItems, openPricing }: { reqId: string; req: 
             ))}
           </tbody>
         </table>
+        </div>
       )}
       {req.notas && <p className="text-xs text-slate-500 italic">Notas: {req.notas}</p>}
     </div>

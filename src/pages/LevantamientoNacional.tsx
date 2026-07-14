@@ -1201,7 +1201,7 @@ function TabPagos({ pagos, planteles, qc, puedeCrear, puedeEliminar }: { pagos: 
   return (
     <div className="space-y-4">
       {/* KPIs */}
-      <div className="grid grid-cols-3 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
         <div className="bg-slate-50 rounded-xl p-4 text-center">
           <p className="text-xs text-slate-500 uppercase tracking-wide">Contrato Total</p>
           <p className="text-xl font-black text-slate-700 mt-1">{fmt(TOTAL_CONTRATO)}</p>

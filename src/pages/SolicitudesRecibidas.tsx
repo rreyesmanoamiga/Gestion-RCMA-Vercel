@@ -359,7 +359,7 @@ export default function SolicitudesRecibidas() {
       />
 
       {/* KPIs */}
-      <div className="grid grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
         {[
           { label: 'Total Solicitudes', value: kpis.total,      color: 'text-slate-900'   },
           { label: 'Pendientes',        value: kpis.nuevas,     color: 'text-amber-600'   },

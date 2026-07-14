@@ -1480,7 +1480,7 @@ export default function TicketMAS() {
           {/* Cotizaciones */}
           <div className="px-4 pb-4">
             <p className="text-[10px] font-bold text-slate-400 uppercase mb-2">Cotizaciones</p>
-            <div className="grid grid-cols-3 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               {[1,2,3].map(n => (
                 <div key={n} className="bg-slate-50 rounded-lg p-2.5 border border-slate-200">
                   <p className="text-[10px] font-bold text-slate-500">COT. No. {n}</p>

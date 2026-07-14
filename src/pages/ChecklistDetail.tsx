@@ -361,7 +361,7 @@ export default function ChecklistDetail() {
         )}
 
         {/* Info grid */}
-        <div className="grid grid-cols-3 gap-4 border-t border-slate-100 pt-4">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 border-t border-slate-100 pt-4">
           <div>
             <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1 flex items-center gap-1">
               <MapPin className="w-3 h-3" /> Colegio
@@ -391,7 +391,7 @@ export default function ChecklistDetail() {
       </div>
 
       {/* KPIs */}
-      <div className="grid grid-cols-4 gap-3 mb-4">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
         {Object.entries(counts).map(([label, count]) => {
           const cfg = Object.values(STATUS_CONFIG).find(s => s.label === label) ?? STATUS_CONFIG.bueno;
           return (
