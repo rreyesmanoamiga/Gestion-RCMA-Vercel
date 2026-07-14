@@ -167,7 +167,7 @@ serve(async (req) => {
                   </tr>
                 </table>
                 <p style="color:#475569;font-size:14px;line-height:1.6;margin:0 0 8px;">
-                  Si tienes alguna duda sobre esta cancelación, comunícate directamente con la Coordinación de Obras escribiendo a <a href="mailto:${smtpUser}" style="color:#1e40af;">${smtpUser}</a>.
+                  Si tienes alguna duda sobre esta cancelación, comunícate directamente con la Coordinación de Obras escribiendo a <a href="mailto:rreyes@manoamiga.edu.mx" style="color:#1e40af;">rreyes@manoamiga.edu.mx</a>.
                 </p>
               </td>
             </tr>
