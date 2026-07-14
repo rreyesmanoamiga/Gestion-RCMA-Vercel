@@ -545,6 +545,7 @@ function TabReporteGeneral({ reportesGenerales, planteles, pagos, comunicados, e
 
 
       <div className="bg-white border border-slate-200 rounded-xl overflow-hidden">
+        <div className="overflow-x-auto">
         <table className="w-full text-sm">
           <thead className="bg-slate-50 text-slate-500 text-xs uppercase">
             <tr>
@@ -581,6 +582,7 @@ function TabReporteGeneral({ reportesGenerales, planteles, pagos, comunicados, e
             ))}
           </tbody>
         </table>
+        </div>
       </div>
       {deleteRG && (
         <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
@@ -998,6 +1000,7 @@ function TabPlanteles({ planteles, loading, qc, directorio, puedeCrear, puedeEli
 
       {/* Tabla */}
       <div className="bg-white border border-slate-200 rounded-xl overflow-hidden">
+        <div className="overflow-x-auto">
         <table className="w-full text-sm">
           <thead className="bg-slate-50 text-slate-500 text-xs uppercase">
             <tr>
@@ -1044,6 +1047,7 @@ function TabPlanteles({ planteles, loading, qc, directorio, puedeCrear, puedeEli
             ))}
           </tbody>
         </table>
+        </div>
       </div>
     </div>
   );
@@ -1898,6 +1902,7 @@ function TabComunicados({ comunicados, planteles, directorio, qc, puedeCrear, pu
 
       {/* Tabla */}
       <div className="bg-white border border-slate-200 rounded-xl overflow-hidden">
+        <div className="overflow-x-auto">
         <table className="w-full text-sm">
           <thead className="bg-slate-50 text-slate-500 text-xs uppercase">
             <tr>
@@ -1938,6 +1943,7 @@ function TabComunicados({ comunicados, planteles, directorio, qc, puedeCrear, pu
             })}
           </tbody>
         </table>
+        </div>
       </div>
     </div>
   );
@@ -2153,6 +2159,7 @@ function TabReportes({ reportes, planteles, qc, puedeCrear, puedeEliminar, puede
       )}
 
       <div className="bg-white border border-slate-200 rounded-xl overflow-hidden">
+        <div className="overflow-x-auto">
         <table className="w-full text-sm">
           <thead className="bg-slate-50 text-slate-500 text-xs uppercase">
             <tr>
@@ -2216,6 +2223,7 @@ function TabReportes({ reportes, planteles, qc, puedeCrear, puedeEliminar, puede
             })}
           </tbody>
         </table>
+        </div>
       </div>
 
       {hasMoreReportes && (
