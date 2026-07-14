@@ -3,6 +3,7 @@ import { jsPDF } from 'jspdf';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import ColegioSelector from '@/components/shared/ColegioSelector';
 import { COLEGIOS } from '@/lib/colegios';
+import { useEcoLookup } from '@/hooks/useEcoLookup';
 
 // Mapa de código corto → datos del colegio (fuente: TicketMAS)
 const DATOS_COLEGIO: Record<string, { nombre: string; director: string; admin: string }> = {
@@ -821,6 +822,7 @@ function TabPlanteles({ planteles, loading, qc, directorio, puedeCrear, puedeEli
     asignacion: 'PROVEEDOR', fase: 'COMUNICADO', fecha_inicio: '', fecha_termino: '', notas: ''
   });
   const set = (k: string, v: string) => setForm(f => ({ ...f, [k]: v }));
+  const { getEco } = useEcoLookup();
 
   // Datos automáticos al seleccionar colegio
   const colegioInfo = COLEGIOS.find(c => c.colegio === colegio);
@@ -864,7 +866,7 @@ function TabPlanteles({ planteles, loading, qc, directorio, puedeCrear, puedeEli
         colegio_clave:  colegio,
         colegio_nombre: datos?.nombre ?? colegio,
         zona:           info?.territorio ?? territorio,
-        eco_nombre:     info?.eco ?? null,
+        eco_nombre:     getEco(colegio) || null,
         asignacion:     form.asignacion || null,
         fase:           form.fase,
         fecha_inicio:   form.fecha_inicio || null,
@@ -933,7 +935,7 @@ function TabPlanteles({ planteles, loading, qc, directorio, puedeCrear, puedeEli
                     </div>
                     <div>
                       <p className="text-[10px] font-bold text-slate-400 uppercase">ECO / Líder de Proyecto</p>
-                      <p className="text-slate-700">{colegioInfo?.eco ?? '—'}</p>
+                      <p className="text-slate-700">{getEco(colegio) || '—'}</p>
                     </div>
                     <div>
                       <p className="text-[10px] font-bold text-slate-400 uppercase">Director</p>
@@ -1020,7 +1022,7 @@ function TabPlanteles({ planteles, loading, qc, directorio, puedeCrear, puedeEli
                   <div className="text-xs text-slate-400">{p.colegio_clave}</div>
                 </td>
                 <td className="px-4 py-3 text-slate-500 text-xs">{p.zona}</td>
-                <td className="px-4 py-3 text-slate-500 text-xs">{p.eco_nombre ?? '—'}</td>
+                <td className="px-4 py-3 text-slate-500 text-xs">{getEco(p.colegio_clave) || '—'}</td>
                 <td className="px-4 py-3 text-slate-500 text-xs">{p.asignacion}</td>
                 <td className="px-4 py-3">
                   <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${faseColor(p.fase)}`}>
@@ -1628,6 +1630,7 @@ function TabComunicados({ comunicados, planteles, directorio, qc, puedeCrear, pu
 
   const colegioInfo = COLEGIOS.find(c => c.colegio === colegio);
   const datosCom    = colegio ? DATOS_COLEGIO[codigoCorto(colegio)] : undefined;
+  const { getEco }  = useEcoLookup();
 
   const resetForm = () => {
     setTerritorio(''); setColegio('');
@@ -1653,7 +1656,7 @@ function TabComunicados({ comunicados, planteles, directorio, qc, puedeCrear, pu
             colegio_clave:  colegio,
             colegio_nombre: datosCom?.nombre ?? colegio,
             zona:           info?.territorio ?? territorio,
-            eco_nombre:     info?.eco ?? null,
+            eco_nombre:     getEco(colegio) || null,
             asignacion:     'PROVEEDOR',
             fase:           'COMUNICADO',
             fecha_inicio:   form.fecha_visita || null,
