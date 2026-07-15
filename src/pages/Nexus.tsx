@@ -21,7 +21,7 @@ interface Nota      { id: string; titulo: string; contenido: string; categoria: 
 interface Pendiente { id: string; titulo: string; descripcion: string; tipo: string; asignado_a: string; asignado_nombre: string; asignado_cc: string; asignado_cc_nombre: string; prioridad: string; fecha_limite: string | null; estatus: string; completado_at: string | null; created_by: string; created_at: string;
   proyecto_id?: string; proyecto_nombre?: string; ticket_id?: string; ticket_folio?: string; colegio?: string; territorio?: string; }
 interface Comentario { id: string; pendiente_id: string; autor_email: string; autor_nombre: string; contenido: string; leido: boolean; created_at: string; }
-interface Seguimiento { id: string; proyecto_id: string; proyecto_nombre: string; territorio: string; colegio: string; estatus: 'activo'|'completado'; completado_at: string | null; created_at: string; }
+interface Seguimiento { id: string; proyecto_id: string; proyecto_nombre: string; territorio: string; colegio: string; estatus: 'activo'|'completado'; completado_at: string | null; created_at: string; presentado_semana: boolean; }
 interface SysUser   { user_email: string; nombre: string; territorio: string; colegio: string; puesto: string; }
 
 const COLORES    = ['#0f172a','#0d8a7e','#2563eb','#7c3aed','#db2777','#ea580c','#16a34a','#d97706'];
@@ -376,6 +376,16 @@ export default function Nexus() {
   const [viewSeguimiento, setViewSeguimiento] = useState<Seguimiento | null>(null);
   const seguimientosActivos    = useMemo(() => seguimientos.filter(s => s.estatus === 'activo'), [seguimientos]);
   const seguimientosCompletados = useMemo(() => seguimientos.filter(s => s.estatus === 'completado'), [seguimientos]);
+  const presentadosCount = useMemo(() => seguimientosActivos.filter(s => s.presentado_semana).length, [seguimientosActivos]);
+
+  const togglePresentadoMutation = useMutation({
+    mutationFn: async ({ id, valor }: { id: string; valor: boolean }) => {
+      const { error } = await supabase.from('nexus_seguimientos').update({ presentado_semana: valor }).eq('id', id);
+      if (error) throw error;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['nexus_seguimientos'] }),
+    onError: () => toast.error('No se pudo actualizar'),
+  });
 
   // ── Form Nota ─────────────────────────────────────────────────────────────
   const [notaForm, setNotaForm] = useState({ titulo:'',contenido:'',categoria:'General',color:'#0f172a',fijada:false,territorio:'',colegio:'' });
@@ -766,17 +776,34 @@ export default function Nexus() {
       {/* ── Seguimiento de Proyectos ─────────────────────────────────────────── */}
       {tab==='seguimiento'&&(
         <div className="space-y-6">
-          <p className="text-sm text-slate-500 -mt-2">Bitácora de seguimiento por proyecto activo — se crea sola cuando un proyecto queda En Espera, En Proceso o Pausado.</p>
+          <div className="flex items-center justify-between flex-wrap gap-2 -mt-2">
+            <p className="text-sm text-slate-500">Bitácora de seguimiento por proyecto activo — se crea sola cuando un proyecto queda En Espera, En Proceso o Pausado.</p>
+            {seguimientosActivos.length>0 && (
+              <span className="inline-flex items-center gap-2 text-xs font-bold text-slate-600 bg-slate-100 px-3 py-1.5 rounded-full shrink-0">
+                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500"/>
+                {presentadosCount} de {seguimientosActivos.length} presentados esta semana
+              </span>
+            )}
+          </div>
 
           {seguimientosActivos.length===0 && <div className="text-center py-12"><ClipboardList className="w-10 h-10 text-slate-200 mx-auto mb-3"/><p className="text-sm font-semibold text-slate-500">No hay proyectos activos en seguimiento.</p></div>}
 
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
             {seguimientosActivos.map(s=>{
               const coment = seguComentMap[s.id];
+              const presentado = s.presentado_semana;
               return (
                 <div key={s.id} onClick={()=>setViewSeguimiento(s)}
-                  className="bg-white rounded-xl border-l-4 border-l-teal-400 border border-slate-200 shadow-sm p-4 cursor-pointer hover:shadow-md transition-all">
-                  <p className="font-bold text-sm text-slate-900 line-clamp-2">{s.proyecto_nombre}</p>
+                  className={`bg-white rounded-xl border-l-4 ${presentado?'border-l-emerald-400':'border-l-teal-400'} border border-slate-200 shadow-sm p-4 cursor-pointer hover:shadow-md transition-all ${presentado?'opacity-60':''}`}>
+                  <div className="flex items-start justify-between gap-2">
+                    <p className="font-bold text-sm text-slate-900 line-clamp-2 flex-1">{s.proyecto_nombre}</p>
+                    <button
+                      onClick={e=>{e.stopPropagation(); togglePresentadoMutation.mutate({id:s.id, valor:!presentado});}}
+                      title={presentado?'Ya la presenté esta semana — clic para desmarcar':'Marcar como presentada esta semana'}
+                      className={`shrink-0 w-6 h-6 rounded-full border-2 flex items-center justify-center transition-colors ${presentado?'bg-emerald-500 border-emerald-500':'border-slate-300 hover:border-emerald-400'}`}>
+                      {presentado && <CheckCircle2 className="w-4 h-4 text-white" strokeWidth={3}/>}
+                    </button>
+                  </div>
                   <div className="flex items-center gap-2 flex-wrap mt-2">
                     {s.territorio && <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full"><MapPin className="w-2.5 h-2.5"/>{s.territorio}</span>}
                     {s.colegio && <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-slate-500 bg-slate-100 px-2 py-0.5 rounded-full"><Building2 className="w-2.5 h-2.5"/>{s.colegio}</span>}
