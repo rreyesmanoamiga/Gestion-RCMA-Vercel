@@ -27,7 +27,8 @@ export type AuditModulo =
   | 'anteproyectos'
   | 'levantamiento'
   | 'calendario'
-  | 'minutas';
+  | 'minutas'
+  | 'reportes_problema';
 
 interface LogAuditParams {
   accion:       AuditAccion;

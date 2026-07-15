@@ -9,7 +9,7 @@ import {
   Building2,
   Menu,
   X,
-  LogOut,
+  LogOut, Wrench,
   Lock,
   ClockAlert,
   CalendarDays,
@@ -273,6 +273,15 @@ export default function Sidebar({ isOpen, onToggle }) {
 
         {/* Footer */}
         <div className="p-4 border-t border-sidebar-border space-y-2">
+          <Link
+            to="/reportar-problema"
+            onClick={handleNavClick}
+            title="Reportar Problema"
+            className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-sidebar-foreground/70 hover:text-amber-400 hover:bg-amber-500/10 transition-all duration-200"
+          >
+            <Wrench className="w-[18px] h-[18px]" />
+            Reportar Problema
+          </Link>
           <button
             onClick={handleLogout}
             className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-sidebar-foreground/70 hover:text-red-400 hover:bg-red-500/10 transition-all duration-200"
