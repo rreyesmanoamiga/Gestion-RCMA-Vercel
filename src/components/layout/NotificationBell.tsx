@@ -58,6 +58,7 @@ export default function NotificationBell() {
   });
 
   const noLeidas = notificaciones.filter(n => !n.leida).length;
+  const hayLeidas = notificaciones.some(n => n.leida);
 
   const marcarLeidaMutation = useMutation({
     mutationFn: async (id: string) => {
@@ -76,6 +77,13 @@ export default function NotificationBell() {
   const eliminarMutation = useMutation({
     mutationFn: async (id: string) => {
       await supabase.from('notificaciones').delete().eq('id', id);
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['notificaciones', user?.id] }),
+  });
+
+  const limpiarLeidasMutation = useMutation({
+    mutationFn: async () => {
+      await supabase.from('notificaciones').delete().eq('usuario_id', user!.id).eq('leida', true);
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ['notificaciones', user?.id] }),
   });
@@ -114,12 +122,20 @@ export default function NotificationBell() {
         <div className="absolute right-0 mt-2 w-96 max-w-[92vw] bg-white rounded-xl border border-slate-200 shadow-xl z-50 overflow-hidden">
           <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100">
             <h3 className="text-sm font-black text-slate-900">Notificaciones</h3>
-            {noLeidas > 0 && (
-              <button onClick={() => marcarTodasLeidasMutation.mutate()}
-                className="flex items-center gap-1 text-xs font-semibold text-blue-600 hover:text-blue-700">
-                <CheckCheck className="w-3.5 h-3.5" /> Marcar todas
-              </button>
-            )}
+            <div className="flex items-center gap-3">
+              {noLeidas > 0 && (
+                <button onClick={() => marcarTodasLeidasMutation.mutate()}
+                  className="flex items-center gap-1 text-xs font-semibold text-blue-600 hover:text-blue-700">
+                  <CheckCheck className="w-3.5 h-3.5" /> Marcar todas
+                </button>
+              )}
+              {hayLeidas && (
+                <button onClick={() => limpiarLeidasMutation.mutate()}
+                  className="flex items-center gap-1 text-xs font-semibold text-slate-400 hover:text-red-600">
+                  <Trash2 className="w-3.5 h-3.5" /> Limpiar leídas
+                </button>
+              )}
+            </div>
           </div>
 
           <div className="max-h-96 overflow-y-auto divide-y divide-slate-50">
@@ -132,7 +148,7 @@ export default function NotificationBell() {
                 return (
                   <div key={n.id}
                     onClick={() => handleClickNotif(n)}
-                    className={`flex items-start gap-3 px-4 py-3 cursor-pointer hover:bg-slate-50 transition-colors ${!n.leida ? 'bg-blue-50/40' : ''}`}>
+                    className={`group flex items-start gap-3 px-4 py-3 cursor-pointer hover:bg-slate-50 transition-colors ${!n.leida ? 'bg-blue-50/40' : ''}`}>
                     <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${meta.color}`}>
                       <Icon className="w-4 h-4" />
                     </div>
