@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { X, Save } from 'lucide-react';
+import { toast } from 'sonner';
 import { useEcoLookup } from '@/hooks/useEcoLookup';
 import ColegioSelector from '@/components/shared/ColegioSelector';
 
@@ -33,6 +34,7 @@ interface FormData {
   progress:       number;
   notes:          string;
   budget:         string;
+  costo_real:     string;
   ticket_number:  string;
 }
 
@@ -50,6 +52,7 @@ const INITIAL_FORM: FormData = {
   progress:       0,
   notes:          '',
   budget:         '',
+  costo_real:     '',
   ticket_number:  '',
 };
 
@@ -81,6 +84,7 @@ export default function ProjectForm({ open, onClose, onSubmit, project = null }:
         progress:      Number(project.progress       ?? 0),
         notes:         String(project.notes          ?? ''),
         budget:        project.budget != null ? String(project.budget) : '',
+        costo_real:    project.costo_real != null ? String(project.costo_real) : '',
         ticket_number: project.ticket_number != null ? String(project.ticket_number) : '',
       });
     } else {
@@ -94,6 +98,10 @@ export default function ProjectForm({ open, onClose, onSubmit, project = null }:
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    if (formData.status === 'completado' && !formData.costo_real) {
+      toast.error('Captura el Costo Real Final antes de marcar el proyecto como Completado — así el correo de aviso sale con el dato correcto.');
+      return;
+    }
     const folio = (formData.ticket_number as string)?.trim() || null;
     onSubmit({
       name:          formData.name,
@@ -109,6 +117,7 @@ export default function ProjectForm({ open, onClose, onSubmit, project = null }:
       progress:      formData.progress   || 0,
       notes:         formData.notes,
       budget:        formData.budget ? parseFloat(formData.budget) : null,
+      costo_real:    formData.costo_real ? parseFloat(formData.costo_real) : null,
       ticket_number: null,
       folio,
       type:          DEFAULT_PROJECT_TYPE,
@@ -204,6 +213,23 @@ export default function ProjectForm({ open, onClose, onSubmit, project = null }:
               </select>
             </div>
           </div>
+
+          {formData.status === 'completado' && (
+            <div className="mt-3 p-3 bg-emerald-50 border border-emerald-200 rounded-lg">
+              <label className={labelClass + ' mt-0 text-emerald-700'}>Costo Real Final *</label>
+              <input
+                type="text"
+                inputMode="decimal"
+                className={inputClass}
+                placeholder="$0.00"
+                value={formatMXN(formData.costo_real)}
+                onChange={e => setFormData(prev => ({ ...prev, costo_real: parseMXN(e.target.value) }))}
+              />
+              <p className="text-[11px] text-emerald-700 mt-1">
+                Requerido para completar el proyecto — este dato se incluye en el correo de aviso que se manda al cerrar.
+              </p>
+            </div>
+          )}
 
           {/* Responsable de Ejecución */}
           <div>
