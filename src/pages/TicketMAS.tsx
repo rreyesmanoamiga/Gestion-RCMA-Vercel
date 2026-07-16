@@ -483,6 +483,18 @@ export default function TicketMAS() {
         detalle:      { colegio: form.colegio, solicitante: form.nombre_solicitante, descripcion: form.descripcion },
       });
 
+      // Quitar el acceso al formulario automáticamente tras enviarlo — así el
+      // usuario no puede mandar otro ticket hasta que se le vuelva a habilitar
+      // para el siguiente proyecto autorizado. No aplica al administrador.
+      if (!isAdmin && user?.email) {
+        try {
+          await supabase.from('user_permissions')
+            .update({ enviar_ticket_mas: false })
+            .eq('user_email', user.email);
+          qc.invalidateQueries({ queryKey: ['userPermissions', user.email] });
+        } catch { /* no bloqueante — el ticket ya se creó correctamente */ }
+      }
+
       notifyByEmail('rreyes@manoamiga.edu.mx', {
         tipo:    'info',
         titulo:  `Nuevo Ticket MAS: ${folio}`,
@@ -1202,6 +1214,11 @@ export default function TicketMAS() {
               <p className="text-sm text-slate-600">
                 Verifica que el colegio, la descripción y las cotizaciones estén correctas antes de continuar — una vez enviado, el Coordinador será notificado de inmediato.
               </p>
+              {!isAdmin && (
+                <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mt-3">
+                  Después de enviarlo, este formulario se cerrará automáticamente hasta que el Coordinador habilite el acceso para tu siguiente ticket.
+                </p>
+              )}
               <div className="flex justify-end gap-3 mt-6">
                 <button onClick={() => setShowConfirmSend(false)}
                   className="px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100 rounded-lg transition-colors">
