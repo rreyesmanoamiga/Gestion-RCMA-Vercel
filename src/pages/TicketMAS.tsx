@@ -6,6 +6,7 @@ import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { useAuth } from '@/lib/AuthContext';
 import { usePermissions } from '@/hooks/usePermissions';
+import { useEcoLookup } from '@/hooks/useEcoLookup';
 import {
   Send, CheckCircle, Eye, X, Printer, ClipboardList,
   ChevronDown, FileCheck, Clock, Trash2, Ban, RefreshCw, AlertCircle, AlertTriangle, FolderPlus, Loader2
@@ -52,6 +53,19 @@ const COLEGIOS_TICKET = [
   { nombre:'OF. CDMX',      codigo:'CDMX-OF', razon:'Federación Mano Amiga A.C.',                                          sociedad:'1238', centro_gestor:'MXM010', territorio:'FMA', director:'Ángel Eduardo Rodriguez Martinez', admin:'Félix Guerra Herrera', contador:'YAZMIN CRUZ', correo_contador:'ycruz@admmx.org' },
   { nombre:'GENERAL', codigo:'FMA-GEN', razon:'Federación Mano Amiga A.C.', sociedad:'1238', centro_gestor:'MXM010', territorio:'FMA', director:'Ángel Eduardo Rodriguez Martinez', admin:'Félix Guerra Herrera', contador:'YAZMIN CRUZ', correo_contador:'ycruz@admmx.org' },
 ];
+
+// Traduce el colegio guardado en el Ticket MAS (nombre completo, ej. "Mano Amiga
+// Querétaro") al código corto estándar que usa el resto del sistema (ej. "MA QRO"),
+// para que el Proyecto que se crea automáticamente al autorizar quede consistente
+// con Proyectos, Directorio, ECO, etc. Si ya viene en formato corto, lo deja igual.
+function colegioCodigoCorto(nombreOColegio: string | null | undefined): string | null {
+  if (!nombreOColegio) return null;
+  const c = COLEGIOS_TICKET.find(x => x.nombre === nombreOColegio);
+  if (!c) return nombreOColegio; // ya viene en otro formato o no se encontró — se deja igual, no se pierde el dato
+  if (c.codigo === 'FMA-GEN') return 'GENERAL';
+  if (c.codigo.endsWith('-OF')) return 'OF. ' + c.codigo.replace('-OF', '');
+  return 'MA ' + c.codigo;
+}
 
 const CAR_CORREOS: Record<string, string> = {
   NORTE:  'jalvarado@manoamiga.edu.mx',
@@ -263,6 +277,7 @@ function generarHTMLTicket(t: TicketMAS, firma: string): string {
 // ─── Componente principal ─────────────────────────────────────────────────────
 export default function TicketMAS() {
   const { user }  = useAuth();
+  const { getEco } = useEcoLookup();
   const { can }   = usePermissions();
   const isAdmin   = user?.user_metadata?.role === 'admin';
   const qc        = useQueryClient();
@@ -680,8 +695,8 @@ export default function TicketMAS() {
       const { error: ticketRegError } = await supabase.from('tickets').insert({
         folio:               updatedRow.folio             ?? null,
         territorio:          updatedRow.territorio        ?? null,
-        colegio:             updatedRow.colegio           ?? null,
-        eco:                 updatedRow.centro_gestor     ?? null,
+        colegio:             colegioCodigoCorto(updatedRow.colegio),
+        eco:                 getEco(colegioCodigoCorto(updatedRow.colegio) ?? '') || null,
         fecha:               adminForm.fecha_recepcion    ?? null,
         estatus:             'aprobado',
         tipo_proyecto:       updatedRow.clasificacion     ?? null,
@@ -703,8 +718,8 @@ export default function TicketMAS() {
           status:        'en_espera',
           priority:      'media',
           territorio:    updatedRow.territorio    ?? null,
-          colegio:       updatedRow.colegio       ?? null,
-          eco:           updatedRow.centro_gestor ?? null,
+          colegio:       colegioCodigoCorto(updatedRow.colegio),
+          eco:           getEco(colegioCodigoCorto(updatedRow.colegio) ?? '') || null,
           tipo_proyecto: updatedRow.clasificacion ?? null,
           notes:         updatedRow.descripcion   ?? null,
           folio:         updatedRow.folio         ?? null,
