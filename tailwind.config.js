@@ -71,27 +71,6 @@ module.exports = {
           border:              'hsl(var(--sidebar-border))',
           ring:                'hsl(var(--sidebar-ring))',
         },
-        // ── Paleta de marca RCMA — Dirección "Tech Vanguardista" ──────────
-        rcma: {
-          bg:          '#0B1120',  // fondo de página
-          surface:     '#141D33',  // tarjetas
-          surface2:    '#1C2740',  // elementos anidados / hover
-          border:      '#253150',  // bordes sutiles sobre fondo oscuro
-          'border-lt': '#2E3B5C',
-          text:        '#F4F6FB',  // texto principal
-          'text-2':    '#93A0BE',  // texto secundario
-          'text-3':    '#5C6785',  // texto tenue / placeholders
-          orange:      '#FF7A45',  // acento primario de marca
-          'orange-bg': '#2A1B12',  // fondo tenue para badges naranja
-          mint:        '#3DDC97',  // acento secundario / éxito
-          'mint-bg':   '#122A20',
-          amber:       '#FFB454',  // advertencia
-          'amber-bg':  '#2E2210',
-          red:         '#FF5C5C',  // peligro / urgente
-          'red-bg':    '#2E1414',
-          blue:        '#5B9DFF',  // informativo
-          'blue-bg':   '#131E33',
-        },
       },
       keyframes: {
         'accordion-down': {
