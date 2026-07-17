@@ -29,32 +29,44 @@ serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
   try {
     const { destinatario_email, destinatario_nombre, autor_nombre, pendiente_titulo, comentario, siteUrl } = await req.json();
+    const smtpUser = Deno.env.get('SMTP_USER') ?? '';
     const appUrl = siteUrl ?? Deno.env.get('SITE_URL') ?? '';
-    const adminEmail = Deno.env.get('ADMIN_EMAIL') ?? 'rreyes@manoamiga.edu.mx';
-    const html = `<!DOCTYPE html><html><head><meta charset="UTF-8"></head>
-<body style="font-family:Arial,sans-serif;background:#f1f5f9;margin:0;padding:20px;">
-  <div style="max-width:620px;margin:0 auto;background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 2px 12px rgba(0,0,0,.08);">
-    <div style="background:#0f172a;padding:20px 28px;">
-      <p style="color:#94a3b8;font-size:11px;margin:0 0 2px;text-transform:uppercase;letter-spacing:.08em;">Sistema RCMA — NEXUS</p>
-      <h1 style="color:#fff;font-size:17px;font-weight:700;margin:0;">Nuevo comentario en tu pendiente</h1>
-    </div>
-    <div style="padding:24px 28px;">
-      <p style="color:#334155;font-size:14px;margin:0 0 16px;">Hola <strong>${destinatario_nombre}</strong>, <strong>${autor_nombre}</strong> dejó un comentario en:</p>
-      <div style="background:#f8fafc;border-left:4px solid #0d8a7e;padding:12px 16px;border-radius:0 8px 8px 0;margin-bottom:16px;">
-        <p style="font-size:13px;font-weight:700;color:#0f172a;margin:0 0 4px;">📌 ${pendiente_titulo}</p>
-      </div>
-      <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;padding:14px 16px;margin-bottom:20px;">
-        <p style="font-size:12px;font-weight:700;color:#1e40af;margin:0 0 6px;">${autor_nombre} escribió:</p>
-        <p style="font-size:13px;color:#1e3a5f;margin:0;">${comentario}</p>
-      </div>
-      <div style="text-align:center;margin-top:20px;">
-        <a href="${appUrl}/nexus" style="display:inline-block;background:#0f172a;color:#fff;font-size:14px;font-weight:700;padding:12px 32px;border-radius:8px;text-decoration:none;">Responder en el sistema →</a>
-      </div>
-    </div>
-    <div style="background:#f8fafc;padding:14px 28px;border-top:1px solid #e2e8f0;text-align:center;">
-      <p style="font-size:11px;color:#94a3b8;margin:0;">Sistema RCMA · NEXUS · <a href="mailto:${adminEmail}" style="color:#64748b;">${adminEmail}</a></p>
-    </div>
-  </div>
+
+    const html = `<!DOCTYPE html>
+<html lang="es"><head><meta charset="UTF-8"></head>
+<body style="margin:0;padding:0;background:#f1f5f9;font-family:Arial,sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#f1f5f9;padding:40px 0;">
+    <tr><td align="center">
+      <table width="600" cellpadding="0" cellspacing="0" style="background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,.08);">
+        <tr><td style="background:#0f172a;padding:28px 36px;">
+          <h1 style="margin:0;color:#fff;font-size:20px;font-weight:700;">Sistema RCMA</h1>
+          <p style="margin:4px 0 0;color:#94a3b8;font-size:12px;">NEXUS — Coordinación de Obras</p>
+        </td></tr>
+        <tr><td style="background:#0d8a7e;padding:14px 36px;">
+          <p style="margin:0;color:#fff;font-size:14px;font-weight:700;">💬 Nuevo Comentario en tu Pendiente</p>
+        </td></tr>
+        <tr><td style="padding:32px 36px;">
+          <p style="color:#475569;font-size:15px;line-height:1.6;margin:0 0 20px;">Hola <strong>${destinatario_nombre}</strong>, <strong>${autor_nombre}</strong> dejó un comentario en:</p>
+          <table width="100%" cellpadding="0" cellspacing="0" style="border:1px solid #e2e8f0;border-radius:8px;overflow:hidden;margin-bottom:16px;">
+            <tr style="background:#f8fafc;">
+              <td style="padding:12px 16px;font-size:12px;font-weight:700;color:#64748b;text-transform:uppercase;width:35%;">Pendiente</td>
+              <td style="padding:12px 16px;font-size:14px;font-weight:600;color:#0f172a;">${pendiente_titulo}</td>
+            </tr>
+          </table>
+          <table width="100%" cellpadding="0" cellspacing="0" style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;margin-bottom:28px;">
+            <tr><td style="padding:14px 16px;">
+              <p style="font-size:12px;font-weight:700;color:#1e40af;margin:0 0 6px;">${autor_nombre} escribió:</p>
+              <p style="font-size:13px;color:#1e3a5f;margin:0;line-height:1.5;">${comentario}</p>
+            </td></tr>
+          </table>
+          <a href="${appUrl}/nexus" style="display:inline-block;background:#0d8a7e;color:#fff;padding:10px 22px;border-radius:8px;font-size:13px;font-weight:700;text-decoration:none;">Responder en el Sistema →</a>
+        </td></tr>
+        <tr><td style="background:#f8fafc;padding:20px 36px;border-top:1px solid #e2e8f0;">
+          <p style="margin:0;color:#94a3b8;font-size:11px;text-align:center;">Sistema RCMA · ${smtpUser}</p>
+        </td></tr>
+      </table>
+    </td></tr>
+  </table>
 </body></html>`;
     await sendEmail(destinatario_email, `💬 Nuevo comentario: ${pendiente_titulo}`, html);
     return new Response(JSON.stringify({ success: true }), { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
