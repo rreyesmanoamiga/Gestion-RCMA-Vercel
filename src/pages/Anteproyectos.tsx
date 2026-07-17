@@ -14,6 +14,7 @@ import { COLEGIOS, TERRITORIOS } from '@/lib/colegios';
 import { useEcoLookup } from '@/hooks/useEcoLookup';
 import { logAudit } from '@/lib/audit';
 import { usePermissions } from '@/hooks/usePermissions';
+import { useAuth } from '@/lib/AuthContext';
 
 const PAGE_SIZE = 20;
 
@@ -116,7 +117,7 @@ function AnteproyectoForm({
 }: {
   open:           boolean;
   onClose:        () => void;
-  onSubmit:       (data: Record<string, unknown>) => void;
+  onSubmit:       (data: Record<string, unknown>, zipSubidoAhora: boolean) => void;
   anteproyecto?:  Anteproyecto | null;
   projects?:      Project[];
 }) {
@@ -173,7 +174,7 @@ function AnteproyectoForm({
         payload.zip_nombre = result.fileName;
       }
     }
-    onSubmit(payload);
+    onSubmit(payload, !!zipFile);
   };
 
   return (
@@ -342,6 +343,8 @@ function AnteproyectoForm({
 // ─── Página principal ─────────────────────────────────────────────────────────
 export default function Anteproyectos() {
   const { isAdmin, can } = usePermissions();
+  const { user } = useAuth();
+  const userName = user?.user_metadata?.nombre || user?.email || 'Usuario';
   const puedeCrear    = isAdmin || can('crear_anteproyectos');
   const puedeEditar   = isAdmin || can('editar_anteproyectos');
   const puedeEliminar = isAdmin || can('eliminar_anteproyectos');
@@ -395,7 +398,7 @@ export default function Anteproyectos() {
   }), [anteproyectos]);
 
   const createMutation = useMutation({
-    mutationFn: async (data: Record<string, unknown>) => {
+    mutationFn: async ({ data }: { data: Record<string, unknown>; zipSubido: boolean }) => {
       if (!puedeCrear) throw new Error('No tienes permiso para crear anteproyectos.');
       const { data: result, error } = await supabase
         .from('anteproyectos')
@@ -405,7 +408,7 @@ export default function Anteproyectos() {
       if (error) throw error;
       return result;
     },
-    onSuccess: (result: any) => {
+    onSuccess: (result: any, variables) => {
       if (result?._offline) {
         queryClient.setQueryData(['anteproyectos'], (old: any) => [result, ...(old ?? [])]);
         toast.warning('📶 Sin conexión — Anteproyecto guardado localmente');
@@ -418,6 +421,15 @@ export default function Anteproyectos() {
           registro_id:  result?.id ?? null,
           registro_ref: result?.nombre_proyecto ?? null,
         });
+        if (variables.zipSubido) {
+          supabase.functions.invoke('notify-nuevo-anteproyecto', {
+            body: {
+              nombre_proyecto: result?.nombre_proyecto, colegio: result?.colegio,
+              territorio: result?.territorio, presupuesto: result?.presupuesto,
+              subido_por: userName, siteUrl: window.location.origin,
+            },
+          }).catch(() => {});
+        }
       }
       setShowForm(false);
     },
@@ -425,7 +437,7 @@ export default function Anteproyectos() {
   });
 
   const updateMutation = useMutation({
-    mutationFn: async ({ id, data }: { id: string; data: Record<string, unknown> }) => {
+    mutationFn: async ({ id, data }: { id: string; data: Record<string, unknown>; zipSubido: boolean }) => {
       if (!puedeEditar) throw new Error('No tienes permiso para editar anteproyectos.');
       const { data: result, error } = await supabase
         .from('anteproyectos')
@@ -436,7 +448,7 @@ export default function Anteproyectos() {
       if (error) throw error;
       return result;
     },
-    onSuccess: (result: any) => {
+    onSuccess: (result: any, variables) => {
       if (result?._offline) {
         queryClient.setQueryData(['anteproyectos'], (old: any) =>
           (old ?? []).map((a: any) => a.id === result.id ? { ...a, ...result } : a)
@@ -452,6 +464,15 @@ export default function Anteproyectos() {
           registro_ref: result?.nombre_proyecto ?? null,
           detalle:      { estatus: result?.estatus },
         });
+        if (variables.zipSubido) {
+          supabase.functions.invoke('notify-nuevo-anteproyecto', {
+            body: {
+              nombre_proyecto: result?.nombre_proyecto, colegio: result?.colegio,
+              territorio: result?.territorio, presupuesto: result?.presupuesto,
+              subido_por: userName, siteUrl: window.location.origin,
+            },
+          }).catch(() => {});
+        }
       }
       setEditingAnteproyecto(null);
     },
@@ -538,8 +559,19 @@ export default function Anteproyectos() {
         referencia: ant.nombre_proyecto?.replace(/[^a-zA-Z0-9]/g,'_').slice(0,40) ?? ant.id,
       });
       if (result) {
-        await supabase.from('anteproyectos').update({ zip_url: result.webUrl, zip_nombre: result.fileName }).eq('id', ant.id);
+        const { data: updated } = await supabase.from('anteproyectos')
+          .update({ zip_url: result.webUrl, zip_nombre: result.fileName })
+          .eq('id', ant.id).select().single();
         qcZ.invalidateQueries({ queryKey: ['anteproyectos'] });
+        supabase.functions.invoke('notify-nuevo-anteproyecto', {
+          body: {
+            nombre_proyecto: updated?.nombre_proyecto ?? ant.nombre_proyecto,
+            colegio: updated?.colegio ?? ant.colegio,
+            territorio: updated?.territorio ?? ant.territorio,
+            presupuesto: updated?.presupuesto ?? ant.presupuesto,
+            subido_por: userName, siteUrl: window.location.origin,
+          },
+        }).catch(() => {});
       }
     };
     if (ant.zip_url) {
@@ -797,14 +829,14 @@ export default function Anteproyectos() {
       <AnteproyectoForm
         open={showForm}
         onClose={() => setShowForm(false)}
-        onSubmit={data => createMutation.mutate(data)}
+        onSubmit={(data, zipSubido) => createMutation.mutate({ data, zipSubido })}
         projects={projectsVinculables}
       />
 
       <AnteproyectoForm
         open={!!editingAnteproyecto}
         onClose={() => setEditingAnteproyecto(null)}
-        onSubmit={data => updateMutation.mutate({ id: editingAnteproyecto!.id, data })}
+        onSubmit={(data, zipSubido) => updateMutation.mutate({ id: editingAnteproyecto!.id, data, zipSubido })}
         anteproyecto={editingAnteproyecto}
         projects={projectsVinculables}
       />
