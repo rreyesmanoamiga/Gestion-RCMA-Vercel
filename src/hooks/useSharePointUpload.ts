@@ -36,18 +36,48 @@ async function getToken(): Promise<string> {
 }
 
 // Genera un link anónimo "anyone with the link can view"
+// Reintenta porque, justo después de subir un archivo, SharePoint puede tardar
+// unos segundos en terminar de procesarlo (423 Locked / 404 transitorio).
 export async function generateShareLink(driveItemId: string, token: string): Promise<string | null> {
-  const res = await fetch(
-    `https://graph.microsoft.com/v1.0/users/${USER}/drive/items/${driveItemId}/createLink`,
-    {
-      method: 'POST',
-      headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ type: 'view', scope: 'anonymous' }),
+  const MAX_INTENTOS = 4;
+  const ESPERAS_MS   = [1000, 2000, 3500, 5000]; // backoff progresivo
+
+  for (let intento = 0; intento < MAX_INTENTOS; intento++) {
+    if (intento > 0) await new Promise(r => setTimeout(r, ESPERAS_MS[intento - 1]));
+
+    try {
+      const res = await fetch(
+        `https://graph.microsoft.com/v1.0/users/${USER}/drive/items/${driveItemId}/createLink`,
+        {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ type: 'view', scope: 'anonymous' }),
+        }
+      );
+
+      if (res.ok) {
+        const data = await res.json();
+        const link = data.link?.webUrl ?? null;
+        if (link) return link;
+        console.warn(`generateShareLink: respuesta OK sin link.webUrl (intento ${intento + 1})`, data);
+        continue;
+      }
+
+      // 423 = archivo aún bloqueado por procesamiento reciente → reintentar
+      // 404 = el item todavía no aparece indexado → reintentar
+      // Otros códigos (401/403/etc.) → no tiene caso reintentar, es un problema de permisos
+      const bodyText = await res.text().catch(() => '');
+      console.warn(`generateShareLink: fallo HTTP ${res.status} (intento ${intento + 1}/${MAX_INTENTOS})`, bodyText);
+      if (res.status !== 423 && res.status !== 404 && res.status !== 429) {
+        return null; // error no transitorio, no vale la pena reintentar
+      }
+    } catch (err) {
+      console.warn(`generateShareLink: error de red (intento ${intento + 1}/${MAX_INTENTOS})`, err);
     }
-  );
-  if (!res.ok) return null;
-  const data = await res.json();
-  return data.link?.webUrl ?? null;
+  }
+
+  console.error('generateShareLink: se agotaron los intentos, se usará el webUrl como respaldo');
+  return null;
 }
 
 // Obtiene el driveItemId desde el path del archivo

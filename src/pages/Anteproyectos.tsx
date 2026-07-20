@@ -575,10 +575,15 @@ export default function Anteproyectos() {
       }
     };
     if (ant.zip_url) {
-      // Abrir carpeta padre en SharePoint (no el archivo directo que descarga)
-      const folderUrl = ant.zip_url.substring(0, ant.zip_url.lastIndexOf('/'));
+      // Si es un link de compartir anónimo de SharePoint (ej. /:u:/g/personal/...token?e=...),
+      // el último segmento es el token del link, NO un nombre de archivo dentro de una carpeta.
+      // Truncarlo rompe el link (404). Solo se trunca cuando es el webUrl canónico con ruta de carpetas.
+      const isShareLink = /\/:[a-z]:\//i.test(ant.zip_url);
+      const openUrl = isShareLink
+        ? ant.zip_url
+        : ant.zip_url.substring(0, ant.zip_url.lastIndexOf('/')); // Abrir carpeta padre (no el archivo directo que descarga)
       return (
-        <a href={folderUrl} target="_blank" rel="noreferrer"
+        <a href={openUrl} target="_blank" rel="noreferrer"
           className="flex items-center gap-1.5 mt-1.5 bg-blue-50 border border-blue-200 rounded-lg px-2 py-1 hover:bg-blue-100 transition">
           <FolderOpen className="w-3 h-3 text-blue-500 shrink-0" />
           <span className="text-[10px] text-blue-700 font-semibold truncate max-w-[140px]">{ant.zip_nombre ?? 'Ver en SharePoint'}</span>
