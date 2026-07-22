@@ -30,6 +30,13 @@ interface Minuta {
   onedrive_url: string | null;
   onedrive_path: string | null;
   creado_por: string | null;
+  notificar_admin_colegio: boolean;
+}
+
+interface ColegioAdmin {
+  user_email: string;
+  nombre: string | null;
+  colegio: string | null;
 }
 
 const TIPO_CFG: Record<string, { label: string; labelCorto: string; color: string; carpeta: string }> = {
@@ -50,7 +57,7 @@ const FORM_INIT = {
 };
 
 export default function Minutas() {
-  const { isAdmin, can } = usePermissions();
+  const { isAdmin, can, permsRecord } = usePermissions();
   const { user } = useAuth();
   const qc = useQueryClient();
   const { uploadCustom, uploading } = useSharePointUpload();
@@ -58,6 +65,12 @@ export default function Minutas() {
   const puedeCrear    = isAdmin || can('crear_minutas');
   const puedeEditar   = isAdmin || can('editar_minutas');
   const puedeEliminar = isAdmin || can('eliminar_minutas');
+
+  // Un "administrador de colegio" es cualquier usuario no-admin al que se le asignó
+  // un colegio específico en Accesos (no ECO, no vacío/general). Ese perfil solo debe ver
+  // minutas (nunca notas técnicas) de SU colegio, y solo las que se marcaron para notificarle.
+  const miColegio       = String((permsRecord as any)?.colegio ?? '');
+  const esAdminColegio  = !isAdmin && !!miColegio && miColegio !== 'ECO';
 
   const [search, setSearch]           = useState('');
   const [filterTipo, setFilterTipo]   = useState<'all' | 'minuta' | 'nota_tecnica'>('all');
@@ -72,15 +85,44 @@ export default function Minutas() {
   const [notifAngel, setNotifAngel]   = useState(false); // maestro: activa el envío, Angel siempre va como "Para"
   const [notifEnrique, setNotifEnrique] = useState(false);
   const [notifCAR, setNotifCAR]       = useState(false);
+  // Notificación independiente al/los administrador(es) del colegio seleccionado
+  const [notifAdminColegio, setNotifAdminColegio] = useState<Record<string, boolean>>({});
+  // En edición: permite otorgar/quitar visibilidad al administrador sin reenviar correo
+  const [visibleAdminColegio, setVisibleAdminColegio] = useState(false);
 
   // ── Data ────────────────────────────────────────────────────────────────
   const { data: minutas = [], isLoading } = useQuery({
-    queryKey: ['minutas'],
+    queryKey: ['minutas', esAdminColegio, miColegio],
     queryFn: async () => {
-      const { data, error } = await supabase.from('minutas').select('*').order('fecha', { ascending: false });
+      let query = supabase.from('minutas').select('*').order('fecha', { ascending: false });
+      if (esAdminColegio) {
+        // Solo minutas (nunca notas técnicas) de su colegio, y solo las marcadas para notificarle.
+        // La política RLS en Supabase aplica esta misma regla como respaldo de seguridad.
+        query = query
+          .eq('tipo', 'minuta')
+          .eq('colegio', miColegio)
+          .eq('notificar_admin_colegio', true);
+      }
+      const { data, error } = await query;
       if (error) throw error;
       return (data ?? []) as Minuta[];
     },
+  });
+
+  // Usuarios ligados (en Accesos) al colegio seleccionado en el formulario —
+  // son los candidatos a "administrador exclusivo" a notificar.
+  const { data: colegioAdmins = [] } = useQuery({
+    queryKey: ['colegioAdmins', form.colegio],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('user_permissions')
+        .select('user_email, nombre, colegio')
+        .eq('colegio', form.colegio)
+        .eq('ver_minutas', true);
+      if (error) throw error;
+      return (data ?? []) as ColegioAdmin[];
+    },
+    enabled: !editItem && puedeCrear && !!form.colegio && form.colegio !== 'ECO',
   });
 
   // Mismos proyectos activos que ya usa NEXUS — comparten caché (misma queryKey)
@@ -115,6 +157,8 @@ export default function Minutas() {
     setNotifAngel(false);
     setNotifEnrique(false);
     setNotifCAR(false);
+    setNotifAdminColegio({});
+    setVisibleAdminColegio(false);
   };
 
   const openEdit = (m: Minuta) => {
@@ -126,6 +170,7 @@ export default function Minutas() {
       proyecto_id: m.proyecto_id ?? '', proyecto_nombre: m.proyecto_nombre ?? '',
       territorio: m.territorio ?? '', colegio: m.colegio ?? '', notas: m.notas ?? '',
     });
+    setVisibleAdminColegio(!!m.notificar_admin_colegio);
     setFile(null);
     setShowForm(true);
   };
@@ -175,13 +220,42 @@ export default function Minutas() {
       };
 
       if (editItem) {
-        const { error } = await supabase.from('minutas').update(payload).eq('id', editItem.id);
+        const { error } = await supabase.from('minutas')
+          .update({ ...payload, notificar_admin_colegio: visibleAdminColegio })
+          .eq('id', editItem.id);
         if (error) throw error;
         logAudit({ accion: 'editar', modulo: 'minutas', registro_id: editItem.id, registro_ref: form.asunto });
       } else {
-        const { data, error } = await supabase.from('minutas').insert(payload).select('id').single();
+        const adminsSeleccionados = colegioAdmins.filter(a => notifAdminColegio[a.user_email]);
+        const { data, error } = await supabase.from('minutas')
+          .insert({ ...payload, notificar_admin_colegio: adminsSeleccionados.length > 0 })
+          .select('id').single();
         if (error) throw error;
         logAudit({ accion: 'crear', modulo: 'minutas', registro_id: data?.id ?? null, registro_ref: form.asunto });
+
+        // Notificación independiente al/los administrador(es) del colegio (no depende de Angel)
+        for (const admin of adminsSeleccionados) {
+          try {
+            const { error: notifError } = await supabase.functions.invoke('notify-minuta-subida', {
+              body: {
+                para: admin.user_email,
+                cc: ['rreyes@manoamiga.edu.mx'],
+                tipo_label: TIPO_CFG[form.tipo]?.label ?? 'Minuta de Reunión',
+                asunto: form.asunto, fecha: form.fecha,
+                proyecto_nombre: form.proyecto_nombre || null,
+                territorio: form.territorio || null, colegio: form.colegio || null,
+                subido_por: user?.email ?? null,
+                onedrive_url, siteUrl: window.location.origin,
+              },
+            });
+            if (notifError) {
+              console.error('Error al notificar al administrador de colegio:', notifError);
+              toast.warning(`El documento se guardó, pero no se pudo notificar a ${admin.nombre || admin.user_email}.`);
+            }
+          } catch (e) {
+            console.error('Error al notificar al administrador de colegio:', e);
+          }
+        }
 
         // Notificar por correo — Para: Angel (si se activó) — CC: Enrique, CAR y tú
         if (notifAngel) {
@@ -240,25 +314,29 @@ export default function Minutas() {
   return (
     <div className="space-y-5">
       <PageHeader
-        title="Minutas y Notas Técnicas"
-        subtitle="Repositorio de minutas de reunión y notas técnicas de seguimiento"
+        title={esAdminColegio ? `Minutas — ${miColegio}` : 'Minutas y Notas Técnicas'}
+        subtitle={esAdminColegio
+          ? 'Minutas de reunión de tu colegio compartidas contigo'
+          : 'Repositorio de minutas de reunión y notas técnicas de seguimiento'}
       />
 
-      {/* Filtro por tipo */}
-      <div className="flex gap-2">
-        {[
-          { key: 'all',          label: 'Todos' },
-          { key: 'minuta',       label: 'Minutas de Reunión' },
-          { key: 'nota_tecnica', label: 'Notas Técnicas' },
-        ].map(t => (
-          <button key={t.key} onClick={() => { setFilterTipo(t.key as any); setVisibleCount(PAGE_SIZE); }}
-            className={`px-3 py-1.5 rounded-full text-xs font-bold border transition-colors ${
-              filterTipo === t.key ? 'bg-slate-900 text-white border-slate-900' : 'bg-white text-slate-500 border-slate-200 hover:border-slate-400'
-            }`}>
-            {t.label}
-          </button>
-        ))}
-      </div>
+      {/* Filtro por tipo — un administrador de colegio nunca ve Notas Técnicas */}
+      {!esAdminColegio && (
+        <div className="flex gap-2">
+          {[
+            { key: 'all',          label: 'Todos' },
+            { key: 'minuta',       label: 'Minutas de Reunión' },
+            { key: 'nota_tecnica', label: 'Notas Técnicas' },
+          ].map(t => (
+            <button key={t.key} onClick={() => { setFilterTipo(t.key as any); setVisibleCount(PAGE_SIZE); }}
+              className={`px-3 py-1.5 rounded-full text-xs font-bold border transition-colors ${
+                filterTipo === t.key ? 'bg-slate-900 text-white border-slate-900' : 'bg-white text-slate-500 border-slate-200 hover:border-slate-400'
+              }`}>
+              {t.label}
+            </button>
+          ))}
+        </div>
+      )}
 
       <div className="flex flex-wrap items-center gap-3">
         <div className="relative flex-1 min-w-[200px] max-w-sm">
@@ -465,6 +543,34 @@ export default function Minutas() {
                     </div>
                   )}
                 </div>
+              )}
+
+              {/* Notificación independiente al administrador exclusivo del colegio seleccionado.
+                  Marcar esta casilla es lo único que hace visible esta minuta para ese administrador
+                  dentro del sistema — sin marcarla, no la verá aunque sea de su colegio. */}
+              {!editItem && form.colegio && form.colegio !== 'ECO' && colegioAdmins.length > 0 && (
+                <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 space-y-2">
+                  <p className="text-xs font-bold text-amber-700 uppercase">Administrador de {form.colegio}</p>
+                  {colegioAdmins.map(admin => (
+                    <label key={admin.user_email} className="flex items-center gap-2 text-sm font-medium text-slate-700 cursor-pointer">
+                      <input type="checkbox"
+                        checked={!!notifAdminColegio[admin.user_email]}
+                        onChange={e => setNotifAdminColegio(prev => ({ ...prev, [admin.user_email]: e.target.checked }))}
+                        className="w-4 h-4 rounded" />
+                      ¿Enviar y hacer visible esta minuta a {admin.nombre || admin.user_email}?
+                    </label>
+                  ))}
+                </div>
+              )}
+
+              {/* En edición: permite otorgar o quitar visibilidad al administrador de colegio
+                  sin volver a enviar correo (por ejemplo si te equivocaste al subir). */}
+              {editItem && form.colegio && form.colegio !== 'ECO' && (
+                <label className="flex items-center gap-2 text-sm font-medium text-slate-700 cursor-pointer bg-amber-50 border border-amber-200 rounded-lg p-3">
+                  <input type="checkbox" checked={visibleAdminColegio}
+                    onChange={e => setVisibleAdminColegio(e.target.checked)} className="w-4 h-4 rounded" />
+                  Visible para el administrador de {form.colegio} (no reenvía correo)
+                </label>
               )}
 
               <div>

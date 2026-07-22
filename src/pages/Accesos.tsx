@@ -460,6 +460,12 @@ export default function Accesos() {
                           {inviteTerritorio && getColegiosByTerritorio(inviteTerritorio).map(c => <option key={c} value={c}>{c}</option>)}
                         </select>
                       </div>
+                      {inviteColegio && inviteColegio !== 'ECO' && (
+                        <p className="text-[11px] text-slate-400 mt-1.5">
+                          Si le das permiso de "Ver Minutas", solo verá las minutas de <strong>{inviteColegio}</strong> que tú marques
+                          para notificarle — nunca notas técnicas ni minutas de otros colegios.
+                        </p>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -544,6 +550,12 @@ export default function Accesos() {
                         {editingUser.territorio && getColegiosByTerritorio(editingUser.territorio).map(c => <option key={c} value={c}>{c}</option>)}
                       </select>
                     </div>
+                    {editingUser.colegio && editingUser.colegio !== 'ECO' && (
+                      <p className="text-[11px] text-slate-400 mt-1.5">
+                        Si tiene permiso de "Ver Minutas", solo ve las minutas de <strong>{editingUser.colegio}</strong> marcadas
+                        para notificarle — nunca notas técnicas ni de otros colegios.
+                      </p>
+                    )}
                   </div>
                 </div>
               </div>
