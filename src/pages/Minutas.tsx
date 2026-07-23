@@ -233,42 +233,13 @@ export default function Minutas() {
         if (error) throw error;
         logAudit({ accion: 'crear', modulo: 'minutas', registro_id: data?.id ?? null, registro_ref: form.asunto });
 
-        // Notificación independiente al/los administrador(es) del colegio (no depende de Angel)
-        for (const admin of adminsSeleccionados) {
-          try {
-            const { error: notifError } = await supabase.functions.invoke('notify-minuta-subida', {
-              body: {
-                para: admin.user_email,
-                cc: ['rreyes@manoamiga.edu.mx'],
-                tipo_label: TIPO_CFG[form.tipo]?.label ?? 'Minuta de Reunión',
-                asunto: form.asunto, fecha: form.fecha,
-                proyecto_nombre: form.proyecto_nombre || null,
-                territorio: form.territorio || null, colegio: form.colegio || null,
-                subido_por: user?.email ?? null,
-                onedrive_url, siteUrl: window.location.origin,
-              },
-            });
-            if (notifError) {
-              console.error('Error al notificar al administrador de colegio:', notifError);
-              toast.warning(`El documento se guardó, pero no se pudo notificar a ${admin.nombre || admin.user_email}.`);
-            }
-          } catch (e) {
-            console.error('Error al notificar al administrador de colegio:', e);
-          }
-        }
+        const adminEmails = adminsSeleccionados.map(a => a.user_email);
 
-        // Notificar por correo — Para: Angel (si se activó) — CC: Enrique, CAR y tú
-        if (notifAngel) {
-          const ccList: string[] = ['rreyes@manoamiga.edu.mx'];
-          if (notifEnrique) ccList.push('ecastaneda@manoamiga.edu.mx');
-          if (notifCAR && form.territorio && CAR_CORREOS[form.territorio]) {
-            ccList.push(CAR_CORREOS[form.territorio].email);
-          }
+        const enviarCorreo = async (para: string, cc: string[]) => {
           try {
             const { error: notifError } = await supabase.functions.invoke('notify-minuta-subida', {
               body: {
-                para: 'arodriguez@manoamiga.edu.mx',
-                cc: ccList,
+                para, cc,
                 tipo_label: TIPO_CFG[form.tipo]?.label ?? 'Minuta de Reunión',
                 asunto: form.asunto, fecha: form.fecha,
                 proyecto_nombre: form.proyecto_nombre || null,
@@ -279,12 +250,29 @@ export default function Minutas() {
             });
             if (notifError) {
               console.error('Error al enviar notificación de minuta:', notifError);
-              toast.warning('El documento se guardó, pero la notificación por correo no pudo enviarse.');
+              toast.warning('El documento se guardó, pero una notificación por correo no pudo enviarse.');
             }
           } catch (e) {
             console.error('Error al enviar notificación de minuta:', e);
-            toast.warning('El documento se guardó, pero la notificación por correo no pudo enviarse.');
+            toast.warning('El documento se guardó, pero una notificación por correo no pudo enviarse.');
           }
+        };
+
+        if (notifAngel) {
+          // Un solo correo: Para Angel, con Enrique / CAR / administrador(es) de colegio en CC
+          // (antes se mandaba un correo aparte al administrador; ahora se une en este mismo).
+          const ccList: string[] = ['rreyes@manoamiga.edu.mx'];
+          if (notifEnrique) ccList.push('ecastaneda@manoamiga.edu.mx');
+          if (notifCAR && form.territorio && CAR_CORREOS[form.territorio]) {
+            ccList.push(CAR_CORREOS[form.territorio].email);
+          }
+          ccList.push(...adminEmails);
+          await enviarCorreo('arodriguez@manoamiga.edu.mx', ccList);
+        } else if (adminEmails.length > 0) {
+          // Angel no fue notificado esta vez: el administrador del colegio va como
+          // destinatario principal (el primero) y el resto, si hay más de uno, en CC.
+          const [paraAdmin, ...restoAdmins] = adminEmails;
+          await enviarCorreo(paraAdmin, ['rreyes@manoamiga.edu.mx', ...restoAdmins]);
         }
       }
     },
