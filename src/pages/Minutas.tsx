@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabaseClient';
 import { toast } from 'sonner';
@@ -39,6 +39,34 @@ interface ColegioAdmin {
   colegio: string | null;
 }
 
+interface Acuerdo {
+  id: string;
+  minuta_id: string;
+  numero: number;
+  descripcion: string;
+  responsable: string | null;
+  fecha_compromiso: string | null;
+  estado: 'pendiente' | 'en_proceso' | 'cumplido' | 'cancelado';
+  fecha_cumplido: string | null;
+  notas_seguimiento: string | null;
+  created_at: string;
+}
+
+interface AcuerdoRow {
+  // fila local del formulario (antes de guardar); id solo existe si ya existía en BD
+  id?: string;
+  descripcion: string;
+  responsable: string;
+  fecha_compromiso: string;
+}
+
+const ESTADO_CFG: Record<string, { label: string; color: string }> = {
+  pendiente:   { label: 'Pendiente',   color: 'text-amber-700 bg-amber-50 border-amber-200' },
+  en_proceso:  { label: 'En Proceso',  color: 'text-blue-700 bg-blue-50 border-blue-200' },
+  cumplido:    { label: 'Cumplido',    color: 'text-green-700 bg-green-50 border-green-200' },
+  cancelado:   { label: 'Cancelado',   color: 'text-slate-500 bg-slate-100 border-slate-200' },
+};
+
 const TIPO_CFG: Record<string, { label: string; labelCorto: string; color: string; carpeta: string }> = {
   minuta:       { label: 'Minuta de Reunión',           labelCorto: 'Minuta',       color: 'text-blue-700 bg-blue-50 border-blue-200',     carpeta: 'Minutas' },
   nota_tecnica: { label: 'Nota Técnica de Seguimiento',  labelCorto: 'Nota Técnica', color: 'text-purple-700 bg-purple-50 border-purple-200', carpeta: 'Notas Tecnicas' },
@@ -75,6 +103,7 @@ export default function Minutas() {
   const [search, setSearch]           = useState('');
   const [filterTipo, setFilterTipo]   = useState<'all' | 'minuta' | 'nota_tecnica'>('all');
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
+  const [vistaActiva, setVistaActiva] = useState<'documentos' | 'acuerdos'>('documentos');
   const [showForm, setShowForm]       = useState(false);
   const [editItem, setEditItem]       = useState<Minuta | null>(null);
   const [deleteItem, setDeleteItem]   = useState<Minuta | null>(null);
@@ -89,6 +118,8 @@ export default function Minutas() {
   const [notifAdminColegio, setNotifAdminColegio] = useState<Record<string, boolean>>({});
   // En edición: permite otorgar/quitar visibilidad al administrador sin reenviar correo
   const [visibleAdminColegio, setVisibleAdminColegio] = useState(false);
+  // Filas de "Acuerdos y Compromisos" capturadas en el formulario (solo para tipo = 'minuta')
+  const [acuerdosForm, setAcuerdosForm] = useState<AcuerdoRow[]>([]);
 
   // ── Data ────────────────────────────────────────────────────────────────
   const { data: minutas = [], isLoading } = useQuery({
@@ -149,6 +180,41 @@ export default function Minutas() {
   const hasMore   = visibleCount < filtered.length;
   const remaining = filtered.length - visibleCount;
 
+  // Acuerdos ya guardados de la minuta que se está editando (para precargar el formulario)
+  const { data: acuerdosDeEditItem = [] } = useQuery({
+    queryKey: ['minuta_acuerdos', editItem?.id],
+    queryFn: async () => {
+      const { data, error } = await supabase.from('minuta_acuerdos')
+        .select('*').eq('minuta_id', editItem!.id).order('numero', { ascending: true });
+      if (error) throw error;
+      return (data ?? []) as Acuerdo[];
+    },
+    enabled: !!editItem?.id,
+  });
+
+  useEffect(() => {
+    if (editItem && acuerdosDeEditItem.length > 0) {
+      setAcuerdosForm(acuerdosDeEditItem.map(a => ({
+        id: a.id, descripcion: a.descripcion, responsable: a.responsable ?? '',
+        fecha_compromiso: a.fecha_compromiso ?? '',
+      })));
+    }
+  }, [editItem, acuerdosDeEditItem]);
+
+  // Todos los acuerdos (para la pestaña "Seguimiento de Acuerdos"), con datos de su minuta origen
+  const { data: acuerdosTodos = [], isLoading: cargandoAcuerdos } = useQuery({
+    queryKey: ['acuerdos_seguimiento', esAdminColegio, miColegio],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('minuta_acuerdos')
+        .select('*, minuta:minuta_id(id, asunto, fecha, territorio, colegio, tipo, onedrive_url)')
+        .order('fecha_compromiso', { ascending: true, nullsFirst: false });
+      if (error) throw error;
+      return (data ?? []) as (Acuerdo & { minuta: { id: string; asunto: string; fecha: string; territorio: string | null; colegio: string | null; tipo: string; onedrive_url: string | null } | null })[];
+    },
+    enabled: vistaActiva === 'acuerdos',
+  });
+
   const resetForm = () => {
     setForm({ ...FORM_INIT });
     setFile(null);
@@ -159,6 +225,7 @@ export default function Minutas() {
     setNotifCAR(false);
     setNotifAdminColegio({});
     setVisibleAdminColegio(false);
+    setAcuerdosForm([]);
   };
 
   const openEdit = (m: Minuta) => {
@@ -171,9 +238,15 @@ export default function Minutas() {
       territorio: m.territorio ?? '', colegio: m.colegio ?? '', notas: m.notas ?? '',
     });
     setVisibleAdminColegio(!!m.notificar_admin_colegio);
+    setAcuerdosForm([]); // se precargan vía el useEffect cuando llegue la consulta
     setFile(null);
     setShowForm(true);
   };
+
+  const agregarFilaAcuerdo = () => setAcuerdosForm(prev => [...prev, { descripcion: '', responsable: '', fecha_compromiso: '' }]);
+  const quitarFilaAcuerdo  = (idx: number) => setAcuerdosForm(prev => prev.filter((_, i) => i !== idx));
+  const actualizarFilaAcuerdo = (idx: number, campo: keyof AcuerdoRow, valor: string) =>
+    setAcuerdosForm(prev => prev.map((row, i) => i === idx ? { ...row, [campo]: valor } : row));
 
   // ── Guardar (crear o editar) ───────────────────────────────────────────
   const saveMutation = useMutation({
@@ -219,11 +292,51 @@ export default function Minutas() {
         creado_por:      user?.email ?? null,
       };
 
+      // Filas de acuerdos con descripción no vacía (numeradas en el orden capturado)
+      const acuerdosValidos = acuerdosForm
+        .map(a => ({ ...a, descripcion: a.descripcion.trim() }))
+        .filter(a => a.descripcion)
+        .map((a, i) => ({ ...a, numero: i + 1 }));
+
+      const sincronizarAcuerdos = async (minutaId: string) => {
+        const idsActuales = new Set(acuerdosValidos.filter(a => a.id).map(a => a.id));
+        const idsPrevios  = new Set(acuerdosDeEditItem.map(a => a.id));
+
+        // Elimina solo los que quitaste del formulario
+        const idsABorrar = [...idsPrevios].filter(id => !idsActuales.has(id));
+        if (idsABorrar.length > 0) {
+          const { error } = await supabase.from('minuta_acuerdos').delete().in('id', idsABorrar);
+          if (error) throw error;
+        }
+
+        for (const a of acuerdosValidos) {
+          if (a.id) {
+            // Solo se actualizan los campos del formulario; el estado, la fecha de
+            // cumplido y las notas de seguimiento que ya tenía quedan intactos
+            // (esos se editan desde la pestaña "Seguimiento de Acuerdos").
+            const { error } = await supabase.from('minuta_acuerdos').update({
+              numero: a.numero, descripcion: a.descripcion,
+              responsable: a.responsable || null, fecha_compromiso: a.fecha_compromiso || null,
+              updated_at: new Date().toISOString(),
+            }).eq('id', a.id);
+            if (error) throw error;
+          } else {
+            const { error } = await supabase.from('minuta_acuerdos').insert({
+              minuta_id: minutaId, numero: a.numero, descripcion: a.descripcion,
+              responsable: a.responsable || null, fecha_compromiso: a.fecha_compromiso || null,
+              creado_por: user?.email ?? null,
+            });
+            if (error) throw error;
+          }
+        }
+      };
+
       if (editItem) {
         const { error } = await supabase.from('minutas')
           .update({ ...payload, notificar_admin_colegio: visibleAdminColegio })
           .eq('id', editItem.id);
         if (error) throw error;
+        await sincronizarAcuerdos(editItem.id);
         logAudit({ accion: 'editar', modulo: 'minutas', registro_id: editItem.id, registro_ref: form.asunto });
       } else {
         const adminsSeleccionados = colegioAdmins.filter(a => notifAdminColegio[a.user_email]);
@@ -231,6 +344,7 @@ export default function Minutas() {
           .insert({ ...payload, notificar_admin_colegio: adminsSeleccionados.length > 0 })
           .select('id').single();
         if (error) throw error;
+        if (data?.id) await sincronizarAcuerdos(data.id);
         logAudit({ accion: 'crear', modulo: 'minutas', registro_id: data?.id ?? null, registro_ref: form.asunto });
 
         const adminEmails = adminsSeleccionados.map(a => a.user_email);
@@ -278,6 +392,8 @@ export default function Minutas() {
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['minutas'] });
+      qc.invalidateQueries({ queryKey: ['acuerdos_seguimiento'] });
+      qc.invalidateQueries({ queryKey: ['minuta_acuerdos'] });
       toast.success(editItem ? 'Documento actualizado' : 'Documento guardado correctamente');
       setShowForm(false);
       resetForm();
@@ -308,6 +424,22 @@ export default function Minutas() {
           : 'Repositorio de minutas de reunión y notas técnicas de seguimiento'}
       />
 
+      {/* Pestañas: Documentos / Seguimiento de Acuerdos */}
+      <div className="flex gap-1 border-b border-slate-200">
+        {[
+          { key: 'documentos', label: 'Documentos' },
+          { key: 'acuerdos',   label: 'Seguimiento de Acuerdos' },
+        ].map(t => (
+          <button key={t.key} onClick={() => setVistaActiva(t.key as any)}
+            className={`px-4 py-2.5 text-sm font-bold border-b-2 -mb-px transition-colors ${
+              vistaActiva === t.key ? 'border-slate-900 text-slate-900' : 'border-transparent text-slate-400 hover:text-slate-600'
+            }`}>
+            {t.label}
+          </button>
+        ))}
+      </div>
+
+      {vistaActiva === 'documentos' && <>
       {/* Filtro por tipo — un administrador de colegio nunca ve Notas Técnicas */}
       {!esAdminColegio && (
         <div className="flex gap-2">
@@ -417,6 +549,16 @@ export default function Minutas() {
           <p className="text-xs text-slate-400">Mostrando {visible.length} de {filtered.length} minutas</p>
         </div>
       )}
+      </>}
+
+      {vistaActiva === 'acuerdos' && (
+        <SeguimientoAcuerdos
+          acuerdos={acuerdosTodos}
+          isLoading={cargandoAcuerdos}
+          puedeEditar={puedeEditar}
+          qc={qc}
+        />
+      )}
 
       {/* ── Modal: Nueva / Editar Minuta ─────────────────────────────────── */}
       {showForm && (
@@ -509,6 +651,47 @@ export default function Minutas() {
                 <textarea className={inputCls + ' resize-none'} rows={2} placeholder="Observaciones adicionales..."
                   value={form.notas} onChange={e => setForm(f => ({ ...f, notas: e.target.value }))} />
               </div>
+
+              {form.tipo === 'minuta' && (
+                <div>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="block text-xs font-bold text-slate-500 uppercase">Acuerdos y Compromisos</label>
+                    <button type="button" onClick={agregarFilaAcuerdo}
+                      className="flex items-center gap-1 text-[11px] font-bold text-blue-600 hover:text-blue-800">
+                      <Plus className="w-3 h-3" /> Agregar acuerdo
+                    </button>
+                  </div>
+                  {acuerdosForm.length === 0 ? (
+                    <p className="text-xs text-slate-400 border border-dashed border-slate-200 rounded-lg px-3 py-3 text-center">
+                      Sin acuerdos capturados. Agrégalos para poder darles seguimiento después sin abrir esta minuta.
+                    </p>
+                  ) : (
+                    <div className="space-y-2">
+                      {acuerdosForm.map((row, idx) => (
+                        <div key={idx} className="flex items-start gap-1.5 bg-slate-50 border border-slate-200 rounded-lg p-2">
+                          <span className="text-[11px] font-bold text-slate-400 mt-2 w-4 shrink-0">{idx + 1}.</span>
+                          <div className="flex-1 space-y-1.5">
+                            <input value={row.descripcion} onChange={e => actualizarFilaAcuerdo(idx, 'descripcion', e.target.value)}
+                              placeholder="¿Qué se acordó?"
+                              className="w-full px-2 py-1.5 border border-slate-200 rounded-md text-xs focus:ring-2 focus:ring-blue-500 focus:outline-none" />
+                            <div className="grid grid-cols-2 gap-1.5">
+                              <input value={row.responsable} onChange={e => actualizarFilaAcuerdo(idx, 'responsable', e.target.value)}
+                                placeholder="Responsable"
+                                className="px-2 py-1.5 border border-slate-200 rounded-md text-xs focus:ring-2 focus:ring-blue-500 focus:outline-none" />
+                              <input type="date" value={row.fecha_compromiso} onChange={e => actualizarFilaAcuerdo(idx, 'fecha_compromiso', e.target.value)}
+                                className="px-2 py-1.5 border border-slate-200 rounded-md text-xs focus:ring-2 focus:ring-blue-500 focus:outline-none" />
+                            </div>
+                          </div>
+                          <button type="button" onClick={() => quitarFilaAcuerdo(idx)}
+                            className="p-1.5 text-slate-300 hover:text-red-600 shrink-0" title="Quitar">
+                            <X className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
 
               {!editItem && (
                 <div className="bg-slate-50 border border-slate-200 rounded-lg p-3 space-y-2">
@@ -626,6 +809,211 @@ export default function Minutas() {
               </button>
             </div>
           </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Pestaña "Seguimiento de Acuerdos" ────────────────────────────────────────
+// Junta los acuerdos de TODAS las minutas en un solo tablero, para no tener
+// que abrir minuta por minuta a revisar qué ya se cumplió y qué falta.
+type AcuerdoConMinuta = Acuerdo & {
+  minuta: { id: string; asunto: string; fecha: string; territorio: string | null; colegio: string | null; tipo: string; onedrive_url: string | null } | null;
+};
+
+function estaVencido(a: AcuerdoConMinuta): boolean {
+  if (!a.fecha_compromiso || a.estado === 'cumplido' || a.estado === 'cancelado') return false;
+  return new Date(a.fecha_compromiso + 'T23:59:59') < new Date();
+}
+
+function SeguimientoAcuerdos({ acuerdos, isLoading, puedeEditar, qc }: {
+  acuerdos: AcuerdoConMinuta[]; isLoading: boolean; puedeEditar: boolean; qc: ReturnType<typeof useQueryClient>;
+}) {
+  const [filtroEstado, setFiltroEstado]   = useState<'todos' | 'vencidos' | 'pendiente' | 'en_proceso' | 'cumplido' | 'cancelado'>('todos');
+  const [filtroColegio, setFiltroColegio] = useState('');
+  const [search, setSearch]               = useState('');
+  const [notasAbiertoId, setNotasAbiertoId] = useState<string | null>(null);
+  const [notasBorrador, setNotasBorrador]   = useState('');
+
+  const colegios = useMemo(() =>
+    Array.from(new Set(acuerdos.map(a => a.minuta?.colegio).filter(Boolean) as string[])).sort(),
+    [acuerdos]);
+
+  const actualizarMutation = useMutation({
+    mutationFn: async (vars: { id: string; cambios: Partial<Acuerdo> }) => {
+      const { error } = await supabase.from('minuta_acuerdos').update(vars.cambios).eq('id', vars.id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['acuerdos_seguimiento'] });
+      toast.success('Acuerdo actualizado');
+    },
+    onError: () => toast.error('No se pudo actualizar el acuerdo'),
+  });
+
+  const cambiarEstado = (a: AcuerdoConMinuta, nuevoEstado: Acuerdo['estado']) => {
+    actualizarMutation.mutate({
+      id: a.id,
+      cambios: {
+        estado: nuevoEstado,
+        fecha_cumplido: nuevoEstado === 'cumplido' ? format(new Date(), 'yyyy-MM-dd') : null,
+      },
+    });
+  };
+
+  const guardarNotas = (a: AcuerdoConMinuta) => {
+    actualizarMutation.mutate({ id: a.id, cambios: { notas_seguimiento: notasBorrador || null } });
+    setNotasAbiertoId(null);
+  };
+
+  const filtrados = useMemo(() => acuerdos.filter(a => {
+    if (filtroEstado === 'vencidos' && !estaVencido(a)) return false;
+    if (filtroEstado !== 'todos' && filtroEstado !== 'vencidos' && a.estado !== filtroEstado) return false;
+    if (filtroColegio && a.minuta?.colegio !== filtroColegio) return false;
+    if (search) {
+      const q = search.toLowerCase();
+      if (!a.descripcion.toLowerCase().includes(q) && !(a.responsable ?? '').toLowerCase().includes(q)) return false;
+    }
+    return true;
+  }), [acuerdos, filtroEstado, filtroColegio, search]);
+
+  const kpi = useMemo(() => ({
+    total:     acuerdos.length,
+    vencidos:  acuerdos.filter(estaVencido).length,
+    pendientes: acuerdos.filter(a => a.estado === 'pendiente' || a.estado === 'en_proceso').length,
+    cumplidos: acuerdos.filter(a => a.estado === 'cumplido').length,
+  }), [acuerdos]);
+
+  if (isLoading) return <div className="text-center py-16 text-slate-400 text-sm">Cargando acuerdos...</div>;
+
+  return (
+    <div className="space-y-4">
+      {/* KPIs */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        {[
+          { label: 'Total',      value: kpi.total,      color: 'text-slate-900' },
+          { label: 'Vencidos',   value: kpi.vencidos,   color: 'text-red-600' },
+          { label: 'Pendientes', value: kpi.pendientes, color: 'text-amber-600' },
+          { label: 'Cumplidos',  value: kpi.cumplidos,  color: 'text-green-600' },
+        ].map(k => (
+          <div key={k.label} className="bg-white rounded-xl border border-slate-200 p-3">
+            <p className="text-[11px] font-bold text-slate-400 uppercase">{k.label}</p>
+            <p className={`text-2xl font-bold ${k.color}`}>{k.value}</p>
+          </div>
+        ))}
+      </div>
+
+      {/* Filtros */}
+      <div className="flex flex-wrap items-center gap-2">
+        {[
+          { key: 'todos',      label: 'Todos' },
+          { key: 'vencidos',   label: 'Vencidos' },
+          { key: 'pendiente',  label: 'Pendientes' },
+          { key: 'en_proceso', label: 'En Proceso' },
+          { key: 'cumplido',   label: 'Cumplidos' },
+        ].map(f => (
+          <button key={f.key} onClick={() => setFiltroEstado(f.key as any)}
+            className={`px-3 py-1.5 rounded-full text-xs font-bold border transition-colors ${
+              filtroEstado === f.key ? 'bg-slate-900 text-white border-slate-900' : 'bg-white text-slate-500 border-slate-200 hover:border-slate-400'
+            }`}>
+            {f.label}
+          </button>
+        ))}
+        {colegios.length > 0 && (
+          <select value={filtroColegio} onChange={e => setFiltroColegio(e.target.value)}
+            className="px-3 py-1.5 border border-slate-200 rounded-full text-xs font-bold text-slate-600 bg-white focus:outline-none">
+            <option value="">Todos los colegios</option>
+            {colegios.map(c => <option key={c} value={c}>{c}</option>)}
+          </select>
+        )}
+        <div className="relative flex-1 min-w-[180px] max-w-xs">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
+          <input value={search} onChange={e => setSearch(e.target.value)}
+            placeholder="Buscar acuerdo o responsable..."
+            className="w-full pl-8 pr-3 py-1.5 border border-slate-200 rounded-full text-xs focus:ring-2 focus:ring-blue-500 focus:outline-none" />
+        </div>
+      </div>
+
+      {/* Lista */}
+      {filtrados.length === 0 ? (
+        <div className="text-center py-16 text-slate-400 text-sm">
+          <ClipboardList className="w-10 h-10 mx-auto mb-2 text-slate-300" />
+          No hay acuerdos que coincidan con el filtro.
+        </div>
+      ) : (
+        <div className="bg-white rounded-xl border border-slate-200 divide-y divide-slate-100 overflow-hidden">
+          {filtrados.map(a => {
+            const vencido = estaVencido(a);
+            const estadoCfg = ESTADO_CFG[a.estado] ?? ESTADO_CFG.pendiente;
+            return (
+              <div key={a.id} className="px-4 py-3">
+                <div className="flex items-start gap-3">
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-semibold text-slate-900">{a.descripcion}</p>
+                    <div className="flex items-center gap-2 flex-wrap mt-1.5">
+                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${vencido ? 'text-red-700 bg-red-50 border-red-200' : estadoCfg.color}`}>
+                        {vencido ? 'Vencido' : estadoCfg.label}
+                      </span>
+                      {a.responsable && (
+                        <span className="text-[11px] text-slate-500">👤 {a.responsable}</span>
+                      )}
+                      {a.fecha_compromiso && (
+                        <span className={`text-[11px] ${vencido ? 'text-red-600 font-bold' : 'text-slate-500'}`}>
+                          📅 {format(new Date(a.fecha_compromiso + 'T12:00:00'), "d MMM yyyy", { locale: es })}
+                        </span>
+                      )}
+                      {a.minuta?.colegio && (
+                        <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-slate-500 bg-slate-100 px-2 py-0.5 rounded-full">
+                          <Building2 className="w-3 h-3" />{a.minuta.colegio}
+                        </span>
+                      )}
+                      {a.minuta && (
+                        a.minuta.onedrive_url ? (
+                          <a href={a.minuta.onedrive_url} target="_blank" rel="noreferrer" className="text-[11px] text-blue-600 hover:underline">
+                            📄 {a.minuta.asunto}
+                          </a>
+                        ) : (
+                          <span className="text-[11px] text-slate-400">📄 {a.minuta.asunto}</span>
+                        )
+                      )}
+                    </div>
+                    {a.notas_seguimiento && notasAbiertoId !== a.id && (
+                      <p className="text-xs text-slate-500 italic mt-1.5">"{a.notas_seguimiento}"</p>
+                    )}
+                    {notasAbiertoId === a.id && (
+                      <div className="mt-2 flex items-start gap-2">
+                        <textarea value={notasBorrador} onChange={e => setNotasBorrador(e.target.value)}
+                          rows={2} autoFocus placeholder="Nota de seguimiento (ej. se llamó al proveedor, entrega la próxima semana)..."
+                          className="flex-1 px-2 py-1.5 border border-slate-200 rounded-lg text-xs focus:ring-2 focus:ring-blue-500 focus:outline-none" />
+                        <button onClick={() => guardarNotas(a)} className="px-2.5 py-1.5 bg-slate-900 text-white rounded-lg text-xs font-bold hover:bg-slate-800">Guardar</button>
+                        <button onClick={() => setNotasAbiertoId(null)} className="px-2 py-1.5 text-slate-400 hover:text-slate-700 text-xs">Cancelar</button>
+                      </div>
+                    )}
+                  </div>
+
+                  {puedeEditar && (
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      <select value={a.estado} onChange={e => cambiarEstado(a, e.target.value as Acuerdo['estado'])}
+                        className="text-xs font-bold border border-slate-200 rounded-lg px-2 py-1.5 bg-white focus:outline-none">
+                        <option value="pendiente">Pendiente</option>
+                        <option value="en_proceso">En Proceso</option>
+                        <option value="cumplido">Cumplido</option>
+                        <option value="cancelado">Cancelado</option>
+                      </select>
+                      {notasAbiertoId !== a.id && (
+                        <button
+                          onClick={() => { setNotasAbiertoId(a.id); setNotasBorrador(a.notas_seguimiento ?? ''); }}
+                          className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-lg" title="Agregar nota de seguimiento">
+                          <Pencil className="w-3.5 h-3.5" />
+                        </button>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </div>
+            );
+          })}
         </div>
       )}
     </div>
