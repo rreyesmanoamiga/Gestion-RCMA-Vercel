@@ -212,7 +212,7 @@ export default function Minutas() {
       if (error) throw error;
       return (data ?? []) as (Acuerdo & { minuta: { id: string; asunto: string; fecha: string; territorio: string | null; colegio: string | null; tipo: string; onedrive_url: string | null } | null })[];
     },
-    enabled: vistaActiva === 'acuerdos',
+    enabled: isAdmin && vistaActiva === 'acuerdos',
   });
 
   const resetForm = () => {
@@ -424,22 +424,24 @@ export default function Minutas() {
           : 'Repositorio de minutas de reunión y notas técnicas de seguimiento'}
       />
 
-      {/* Pestañas: Documentos / Seguimiento de Acuerdos */}
-      <div className="flex gap-1 border-b border-slate-200">
-        {[
-          { key: 'documentos', label: 'Documentos' },
-          { key: 'acuerdos',   label: 'Seguimiento de Acuerdos' },
-        ].map(t => (
-          <button key={t.key} onClick={() => setVistaActiva(t.key as any)}
-            className={`px-4 py-2.5 text-sm font-bold border-b-2 -mb-px transition-colors ${
-              vistaActiva === t.key ? 'border-slate-900 text-slate-900' : 'border-transparent text-slate-400 hover:text-slate-600'
-            }`}>
-            {t.label}
-          </button>
-        ))}
-      </div>
+      {/* Pestañas: Documentos / Seguimiento de Acuerdos — la segunda solo la ve el admin */}
+      {isAdmin && (
+        <div className="flex gap-1 border-b border-slate-200 overflow-x-auto">
+          {[
+            { key: 'documentos', label: 'Documentos' },
+            { key: 'acuerdos',   label: 'Seguimiento de Acuerdos' },
+          ].map(t => (
+            <button key={t.key} onClick={() => setVistaActiva(t.key as any)}
+              className={`shrink-0 px-3 sm:px-4 py-2 sm:py-2.5 text-xs sm:text-sm font-bold border-b-2 -mb-px transition-colors whitespace-nowrap ${
+                vistaActiva === t.key ? 'border-slate-900 text-slate-900' : 'border-transparent text-slate-400 hover:text-slate-600'
+              }`}>
+              {t.label}
+            </button>
+          ))}
+        </div>
+      )}
 
-      {vistaActiva === 'documentos' && <>
+      {(vistaActiva === 'documentos' || !isAdmin) && <>
       {/* Filtro por tipo — un administrador de colegio nunca ve Notas Técnicas */}
       {!esAdminColegio && (
         <div className="flex gap-2">
@@ -551,7 +553,7 @@ export default function Minutas() {
       )}
       </>}
 
-      {vistaActiva === 'acuerdos' && (
+      {isAdmin && vistaActiva === 'acuerdos' && (
         <SeguimientoAcuerdos
           acuerdos={acuerdosTodos}
           isLoading={cargandoAcuerdos}
@@ -674,7 +676,7 @@ export default function Minutas() {
                             <input value={row.descripcion} onChange={e => actualizarFilaAcuerdo(idx, 'descripcion', e.target.value)}
                               placeholder="¿Qué se acordó?"
                               className="w-full px-2 py-1.5 border border-slate-200 rounded-md text-xs focus:ring-2 focus:ring-blue-500 focus:outline-none" />
-                            <div className="grid grid-cols-2 gap-1.5">
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
                               <input value={row.responsable} onChange={e => actualizarFilaAcuerdo(idx, 'responsable', e.target.value)}
                                 placeholder="Responsable"
                                 className="px-2 py-1.5 border border-slate-200 rounded-md text-xs focus:ring-2 focus:ring-blue-500 focus:outline-none" />
@@ -924,28 +926,30 @@ function SeguimientoAcuerdos({ acuerdos, isLoading, puedeEditar, qc }: {
 
       {/* Filtros */}
       <div className="flex flex-wrap items-center gap-2">
-        {[
-          { key: 'todos',      label: 'Todos' },
-          { key: 'vencidos',   label: 'Vencidos' },
-          { key: 'pendiente',  label: 'Pendientes' },
-          { key: 'en_proceso', label: 'En Proceso' },
-          { key: 'cumplido',   label: 'Cumplidos' },
-        ].map(f => (
-          <button key={f.key} onClick={() => setFiltroEstado(f.key as any)}
-            className={`px-3 py-1.5 rounded-full text-xs font-bold border transition-colors ${
-              filtroEstado === f.key ? 'bg-slate-900 text-white border-slate-900' : 'bg-white text-slate-500 border-slate-200 hover:border-slate-400'
-            }`}>
-            {f.label}
-          </button>
-        ))}
+        <div className="flex flex-wrap gap-2">
+          {[
+            { key: 'todos',      label: 'Todos' },
+            { key: 'vencidos',   label: 'Vencidos' },
+            { key: 'pendiente',  label: 'Pendientes' },
+            { key: 'en_proceso', label: 'En Proceso' },
+            { key: 'cumplido',   label: 'Cumplidos' },
+          ].map(f => (
+            <button key={f.key} onClick={() => setFiltroEstado(f.key as any)}
+              className={`px-3 py-1.5 rounded-full text-xs font-bold border transition-colors ${
+                filtroEstado === f.key ? 'bg-slate-900 text-white border-slate-900' : 'bg-white text-slate-500 border-slate-200 hover:border-slate-400'
+              }`}>
+              {f.label}
+            </button>
+          ))}
+        </div>
         {colegios.length > 0 && (
           <select value={filtroColegio} onChange={e => setFiltroColegio(e.target.value)}
-            className="px-3 py-1.5 border border-slate-200 rounded-full text-xs font-bold text-slate-600 bg-white focus:outline-none">
+            className="w-full sm:w-auto px-3 py-1.5 border border-slate-200 rounded-full text-xs font-bold text-slate-600 bg-white focus:outline-none">
             <option value="">Todos los colegios</option>
             {colegios.map(c => <option key={c} value={c}>{c}</option>)}
           </select>
         )}
-        <div className="relative flex-1 min-w-[180px] max-w-xs">
+        <div className="relative w-full sm:flex-1 sm:min-w-[180px] sm:max-w-xs">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
           <input value={search} onChange={e => setSearch(e.target.value)}
             placeholder="Buscar acuerdo o responsable..."
@@ -966,7 +970,7 @@ function SeguimientoAcuerdos({ acuerdos, isLoading, puedeEditar, qc }: {
             const estadoCfg = ESTADO_CFG[a.estado] ?? ESTADO_CFG.pendiente;
             return (
               <div key={a.id} className="px-4 py-3">
-                <div className="flex items-start gap-3">
+                <div className="flex flex-col sm:flex-row sm:items-start gap-3">
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-semibold text-slate-900">{a.descripcion}</p>
                     <div className="flex items-center gap-2 flex-wrap mt-1.5">
@@ -1000,12 +1004,14 @@ function SeguimientoAcuerdos({ acuerdos, isLoading, puedeEditar, qc }: {
                       <p className="text-xs text-slate-500 italic mt-1.5">"{a.notas_seguimiento}"</p>
                     )}
                     {notasAbiertoId === a.id && (
-                      <div className="mt-2 flex items-start gap-2">
+                      <div className="mt-2 flex flex-col sm:flex-row items-stretch sm:items-start gap-2">
                         <textarea value={notasBorrador} onChange={e => setNotasBorrador(e.target.value)}
                           rows={2} autoFocus placeholder="Nota de seguimiento (ej. se llamó al proveedor, entrega la próxima semana)..."
                           className="flex-1 px-2 py-1.5 border border-slate-200 rounded-lg text-xs focus:ring-2 focus:ring-blue-500 focus:outline-none" />
-                        <button onClick={() => guardarNotas(a)} className="px-2.5 py-1.5 bg-slate-900 text-white rounded-lg text-xs font-bold hover:bg-slate-800">Guardar</button>
-                        <button onClick={() => setNotasAbiertoId(null)} className="px-2 py-1.5 text-slate-400 hover:text-slate-700 text-xs">Cancelar</button>
+                        <div className="flex items-center gap-2">
+                          <button onClick={() => guardarNotas(a)} className="flex-1 sm:flex-none px-2.5 py-1.5 bg-slate-900 text-white rounded-lg text-xs font-bold hover:bg-slate-800">Guardar</button>
+                          <button onClick={() => setNotasAbiertoId(null)} className="flex-1 sm:flex-none px-2 py-1.5 text-slate-400 hover:text-slate-700 text-xs">Cancelar</button>
+                        </div>
                       </div>
                     )}
                   </div>
@@ -1013,7 +1019,7 @@ function SeguimientoAcuerdos({ acuerdos, isLoading, puedeEditar, qc }: {
                   {puedeEditar && (
                     <div className="flex items-center gap-1.5 shrink-0">
                       <select value={a.estado} onChange={e => cambiarEstado(a, e.target.value as Acuerdo['estado'])}
-                        className="text-xs font-bold border border-slate-200 rounded-lg px-2 py-1.5 bg-white focus:outline-none">
+                        className="flex-1 sm:flex-none text-xs font-bold border border-slate-200 rounded-lg px-2 py-1.5 bg-white focus:outline-none">
                         <option value="pendiente">Pendiente</option>
                         <option value="en_proceso">En Proceso</option>
                         <option value="cumplido">Cumplido</option>
@@ -1022,7 +1028,7 @@ function SeguimientoAcuerdos({ acuerdos, isLoading, puedeEditar, qc }: {
                       {notasAbiertoId !== a.id && (
                         <button
                           onClick={() => { setNotasAbiertoId(a.id); setNotasBorrador(a.notas_seguimiento ?? ''); }}
-                          className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-lg" title="Agregar nota de seguimiento">
+                          className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-lg shrink-0" title="Agregar nota de seguimiento">
                           <Pencil className="w-3.5 h-3.5" />
                         </button>
                       )}
