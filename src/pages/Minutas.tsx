@@ -867,16 +867,34 @@ function SeguimientoAcuerdos({ acuerdos, isLoading, puedeEditar, qc }: {
     setNotasAbiertoId(null);
   };
 
-  const filtrados = useMemo(() => acuerdos.filter(a => {
-    if (filtroEstado === 'vencidos' && !estaVencido(a)) return false;
-    if (filtroEstado !== 'todos' && filtroEstado !== 'vencidos' && a.estado !== filtroEstado) return false;
-    if (filtroColegio && a.minuta?.colegio !== filtroColegio) return false;
-    if (search) {
-      const q = search.toLowerCase();
-      if (!a.descripcion.toLowerCase().includes(q) && !(a.responsable ?? '').toLowerCase().includes(q)) return false;
-    }
-    return true;
-  }), [acuerdos, filtroEstado, filtroColegio, search]);
+  const prioridadOrden = (a: AcuerdoConMinuta): number => {
+    if (estaVencido(a)) return 0;
+    if (a.estado === 'pendiente' || a.estado === 'en_proceso') return 1;
+    if (a.estado === 'cumplido') return 2;
+    return 3; // cancelado
+  };
+
+  const filtrados = useMemo(() => acuerdos
+    .filter(a => {
+      if (filtroEstado === 'vencidos' && !estaVencido(a)) return false;
+      if (filtroEstado !== 'todos' && filtroEstado !== 'vencidos' && a.estado !== filtroEstado) return false;
+      if (filtroColegio && a.minuta?.colegio !== filtroColegio) return false;
+      if (search) {
+        const q = search.toLowerCase();
+        if (!a.descripcion.toLowerCase().includes(q) && !(a.responsable ?? '').toLowerCase().includes(q)) return false;
+      }
+      return true;
+    })
+    .sort((a, b) => {
+      const p = prioridadOrden(a) - prioridadOrden(b);
+      if (p !== 0) return p;
+      // Dentro del mismo grupo: por fecha de compromiso más próxima primero (sin fecha, al final del grupo)
+      if (!a.fecha_compromiso && !b.fecha_compromiso) return 0;
+      if (!a.fecha_compromiso) return 1;
+      if (!b.fecha_compromiso) return -1;
+      return a.fecha_compromiso.localeCompare(b.fecha_compromiso);
+    }),
+  [acuerdos, filtroEstado, filtroColegio, search]);
 
   const kpi = useMemo(() => ({
     total:     acuerdos.length,
