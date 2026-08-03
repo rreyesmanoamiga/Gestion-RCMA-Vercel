@@ -19,6 +19,7 @@ interface Actividad {
   esSobreescrita?: boolean;   // base activity that has been overridden in DB
   customId?: string;          // UUID of the custom_maintenance record (for base overrides)
   base_id?: number;           // original ACTIVIDADES_BASE id (for overrides)
+  eliminado?: boolean;        // base activity oculta por el admin
 }
 
 interface NotificationRecipient {
@@ -162,6 +163,7 @@ export default function CalendarioMantenimiento() {
   // Gestionar: actividad seleccionada para editar dentro del modal
   const [gestionSelected, setGestionSelected] = useState<Actividad | null>(null);
   const [gestionSearch, setGestionSearch] = useState('');
+  const [showOcultos, setShowOcultos] = useState(false);
 
   // Recipient: selector de actividades al agregar
   const [formRecipientTodos, setFormRecipientTodos] = useState(true);
@@ -372,6 +374,42 @@ export default function CalendarioMantenimiento() {
     onError: () => toast.error('Error al actualizar'),
   });
 
+  // ── Ocultar / restaurar mantenimiento precargado (base) ────────────────────
+  // No se puede "eliminar" un mantenimiento base porque vive en código, así
+  // que se guarda un override marcado como eliminado=true; se filtra en la
+  // vista y en todo el calendario/notificaciones. Restaurar borra el override
+  // por completo (regresa al original de fábrica, sin ediciones previas).
+  const hideBaseMutation = useMutation({
+    mutationFn: async (act: Actividad) => {
+      if (!puedeEliminar) throw new Error('No tienes permiso para eliminar actividades de mantenimiento.');
+      const { error } = await supabase.from('custom_maintenance').upsert({
+        base_id: Number(act.id),
+        categoria: act.categoria, actividad: act.actividad, tipo: act.tipo,
+        frecuencia: act.frecuencia, frecuencia_dias: act.frecuenciaDias, descripcion: act.descripcion,
+        eliminado: true,
+      }, { onConflict: 'base_id' });
+      if (error) throw error;
+      logAudit({ accion: 'eliminar', modulo: 'calendario', registro_ref: act.actividad, detalle: { base_id: act.id, oculto: true } });
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['customMaintenance'] });
+      toast.success('Mantenimiento oculto — ya no aparecerá en el calendario');
+      setGestionSelected(null);
+    },
+    onError: () => toast.error('Error al ocultar'),
+  });
+
+  const restoreBaseMutation = useMutation({
+    mutationFn: async (customId: string) => {
+      if (!puedeEliminar) throw new Error('No tienes permiso para restaurar actividades de mantenimiento.');
+      const { error } = await supabase.from('custom_maintenance').delete().eq('id', customId);
+      if (error) throw error;
+      logAudit({ accion: 'editar', modulo: 'calendario', registro_id: customId, registro_ref: 'Mantenimiento restaurado' });
+    },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['customMaintenance'] }); toast.success('Mantenimiento restaurado'); },
+    onError: () => toast.error('Error al restaurar'),
+  });
+
   // ── Mapear actividades custom + detectar overrides de base ────────────────
   const customActividades: Actividad[] = customRaw.map((r: any) => ({
     id: r.base_id ?? r.id,
@@ -381,14 +419,22 @@ export default function CalendarioMantenimiento() {
     esSobreescrita: r.base_id != null,
     customId: r.id,
     base_id: r.base_id ?? undefined,
+    eliminado: !!r.eliminado,
   }));
 
   // Overrides indexados por base_id
   const baseOverrides: Record<number, Actividad> = {};
   customActividades.filter(a => a.base_id != null).forEach(a => { baseOverrides[a.base_id!] = a; });
 
-  // Actividades base con overrides aplicados
-  const actividadesBaseMerged: Actividad[] = ACTIVIDADES_BASE.map(a => baseOverrides[a.id as number] ?? a);
+  // Actividades base con overrides aplicados, excluyendo las ocultas por el admin
+  const actividadesBaseMerged: Actividad[] = ACTIVIDADES_BASE
+    .filter(a => !baseOverrides[a.id as number]?.eliminado)
+    .map(a => baseOverrides[a.id as number] ?? a);
+
+  // Mantenimientos base ocultos (para la sección "Restaurar")
+  const actividadesBaseOcultas: Actividad[] = ACTIVIDADES_BASE
+    .filter(a => baseOverrides[a.id as number]?.eliminado)
+    .map(a => baseOverrides[a.id as number]);
 
   // Solo custom puras (no overrides)
   const customPuras = customActividades.filter(a => a.base_id == null);
@@ -948,15 +994,20 @@ export default function CalendarioMantenimiento() {
                           <span className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-200 rounded-md" title="Clic para editar">
                             <Pencil className="w-3.5 h-3.5" />
                           </span>
-                          {act.esPersonalizada && (
-                            <button
-                              onClick={e => { e.stopPropagation(); if (confirm('¿Eliminar este mantenimiento?')) deleteMutation.mutate(String(act.customId ?? act.id)); }}
-                              disabled={deleteMutation.isPending}
-                              className="p-1.5 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-md"
-                              title="Eliminar">
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </button>
-                          )}
+                          <button
+                            onClick={e => {
+                              e.stopPropagation();
+                              if (act.esPersonalizada) {
+                                if (confirm('¿Eliminar este mantenimiento?')) deleteMutation.mutate(String(act.customId ?? act.id));
+                              } else {
+                                if (confirm(`¿Ocultar "${act.actividad}"? Dejará de aparecer en el calendario. Podrás restaurarlo después desde "Ocultos".`)) hideBaseMutation.mutate(act);
+                              }
+                            }}
+                            disabled={deleteMutation.isPending || hideBaseMutation.isPending}
+                            className="p-1.5 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-md"
+                            title={act.esPersonalizada ? 'Eliminar' : 'Ocultar (es un mantenimiento precargado)'}>
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
                         </div>
                       </div>
                     ))}
@@ -1018,6 +1069,36 @@ export default function CalendarioMantenimiento() {
                     </button>
                   </div>
                 </div>
+              </div>
+            )}
+
+            {/* Mantenimientos ocultos (precargados que se eliminaron) */}
+            {actividadesBaseOcultas.length > 0 && (
+              <div className="border-t border-slate-100">
+                <button onClick={() => setShowOcultos(o => !o)}
+                  className="w-full px-5 py-2.5 bg-slate-50 flex items-center justify-between text-xs font-bold text-slate-500 uppercase tracking-wider hover:bg-slate-100">
+                  <span>Ocultos ({actividadesBaseOcultas.length})</span>
+                  {showOcultos ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+                </button>
+                {showOcultos && (
+                  <div className="max-h-40 overflow-y-auto">
+                    {actividadesBaseOcultas.map(act => (
+                      <div key={act.customId} className="px-5 py-2.5 flex items-center gap-3 border-b border-slate-50 opacity-60">
+                        <div className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: colorCat(act.categoria) }} />
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium text-slate-700 truncate">{act.actividad}</p>
+                          <p className="text-xs text-slate-400">{act.categoria}</p>
+                        </div>
+                        <button
+                          onClick={() => restoreBaseMutation.mutate(act.customId!)}
+                          disabled={restoreBaseMutation.isPending}
+                          className="px-2.5 py-1 text-xs font-bold text-blue-600 hover:bg-blue-50 rounded-md shrink-0">
+                          Restaurar
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             )}
 
