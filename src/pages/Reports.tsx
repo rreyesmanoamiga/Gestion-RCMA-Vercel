@@ -7,6 +7,8 @@ import {
   PieChart, Filter, TrendingUp, ClockAlert, Wrench, Package, Building2,
 } from 'lucide-react';
 import PageHeader from '@/components/shared/PageHeader';
+import { mergeActividadesConCustom, calcularFechasEnMes } from './CalendarioMantenimiento';
+import { COLEGIOS } from '@/lib/colegios';
 
 const btnOutline = "flex items-center gap-2 px-4 py-2.5 border border-slate-300 rounded-lg text-sm font-bold text-slate-700 hover:bg-slate-50 transition-all shadow-sm disabled:opacity-40 disabled:cursor-not-allowed";
 const cardClass  = "bg-white p-6 rounded-xl border border-slate-200 shadow-sm";
@@ -15,7 +17,7 @@ interface Project  { id: string; name?: string; status?: string; progress?: numb
 interface Solicitud { id: string; nombre_centro?: string; nombre_proyecto?: string; estatus?: string; created_at?: string; }
 interface Ticket   { id: string; folio?: string; territorio?: string; colegio?: string; proyecto_id?: string; presupuesto?: number; estatus?: string; tipo_proyecto?: string; nombre_proveedor?: string; plan_financiamiento?: string; fecha?: string; }
 interface Pendiente { id: string; nombre_proyecto?: string; estatus?: string; territorio?: string; colegio?: string; presupuesto?: number; prioridad?: string; }
-interface MaintenanceRecord { id: string; title?: string; status?: string; territorio?: string; colegio?: string; type?: string; priority?: string; scheduled_date?: string; created_at?: string; }
+interface ColegioCumplimiento { colegio: string; territorio: string; completados: number; total: number; pct: number; }
 interface ReqInsumo { id: string; folio?: string; estatus?: string; total_cotizado?: number; total_con_iva?: number; prioridad?: string; proveedores_nombres?: string[]; created_at?: string; fecha_requerida?: string; departamento?: string; }
 interface PlantelLev { id: string; colegio_clave?: string; colegio_nombre?: string; zona?: string; eco_nombre?: string; asignacion?: string; fase?: string; fecha_inicio?: string | null; fecha_termino?: string | null; }
 interface PagoLev { id: string; plantel_id?: string; mes_numero?: number; mes_etiqueta?: string; concepto?: string; monto_programado?: number; monto_pagado?: number | null; pagado?: boolean; fecha_pago?: string | null; }
@@ -383,11 +385,11 @@ async function exportIncidenciasPDF({ projects, pendientes, ticketsMas, minimos,
 }
 
 // ─── Export PDF mejorado ──────────────────────────────────────────────────────
-async function exportResumenPDF({ stats, projects, checklists, solicitudes, tickets, pendientes, ticketsMas, minimos, anteproyectos, solicitudesAll, maintenance, requisiciones, planteles, pagosLev, entregablesLev }: {
+async function exportResumenPDF({ stats, projects, checklists, solicitudes, tickets, pendientes, ticketsMas, minimos, anteproyectos, solicitudesAll, cumplimiento, requisiciones, planteles, pagosLev, entregablesLev }: {
   stats: Stats; projects: Project[]; checklists: unknown[];
   solicitudes: Solicitud[]; tickets: Ticket[]; pendientes: Pendiente[];
   ticketsMas: any[]; minimos: any[]; anteproyectos: any[]; solicitudesAll: any[];
-  maintenance: MaintenanceRecord[]; requisiciones: ReqInsumo[];
+  cumplimiento: ColegioCumplimiento[]; requisiciones: ReqInsumo[];
   planteles: PlantelLev[]; pagosLev: PagoLev[]; entregablesLev: EntregableLev[];
 }): Promise<void> {
   const JsPDF = await loadJsPDF();
@@ -842,39 +844,34 @@ async function exportResumenPDF({ stats, projects, checklists, solicitudes, tick
 
   // ─── SECCIÓN 11: Mantenimiento ────────────────────────────────────────────
   if (y > getH() - 40) { doc.addPage(); y = 20; }
-  section('11. Mantenimiento');
+  section('11. Cumplimiento de Mantenimiento');
 
-  const mantPendiente = maintenance.filter(m => m.status !== 'completado').length;
-  const mantCompletado = maintenance.filter(m => m.status === 'completado').length;
-  const mantUrgente = maintenance.filter(m => m.priority === 'alta' && m.status !== 'completado').length;
+  const totalColegios = cumplimiento.length;
+  const colegiosAlDia = cumplimiento.filter(c => c.pct >= 80).length;
+  const colegiosRezagados = cumplimiento.filter(c => c.pct < 40).length;
+  const pctPromedio = totalColegios > 0 ? Math.round(cumplimiento.reduce((s, c) => s + c.pct, 0) / totalColegios) : 0;
 
   y = drawKPIBoxes(doc, 20, y, W, [
-    { label: 'Total Mantenimientos', value: String(maintenance.length), color: [15, 23, 42]   },
-    { label: 'Pendientes',           value: String(mantPendiente),      color: [245, 158, 11] },
-    { label: 'Completados',          value: String(mantCompletado),     color: [22, 163, 74]  },
-    { label: 'Prioridad Alta',       value: String(mantUrgente),        color: [220, 38, 38]  },
+    { label: 'Cumplimiento Promedio', value: `${pctPromedio}%`,        color: [15, 23, 42]   },
+    { label: 'Colegios al Día (≥80%)', value: String(colegiosAlDia),    color: [22, 163, 74]  },
+    { label: 'Colegios Rezagados (<40%)', value: String(colegiosRezagados), color: [220, 38, 38] },
+    { label: 'Total Colegios',        value: String(totalColegios),    color: [59, 130, 246] },
   ]);
   y += 4;
 
-  if (maintenance.length > 0) {
-    const mantRows = maintenance.slice(0, 30).map(m => [
-      m.title ?? '—', m.colegio ?? '—', m.territorio ?? '—', m.type ?? '—',
-      m.priority ?? '—',
-      m.status === 'completado' ? 'Completado' : (m.status ?? '—'),
-      m.scheduled_date ? new Date(m.scheduled_date + 'T12:00:00').toLocaleDateString('es-MX') : '—',
-    ]);
+  if (cumplimiento.length > 0) {
+    const cumpRows = cumplimiento
+      .slice().sort((a, b) => a.pct - b.pct)
+      .map(c => [c.colegio, c.territorio, `${c.completados} / ${c.total}`, `${c.pct}%`]);
     y = drawTable(doc, y, W, [
-      { label: 'Título',     x: 20  },
-      { label: 'Colegio',    x: 80  },
-      { label: 'Territorio', x: 140 },
-      { label: 'Tipo',       x: 165 },
-      { label: 'Prioridad',  x: 195 },
-      { label: 'Estatus',    x: 222 },
-      { label: 'Fecha Prog.',x: 255 },
-    ], mantRows, 30, 210);
+      { label: 'Colegio',      x: 20  },
+      { label: 'Territorio',   x: 80  },
+      { label: 'Completados',  x: 140, align: 'right' },
+      { label: 'Cumplimiento', x: 185, align: 'right' },
+    ], cumpRows, 30, 210);
   } else {
     doc.setFontSize(9); doc.setFont('helvetica', 'normal'); doc.setTextColor(150, 150, 150);
-    doc.text('Sin mantenimientos registrados.', 20, y); y += 10;
+    doc.text('Sin datos de mantenimiento este mes.', 20, y); y += 10;
   }
   y += 4;
 
@@ -992,7 +989,7 @@ async function loadXLSX() {
 async function exportMatrizExcel(data: {
   projects: unknown[]; checklists: unknown[]; tickets: unknown[];
   anteproyectos: unknown[]; solicitudes: unknown[];
-  minimos: unknown[]; ticketsMas: unknown[]; maintenance: unknown[];
+  minimos: unknown[]; ticketsMas: unknown[]; cumplimiento: ColegioCumplimiento[];
   requisiciones: unknown[]; planteles: unknown[]; pagosLev: unknown[];
   nexusNotas: unknown[]; nexusPendientes: unknown[]; reportesLev: unknown[];
 }) {
@@ -1163,15 +1160,13 @@ async function exportMatrizExcel(data: {
     ] as (string | number | null | undefined)[]),
     [14, 24, 12, 18, 22, 14, 14]);
 
-  // ── Mantenimiento ─────────────────────────────────────────────────────────
-  buildSheet('🔧 Mantenimiento', 'Mantenimiento — Sistema RCMA',
-    ['Título', 'Colegio', 'Territorio', 'Tipo', 'Prioridad', 'Estatus', 'Fecha Programada'],
-    (data.maintenance as Record<string, unknown>[]).map(m => [
-      m.title ?? '—', m.colegio ?? '—', m.territorio ?? '—', m.type ?? '—',
-      m.priority ?? '—', m.status === 'completado' ? 'Completado' : (m.status ?? '—'),
-      fmt(m.scheduled_date as string),
-    ] as (string | number | null | undefined)[]),
-    [30, 24, 12, 16, 12, 14, 16]);
+  // ── Cumplimiento de Mantenimiento ────────────────────────────────────────
+  buildSheet('🔧 Cumplimiento Mtto.', 'Cumplimiento de Mantenimiento por Colegio — Sistema RCMA',
+    ['Colegio', 'Territorio', 'Completados', 'Total Programado', '% Cumplimiento'],
+    (data.cumplimiento as unknown as ColegioCumplimiento[])
+      .slice().sort((a, b) => a.pct - b.pct)
+      .map(c => [c.colegio, c.territorio, c.completados, c.total, `${c.pct}%`] as (string | number | null | undefined)[]),
+    [16, 12, 14, 18, 16]);
 
   // ── Insumos — Requisiciones ──────────────────────────────────────────────
   const reqLblXl: Record<string,string> = { pendiente_cotizacion:'Pend. Cotización', cotizacion_recibida:'Cotización Recibida', en_autorizacion:'En Autorización', autorizado:'Autorizado', surtido:'Surtido' };
@@ -1247,7 +1242,7 @@ async function exportMatrizExcel(data: {
     { label: 'Anteproyectos', count: data.anteproyectos.length },
     { label: 'Inspecciones', count: data.checklists.length }, { label: 'Solicitudes', count: data.solicitudes.length },
     { label: 'Mínimos Indispensables', count: data.minimos.length },
-    { label: 'Mantenimiento', count: data.maintenance.length },
+    { label: 'Mantenimiento — Colegios al Día', count: (data.cumplimiento as unknown as ColegioCumplimiento[]).filter(c => c.pct >= 80).length },
     { label: 'Requisiciones (Insumos)', count: data.requisiciones.length },
     { label: 'Planteles Levantamiento Nacional', count: data.planteles.length },
     { label: 'Pagos Levantamiento Nacional', count: data.pagosLev.length },
@@ -1335,9 +1330,24 @@ export default function Reports() {
     queryFn: async () => { const { data, error } = await supabase.from('tickets_mas').select('*').order('created_at', { ascending: false }).limit(500); if (error) throw error; return data ?? []; },
   });
 
-  const { data: rawMaintenance = [] } = useQuery({
-    queryKey: ['maintenance-report'],
-    queryFn: () => db.MaintenanceRecord.list('-created_at', 500),
+  // Cumplimiento de mantenimiento (mes actual) — mismo cálculo que la pestaña
+  // "Cumplimiento" de Calendario: catálogo nacional de actividades vs. lo que
+  // cada colegio marcó como realizado.
+  const { data: rawCustomMaintenance = [] } = useQuery({
+    queryKey: ['custom_maintenance-report'],
+    queryFn: async () => { const { data, error } = await supabase.from('custom_maintenance').select('*'); if (error) throw error; return data ?? []; },
+  });
+  const hoyReport = new Date();
+  const inicioMesReport = `${hoyReport.getFullYear()}-${String(hoyReport.getMonth()+1).padStart(2,'0')}-01`;
+  const finMesReport = `${hoyReport.getFullYear()}-${String(hoyReport.getMonth()+1).padStart(2,'0')}-${String(new Date(hoyReport.getFullYear(), hoyReport.getMonth()+1, 0).getDate()).padStart(2,'0')}`;
+  const { data: rawCompletions = [] } = useQuery({
+    queryKey: ['maintenance_completions-report', inicioMesReport],
+    queryFn: async () => {
+      const { data, error } = await supabase.from('maintenance_completions').select('colegio')
+        .gte('fecha_programada', inicioMesReport).lte('fecha_programada', finMesReport);
+      if (error) throw error;
+      return data ?? [];
+    },
   });
   const { data: rawRequisiciones = [] } = useQuery({
     queryKey: ['insumos_requisiciones-report'],
@@ -1373,11 +1383,21 @@ export default function Reports() {
   const solicitudes = rawSolicitudes as unknown as Solicitud[];
   const tickets     = rawTickets     as unknown as Ticket[];
   const pendientes  = rawPendientes  as unknown as Pendiente[];
-  const maintenance = rawMaintenance as unknown as MaintenanceRecord[];
   const requisiciones = rawRequisiciones as unknown as ReqInsumo[];
   const planteles    = rawPlanteles    as unknown as PlantelLev[];
   const pagosLev      = rawPagosLev      as unknown as PagoLev[];
   const ticketsMasArr = rawTicketsMas    as unknown as any[];
+
+  const cumplimiento = useMemo((): ColegioCumplimiento[] => {
+    const { todasActividades } = mergeActividadesConCustom(rawCustomMaintenance as any[]);
+    let totalInstancias = 0;
+    todasActividades.forEach(act => { totalInstancias += calcularFechasEnMes(act, hoyReport.getFullYear(), hoyReport.getMonth()).length; });
+    return COLEGIOS.map(c => {
+      const completados = (rawCompletions as { colegio: string }[]).filter(r => r.colegio === c.colegio).length;
+      const pct = totalInstancias > 0 ? Math.round((completados / totalInstancias) * 100) : 0;
+      return { colegio: c.colegio, territorio: c.territorio, completados, total: totalInstancias, pct };
+    });
+  }, [rawCustomMaintenance, rawCompletions]);
 
   const stats = useMemo((): Stats => ({
     total:       projects.length,
@@ -1408,7 +1428,7 @@ export default function Reports() {
     minimos:       rawMinimos       as any[],
     anteproyectos: rawAnteproyectos as any[],
     solicitudesAll: rawSolicitudesAll as any[],
-    maintenance, requisiciones, planteles, pagosLev,
+    cumplimiento, requisiciones, planteles, pagosLev,
     entregablesLev: rawEntregablesLev as unknown as EntregableLev[],
   }).catch(e => { console.error('Error generando PDF:', e); alert('Error al generar PDF: ' + (e?.message ?? e)); });
 
@@ -1416,7 +1436,7 @@ export default function Reports() {
     projects: rawProjects, checklists: rawChecklists, tickets: rawTicketsFull,
     anteproyectos: rawAnteproyectos, solicitudes: rawSolicitudesAll,
     minimos: rawMinimos,
-    ticketsMas: rawTicketsMas, maintenance: rawMaintenance,
+    ticketsMas: rawTicketsMas, cumplimiento,
     requisiciones: rawRequisiciones, planteles: rawPlanteles, pagosLev: rawPagosLev,
     nexusNotas: rawNexusNotas, nexusPendientes: rawNexusPendientes, reportesLev: rawReportesLev,
   }).catch(e => console.error('Error generando Excel:', e));
@@ -1470,12 +1490,14 @@ export default function Reports() {
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <div className={`${cardClass} border-l-4 border-l-orange-500`}>
-          <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Mantenimiento Pendiente</p>
+          <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Cumplimiento Mantenimiento (mes)</p>
           <div className="flex items-center justify-between">
-            <h3 className="text-3xl font-black text-slate-900">{maintenance.filter(m => m.status !== 'completado').length}</h3>
+            <h3 className="text-3xl font-black text-slate-900">
+              {cumplimiento.length > 0 ? Math.round(cumplimiento.reduce((s, c) => s + c.pct, 0) / cumplimiento.length) : 0}%
+            </h3>
             <Wrench className="w-8 h-8 text-orange-50" />
           </div>
-          <p className="text-xs text-slate-400 mt-1">{maintenance.length} registrados en total</p>
+          <p className="text-xs text-slate-400 mt-1">{cumplimiento.filter(c => c.pct < 40).length} colegio(s) rezagado(s)</p>
         </div>
         <div className={`${cardClass} border-l-4 border-l-teal-500`}>
           <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Requisiciones (Insumos)</p>

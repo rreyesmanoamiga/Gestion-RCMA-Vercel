@@ -2,12 +2,13 @@ import React, { useState, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { ChevronLeft, ChevronRight, Calendar, CheckCircle2, Clock, AlertTriangle, Wrench, X, Plus, Trash2, Bell, Mail, UserPlus, Pencil, Lock, Search, ChevronDown, ChevronUp, BellOff, Filter } from 'lucide-react';
 import { supabase } from '@/lib/supabaseClient';
+import { COLEGIOS } from '@/lib/colegios';
 import { useAuth } from '@/lib/AuthContext';
 import { usePermissions } from '@/hooks/usePermissions';
 import { toast } from 'sonner';
 import { logAudit } from '@/lib/audit';
 
-interface Actividad {
+export interface Actividad {
   id: number | string;
   categoria: string;
   actividad: string;
@@ -30,7 +31,7 @@ interface NotificationRecipient {
   actividades_ids: number[] | null; // null = todos los mttos
 }
 
-const ACTIVIDADES_BASE: Actividad[] = [
+export const ACTIVIDADES_BASE: Actividad[] = [
   { id: 1,  categoria: 'Paredes y Acabados',    actividad: 'Limpiar paredes interiores',       tipo: 'Limpiar', frecuencia: '6 meses', frecuenciaDias: 180,  descripcion: 'Limpieza de las paredes y divisiones interiores.' },
   { id: 2,  categoria: 'Paredes y Acabados',    actividad: 'Limpiar banquinas y cornisas',     tipo: 'Limpiar', frecuencia: '6 meses', frecuenciaDias: 180,  descripcion: 'Limpieza de banquinas, cornisas y demas acabados.' },
   { id: 3,  categoria: 'Paredes y Acabados',    actividad: 'Limpiar paredes exteriores',       tipo: 'Limpiar', frecuencia: '2 años',  frecuenciaDias: 730,  descripcion: 'Limpieza general de las paredes exteriores.' },
@@ -108,7 +109,37 @@ const MESES = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto'
 const DIAS_SEMANA = ['Dom','Lun','Mar','Mie','Jue','Vie','Sab'];
 const FECHA_BASE = new Date(2025, 0, 1);
 
-function calcularFechasEnMes(act: Actividad, año: number, mes: number): Date[] {
+export function mergeActividadesConCustom(customRaw: any[]): {
+  actividadesBaseMerged: Actividad[]; actividadesBaseOcultas: Actividad[]; todasActividades: Actividad[];
+} {
+  const customActividades: Actividad[] = (customRaw ?? []).map((r: any) => ({
+    id: r.base_id ?? r.id,
+    categoria: r.categoria, actividad: r.actividad, tipo: r.tipo,
+    frecuencia: r.frecuencia, frecuenciaDias: r.frecuencia_dias, descripcion: r.descripcion || '',
+    esPersonalizada: r.base_id == null,
+    esSobreescrita: r.base_id != null,
+    customId: r.id,
+    base_id: r.base_id ?? undefined,
+    eliminado: !!r.eliminado,
+  }));
+
+  const baseOverrides: Record<number, Actividad> = {};
+  customActividades.filter(a => a.base_id != null).forEach(a => { baseOverrides[a.base_id!] = a; });
+
+  const actividadesBaseMerged: Actividad[] = ACTIVIDADES_BASE
+    .filter(a => !baseOverrides[a.id as number]?.eliminado)
+    .map(a => baseOverrides[a.id as number] ?? a);
+
+  const actividadesBaseOcultas: Actividad[] = ACTIVIDADES_BASE
+    .filter(a => baseOverrides[a.id as number]?.eliminado)
+    .map(a => baseOverrides[a.id as number]);
+
+  const customPuras = customActividades.filter(a => a.base_id == null);
+
+  return { actividadesBaseMerged, actividadesBaseOcultas, todasActividades: [...actividadesBaseMerged, ...customPuras] };
+}
+
+export function calcularFechasEnMes(act: Actividad, año: number, mes: number): Date[] {
   const fechas: Date[] = [];
   const inicioMes = new Date(año, mes, 1);
   const finMes = new Date(año, mes + 1, 0);
@@ -141,17 +172,22 @@ const inputClass = "w-full px-3 py-2 border border-slate-300 rounded-md text-sm 
 export default function CalendarioMantenimiento() {
   const hoy = new Date();
   const { user } = useAuth();
-  const { isAdmin, can } = usePermissions();
+  const { isAdmin, can, permsRecord } = usePermissions();
   const puedeCrear    = isAdmin || can('crear_calendario');
   const puedeEditar   = isAdmin || can('editar_calendario');
   const puedeEliminar = isAdmin || can('eliminar_calendario');
   const qc = useQueryClient();
 
+  // Colegio del usuario actual (si tiene uno asignado específico en Accesos) —
+  // determina para qué colegio puede marcar mantenimientos como realizados.
+  const miColegio      = String((permsRecord as any)?.colegio ?? '');
+  const esAdminColegio = !isAdmin && !!miColegio && miColegio !== 'ECO';
+
   const [año, setAño] = useState(hoy.getFullYear());
   const [mes, setMes] = useState(hoy.getMonth());
   const [categoriaFiltro, setCategoriaFiltro] = useState('Todas');
   const [diaSeleccionado, setDiaSeleccionado] = useState<number | null>(null);
-  const [vistaActiva, setVistaActiva] = useState<'calendario' | 'lista'>('calendario');
+  const [vistaActiva, setVistaActiva] = useState<'calendario' | 'lista' | 'cumplimiento'>('calendario');
   const [showModal, setShowModal] = useState(false);
   const [showGestion, setShowGestion] = useState(false);
   const [showNotificaciones, setShowNotificaciones] = useState(false);
@@ -164,6 +200,7 @@ export default function CalendarioMantenimiento() {
   const [gestionSelected, setGestionSelected] = useState<Actividad | null>(null);
   const [gestionSearch, setGestionSearch] = useState('');
   const [showOcultos, setShowOcultos] = useState(false);
+  const [colegioExpandido, setColegioExpandido] = useState<string | null>(null);
 
   // Recipient: selector de actividades al agregar
   const [formRecipientTodos, setFormRecipientTodos] = useState(true);
@@ -411,36 +448,67 @@ export default function CalendarioMantenimiento() {
   });
 
   // ── Mapear actividades custom + detectar overrides de base ────────────────
-  const customActividades: Actividad[] = customRaw.map((r: any) => ({
-    id: r.base_id ?? r.id,
-    categoria: r.categoria, actividad: r.actividad, tipo: r.tipo,
-    frecuencia: r.frecuencia, frecuenciaDias: r.frecuencia_dias, descripcion: r.descripcion || '',
-    esPersonalizada: r.base_id == null,
-    esSobreescrita: r.base_id != null,
-    customId: r.id,
-    base_id: r.base_id ?? undefined,
-    eliminado: !!r.eliminado,
-  }));
+  const { actividadesBaseMerged, actividadesBaseOcultas, todasActividades } = useMemo(
+    () => mergeActividadesConCustom(customRaw), [customRaw]);
 
-  // Overrides indexados por base_id
-  const baseOverrides: Record<number, Actividad> = {};
-  customActividades.filter(a => a.base_id != null).forEach(a => { baseOverrides[a.base_id!] = a; });
-
-  // Actividades base con overrides aplicados, excluyendo las ocultas por el admin
-  const actividadesBaseMerged: Actividad[] = ACTIVIDADES_BASE
-    .filter(a => !baseOverrides[a.id as number]?.eliminado)
-    .map(a => baseOverrides[a.id as number] ?? a);
-
-  // Mantenimientos base ocultos (para la sección "Restaurar")
-  const actividadesBaseOcultas: Actividad[] = ACTIVIDADES_BASE
-    .filter(a => baseOverrides[a.id as number]?.eliminado)
-    .map(a => baseOverrides[a.id as number]);
-
-  // Solo custom puras (no overrides)
-  const customPuras = customActividades.filter(a => a.base_id == null);
-
-  const todasActividades = [...actividadesBaseMerged, ...customPuras];
   const todasCategorias = [...new Set(todasActividades.map(a => a.categoria))];
+
+  // ── Cumplimiento: marcar/desmarcar un mantenimiento como realizado ────────
+  const fechaISO = (d: Date) => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+  const actividadRef = (act: Actividad) => act.esPersonalizada ? `custom:${act.customId}` : `base:${act.id}`;
+
+  // Trae los cumplimientos del mes visible (alcanza para pintar los checks del
+  // calendario/lista); el reporte de "Cumplimiento" pide su propio rango aparte.
+  const inicioMesISO = fechaISO(new Date(año, mes, 1));
+  const finMesISO    = fechaISO(new Date(año, mes + 1, 0));
+  const { data: completions = [] } = useQuery({
+    queryKey: ['maintenanceCompletions', año, mes],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('maintenance_completions')
+        .select('*')
+        .gte('fecha_programada', inicioMesISO)
+        .lte('fecha_programada', finMesISO);
+      if (error) throw error;
+      return data as { id: string; actividad_ref: string; colegio: string; fecha_programada: string }[];
+    },
+  });
+
+  const completionsSet = useMemo(() => {
+    const set = new Set<string>();
+    completions.forEach(c => set.add(`${c.colegio}|${c.fecha_programada}|${c.actividad_ref}`));
+    return set;
+  }, [completions]);
+  const completionsMap = useMemo(() => {
+    const map = new Map<string, string>(); // key -> id (para poder desmarcar)
+    completions.forEach(c => map.set(`${c.colegio}|${c.fecha_programada}|${c.actividad_ref}`, c.id));
+    return map;
+  }, [completions]);
+
+  const toggleCompletionMutation = useMutation({
+    mutationFn: async ({ act, fecha, marcar }: { act: Actividad; fecha: Date; marcar: boolean }) => {
+      if (!miColegio) throw new Error('Tu usuario no tiene un colegio asignado.');
+      const fechaStr = fechaISO(fecha);
+      const key = `${miColegio}|${fechaStr}|${actividadRef(act)}`;
+      if (marcar) {
+        const { error } = await supabase.from('maintenance_completions').insert({
+          actividad_ref: actividadRef(act), actividad_nombre: act.actividad, categoria: act.categoria,
+          colegio: miColegio, fecha_programada: fechaStr, realizado_por: user?.email ?? null,
+        });
+        if (error) throw error;
+        logAudit({ accion: 'crear', modulo: 'calendario', registro_ref: `Realizado: ${act.actividad}`, detalle: { colegio: miColegio, fecha: fechaStr } });
+      } else {
+        const id = completionsMap.get(key);
+        if (id) {
+          const { error } = await supabase.from('maintenance_completions').delete().eq('id', id);
+          if (error) throw error;
+          logAudit({ accion: 'eliminar', modulo: 'calendario', registro_ref: `Desmarcado: ${act.actividad}`, detalle: { colegio: miColegio, fecha: fechaStr } });
+        }
+      }
+    },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['maintenanceCompletions'] }); },
+    onError: (err: any) => toast.error(err?.message ?? 'Error al actualizar'),
+  });
 
   const actividadesPorDia = useMemo(() => {
     const mapa: Record<number, Actividad[]> = {};
@@ -467,6 +535,27 @@ export default function CalendarioMantenimiento() {
   const primerDiaMes = new Date(año, mes, 1).getDay();
   const actsDia = diaSeleccionado ? actividadesPorDia[diaSeleccionado] || [] : [];
   const esHoy = (d: number) => d === hoy.getDate() && mes === hoy.getMonth() && año === hoy.getFullYear();
+
+  // Total de instancias programadas este mes (TODAS las actividades, sin importar
+  // el filtro de categoría que se esté usando para navegar el calendario) — es
+  // el mismo total para cada colegio, ya que el catálogo es nacional/universal.
+  const totalInstanciasMes = useMemo(() => {
+    let total = 0;
+    todasActividades.forEach(act => { total += calcularFechasEnMes(act, año, mes).length; });
+    return total;
+  }, [todasActividades, año, mes]);
+
+  // Actividades faltantes de un colegio para el mes (usado en el desglose de Cumplimiento)
+  const actividadesFaltantes = (colegio: string) => {
+    const faltan: { act: Actividad; fecha: Date }[] = [];
+    todasActividades.forEach(act => {
+      calcularFechasEnMes(act, año, mes).forEach(f => {
+        const key = `${colegio}|${fechaISO(f)}|${actividadRef(act)}`;
+        if (!completionsSet.has(key)) faltan.push({ act, fecha: f });
+      });
+    });
+    return faltan.sort((a, b) => a.fecha.getTime() - b.fecha.getTime());
+  };
   const anteriorMes = () => { if (mes === 0) { setMes(11); setAño(a => a-1); } else setMes(m => m-1); setDiaSeleccionado(null); };
   const siguienteMes = () => { if (mes === 11) { setMes(0); setAño(a => a+1); } else setMes(m => m+1); setDiaSeleccionado(null); };
   const colorCat = (cat: string) => COLORES_CATEGORIA[cat] || '#64748b';
@@ -494,6 +583,12 @@ export default function CalendarioMantenimiento() {
             className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${vistaActiva === 'lista' ? 'bg-slate-900 text-white' : 'border border-slate-300 text-slate-700 hover:bg-slate-50'}`}>
             Lista
           </button>
+          {isAdmin && (
+            <button onClick={() => setVistaActiva('cumplimiento')}
+              className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${vistaActiva === 'cumplimiento' ? 'bg-slate-900 text-white' : 'border border-slate-300 text-slate-700 hover:bg-slate-50'}`}>
+              Cumplimiento
+            </button>
+          )}
           <button
             onClick={() => { setShowConsulta(true); setConsultaActividadId(''); setConsultaCategoriaFiltro(''); }}
             className="px-4 py-2 rounded-md text-sm font-medium border border-slate-300 text-slate-700 hover:bg-slate-50 transition-colors flex items-center gap-2">
@@ -553,7 +648,7 @@ export default function CalendarioMantenimiento() {
         ))}
       </div>
 
-      {vistaActiva === 'calendario' ? (
+      {vistaActiva === 'cumplimiento' ? null : vistaActiva === 'calendario' ? (
         <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
           <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 bg-slate-50">
             <button onClick={anteriorMes} className="p-2 hover:bg-slate-200 rounded-lg transition-colors"><ChevronLeft className="w-5 h-5" /></button>
@@ -602,23 +697,114 @@ export default function CalendarioMantenimiento() {
               <div key={dia} className="px-5 py-3">
                 <p className="text-xs font-bold text-slate-400 uppercase mb-2">{DIAS_SEMANA[new Date(año,mes,Number(dia)).getDay()]} {dia} de {MESES[mes]}</p>
                 <div className="space-y-1.5">
-                  {acts.map((act, idx) => (
+                  {acts.map((act, idx) => {
+                    const fechaDia = new Date(año, mes, Number(dia));
+                    const key = `${miColegio}|${fechaISO(fechaDia)}|${actividadRef(act)}`;
+                    const realizado = completionsSet.has(key);
+                    return (
                     <div key={idx} className="flex items-center gap-3 p-2 rounded-lg bg-slate-50">
                       <div className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: colorCat(act.categoria) }} />
                       <div className="min-w-0 flex-1">
                         <p className="text-sm font-semibold text-slate-800 truncate">{act.actividad}{act.esPersonalizada && <span className="ml-1 text-[9px] font-bold px-1.5 py-0.5 bg-slate-200 text-slate-500 rounded-full">CUSTOM</span>}</p>
                         <p className="text-xs text-slate-500 truncate">{act.descripcion}</p>
                       </div>
-                      <div className="flex gap-1.5 shrink-0">
+                      <div className="flex gap-1.5 shrink-0 items-center">
                         <span className="text-[10px] font-bold px-2 py-0.5 rounded-full" style={{ backgroundColor: colorCat(act.categoria)+'22', color: colorCat(act.categoria) }}>{act.categoria}</span>
                         <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${act.tipo==='Limpiar'?'bg-blue-100 text-blue-700':act.tipo==='Renovar'?'bg-amber-100 text-amber-700':'bg-emerald-100 text-emerald-700'}`}>{act.tipo}</span>
+                        {esAdminColegio && (
+                          <button
+                            onClick={() => toggleCompletionMutation.mutate({ act, fecha: fechaDia, marcar: !realizado })}
+                            disabled={toggleCompletionMutation.isPending}
+                            className={`flex items-center gap-1 px-2 py-1 rounded-full text-[10px] font-bold border transition-colors ${
+                              realizado ? 'bg-green-50 text-green-700 border-green-200' : 'bg-white text-slate-500 border-slate-300 hover:border-slate-400'
+                            }`}>
+                            <CheckCircle2 className="w-3 h-3" />
+                            {realizado ? 'Realizado' : 'Marcar'}
+                          </button>
+                        )}
                       </div>
                     </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </div>
             ))}
             {Object.keys(actividadesPorDia).length === 0 && (<div className="py-12 text-center"><p className="text-sm text-slate-400 italic">No hay actividades para este mes.</p></div>)}
+          </div>
+        </div>
+      )}
+
+      {vistaActiva === 'cumplimiento' && isAdmin && (
+        <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+          <div className="px-5 py-4 border-b border-slate-100 bg-slate-50 flex items-center justify-between">
+            <div>
+              <h3 className="text-sm font-bold text-slate-800 uppercase tracking-tight">Cumplimiento — {MESES[mes]} {año}</h3>
+              <p className="text-xs text-slate-500 mt-0.5">{totalInstanciasMes} actividades programadas este mes por colegio</p>
+            </div>
+            <div className="flex items-center gap-1">
+              <button onClick={anteriorMes} className="p-1.5 hover:bg-slate-200 rounded-lg"><ChevronLeft className="w-4 h-4" /></button>
+              <button onClick={siguienteMes} className="p-1.5 hover:bg-slate-200 rounded-lg"><ChevronRight className="w-4 h-4" /></button>
+            </div>
+          </div>
+
+          <div className="divide-y divide-slate-100">
+            {COLEGIOS
+              .map(c => {
+                const completados = completions.filter(comp => comp.colegio === c.colegio).length;
+                const pct = totalInstanciasMes > 0 ? Math.round((completados / totalInstanciasMes) * 100) : 0;
+                return { ...c, completados, pct };
+              })
+              .sort((a, b) => a.pct - b.pct)
+              .map(c => (
+                <div key={c.colegio}>
+                  <button onClick={() => setColegioExpandido(e => e === c.colegio ? null : c.colegio)}
+                    className="w-full px-5 py-3 flex items-center gap-3 hover:bg-slate-50 transition-colors text-left">
+                    <div className="w-24 shrink-0">
+                      <p className="text-sm font-bold text-slate-900">{c.colegio}</p>
+                      <p className="text-[10px] text-slate-400">{c.territorio}</p>
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
+                        <div className="h-full rounded-full transition-all"
+                          style={{
+                            width: `${c.pct}%`,
+                            backgroundColor: c.pct >= 80 ? '#16a34a' : c.pct >= 40 ? '#f59e0b' : '#dc2626',
+                          }} />
+                      </div>
+                    </div>
+                    <div className="w-28 shrink-0 text-right">
+                      <span className="text-sm font-bold text-slate-900">{c.completados}/{totalInstanciasMes}</span>
+                      <span className="text-xs text-slate-400 ml-1.5">({c.pct}%)</span>
+                    </div>
+                    {colegioExpandido === c.colegio ? <ChevronUp className="w-4 h-4 text-slate-400 shrink-0" /> : <ChevronDown className="w-4 h-4 text-slate-400 shrink-0" />}
+                  </button>
+                  {colegioExpandido === c.colegio && (() => {
+                    const faltantes = actividadesFaltantes(c.colegio);
+                    return (
+                      <div className="px-5 pb-4 bg-slate-50">
+                        {faltantes.length === 0 ? (
+                          <p className="text-xs text-green-600 font-bold py-2">✓ Sin pendientes este mes.</p>
+                        ) : (
+                          <div className="max-h-56 overflow-y-auto space-y-1 pt-1">
+                            {faltantes.map((f, i) => {
+                              const vencido = f.fecha < new Date(new Date().setHours(0,0,0,0));
+                              return (
+                                <div key={i} className="flex items-center gap-2 text-xs bg-white border border-slate-200 rounded-md px-2.5 py-1.5">
+                                  <span className={`font-bold ${vencido ? 'text-red-600' : 'text-slate-500'}`}>
+                                    {DIAS_SEMANA[f.fecha.getDay()]} {f.fecha.getDate()}
+                                  </span>
+                                  <span className="text-slate-700 flex-1 truncate">{f.act.actividad}</span>
+                                  {vencido && <span className="text-[9px] font-bold px-1.5 py-0.5 bg-red-100 text-red-700 rounded-full shrink-0">VENCIDO</span>}
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })()}
+                </div>
+              ))}
           </div>
         </div>
       )}
@@ -681,6 +867,21 @@ export default function CalendarioMantenimiento() {
                     )}
                   </div>
                 )}
+                {esAdminColegio && (() => {
+                  const key = `${miColegio}|${fechaISO(new Date(año, mes, diaSeleccionado!))}|${actividadRef(act)}`;
+                  const realizado = completionsSet.has(key);
+                  return (
+                    <button
+                      onClick={() => toggleCompletionMutation.mutate({ act, fecha: new Date(año, mes, diaSeleccionado!), marcar: !realizado })}
+                      disabled={toggleCompletionMutation.isPending}
+                      className={`shrink-0 mt-0.5 flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-bold border transition-colors ${
+                        realizado ? 'bg-green-50 text-green-700 border-green-200 hover:bg-green-100' : 'bg-white text-slate-500 border-slate-300 hover:border-slate-400'
+                      }`}>
+                      <CheckCircle2 className="w-3.5 h-3.5" />
+                      {realizado ? 'Realizado' : 'Marcar realizado'}
+                    </button>
+                  );
+                })()}
               </div>
             ))}
           </div>
