@@ -213,6 +213,8 @@ export default function CalendarioMantenimiento() {
   });
 
   const [formRecipient, setFormRecipient] = useState({ email: '', nombre: '' });
+  const [recipientModoManual, setRecipientModoManual] = useState(false);
+  const [recipientSeleccionado, setRecipientSeleccionado] = useState('');
 
   const { data: customRaw = [] } = useQuery({
     queryKey: ['customMaintenance'],
@@ -294,6 +296,22 @@ export default function CalendarioMantenimiento() {
     },
   });
 
+  // Usuarios ya registrados en Accesos, para elegirlos directo en vez de tipear a mano
+  const { data: usuariosRegistrados = [] } = useQuery({
+    queryKey: ['usuariosRegistradosNotif'],
+    queryFn: async () => {
+      const { data, error } = await supabase.from('user_permissions').select('user_email, nombre').order('nombre');
+      if (error) throw error;
+      return (data ?? []) as { user_email: string; nombre: string | null }[];
+    },
+  });
+
+  // Solo los que aún NO están configurados como destinatarios de mantenimiento
+  const usuariosDisponibles = useMemo(() => {
+    const yaAgregados = new Set(recipients.map(r => r.email.toLowerCase()));
+    return usuariosRegistrados.filter(u => !yaAgregados.has(u.user_email.toLowerCase()));
+  }, [usuariosRegistrados, recipients]);
+
   const addMutation = useMutation({
     mutationFn: async (data: typeof form) => {
       if (!puedeCrear) throw new Error('No tienes permiso para crear actividades de mantenimiento.');
@@ -359,6 +377,7 @@ export default function CalendarioMantenimiento() {
       setFormRecipient({ email: '', nombre: '' });
       setFormRecipientTodos(true);
       setFormRecipientIds([]);
+      setRecipientSeleccionado('');
     },
     onError: (err: any) => {
       if (err?.message?.includes('duplicate') || err?.code === '23505') toast.error('Este correo ya esta registrado');
@@ -952,23 +971,57 @@ export default function CalendarioMantenimiento() {
 
             {/* Form agregar destinatario */}
             <div className="px-5 py-4 border-b border-slate-100">
-              <p className="text-xs font-bold text-slate-500 uppercase mb-3">Agregar destinatario</p>
-              <div className="flex gap-2 mb-3">
-                <div className="flex-1 space-y-2">
-                  <input className={inputClass} placeholder="Nombre (ej: Juan Perez)" value={formRecipient.nombre}
-                    onChange={e => setFormRecipient(f => ({ ...f, nombre: e.target.value }))} />
-                  <input className={inputClass} type="email" placeholder="correo@ejemplo.com" value={formRecipient.email}
-                    onChange={e => setFormRecipient(f => ({ ...f, email: e.target.value }))} />
-                </div>
-                <button
-                  disabled={!formRecipient.email || !formRecipient.nombre || !isValidEmail(formRecipient.email) || addRecipientMutation.isPending || (!formRecipientTodos && formRecipientIds.length === 0)}
-                  onClick={() => addRecipientMutation.mutate({ ...formRecipient, actividades_ids: formRecipientTodos ? null : formRecipientIds })}
-                  className="px-3 py-2 bg-slate-900 text-white rounded-md text-sm font-medium hover:bg-slate-800 disabled:opacity-40 transition-colors flex items-center gap-1.5 self-end">
-                  <UserPlus className="w-4 h-4" />
-                  {addRecipientMutation.isPending ? '...' : 'Agregar'}
+              <div className="flex items-center justify-between mb-3">
+                <p className="text-xs font-bold text-slate-500 uppercase">Agregar destinatario</p>
+                <button onClick={() => { setRecipientModoManual(m => !m); setRecipientSeleccionado(''); setFormRecipient({ email: '', nombre: '' }); }}
+                  className="text-[11px] font-bold text-blue-600 hover:text-blue-800">
+                  {recipientModoManual ? 'Elegir de la lista' : '¿No está en la lista?'}
                 </button>
               </div>
-              {formRecipient.email && !isValidEmail(formRecipient.email) && <p className="text-xs text-red-500 mb-2">Correo no válido</p>}
+
+              {recipientModoManual ? (
+                <div className="flex gap-2 mb-3">
+                  <div className="flex-1 space-y-2">
+                    <input className={inputClass} placeholder="Nombre (ej: Juan Perez)" value={formRecipient.nombre}
+                      onChange={e => setFormRecipient(f => ({ ...f, nombre: e.target.value }))} />
+                    <input className={inputClass} type="email" placeholder="correo@ejemplo.com" value={formRecipient.email}
+                      onChange={e => setFormRecipient(f => ({ ...f, email: e.target.value }))} />
+                  </div>
+                  <button
+                    disabled={!formRecipient.email || !formRecipient.nombre || !isValidEmail(formRecipient.email) || addRecipientMutation.isPending || (!formRecipientTodos && formRecipientIds.length === 0)}
+                    onClick={() => addRecipientMutation.mutate({ ...formRecipient, actividades_ids: formRecipientTodos ? null : formRecipientIds })}
+                    className="px-3 py-2 bg-slate-900 text-white rounded-md text-sm font-medium hover:bg-slate-800 disabled:opacity-40 transition-colors flex items-center gap-1.5 self-end">
+                    <UserPlus className="w-4 h-4" />
+                    {addRecipientMutation.isPending ? '...' : 'Agregar'}
+                  </button>
+                </div>
+              ) : (
+                <div className="flex gap-2 mb-3">
+                  <select
+                    value={recipientSeleccionado}
+                    onChange={e => {
+                      setRecipientSeleccionado(e.target.value);
+                      const u = usuariosDisponibles.find(u => u.user_email === e.target.value);
+                      setFormRecipient(u ? { email: u.user_email, nombre: u.nombre || u.user_email } : { email: '', nombre: '' });
+                    }}
+                    className={inputClass + ' flex-1'}>
+                    <option value="">
+                      {usuariosDisponibles.length === 0 ? 'Todos los usuarios ya reciben notificaciones' : 'Selecciona un usuario...'}
+                    </option>
+                    {usuariosDisponibles.map(u => (
+                      <option key={u.user_email} value={u.user_email}>{u.nombre || u.user_email} — {u.user_email}</option>
+                    ))}
+                  </select>
+                  <button
+                    disabled={!formRecipient.email || !formRecipient.nombre || addRecipientMutation.isPending || (!formRecipientTodos && formRecipientIds.length === 0)}
+                    onClick={() => addRecipientMutation.mutate({ ...formRecipient, actividades_ids: formRecipientTodos ? null : formRecipientIds })}
+                    className="px-3 py-2 bg-slate-900 text-white rounded-md text-sm font-medium hover:bg-slate-800 disabled:opacity-40 transition-colors flex items-center gap-1.5">
+                    <UserPlus className="w-4 h-4" />
+                    {addRecipientMutation.isPending ? '...' : 'Agregar'}
+                  </button>
+                </div>
+              )}
+              {recipientModoManual && formRecipient.email && !isValidEmail(formRecipient.email) && <p className="text-xs text-red-500 mb-2">Correo no válido</p>}
 
               {/* Selector de actividades */}
               <div className="border border-slate-200 rounded-lg overflow-hidden">
