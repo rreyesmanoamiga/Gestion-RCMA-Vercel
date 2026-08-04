@@ -168,8 +168,19 @@ function SetPasswordPage() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-slate-50 p-4">
-      <div className="bg-white rounded-xl shadow-sm border border-slate-200 w-full max-w-sm p-8">
+    <div
+      className="min-h-screen flex items-center justify-center p-4 relative overflow-hidden"
+      style={{ background: 'linear-gradient(135deg, #00295A 0%, #0E1B2A 60%, #00295A 100%)' }}
+    >
+      <div
+        className="absolute inset-0 pointer-events-none"
+        style={{
+          backgroundImage:
+            'linear-gradient(rgba(255,255,255,0.05) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.05) 1px, transparent 1px)',
+          backgroundSize: '32px 32px',
+        }}
+      />
+      <div className="bg-white rounded-xl shadow-2xl border-t-4 border-t-[#ED7102] w-full max-w-sm p-8 relative">
         <div className="text-center mb-8">
           <h1 className="text-2xl font-display font-semibold text-slate-900 uppercase tracking-tight">Sistema RCMA</h1>
           <p className="text-sm text-slate-500 mt-1">Establece tu contraseña de acceso</p>
@@ -260,8 +271,20 @@ function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-slate-50 p-4">
-      <div className="bg-white rounded-xl shadow-sm border border-slate-200 w-full max-w-sm p-8">
+    <div
+      className="min-h-screen flex items-center justify-center p-4 relative overflow-hidden"
+      style={{ background: 'linear-gradient(135deg, #00295A 0%, #0E1B2A 60%, #00295A 100%)' }}
+    >
+      {/* Textura sutil tipo plano arquitectónico */}
+      <div
+        className="absolute inset-0 pointer-events-none"
+        style={{
+          backgroundImage:
+            'linear-gradient(rgba(255,255,255,0.05) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.05) 1px, transparent 1px)',
+          backgroundSize: '32px 32px',
+        }}
+      />
+      <div className="bg-white rounded-xl shadow-2xl border-t-4 border-t-[#ED7102] w-full max-w-sm p-8 relative">
 
         {/* Logo + Título */}
         <div className="text-center mb-8">
