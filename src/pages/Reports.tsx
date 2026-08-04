@@ -1281,7 +1281,7 @@ async function exportMatrizExcel(data: {
     '📊 Resumen Ejecutivo', '📁 Proyectos', '💰 Presupuesto vs Real', '🎫 Tickets TCMM', '🎫 Ticket MAS',
     '📐 Anteproyectos', '✅ Inspecciones', '📩 Solicitudes',
     'Minimos Indispensables', 'Minimos Detalle',
-    '🔧 Mantenimiento', '📦 Requisiciones', '🏫 Levant. Planteles', '💵 Levant. Pagos', '📄 Levant. Reportes',
+    '🔧 Cumplimiento Mtto.', '📦 Requisiciones', '🏫 Levant. Planteles', '💵 Levant. Pagos', '📄 Levant. Reportes',
     '📝 Nexus Notas', '✅ Nexus Pendientes',
   ];
   XLSX.writeFile(wb, `Matriz_Sistema_RCMA_${new Date().toISOString().slice(0, 10)}.xlsx`);
