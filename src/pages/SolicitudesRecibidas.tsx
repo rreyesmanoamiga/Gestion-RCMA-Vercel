@@ -86,20 +86,20 @@ export default function SolicitudesRecibidas() {
   <title>Solicitud — ${s.nombre_proyecto}</title>
   <style>
     * { margin:0; padding:0; box-sizing:border-box; }
-    body { font-family: Arial, sans-serif; font-size: 11px; color: #1e293b; padding: 20px; }
-    .header { background:#1e293b; color:white; padding:12px 16px; display:flex; align-items:center; justify-content:space-between; }
+    body { font-family: Arial, sans-serif; font-size: 11px; color: #3A4450; padding: 20px; }
+    .header { background:#3A4450; color:white; padding:12px 16px; display:flex; align-items:center; justify-content:space-between; }
     .header-text h1 { font-size:13px; font-weight:900; text-transform:uppercase; letter-spacing:0.05em; }
-    .header-text h2 { font-size:10px; color:#94a3b8; text-transform:uppercase; margin-top:2px; }
+    .header-text h2 { font-size:10px; color:#8F9DAE; text-transform:uppercase; margin-top:2px; }
     .header img { height:48px; width:auto; object-fit:contain; }
-    .section-title { background:#e2e8f0; padding:5px 10px; font-size:10px; font-weight:900; text-transform:uppercase; letter-spacing:0.05em; color:#475569; border-bottom:1px solid #cbd5e1; }
+    .section-title { background:#D3D8DF; padding:5px 10px; font-size:10px; font-weight:900; text-transform:uppercase; letter-spacing:0.05em; color:#5E6E82; border-bottom:1px solid #B2BCC7; }
     table { width:100%; border-collapse:collapse; }
-    td { border:1px solid #cbd5e1; padding:5px 8px; font-size:11px; }
-    .label { background:#f8fafc; font-weight:700; color:#475569; width:160px; text-transform:uppercase; font-size:10px; }
-    .value { color:#1e293b; }
-    .th { background:#1e293b; color:white; font-size:10px; font-weight:700; text-transform:uppercase; padding:6px 8px; text-align:center; }
+    td { border:1px solid #B2BCC7; padding:5px 8px; font-size:11px; }
+    .label { background:#F6F7F9; font-weight:700; color:#5E6E82; width:160px; text-transform:uppercase; font-size:10px; }
+    .value { color:#3A4450; }
+    .th { background:#3A4450; color:white; font-size:10px; font-weight:700; text-transform:uppercase; padding:6px 8px; text-align:center; }
     .num { text-align:right; font-family:monospace; }
-    .total-row td { background:#f1f5f9; font-weight:900; }
-    .footer { margin-top:20px; border-top:1px solid #e2e8f0; padding-top:10px; text-align:center; font-size:9px; color:#94a3b8; }
+    .total-row td { background:#EAEDF0; font-weight:900; }
+    .footer { margin-top:20px; border-top:1px solid #D3D8DF; padding-top:10px; text-align:center; font-size:9px; color:#8F9DAE; }
     @media print { body { padding:10px; } }
   </style>
 </head>

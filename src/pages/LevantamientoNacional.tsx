@@ -1737,7 +1737,7 @@ function TabComunicados({ comunicados, planteles, directorio, qc, puedeCrear, pu
       .stitle{font-weight:bold;color:#00295A;margin:16px 0 3px;}
       .hr{border:none;border-top:1px solid #dde3ea;margin:0 0 10px;}
       table.info{width:100%;border-collapse:collapse;margin:8px 0;}
-      table.info th{background:#f1f5f9;width:38%;padding:6px 9px;font-size:12px;border-bottom:1px solid #dde3ea;text-align:left;}
+      table.info th{background:#EAEDF0;width:38%;padding:6px 9px;font-size:12px;border-bottom:1px solid #dde3ea;text-align:left;}
       table.info td{padding:6px 9px;font-size:12px;border-bottom:1px solid #dde3ea;word-break:break-word;}
       table.contact{width:100%;border-collapse:collapse;margin:8px 0;table-layout:fixed;}
       table.contact th{background:#00295A;color:#fff;padding:6px 8px;font-size:11px;text-align:left;}

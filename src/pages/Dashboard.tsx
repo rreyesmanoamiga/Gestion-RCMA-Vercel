@@ -207,7 +207,7 @@ export default function Dashboard() {
     const map: Record<string, number> = {};
     projects.forEach(p => { const k = p.status ?? 'sin_estado'; map[k] = (map[k] ?? 0) + 1; });
     return Object.entries(map).map(([status, count]) => ({
-      name: STATUS_LABELS[status] ?? status, value: count, color: STATUS_COLORS[status] ?? '#94a3b8',
+      name: STATUS_LABELS[status] ?? status, value: count, color: STATUS_COLORS[status] ?? '#8F9DAE',
     }));
   }, [projects]);
 
@@ -215,7 +215,7 @@ export default function Dashboard() {
     const map: Record<string, number> = {};
     tickets.forEach(t => { const k = t.estatus ?? 'sin_estado'; map[k] = (map[k] ?? 0) + 1; });
     return Object.entries(map).map(([status, count]) => ({
-      name: STATUS_LABELS[status] ?? status, value: count, color: STATUS_COLORS[status] ?? '#94a3b8',
+      name: STATUS_LABELS[status] ?? status, value: count, color: STATUS_COLORS[status] ?? '#8F9DAE',
     }));
   }, [tickets]);
 
@@ -473,7 +473,7 @@ export default function Dashboard() {
           ) : (
             <ResponsiveContainer width="100%" height={220}>
               <BarChart data={ticketsByStatus} barSize={32} margin={{ top: 5, right: 10, left: -20, bottom: 5 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+                <CartesianGrid strokeDasharray="3 3" stroke="#EAEDF0" />
                 <XAxis dataKey="name" tick={{ fontSize: 10 }} />
                 <YAxis tick={{ fontSize: 10 }} allowDecimals={false} />
                 <Tooltip content={<CustomTooltip />} />
@@ -501,7 +501,7 @@ export default function Dashboard() {
           </div>
           <ResponsiveContainer width="100%" height={220}>
             <LineChart data={proyectosCompletadosPorMes} margin={{ top: 5, right: 10, left: -20, bottom: 5 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+              <CartesianGrid strokeDasharray="3 3" stroke="#EAEDF0" />
               <XAxis dataKey="name" tick={{ fontSize: 10 }} />
               <YAxis tick={{ fontSize: 10 }} allowDecimals={false} />
               <Tooltip content={<CustomTooltip />} />
@@ -523,7 +523,7 @@ export default function Dashboard() {
           </div>
           <ResponsiveContainer width="100%" height={220}>
             <BarChart data={presupuestoVsRealPorMes} barSize={16} margin={{ top: 5, right: 10, left: -10, bottom: 5 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+              <CartesianGrid strokeDasharray="3 3" stroke="#EAEDF0" />
               <XAxis dataKey="name" tick={{ fontSize: 10 }} />
               <YAxis tick={{ fontSize: 9 }} tickFormatter={(v) => `$${(v / 1000).toFixed(0)}k`} />
               <Tooltip formatter={(v: number) => '$' + v.toLocaleString('es-MX')} />

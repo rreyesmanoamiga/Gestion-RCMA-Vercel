@@ -180,26 +180,26 @@ function generarHTMLTicket(t: TicketMAS, firma: string): string {
   <title>Ticket MAS — ${t.folio ?? ''}</title>
   <style>
     *{margin:0;padding:0;box-sizing:border-box;}
-    body{font-family:Arial,sans-serif;font-size:10.5px;color:#1e293b;padding:18px;}
-    .header{background:#0f172a;color:white;padding:10px 16px;display:flex;align-items:center;justify-content:space-between;border-radius:4px 4px 0 0;}
+    body{font-family:Arial,sans-serif;font-size:10.5px;color:#3A4450;padding:18px;}
+    .header{background:#272D35;color:white;padding:10px 16px;display:flex;align-items:center;justify-content:space-between;border-radius:4px 4px 0 0;}
     .header h1{font-size:13px;font-weight:900;text-transform:uppercase;letter-spacing:.05em;}
-    .header h2{font-size:9px;color:#94a3b8;margin-top:2px;text-transform:uppercase;}
+    .header h2{font-size:9px;color:#8F9DAE;margin-top:2px;text-transform:uppercase;}
     .header img{height:44px;width:auto;object-fit:contain;}
-    .sub-header{background:#1e40af;color:white;padding:6px 16px;font-size:11px;font-weight:700;display:flex;justify-content:space-between;margin-bottom:10px;}
+    .sub-header{background:#224167;color:white;padding:6px 16px;font-size:11px;font-weight:700;display:flex;justify-content:space-between;margin-bottom:10px;}
     .section{margin-bottom:10px;}
-    .section-title{background:#e2e8f0;padding:4px 10px;font-size:9px;font-weight:900;text-transform:uppercase;letter-spacing:.05em;color:#475569;border-bottom:1px solid #cbd5e1;border-top:1px solid #cbd5e1;}
+    .section-title{background:#D3D8DF;padding:4px 10px;font-size:9px;font-weight:900;text-transform:uppercase;letter-spacing:.05em;color:#5E6E82;border-bottom:1px solid #B2BCC7;border-top:1px solid #B2BCC7;}
     table{width:100%;border-collapse:collapse;}
-    td{border:1px solid #cbd5e1;padding:4px 7px;font-size:10.5px;}
-    .lbl{background:#f8fafc;font-weight:700;color:#475569;width:140px;text-transform:uppercase;font-size:9.5px;}
-    .val{color:#1e293b;}
-    .th{background:#1e293b;color:white;font-size:9.5px;font-weight:700;text-transform:uppercase;padding:5px 7px;text-align:center;}
+    td{border:1px solid #B2BCC7;padding:4px 7px;font-size:10.5px;}
+    .lbl{background:#F6F7F9;font-weight:700;color:#5E6E82;width:140px;text-transform:uppercase;font-size:9.5px;}
+    .val{color:#3A4450;}
+    .th{background:#3A4450;color:white;font-size:9.5px;font-weight:700;text-transform:uppercase;padding:5px 7px;text-align:center;}
     .num{text-align:right;font-family:monospace;}
     .firma-section{display:flex;gap:20px;margin-top:10px;}
-    .firma-box{flex:1;border:1px solid #cbd5e1;padding:10px;text-align:center;min-height:90px;display:flex;flex-direction:column;align-items:center;justify-content:space-between;}
+    .firma-box{flex:1;border:1px solid #B2BCC7;padding:10px;text-align:center;min-height:90px;display:flex;flex-direction:column;align-items:center;justify-content:space-between;}
     .firma-box img{height:60px;width:auto;object-fit:contain;}
-    .firma-name{font-size:9.5px;font-weight:700;text-transform:uppercase;border-top:1px solid #94a3b8;padding-top:4px;width:100%;text-align:center;margin-top:auto;}
-    .firma-title{font-size:8.5px;color:#64748b;}
-    .footer{margin-top:14px;border-top:1px solid #e2e8f0;padding-top:8px;text-align:center;font-size:8.5px;color:#94a3b8;}
+    .firma-name{font-size:9.5px;font-weight:700;text-transform:uppercase;border-top:1px solid #8F9DAE;padding-top:4px;width:100%;text-align:center;margin-top:auto;}
+    .firma-title{font-size:8.5px;color:#77889C;}
+    .footer{margin-top:14px;border-top:1px solid #D3D8DF;padding-top:8px;text-align:center;font-size:8.5px;color:#8F9DAE;}
     @media print{body{padding:8px;}}
   </style>
 </head>
@@ -256,8 +256,8 @@ function generarHTMLTicket(t: TicketMAS, firma: string): string {
   <div class="firma-section">
     <div class="firma-box">
       <div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:4px 0;gap:4px;">
-        <span style="font-size:10px;font-weight:600;color:#1e293b;">${t.nombre_solicitante ?? '—'}</span>
-        <span style="font-size:8.5px;color:#64748b;">Enviado: ${t.created_at ? format(new Date(t.created_at), "dd/MM/yyyy HH:mm", { locale: es }) : '—'}</span>
+        <span style="font-size:10px;font-weight:600;color:#3A4450;">${t.nombre_solicitante ?? '—'}</span>
+        <span style="font-size:8.5px;color:#77889C;">Enviado: ${t.created_at ? format(new Date(t.created_at), "dd/MM/yyyy HH:mm", { locale: es }) : '—'}</span>
       </div>
       <div class="firma-name">${t.puesto_solicitante ?? 'Director / Administrador'}<br/><span class="firma-title">${t.colegio ?? ''}</span></div>
     </div>
