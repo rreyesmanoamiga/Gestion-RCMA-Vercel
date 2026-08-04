@@ -20,7 +20,7 @@ export default function PageHeader({
   return (
     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8 border-b border-slate-100 pb-6">
       <div>
-        <h1 className="text-2xl font-black text-slate-900 tracking-tight uppercase">
+        <h1 className="text-2xl font-display font-semibold text-slate-900 tracking-tight uppercase">
           {title}
         </h1>
         {subtitle && (

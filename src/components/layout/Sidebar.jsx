@@ -111,7 +111,7 @@ export default function Sidebar({ isOpen, onToggle }) {
               <Building2 className="w-5 h-5 text-sidebar-primary-foreground" />
             </div>
             <div>
-              <h1 className="text-sm font-black text-sidebar-foreground leading-tight tracking-tight uppercase">
+              <h1 className="text-sm font-display font-black text-sidebar-foreground leading-tight tracking-tight uppercase">
                 Sistema RCMA
               </h1>
               <p className="text-[10px] font-bold text-sidebar-foreground/60 uppercase tracking-widest">
