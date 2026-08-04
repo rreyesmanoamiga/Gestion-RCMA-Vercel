@@ -171,7 +171,7 @@ function SetPasswordPage() {
     <div className="min-h-screen flex items-center justify-center bg-slate-50 p-4">
       <div className="bg-white rounded-xl shadow-sm border border-slate-200 w-full max-w-sm p-8">
         <div className="text-center mb-8">
-          <h1 className="text-2xl font-black text-slate-900 uppercase tracking-tight">Sistema RCMA</h1>
+          <h1 className="text-2xl font-display font-semibold text-slate-900 uppercase tracking-tight">Sistema RCMA</h1>
           <p className="text-sm text-slate-500 mt-1">Establece tu contraseña de acceso</p>
         </div>
         {error && !verified ? (
@@ -270,7 +270,7 @@ function LoginPage() {
             alt="Mano Amiga"
             className="mx-auto mb-4 h-16 w-auto object-contain"
           />
-          <h1 className="text-2xl font-black text-slate-900 uppercase tracking-tight">Sistema RCMA</h1>
+          <h1 className="text-2xl font-display font-semibold text-slate-900 uppercase tracking-tight">Sistema RCMA</h1>
           <p className="text-sm text-slate-500 mt-1">Coordinación de Obras</p>
         </div>
 
