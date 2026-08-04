@@ -151,7 +151,7 @@ const faseColor = (f: string) => FASES.find(x => x.key === f)?.color ?? 'bg-slat
 const faseLabel = (f: string) => FASES.find(x => x.key === f)?.label ?? f;
 
 const inputCls = 'w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none bg-white';
-const btnPrimary = 'px-4 py-2 bg-[#0C3B6E] text-white rounded-lg text-sm font-medium hover:bg-[#1565C0] transition-colors flex items-center gap-2 disabled:opacity-50';
+const btnPrimary = 'px-4 py-2 bg-[#00295A] text-white rounded-lg text-sm font-medium hover:bg-[#4F82C2] transition-colors flex items-center gap-2 disabled:opacity-50';
 const btnSecondary = 'px-4 py-2 bg-slate-100 text-slate-700 rounded-lg text-sm font-medium hover:bg-slate-200 transition-colors flex items-center gap-2';
 
 // ─── Tabs ─────────────────────────────────────────────────────────────────────
@@ -567,7 +567,7 @@ function TabReporteGeneral({ reportesGenerales, planteles, pagos, comunicados, e
                 <td className="px-4 py-3">
                   <div className="flex items-center gap-2">
                     {r.onedrive_url && (
-                      <a href={r.onedrive_url} target="_blank" rel="noreferrer" className="text-[#0C3B6E] hover:underline flex items-center gap-1 text-xs">
+                      <a href={r.onedrive_url} target="_blank" rel="noreferrer" className="text-[#00295A] hover:underline flex items-center gap-1 text-xs">
                         <Eye className="w-3.5 h-3.5" />Ver PDF
                       </a>
                     )}
@@ -691,7 +691,7 @@ export default function LevantamientoNacional() {
       {/* Stats */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         {[
-          { label: 'Planteles', value: planteles.length, color: 'text-[#0C3B6E]' },
+          { label: 'Planteles', value: planteles.length, color: 'text-[#00295A]' },
           { label: 'Completados', value: completados, color: 'text-emerald-600' },
           { label: 'En Proceso', value: planteles.length - completados, color: 'text-amber-600' },
           { label: 'Pagado', value: `$${(totalPagado / 1e6).toFixed(2)}M`, color: 'text-[#F9A825]', sub: `de $${(totalContrato / 1e6).toFixed(2)}M` },
@@ -709,7 +709,7 @@ export default function LevantamientoNacional() {
         {TABS.map(t => (
           <button key={t.key} onClick={() => setTab(t.key)}
             className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${
-              tab === t.key ? 'bg-white text-[#0C3B6E] shadow-sm' : 'text-slate-500 hover:text-slate-700'
+              tab === t.key ? 'bg-white text-[#00295A] shadow-sm' : 'text-slate-500 hover:text-slate-700'
             }`}>
             <t.icon className="w-4 h-4" />{t.label}
           </button>
@@ -1039,7 +1039,7 @@ function TabPlanteles({ planteles, loading, qc, directorio, puedeCrear, puedeEli
                   {p.fecha_termino ? new Date(p.fecha_termino + 'T12:00:00').toLocaleDateString('es-MX') : '—'}
                 </td>
                 <td className="px-4 py-3">
-                  <button onClick={() => openEdit(p)} className="text-slate-400 hover:text-[#0C3B6E]">
+                  <button onClick={() => openEdit(p)} className="text-slate-400 hover:text-[#00295A]">
                     <Edit2 className="w-4 h-4" />
                   </button>
                 </td>
@@ -1254,7 +1254,7 @@ function TabPagos({ pagos, planteles, qc, puedeCrear, puedeEliminar }: { pagos: 
                   <div className="bg-slate-50 rounded-lg p-3 text-xs text-slate-600 grid grid-cols-3 gap-2">
                     <div><p className="text-slate-400">Subtotal</p><p className="font-bold">{fmt(m.subtotal)}</p></div>
                     <div><p className="text-slate-400">IVA</p><p className="font-bold">{fmt(m.iva)}</p></div>
-                    <div><p className="text-slate-400">Total</p><p className="font-bold text-[#0C3B6E]">{fmt(m.total)}</p></div>
+                    <div><p className="text-slate-400">Total</p><p className="font-bold text-[#00295A]">{fmt(m.total)}</p></div>
                   </div>
                 ) : null;
               })()}
@@ -1366,7 +1366,7 @@ function TabPagos({ pagos, planteles, qc, puedeCrear, puedeEliminar }: { pagos: 
                 </label>
                 {editPago.notas?.includes('factura_url:') && (
                   <a href={editPago.notas.match(/factura_url:([^|]+)/)?.[1] ?? '#'} target="_blank" rel="noreferrer"
-                    className="flex items-center gap-1 text-xs text-[#0C3B6E] hover:underline mb-1">
+                    className="flex items-center gap-1 text-xs text-[#00295A] hover:underline mb-1">
                     <Eye className="w-3 h-3" />Ver factura actual
                   </a>
                 )}
@@ -1378,7 +1378,7 @@ function TabPagos({ pagos, planteles, qc, puedeCrear, puedeEliminar }: { pagos: 
                 </label>
                 {editPago.notas?.includes('recibo_url:') && (
                   <a href={editPago.notas.match(/recibo_url:([^|]+)/)?.[1] ?? '#'} target="_blank" rel="noreferrer"
-                    className="flex items-center gap-1 text-xs text-[#0C3B6E] hover:underline mb-1">
+                    className="flex items-center gap-1 text-xs text-[#00295A] hover:underline mb-1">
                     <Eye className="w-3 h-3" />Ver ficha de pago actual
                   </a>
                 )}
@@ -1411,7 +1411,7 @@ function TabPagos({ pagos, planteles, qc, puedeCrear, puedeEliminar }: { pagos: 
       {/* Tabla principal */}
       <div className="bg-white border border-slate-200 rounded-xl overflow-x-auto">
         <table className="w-full text-sm">
-          <thead className="bg-[#0C3B6E] text-white text-xs uppercase">
+          <thead className="bg-[#00295A] text-white text-xs uppercase">
             <tr>
               <th className="text-left px-3 py-3">Meses</th>
               <th className="text-right px-3 py-3">Subtotal</th>
@@ -1454,13 +1454,13 @@ function TabPagos({ pagos, planteles, qc, puedeCrear, puedeEliminar }: { pagos: 
                         : <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-slate-100 text-slate-500">Pendiente</span>}
                       {pago && (
                         <button onClick={() => { setEditPago(pago!); setEditFechaPago(pago!.fecha_pago ?? ''); setEditMontoPagado(pago!.monto_pagado != null ? String(pago!.monto_pagado) : ''); setEditFolioFactura(pago!.folio_factura ?? ''); setEditFileFactura(null); setEditFileRecibo(null); }}
-                          className="text-slate-400 hover:text-[#0C3B6E] transition-colors" title="Agregar/editar archivos">
+                          className="text-slate-400 hover:text-[#00295A] transition-colors" title="Agregar/editar archivos">
                           <Edit2 className="w-3.5 h-3.5" />
                         </button>
                       )}
                       {pago?.notas?.includes('factura_url:') && (
                         <a href={pago.notas.match(/factura_url:([^|]+)/)?.[1]} target="_blank" rel="noreferrer"
-                          className="text-slate-400 hover:text-[#0C3B6E]" title="Ver Factura">
+                          className="text-slate-400 hover:text-[#00295A]" title="Ver Factura">
                           <Eye className="w-3.5 h-3.5" />
                         </a>
                       )}
@@ -1728,19 +1728,19 @@ function TabComunicados({ comunicados, planteles, directorio, qc, puedeCrear, pu
       *{box-sizing:border-box;margin:0;padding:0;}html,body{width:100%;background:#e8e8e8;}
       body{font-family:Arial,sans-serif;font-size:12.5px;color:#222;line-height:1.55;}
       .wrap{width:680px;margin:0 auto;background:#fff;}
-      .hdr{background:#0C3B6E;border-left:6px solid #E87722;padding:16px 28px;display:flex;justify-content:space-between;align-items:center;}
+      .hdr{background:#00295A;border-left:6px solid #E87722;padding:16px 28px;display:flex;justify-content:space-between;align-items:center;}
       .hdr h1{color:#fff;font-size:15px;margin:0;} .hdr p{color:#b0c4de;font-size:10px;margin:3px 0 0;}
       .hdr img{height:42px;width:auto;}
       .body{padding:24px 28px 28px;}
-      .asunto{font-weight:bold;color:#0C3B6E;margin-bottom:12px;}
+      .asunto{font-weight:bold;color:#00295A;margin-bottom:12px;}
       p{margin:0 0 10px;word-break:break-word;}
-      .stitle{font-weight:bold;color:#0C3B6E;margin:16px 0 3px;}
+      .stitle{font-weight:bold;color:#00295A;margin:16px 0 3px;}
       .hr{border:none;border-top:1px solid #dde3ea;margin:0 0 10px;}
       table.info{width:100%;border-collapse:collapse;margin:8px 0;}
       table.info th{background:#f1f5f9;width:38%;padding:6px 9px;font-size:12px;border-bottom:1px solid #dde3ea;text-align:left;}
       table.info td{padding:6px 9px;font-size:12px;border-bottom:1px solid #dde3ea;word-break:break-word;}
       table.contact{width:100%;border-collapse:collapse;margin:8px 0;table-layout:fixed;}
-      table.contact th{background:#0C3B6E;color:#fff;padding:6px 8px;font-size:11px;text-align:left;}
+      table.contact th{background:#00295A;color:#fff;padding:6px 8px;font-size:11px;text-align:left;}
       table.contact td{padding:6px 8px;font-size:11px;border-bottom:1px solid #dde3ea;word-break:break-word;}
       table.contact th:nth-child(1),table.contact td:nth-child(1){width:20%;}
       table.contact th:nth-child(2),table.contact td:nth-child(2){width:24%;}
@@ -1748,7 +1748,7 @@ function TabComunicados({ comunicados, planteles, directorio, qc, puedeCrear, pu
       table.contact th:nth-child(4),table.contact td:nth-child(4){width:21%;}
       ul{margin:6px 0 10px 20px;} li{margin-bottom:3px;}
       .firma{margin-top:24px;padding-top:12px;border-top:1px solid #dde3ea;}
-      .footer{background:#0C3B6E;color:#b0c4de;text-align:center;font-size:10px;padding:7px;}
+      .footer{background:#00295A;color:#b0c4de;text-align:center;font-size:10px;padding:7px;}
       @media print{*{-webkit-print-color-adjust:exact;print-color-adjust:exact;}body{background:#fff;}.wrap{width:100%;box-shadow:none;margin:0;}}
     </style></head><body>
     <div class="wrap">
@@ -1928,13 +1928,13 @@ function TabComunicados({ comunicados, planteles, directorio, qc, puedeCrear, pu
                   <td className="px-4 py-3 text-slate-500 text-xs">{c.fecha_visita  ? new Date(c.fecha_visita  + 'T12:00:00').toLocaleDateString('es-MX') : '—'}</td>
                   <td className="px-4 py-3">
                     {c.onedrive_url
-                      ? <a href={c.onedrive_url} target="_blank" rel="noreferrer" className="text-xs text-[#0C3B6E] hover:underline flex items-center gap-1"><Eye className="w-3.5 h-3.5" />Ver en Drive</a>
+                      ? <a href={c.onedrive_url} target="_blank" rel="noreferrer" className="text-xs text-[#00295A] hover:underline flex items-center gap-1"><Eye className="w-3.5 h-3.5" />Ver en Drive</a>
                       : <span className="text-xs text-slate-300">—</span>}
                   </td>
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-2">
-                      <button onClick={() => handlePreview(c)} className="text-slate-400 hover:text-[#0C3B6E]" title="Vista previa"><Eye className="w-4 h-4" /></button>
-                      <button onClick={() => handlePrint(c)} className="text-slate-400 hover:text-[#0C3B6E]" title="Imprimir"><Download className="w-4 h-4" /></button>
+                      <button onClick={() => handlePreview(c)} className="text-slate-400 hover:text-[#00295A]" title="Vista previa"><Eye className="w-4 h-4" /></button>
+                      <button onClick={() => handlePrint(c)} className="text-slate-400 hover:text-[#00295A]" title="Imprimir"><Download className="w-4 h-4" /></button>
                       {puedeEliminar && <button onClick={() => setDeleteCom(c)} className="text-slate-400 hover:text-red-500" title="Eliminar"><X className="w-4 h-4" /></button>}
                     </div>
                   </td>
@@ -2202,12 +2202,12 @@ function TabReportes({ reportes, planteles, qc, puedeCrear, puedeEliminar, puede
                   <td className="px-4 py-3 align-top">
                     <div className="flex items-center justify-end gap-2 whitespace-nowrap">
                       {r.onedrive_url && (
-                        <a href={r.onedrive_url} target="_blank" rel="noreferrer" className="text-slate-400 hover:text-[#0C3B6E]">
+                        <a href={r.onedrive_url} target="_blank" rel="noreferrer" className="text-slate-400 hover:text-[#00295A]">
                           <Eye className="w-4 h-4" />
                         </a>
                       )}
                       {puedeCrear && (
-                      <button onClick={() => openEdit(r)} className="text-slate-400 hover:text-[#0C3B6E]">
+                      <button onClick={() => openEdit(r)} className="text-slate-400 hover:text-[#00295A]">
                         <Edit2 className="w-4 h-4" />
                       </button>
                       )}
@@ -2388,7 +2388,7 @@ function TabEntregables({ entregables, planteles, qc, puedeCrear }: { entregable
                 </span>
                 <span className="text-xs text-slate-500 font-medium">{total}/5</span>
                 {!ent && (
-                  <button onClick={() => createMut.mutate(plantel.id)} className="text-xs text-[#0C3B6E] hover:underline">
+                  <button onClick={() => createMut.mutate(plantel.id)} className="text-xs text-[#00295A] hover:underline">
                     Iniciar checklist
                   </button>
                 )}
@@ -2420,7 +2420,7 @@ function TabEntregables({ entregables, planteles, qc, puedeCrear }: { entregable
                     {estadoBadge}
                     {actaFirmada && ent.acta_cierre_url && (
                       <a href={ent.acta_cierre_url} target="_blank" rel="noreferrer"
-                        className="flex items-center gap-1 text-xs text-[#0C3B6E] hover:underline">
+                        className="flex items-center gap-1 text-xs text-[#00295A] hover:underline">
                         <Eye className="w-3.5 h-3.5" />Ver acta
                       </a>
                     )}
@@ -2439,7 +2439,7 @@ function TabEntregables({ entregables, planteles, qc, puedeCrear }: { entregable
                     {!actaFirmada ? (
                       <button
                         onClick={() => setActaModal({ entId: ent.id, plantelNombre: plantel.colegio_nombre })}
-                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-[#0C3B6E] text-xs font-medium text-[#0C3B6E] hover:bg-blue-50 transition-all">
+                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-[#00295A] text-xs font-medium text-[#00295A] hover:bg-blue-50 transition-all">
                         <Upload className="w-3.5 h-3.5" />Registrar Acta de Cierre
                       </button>
                     ) : (

@@ -1338,7 +1338,7 @@ export default function TicketMAS() {
                         {/* Ver Expediente — si ya existe */}
                         {t.expediente_url && (
                           <a href={t.expediente_url} target="_blank" rel="noreferrer" title="Ver Expediente en OneDrive"
-                            className="p-1.5 rounded hover:bg-blue-50 text-[#0C3B6E] transition">
+                            className="p-1.5 rounded hover:bg-blue-50 text-[#00295A] transition">
                             <FolderPlus className="w-4 h-4" />
                           </a>
                         )}
@@ -1440,7 +1440,7 @@ export default function TicketMAS() {
               <div className="flex justify-end gap-2 p-5 border-t border-slate-100">
                 <button onClick={() => setExpedienteModal(null)} className="px-4 py-2 bg-slate-100 text-slate-700 rounded-lg text-sm hover:bg-slate-200">Cancelar</button>
                 <button onClick={() => crearExpedienteManual(expedienteModal)} disabled={creandoExpediente}
-                  className="px-4 py-2 bg-[#0C3B6E] text-white rounded-lg text-sm font-medium hover:bg-[#1565C0] flex items-center gap-2 disabled:opacity-50">
+                  className="px-4 py-2 bg-[#00295A] text-white rounded-lg text-sm font-medium hover:bg-[#4F82C2] flex items-center gap-2 disabled:opacity-50">
                   {creandoExpediente ? <Loader2 className="w-4 h-4 animate-spin" /> : <FolderPlus className="w-4 h-4" />}
                   {creandoExpediente ? 'Creando...' : 'Crear Expediente'}
                 </button>
@@ -1537,7 +1537,7 @@ export default function TicketMAS() {
             {viewing.nombre_proyecto && (
               <div className="mb-3">
                 <p className="text-[10px] font-bold text-slate-400 uppercase mb-1">Nombre del Proyecto</p>
-                <p className="text-sm font-bold text-[#0C3B6E] bg-blue-50 rounded-lg p-3">{viewing.nombre_proyecto}</p>
+                <p className="text-sm font-bold text-[#00295A] bg-blue-50 rounded-lg p-3">{viewing.nombre_proyecto}</p>
               </div>
             )}
             <p className="text-[10px] font-bold text-slate-400 uppercase mb-1">Descripción</p>
@@ -1609,7 +1609,7 @@ export default function TicketMAS() {
             </p>
             {viewing.expediente_url && (
               <a href={viewing.expediente_url} target="_blank" rel="noreferrer"
-                className="mt-3 inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-[#0C3B6E] text-white text-xs font-bold hover:bg-[#1565C0] transition-colors">
+                className="mt-3 inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-[#00295A] text-white text-xs font-bold hover:bg-[#4F82C2] transition-colors">
                 📁 Ver Expediente en OneDrive
               </a>
             )}

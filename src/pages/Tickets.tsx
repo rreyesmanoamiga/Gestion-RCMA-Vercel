@@ -916,7 +916,7 @@ export default function Tickets() {
             <div className="flex justify-end gap-2 p-5 border-t border-slate-100">
               <button onClick={() => setExpModal(null)} className="px-4 py-2 bg-slate-100 text-slate-700 rounded-lg text-sm hover:bg-slate-200">Cancelar</button>
               <button onClick={() => crearExpediente(expModal)} disabled={creandoExp}
-                className="px-4 py-2 bg-[#0C3B6E] text-white rounded-lg text-sm font-medium hover:bg-[#1565C0] flex items-center gap-2 disabled:opacity-50">
+                className="px-4 py-2 bg-[#00295A] text-white rounded-lg text-sm font-medium hover:bg-[#4F82C2] flex items-center gap-2 disabled:opacity-50">
                 {creandoExp ? <Loader2 className="w-4 h-4 animate-spin" /> : <FolderPlus className="w-4 h-4" />}
                 {creandoExp ? 'Creando...' : 'Crear Expediente'}
               </button>
