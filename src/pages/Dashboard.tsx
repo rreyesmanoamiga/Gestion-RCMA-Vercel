@@ -62,21 +62,20 @@ interface KPICardProps {
   to?: string;
 }
 function KPICard({ title, value, subtitle, icon: Icon, color, trend, trendLabel, to }: KPICardProps) {
-  const colorMap: Record<string, { bg: string; icon: string; border: string }> = {
-    blue:   { bg: 'bg-blue-50',    icon: 'text-blue-600',    border: 'border-blue-100' },
-    green:  { bg: 'bg-emerald-50', icon: 'text-emerald-600', border: 'border-emerald-100' },
-    orange: { bg: 'bg-amber-50',   icon: 'text-amber-600',   border: 'border-amber-100' },
-    red:    { bg: 'bg-red-50',     icon: 'text-red-600',     border: 'border-red-100' },
-    purple: { bg: 'bg-purple-50',  icon: 'text-purple-600',  border: 'border-purple-100' },
+  const colorMap: Record<string, { text: string; accent: string }> = {
+    blue:   { text: 'text-[#00295A]', accent: '#4F82C2' },
+    green:  { text: 'text-[#00295A]', accent: '#10b981' },
+    orange: { text: 'text-[#ED7102]', accent: '#ED7102' },
+    red:    { text: 'text-[#00295A]', accent: '#ef4444' },
+    purple: { text: 'text-[#00295A]', accent: '#8b5cf6' },
   };
   const c = colorMap[color];
 
   const inner = (
-    <div className={`bg-white rounded-xl border ${c.border} p-5 hover:shadow-md transition-all duration-200 h-full`}>
+    <div className="bg-white rounded-xl border border-slate-200 p-5 pl-6 hover:shadow-md hover:border-slate-300 transition-all duration-200 h-full relative overflow-hidden">
+      <div className="absolute top-0 left-0 w-1 h-full" style={{ backgroundColor: c.accent }} />
       <div className="flex items-start justify-between mb-3">
-        <div className={`w-10 h-10 rounded-lg ${c.bg} flex items-center justify-center`}>
-          <Icon className={`w-5 h-5 ${c.icon}`} />
-        </div>
+        <Icon className="w-4 h-4 text-slate-300" aria-hidden="true" />
         {trend && trendLabel && (
           <span className={`text-xs font-semibold flex items-center gap-0.5 px-2 py-0.5 rounded-full ${
             trend === 'up'   ? 'bg-emerald-50 text-emerald-600' :
@@ -86,9 +85,9 @@ function KPICard({ title, value, subtitle, icon: Icon, color, trend, trendLabel,
           </span>
         )}
       </div>
-      <p className="text-3xl font-black text-slate-900 mb-0.5">{value}</p>
-      <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-0.5">{title}</p>
-      {subtitle && <p className="text-xs text-slate-400">{subtitle}</p>}
+      <p className={`font-display text-4xl font-semibold ${c.text} mb-1 leading-none`}>{value}</p>
+      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-2">{title}</p>
+      {subtitle && <p className="text-xs text-slate-400 mt-0.5">{subtitle}</p>}
     </div>
   );
   return to ? <Link to={to} className="block h-full">{inner}</Link> : inner;
