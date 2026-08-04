@@ -145,7 +145,18 @@ export function calcularFechasEnMes(act: Actividad, año: number, mes: number): 
   const finMes = new Date(año, mes + 1, 0);
   let fecha = new Date(FECHA_BASE);
   while (fecha <= finMes) {
-    if (fecha >= inicioMes) fechas.push(new Date(fecha));
+    const esDomingo = fecha.getDay() === 0;
+    // Diarias: el domingo simplemente no cuenta (no deja hueco real, ya se
+    // hizo el sábado y se vuelve a hacer el lunes).
+    // Todo lo demás (semanal, mensual, anual...): se recorre al lunes para no
+    // perder la única ocurrencia del periodo — pero el ciclo sigue calculándose
+    // desde la fecha original de domingo, para que no se recorra todo lo futuro.
+    if (esDomingo && act.frecuenciaDias === 1) {
+      // se omite, no se agrega nada
+    } else {
+      const fechaMostrar = esDomingo ? new Date(fecha.getTime() + 86400000) : fecha;
+      if (fechaMostrar >= inicioMes && fechaMostrar <= finMes) fechas.push(new Date(fechaMostrar));
+    }
     fecha = new Date(fecha.getTime() + act.frecuenciaDias * 86400000);
   }
   return fechas;
@@ -157,7 +168,11 @@ function calcularProximasFechas(act: Actividad, cantidad: number = 8): Date[] {
   let fecha = new Date(FECHA_BASE);
   const limite = new Date(hoy.getFullYear() + 6, 0, 1);
   while (resultado.length < cantidad && fecha < limite) {
-    if (fecha >= hoy) resultado.push(new Date(fecha));
+    const esDomingo = fecha.getDay() === 0;
+    if (!(esDomingo && act.frecuenciaDias === 1)) {
+      const fechaMostrar = esDomingo ? new Date(fecha.getTime() + 86400000) : fecha;
+      if (fechaMostrar >= hoy) resultado.push(new Date(fechaMostrar));
+    }
     fecha = new Date(fecha.getTime() + act.frecuenciaDias * 86400000);
   }
   return resultado;

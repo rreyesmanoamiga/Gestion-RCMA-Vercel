@@ -48,8 +48,23 @@ const ACTIVIDADES_BASE: Actividad[] = [
 const FECHA_BASE = new Date(2025, 0, 1);
 
 function ocurreMañana(act: Actividad, mañana: Date): boolean {
-  const diff = Math.floor((mañana.getTime() - FECHA_BASE.getTime()) / 86400000);
-  return diff >= 0 && diff % act.frecuenciaDias === 0;
+  const diffManana = Math.floor((mañana.getTime() - FECHA_BASE.getTime()) / 86400000);
+  const esFechaNaturalManana = diffManana >= 0 && diffManana % act.frecuenciaDias === 0;
+
+  if (act.frecuenciaDias === 1) {
+    // Diaria: el domingo se omite, sin correrse.
+    return esFechaNaturalManana && mañana.getDay() !== 0;
+  }
+
+  // No diaria: cuenta si mañana es su fecha natural (y no es domingo)...
+  if (esFechaNaturalManana && mañana.getDay() !== 0) return true;
+  // ...o si mañana es lunes y absorbe la fecha natural que cayó el domingo anterior.
+  if (mañana.getDay() === 1) {
+    const domingoAnterior = new Date(mañana.getTime() - 86400000);
+    const diffDom = Math.floor((domingoAnterior.getTime() - FECHA_BASE.getTime()) / 86400000);
+    if (diffDom >= 0 && diffDom % act.frecuenciaDias === 0) return true;
+  }
+  return false;
 }
 
 // ─── SMTP identico a notify-nueva-solicitud (funcionando) ─────────────────────
