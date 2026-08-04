@@ -321,7 +321,7 @@ export default function Dashboard() {
             <div className="w-8 h-8 rounded-lg bg-slate-900 flex items-center justify-center">
               <Building2 className="w-4 h-4 text-white" />
             </div>
-            <h1 className="text-2xl font-black text-slate-900 uppercase tracking-tight">Colegios Mano Amiga</h1>
+            <h1 className="text-2xl font-display font-semibold text-slate-900 uppercase tracking-tight">Colegios Mano Amiga</h1>
           </div>
           <p className="text-sm text-slate-500 ml-11">
             Panel de Gestión · {projects.length} proyectos · {tickets.length} tickets
