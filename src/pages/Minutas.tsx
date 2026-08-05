@@ -654,18 +654,22 @@ export default function Minutas() {
                   value={form.notas} onChange={e => setForm(f => ({ ...f, notas: e.target.value }))} />
               </div>
 
-              {form.tipo === 'minuta' && (
+              {(form.tipo === 'minuta' || form.tipo === 'nota_tecnica') && (
                 <div>
                   <div className="flex items-center justify-between mb-1">
-                    <label className="block text-xs font-bold text-slate-500 uppercase">Acuerdos y Compromisos</label>
+                    <label className="block text-xs font-bold text-slate-500 uppercase">
+                      {form.tipo === 'nota_tecnica' ? 'Acciones Recomendadas / Siguientes Pasos' : 'Acuerdos y Compromisos'}
+                    </label>
                     <button type="button" onClick={agregarFilaAcuerdo}
                       className="flex items-center gap-1 text-[11px] font-bold text-blue-600 hover:text-blue-800">
-                      <Plus className="w-3 h-3" /> Agregar acuerdo
+                      <Plus className="w-3 h-3" /> {form.tipo === 'nota_tecnica' ? 'Agregar acción' : 'Agregar acuerdo'}
                     </button>
                   </div>
                   {acuerdosForm.length === 0 ? (
                     <p className="text-xs text-slate-400 border border-dashed border-slate-200 rounded-lg px-3 py-3 text-center">
-                      Sin acuerdos capturados. Agrégalos para poder darles seguimiento después sin abrir esta minuta.
+                      {form.tipo === 'nota_tecnica'
+                        ? 'Sin acciones capturadas. Agrégalas para poder darles seguimiento después sin abrir esta nota.'
+                        : 'Sin acuerdos capturados. Agrégalos para poder darles seguimiento después sin abrir esta minuta.'}
                     </p>
                   ) : (
                     <div className="space-y-2">
@@ -674,7 +678,7 @@ export default function Minutas() {
                           <span className="text-[11px] font-bold text-slate-400 mt-2 w-4 shrink-0">{idx + 1}.</span>
                           <div className="flex-1 space-y-1.5">
                             <input value={row.descripcion} onChange={e => actualizarFilaAcuerdo(idx, 'descripcion', e.target.value)}
-                              placeholder="¿Qué se acordó?"
+                              placeholder={form.tipo === 'nota_tecnica' ? '¿Qué acción se recomienda?' : '¿Qué se acordó?'}
                               className="w-full px-2 py-1.5 border border-slate-200 rounded-md text-xs focus:ring-2 focus:ring-blue-500 focus:outline-none" />
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
                               <input value={row.responsable} onChange={e => actualizarFilaAcuerdo(idx, 'responsable', e.target.value)}
