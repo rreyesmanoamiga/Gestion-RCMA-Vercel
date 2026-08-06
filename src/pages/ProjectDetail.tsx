@@ -5,7 +5,7 @@ import { db } from '@/lib/db';
 import {
   ArrowLeft, Calendar, MapPin, User, FileText, Trash2, Pencil,
   CheckCircle2, Clock, AlertTriangle, DollarSign, TrendingUp,
-  TrendingDown, Minus, Save, X, ClipboardList,
+  TrendingDown, Minus, Save, X, ClipboardList, Camera, Upload, ImagePlus,
 } from 'lucide-react';
 import ProjectForm from '@/components/projects/ProjectForm';
 import { supabase } from '@/lib/supabaseClient';
@@ -200,6 +200,91 @@ export default function ProjectDetail() {
     const valor = parseFloat(parseMXN(costoRealInput));
     if (isNaN(valor) || valor <= 0) { toast.error('Ingresa un monto válido'); return; }
     updateMutation.mutate({ costo_real: valor });
+  };
+
+  // ── Evidencia Fotográfica (Antes / Durante / Después) ─────────────────────
+  const [showEvidencia, setShowEvidencia] = useState(false);
+  const [subiendoEvidencia, setSubiendoEvidencia] = useState(false);
+  const [progresoEvidencia, setProgresoEvidencia] = useState('');
+  const [evidenciaFiles, setEvidenciaFiles] = useState<{ antes: File[]; durante: File[]; despues: File[] }>({
+    antes: [], durante: [], despues: [],
+  });
+
+  const limpiarNombre = (s: string) => s.replace(/[/\\:*?"<>|]/g, '_');
+
+  const subirEvidenciaFotografica = async () => {
+    const totalArchivos = evidenciaFiles.antes.length + evidenciaFiles.durante.length + evidenciaFiles.despues.length;
+    if (totalArchivos === 0) { toast.error('Selecciona al menos una foto.'); return; }
+
+    setSubiendoEvidencia(true);
+    try {
+      // Reconstruir la misma ruta que usó Ticket MAS al crear el Expediente
+      // (mismo folio/colegio/nombre/año), para subir dentro de las carpetas
+      // Antes/Durante/Después que ya existen ahí.
+      const folio = folioDisplay;
+      let anio = new Date().getFullYear();
+      let colegioCarpeta = limpiarNombre(project!.colegio ?? 'SIN_COLEGIO');
+      let nombreCarpeta = limpiarNombre((project!.name ?? 'Sin nombre').slice(0, 60));
+
+      if (folio) {
+        const { data: tmas } = await supabase.from('tickets_mas')
+          .select('created_at, colegio, nombre_proyecto, descripcion').eq('folio', folio).maybeSingle();
+        const origen = tmas ?? (await supabase.from('tickets')
+          .select('created_at, colegio, nombre_proyecto, descripcion').eq('folio', folio).maybeSingle()).data;
+        if (origen) {
+          anio = origen.created_at ? new Date(origen.created_at).getFullYear() : anio;
+          colegioCarpeta = limpiarNombre(origen.colegio ?? project!.colegio ?? 'SIN_COLEGIO');
+          nombreCarpeta = limpiarNombre(((origen.nombre_proyecto ?? origen.descripcion ?? project!.name) ?? 'Sin nombre').slice(0, 60));
+        }
+      }
+      const folioCarpeta = folio ?? 'SIN_FOLIO';
+      const raiz = `Expedientes/${anio}/${colegioCarpeta}/${folioCarpeta} - ${nombreCarpeta}/ECO/06 - Fotografías`;
+
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token    = sessionData?.session?.access_token ?? '';
+      const SUPA_URL = import.meta.env.VITE_SUPABASE_URL as string;
+      const ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY as string;
+
+      const spUp = async (file: File, carpeta: string, fileName: string) => {
+        const fd = new FormData();
+        fd.append('file', file); fd.append('carpeta', carpeta); fd.append('fileName', fileName);
+        const res = await fetch(`${SUPA_URL}/functions/v1/sharepoint-upload`, {
+          method: 'POST', headers: { 'Authorization': `Bearer ${token}`, 'apikey': ANON_KEY }, body: fd,
+        });
+        return res.json();
+      };
+
+      const categorias: { key: 'antes' | 'durante' | 'despues'; carpeta: string }[] = [
+        { key: 'antes',   carpeta: 'Antes' },
+        { key: 'durante', carpeta: 'Durante' },
+        { key: 'despues', carpeta: 'Después' },
+      ];
+
+      let subidas = 0;
+      for (const cat of categorias) {
+        const archivos = evidenciaFiles[cat.key];
+        for (const file of archivos) {
+          subidas++;
+          setProgresoEvidencia(`Subiendo ${subidas} de ${totalArchivos}...`);
+          const r = await spUp(file, `${raiz}/${cat.carpeta}`, file.name);
+          if (r?.error) throw new Error(`${file.name}: ${r.error}`);
+        }
+      }
+
+      logAudit({
+        accion: 'editar', modulo: 'proyectos', registro_id: id ?? null, registro_ref: project?.name ?? null,
+        detalle: { evidencia_fotografica: { antes: evidenciaFiles.antes.length, durante: evidenciaFiles.durante.length, despues: evidenciaFiles.despues.length } },
+      });
+
+      toast.success(`${totalArchivos} foto${totalArchivos !== 1 ? 's' : ''} subida${totalArchivos !== 1 ? 's' : ''} al Expediente ✓`);
+      setEvidenciaFiles({ antes: [], durante: [], despues: [] });
+      setShowEvidencia(false);
+    } catch (e: any) {
+      toast.error('Error al subir evidencia: ' + (e.message ?? 'desconocido'));
+    } finally {
+      setSubiendoEvidencia(false);
+      setProgresoEvidencia('');
+    }
   };
 
   if (isLoading) {
@@ -440,6 +525,78 @@ export default function ProjectDetail() {
               </div>
             )}
           </div>
+        </div>
+      )}
+
+      {/* ─── Sección Evidencia Fotográfica ───────────────────────────────── */}
+      {esCompletado && (
+        <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+          <div className="px-6 py-4 border-b border-slate-100 bg-slate-50 flex items-center justify-between">
+            <h3 className="text-sm font-bold text-slate-900 uppercase tracking-tight flex items-center gap-2">
+              <Camera className="w-4 h-4 text-[#ED7102]" />
+              Evidencia Fotográfica
+            </h3>
+            {!showEvidencia && (
+              <button onClick={() => setShowEvidencia(true)}
+                className="text-xs font-bold text-blue-600 hover:underline flex items-center gap-1">
+                <ImagePlus className="w-3 h-3" /> Agregar fotos
+              </button>
+            )}
+          </div>
+
+          {showEvidencia ? (
+            <div className="p-6 space-y-4">
+              <p className="text-xs text-slate-500">
+                Las fotos se suben directo al Expediente del proyecto en OneDrive, dentro de <span className="font-mono">ECO / 06 - Fotografías</span>.
+                Selecciona todas las que quieras a la vez — no hay límite de cuántas eliges por categoría.
+              </p>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                {([
+                  { key: 'antes' as const,   label: 'Antes' },
+                  { key: 'durante' as const, label: 'Durante' },
+                  { key: 'despues' as const, label: 'Después' },
+                ]).map(cat => (
+                  <div key={cat.key} className="border border-dashed border-slate-300 rounded-xl p-4 text-center">
+                    <p className="text-xs font-bold text-slate-600 uppercase tracking-wide mb-2">{cat.label}</p>
+                    <label className="flex flex-col items-center gap-1.5 cursor-pointer text-slate-400 hover:text-slate-600">
+                      <Upload className="w-5 h-5" />
+                      <span className="text-[11px]">
+                        {evidenciaFiles[cat.key].length > 0
+                          ? `${evidenciaFiles[cat.key].length} foto${evidenciaFiles[cat.key].length !== 1 ? 's' : ''} seleccionada${evidenciaFiles[cat.key].length !== 1 ? 's' : ''}`
+                          : 'Elegir fotos...'}
+                      </span>
+                      <input type="file" accept="image/*" multiple className="hidden"
+                        onChange={e => {
+                          const nuevos = Array.from(e.target.files ?? []);
+                          setEvidenciaFiles(prev => ({ ...prev, [cat.key]: [...prev[cat.key], ...nuevos] }));
+                          e.target.value = '';
+                        }} />
+                    </label>
+                    {evidenciaFiles[cat.key].length > 0 && (
+                      <button onClick={() => setEvidenciaFiles(prev => ({ ...prev, [cat.key]: [] }))}
+                        className="text-[10px] text-red-500 hover:underline mt-1.5">Quitar todas</button>
+                    )}
+                  </div>
+                ))}
+              </div>
+              <div className="flex items-center gap-3 pt-1">
+                <button onClick={subirEvidenciaFotografica} disabled={subiendoEvidencia}
+                  className="px-4 py-2 bg-slate-900 text-white rounded-md text-sm font-bold hover:bg-slate-800 flex items-center gap-2 disabled:opacity-50">
+                  <Upload className="w-4 h-4" />
+                  {subiendoEvidencia ? (progresoEvidencia || 'Subiendo...') : 'Subir evidencia'}
+                </button>
+                <button onClick={() => { setShowEvidencia(false); setEvidenciaFiles({ antes: [], durante: [], despues: [] }); }}
+                  disabled={subiendoEvidencia}
+                  className="px-3 py-2 border border-slate-300 rounded-md text-sm text-slate-600 hover:bg-slate-50 disabled:opacity-50">
+                  Cancelar
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className="px-6 py-4">
+              <p className="text-xs text-slate-400 italic">Sin fotos agregadas desde aquí todavía. Usa "Agregar fotos" para subir evidencia de Antes / Durante / Después directo al Expediente.</p>
+            </div>
+          )}
         </div>
       )}
 
