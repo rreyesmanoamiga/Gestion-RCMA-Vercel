@@ -1,9 +1,13 @@
 name: Recordatorio Mantenimiento Diario
 
+# El disparo automático diario (cron) se desactivó: ahora este envío lo maneja
+# un cron job de Supabase (pg_cron) que llama a la misma función cada hora y
+# respeta el "Horario de envío" configurado dentro del sistema. Tener los dos
+# mecanismos activos al mismo tiempo era redundante y este (fijo a las 8am,
+# sin poder ajustarse desde la pantalla) ya no hacía falta.
+# Se deja "workflow_dispatch" para poder correrlo manualmente desde GitHub si
+# se necesita probar o forzar un envío.
 on:
-  schedule:
-    # Corre todos los días a las 8:00 AM hora México (CST = UTC-6 → 14:00 UTC)
-    - cron: '0 14 * * *'
   workflow_dispatch: # Permite ejecutar manualmente desde GitHub
 
 jobs:
