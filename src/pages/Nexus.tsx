@@ -156,11 +156,16 @@ function ComentariosPanel({ pendiente, userEmail, userName, isAdmin }: { pendien
       if(destEmail){ await supabase.functions.invoke('notify-nexus-comentario',{body:{destinatario_email:destEmail,destinatario_nombre:destNombre,autor_nombre:userName,pendiente_titulo:pendiente.titulo,comentario:contenido,siteUrl:window.location.origin}}); }
     }
   }, onSuccess:()=>{ qc.invalidateQueries({queryKey:['nexus_comentarios',pendiente.id]}); setTexto(''); setTimeout(()=>endRef.current?.scrollIntoView({behavior:'smooth'}),100); }, onError:(e:any)=>toast.error(e.message??'Error') });
+  const deleteMutation = useMutation({
+    mutationFn: async (id: string) => { const { error } = await supabase.from('nexus_comentarios').delete().eq('id', id); if (error) throw error; },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['nexus_comentarios', pendiente.id] }); toast.success('Comentario eliminado'); },
+    onError: (e: any) => toast.error(e.message ?? 'Error al eliminar'),
+  });
   return (
     <div className="flex flex-col h-full">
       <div className="flex-1 overflow-y-auto space-y-3 mb-3 max-h-52">
         {comentarios.length===0&&<p className="text-xs text-slate-400 text-center py-4">Sin comentarios aún.</p>}
-        {comentarios.map(c=>{ const esMio=c.autor_email===userEmail; return (<div key={c.id} className={`flex ${esMio?'justify-end':'justify-start'}`}><div className={`max-w-[80%] rounded-xl px-3 py-2 ${esMio?'bg-slate-900 text-white':'bg-slate-100 text-slate-800'}`}><p className={`text-[10px] font-bold mb-1 ${esMio?'text-slate-300':'text-slate-500'}`}>{c.autor_nombre}</p><p className="text-sm">{c.contenido}</p><p className={`text-[10px] mt-1 ${esMio?'text-slate-400':'text-slate-400'}`}>{fmtFull(c.created_at)}</p></div></div>); })}
+        {comentarios.map(c=>{ const esMio=c.autor_email===userEmail; return (<div key={c.id} className={`flex ${esMio?'justify-end':'justify-start'}`}><div className={`group relative max-w-[80%] rounded-xl px-3 py-2 ${esMio?'bg-slate-900 text-white':'bg-slate-100 text-slate-800'}`}><p className={`text-[10px] font-bold mb-1 ${esMio?'text-slate-300':'text-slate-500'}`}>{c.autor_nombre}</p><p className="text-sm">{c.contenido}</p><p className={`text-[10px] mt-1 ${esMio?'text-slate-400':'text-slate-400'}`}>{fmtFull(c.created_at)}</p>{esMio && (<button onClick={()=>{ if(confirm('¿Eliminar este comentario?')) deleteMutation.mutate(c.id); }} className="absolute -top-2 -left-2 opacity-0 group-hover:opacity-100 transition-opacity bg-white text-red-500 hover:text-red-700 rounded-full p-1 shadow border border-slate-200" title="Eliminar"><Trash2 className="w-3 h-3"/></button>)}</div></div>); })}
         <div ref={endRef}/>
       </div>
       <div className="flex gap-2">
@@ -204,6 +209,16 @@ function SeguimientoModal({ seguimiento, userEmail, userName, onClose }: { segui
     onError: (e: any) => toast.error(e.message ?? 'Error'),
   });
 
+  const deleteComentarioMutation = useMutation({
+    mutationFn: async (id: string) => { const { error } = await supabase.from('nexus_comentarios').delete().eq('id', id); if (error) throw error; },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['seguimiento_comentarios', seguimiento.id] });
+      qc.invalidateQueries({ queryKey: ['seguimiento_comentarios_resumen'] });
+      toast.success('Comentario eliminado');
+    },
+    onError: (e: any) => toast.error(e.message ?? 'Error al eliminar'),
+  });
+
   const convertirMutation = useMutation({
     mutationFn: async () => {
       if (!convTitulo.trim()) throw new Error('Escribe un título para el pendiente.');
@@ -240,9 +255,15 @@ function SeguimientoModal({ seguimiento, userEmail, userName, onClose }: { segui
         <div className="flex-1 overflow-y-auto p-5 space-y-3">
           {comentarios.length === 0 && <p className="text-xs text-slate-400 text-center py-6">Sin notas de seguimiento aún. Empieza escribiendo abajo.</p>}
           {comentarios.map(c => (
-            <div key={c.id} className="bg-slate-50 rounded-lg px-3 py-2">
+            <div key={c.id} className="group relative bg-slate-50 rounded-lg px-3 py-2">
               <p className="text-[10px] font-bold text-slate-500 mb-1">{c.autor_nombre} · {fmtFull(c.created_at)}</p>
-              <p className="text-sm text-slate-800 whitespace-pre-wrap">{c.contenido}</p>
+              <p className="text-sm text-slate-800 whitespace-pre-wrap pr-5">{c.contenido}</p>
+              {c.autor_email === userEmail && (
+                <button onClick={() => { if (confirm('¿Eliminar este comentario?')) deleteComentarioMutation.mutate(c.id); }}
+                  className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity text-slate-300 hover:text-red-600" title="Eliminar">
+                  <Trash2 className="w-3.5 h-3.5" />
+                </button>
+              )}
             </div>
           ))}
           <div ref={endRef} />
@@ -328,6 +349,16 @@ function SeguimientoAnteproyectoModal({ seguimiento, userEmail, userName, onClos
     onError: (e: any) => toast.error(e.message ?? 'Error'),
   });
 
+  const deleteComentarioMutation = useMutation({
+    mutationFn: async (id: string) => { const { error } = await supabase.from('nexus_comentarios').delete().eq('id', id); if (error) throw error; },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['seguimiento_ante_comentarios', seguimiento.id] });
+      qc.invalidateQueries({ queryKey: ['seguimiento_ante_comentarios_resumen'] });
+      toast.success('Comentario eliminado');
+    },
+    onError: (e: any) => toast.error(e.message ?? 'Error al eliminar'),
+  });
+
   const convertirMutation = useMutation({
     mutationFn: async () => {
       if (!convTitulo.trim()) throw new Error('Escribe un título para el pendiente.');
@@ -363,9 +394,15 @@ function SeguimientoAnteproyectoModal({ seguimiento, userEmail, userName, onClos
         <div className="flex-1 overflow-y-auto p-5 space-y-3">
           {comentarios.length === 0 && <p className="text-xs text-slate-400 text-center py-6">Sin notas de seguimiento aún. Empieza escribiendo abajo.</p>}
           {comentarios.map(c => (
-            <div key={c.id} className="bg-slate-50 rounded-lg px-3 py-2">
+            <div key={c.id} className="group relative bg-slate-50 rounded-lg px-3 py-2">
               <p className="text-[10px] font-bold text-slate-500 mb-1">{c.autor_nombre} · {fmtFull(c.created_at)}</p>
-              <p className="text-sm text-slate-800 whitespace-pre-wrap">{c.contenido}</p>
+              <p className="text-sm text-slate-800 whitespace-pre-wrap pr-5">{c.contenido}</p>
+              {c.autor_email === userEmail && (
+                <button onClick={() => { if (confirm('¿Eliminar este comentario?')) deleteComentarioMutation.mutate(c.id); }}
+                  className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity text-slate-300 hover:text-red-600" title="Eliminar">
+                  <Trash2 className="w-3.5 h-3.5" />
+                </button>
+              )}
             </div>
           ))}
           <div ref={endRef} />
