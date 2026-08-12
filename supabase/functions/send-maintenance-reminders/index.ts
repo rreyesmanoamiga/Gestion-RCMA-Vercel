@@ -221,16 +221,21 @@ serve(async (req) => {
     const { data: customRaw = [] } = await supabase
       .from('custom_maintenance').select('*');
 
-    // Respetar overrides de actividades base (base_id)
-    const baseOverrides: Record<number, Actividad> = {};
+    // Respetar overrides de actividades base (base_id) y las que se ocultaron
+    const baseOverrides: Record<number, { data: Actividad; eliminado: boolean }> = {};
     (customRaw || []).filter((r: any) => r.base_id != null).forEach((r: any) => {
       baseOverrides[r.base_id] = {
-        id: r.base_id, categoria: r.categoria, actividad: r.actividad,
-        tipo: r.tipo, frecuencia: r.frecuencia,
-        frecuenciaDias: r.frecuencia_dias, descripcion: r.descripcion || '',
+        eliminado: !!r.eliminado,
+        data: {
+          id: r.base_id, categoria: r.categoria, actividad: r.actividad,
+          tipo: r.tipo, frecuencia: r.frecuencia,
+          frecuenciaDias: r.frecuencia_dias, descripcion: r.descripcion || '',
+        },
       };
     });
-    const actividadesBase = ACTIVIDADES_BASE.map(a => baseOverrides[a.id as number] ?? a);
+    const actividadesBase = ACTIVIDADES_BASE
+      .filter(a => !baseOverrides[a.id as number]?.eliminado)
+      .map(a => baseOverrides[a.id as number]?.data ?? a);
     const customPuras: Actividad[] = (customRaw || [])
       .filter((r: any) => r.base_id == null)
       .map((r: any) => ({
@@ -272,12 +277,10 @@ serve(async (req) => {
       });
     }
 
-    // Si las notificaciones están desactivadas, salir sin enviar
-    if (!adminNotifActivo) {
-      return new Response(JSON.stringify({ skipped: true, reason: 'Notificaciones desactivadas' }), {
-        status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
-    }
+    // Nota: "adminNotifActivo" solo decide si TÚ (admin) recibes copia personal.
+    // Ya NO corta el envío a los demás destinatarios — antes, si tenías tu copia
+    // apagada, se cancelaba todo el recordatorio para todo mundo, aunque otros
+    // destinatarios sí estuvieran configurados para recibirlo.
 
     // ── Destinatarios con filtro de actividades ─────────────────────────────
     const { data: recipientsRaw = [] } = await supabase

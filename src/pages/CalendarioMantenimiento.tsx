@@ -608,6 +608,19 @@ export default function CalendarioMantenimiento() {
           </h1>
           <p className="text-sm text-slate-500 mt-0.5">Cronograma basado en guias tecnicas de mantenimiento</p>
         </div>
+      </div>
+
+      {esAdminColegio && (
+        <div className="flex items-center gap-2 bg-amber-50 border border-amber-200 rounded-lg px-4 py-2.5">
+          <CheckCircle2 className="w-4 h-4 text-amber-600 shrink-0" />
+          <p className="text-xs text-amber-800">
+            <span className="font-bold">Recuerda:</span> marca cada actividad como realizada en cuanto la termines — te toma menos de 1 minuto y así queda registrada tu labor de mantenimiento preventivo.
+          </p>
+        </div>
+      )}
+
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div className="hidden sm:block" />
         <div className="flex gap-2 flex-wrap">
           <button onClick={() => setVistaActiva('calendario')}
             className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${vistaActiva === 'calendario' ? 'bg-slate-900 text-white' : 'border border-slate-300 text-slate-700 hover:bg-slate-50'}`}>
