@@ -94,7 +94,7 @@ export async function generarReporteIndividualExcel(opts: {
   });
   wsL.getCell(rr + 1, 2).value = `Colegio: ${colegioNombre}   |   Territorio: ${territorio}   |   Año: ${año}`;
   wsL.getCell(rr + 1, 2).font = { italic: true, size: 10, color: { argb: 'FF6B7280' }, name: 'Calibri' };
-  wsL.getCell(rr + 3, 2).value = 'Documento generado por Sistema RCMA para Coordinación de Protección Civil.';
+  wsL.getCell(rr + 3, 2).value = 'Documento generado por Sistema RCMA.';
   wsL.getCell(rr + 3, 2).font = { italic: true, size: 9, color: { argb: 'FF9CA3AF' }, name: 'Calibri' };
 
   // ── Una hoja por mes ──
@@ -133,7 +133,7 @@ export async function generarReporteIndividualExcel(opts: {
 
     ws.mergeCells(4, 1, 4, ultimaCol);
     const sub = ws.getCell(4, 1);
-    sub.value = `Colegio: ${colegioNombre}   |   Territorio: ${territorio}   |   Periodo: ${MESES_ES[mes]} ${año}   |   Documento para Coordinación de Protección Civil`;
+    sub.value = `Colegio: ${colegioNombre}   |   Territorio: ${territorio}   |   Periodo: ${MESES_ES[mes]} ${año}   |   Reporte General de Mantenimiento`;
     sub.font = { italic: true, size: 10, color: { argb: SKY }, name: 'Calibri' };
     sub.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF5F7FA' } };
     sub.alignment = { horizontal: 'left', vertical: 'middle', indent: 1 };
@@ -286,7 +286,7 @@ async function pdfHeaderPC(doc: Doc, W: number, subtitle: string) {
   doc.setFontSize(14); doc.setFont('helvetica', 'bold'); doc.setTextColor(255, 255, 255);
   doc.text('COLEGIOS MANO AMIGA — PROGRAMA DE MANTENIMIENTO', 34, 12);
   doc.setFontSize(9.5); doc.setFont('helvetica', 'normal'); doc.setTextColor(255, 170, 110);
-  doc.text('REPORTE GENERAL — Documento para Coordinación de Protección Civil', 34, 19);
+  doc.text('REPORTE GENERAL DE MANTENIMIENTO', 34, 19);
   doc.setFontSize(8); doc.setTextColor(190, 200, 220);
   doc.text(subtitle, 34, 25);
   try {
@@ -338,7 +338,7 @@ export async function generarReporteGeneralPDF(opts: {
   doc.setFontSize(9); doc.setFont('helvetica', 'normal'); doc.setTextColor(30, 41, 59);
   doc.text(`Alcance: ${datos.length} colegios a nivel nacional`, 20, y);
   doc.text(`Elaborado por: ${elaboradoPor}`, 20, y + 5);
-  doc.text(`Dirigido a: Gerencia de Protección Civil`, 20, y + 10);
+  doc.text(`Dirigido a: Lic. Ángel Eduardo Rodríguez Martínez`, 20, y + 10);
   doc.text(`Fecha de generación: ${hoyStr}`, W - 20, y, { align: 'right' });
   y += 20;
 

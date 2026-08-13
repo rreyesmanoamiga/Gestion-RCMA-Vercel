@@ -676,7 +676,7 @@ export default function CalendarioMantenimiento() {
       await generarReporteGeneralPDF({
         año: pcAño,
         datos,
-        elaboradoPor: user?.email ?? 'Coordinación de Obras y Mantenimiento',
+        elaboradoPor: 'Ing. Ricardo Joanathan Reyes Medina — Coordinador de Obras y Mantenimiento',
       });
       logAudit({ accion: 'editar', modulo: 'calendario', registro_ref: `Reporte PC General — ${pcAño}` });
       toast.success('Reporte generado ✓');
