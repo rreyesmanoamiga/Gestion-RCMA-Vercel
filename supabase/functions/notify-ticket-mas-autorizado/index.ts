@@ -90,23 +90,23 @@ serve(async (req) => {
         <tr><td align="center">
           <table width="600" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,0.08);">
             <tr>
-              <td style="background:#0f172a;padding:32px 40px;">
+              <td style="background:#00295A;padding:32px 40px;border-bottom:3px solid #059669;">
                 <h1 style="margin:0;color:#ffffff;font-size:22px;font-weight:700;">Sistema RCMA</h1>
                 <p style="margin:4px 0 0;color:#94a3b8;font-size:13px;">Coordinación de Obras — Colegios Mano Amiga</p>
               </td>
             </tr>
             <tr>
-              <td style="background:#15803d;padding:16px 40px;">
+              <td style="background:#059669;padding:16px 40px;">
                 <p style="margin:0;color:#ffffff;font-size:14px;font-weight:600;">Ticket MAS Autorizado - ${folio ?? ''}</p>
               </td>
             </tr>
             <tr>
               <td style="padding:40px;">
                 <p style="color:#475569;font-size:15px;margin:0 0 8px;">Estimado(a) <strong>${solicitante ?? 'solicitante'}</strong>,</p>
-                <p style="color:#475569;font-size:15px;line-height:1.6;margin:0 0 24px;">Su Ticket ha sido <strong style="color:#15803d;">revisado y autorizado</strong> por la Coordinación de Obras RCMA.</p>
+                <p style="color:#475569;font-size:15px;line-height:1.6;margin:0 0 24px;">Su Ticket ha sido <strong style="color:#059669;">revisado y autorizado</strong> por la Coordinación de Obras RCMA.</p>
                 <table width="100%" cellpadding="0" cellspacing="0" style="border:1px solid #e2e8f0;border-radius:8px;overflow:hidden;margin-bottom:24px;">
-                  <tr style="background:#f0fdf4;"><td colspan="2" style="padding:10px 16px;font-size:12px;font-weight:700;color:#15803d;border-bottom:1px solid #dcfce7;">Datos del Ticket Autorizado</td></tr>
-                  <tr style="background:#f8fafc;"><td style="padding:12px 16px;font-size:12px;font-weight:700;color:#64748b;text-transform:uppercase;width:40%;border-bottom:1px solid #e2e8f0;">Folio</td><td style="padding:12px 16px;font-size:14px;font-weight:700;color:#1d4ed8;border-bottom:1px solid #e2e8f0;">${folio ?? '&#8212;'}</td></tr>
+                  <tr style="background:#ecfdf5;"><td colspan="2" style="padding:10px 16px;font-size:12px;font-weight:700;color:#059669;border-bottom:1px solid #d1fae5;">Datos del Ticket Autorizado</td></tr>
+                  <tr style="background:#f8fafc;"><td style="padding:12px 16px;font-size:12px;font-weight:700;color:#64748b;text-transform:uppercase;width:40%;border-bottom:1px solid #e2e8f0;">Folio</td><td style="padding:12px 16px;font-size:14px;font-weight:700;color:#4F82C2;border-bottom:1px solid #e2e8f0;">${folio ?? '&#8212;'}</td></tr>
                   <tr><td style="padding:12px 16px;font-size:12px;font-weight:700;color:#64748b;text-transform:uppercase;border-bottom:1px solid #e2e8f0;">Colegio</td><td style="padding:12px 16px;font-size:14px;color:#0f172a;border-bottom:1px solid #e2e8f0;">${colegio ?? '&#8212;'}</td></tr>
                   <tr style="background:#f8fafc;"><td style="padding:12px 16px;font-size:12px;font-weight:700;color:#64748b;text-transform:uppercase;border-bottom:1px solid #e2e8f0;">Territorio</td><td style="padding:12px 16px;font-size:14px;color:#0f172a;border-bottom:1px solid #e2e8f0;">${territorio ?? '&#8212;'}</td></tr>
                   <tr><td style="padding:12px 16px;font-size:12px;font-weight:700;color:#64748b;text-transform:uppercase;border-bottom:1px solid #e2e8f0;">Clasificación</td><td style="padding:12px 16px;font-size:14px;color:#0f172a;border-bottom:1px solid #e2e8f0;">${clasificacion ?? '&#8212;'}</td></tr>

@@ -86,7 +86,7 @@ serve(async (req) => {
         <td style="padding:8px 12px;font-size:13px;border-bottom:1px solid #f1f5f9;">${p.titulo ?? '—'}</td>
         <td style="padding:8px 12px;font-size:12px;color:#64748b;border-bottom:1px solid #f1f5f9;">${p.asignado_nombre ?? '—'}</td>
         <td style="padding:8px 12px;font-size:12px;border-bottom:1px solid #f1f5f9;">
-          <span style="color:${new Date(p.fecha_limite) < hoy ? '#dc2626' : '#d97706'};font-weight:700;">
+          <span style="color:${new Date(p.fecha_limite) < hoy ? '#DC2626' : '#d97706'};font-weight:700;">
             ${new Date(p.fecha_limite) < hoy ? '🔴 VENCIDO' : '🟡 Hoy/Mañana'}
           </span><br>
           <span style="color:#64748b;font-size:11px;">${p.fecha_limite}</span>
@@ -100,11 +100,11 @@ serve(async (req) => {
   <table width="100%" cellpadding="0" cellspacing="0" style="background:#f1f5f9;padding:40px 0;">
     <tr><td align="center">
       <table width="640" cellpadding="0" cellspacing="0" style="background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,.08);">
-        <tr><td style="background:#0f172a;padding:24px 32px;">
+        <tr><td style="background:#00295A;padding:24px 32px;border-bottom:3px solid #DC2626;">
           <h1 style="margin:0;color:#fff;font-size:18px;font-weight:700;">Sistema RCMA — NEXUS</h1>
           <p style="margin:4px 0 0;color:#94a3b8;font-size:11px;">Recordatorio diario de pendientes · ${new Date().toLocaleDateString('es-MX', {weekday:'long',year:'numeric',month:'long',day:'numeric'})}</p>
         </td></tr>
-        <tr><td style="background:${vencidos && vencidos.length > 0 ? '#dc2626' : '#d97706'};padding:12px 32px;">
+        <tr><td style="background:${vencidos && vencidos.length > 0 ? '#DC2626' : '#d97706'};padding:12px 32px;">
           <p style="margin:0;color:#fff;font-size:13px;font-weight:700;">
             ${vencidos && vencidos.length > 0 ? `⚠️ ${vencidos.length} pendiente${vencidos.length !== 1 ? 's' : ''} vencido${vencidos.length !== 1 ? 's' : ''}` : ''}
             ${porVencer && porVencer.length > 0 ? ` · 🟡 ${porVencer.length} vence${porVencer.length !== 1 ? 'n' : ''} hoy o mañana` : ''}
@@ -121,7 +121,7 @@ serve(async (req) => {
             ${allPendientes.map(fila).join('')}
           </table>
           <br>
-          <a href="${siteUrl}/nexus" style="display:inline-block;background:#0f172a;color:#fff;padding:10px 22px;border-radius:8px;font-size:13px;font-weight:700;text-decoration:none;">Ver NEXUS →</a>
+          <a href="${siteUrl}/nexus" style="display:inline-block;background:#00295A;color:#fff;padding:10px 22px;border-radius:8px;font-size:13px;font-weight:700;text-decoration:none;">Ver NEXUS →</a>
         </td></tr>
         <tr><td style="background:#f8fafc;padding:16px 32px;border-top:1px solid #e2e8f0;">
           <p style="margin:0;color:#94a3b8;font-size:11px;text-align:center;">Sistema RCMA · ${smtpUser} · Recordatorio automático ${tipo === 'vencidos' ? '8:00 AM — Vencidos' : tipo === 'por_vencer' ? '7:00 PM — Próximos a vencer' : 'diario'}</p>

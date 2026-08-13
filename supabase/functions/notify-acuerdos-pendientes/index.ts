@@ -80,7 +80,7 @@ function generarHTML(vencidos: AcuerdoFila[], proximos: AcuerdoFila[], siteUrl: 
 <table width="100%" cellpadding="0" cellspacing="0" style="background:#f1f5f9;padding:40px 0;">
 <tr><td align="center">
 <table width="600" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,0.08);">
-<tr><td style="background:#0f172a;padding:28px 36px;">
+<tr><td style="background:#00295A;padding:28px 36px;border-bottom:3px solid #ED7102;">
   <h1 style="margin:0;color:#ffffff;font-size:20px;font-weight:700;">Sistema RCMA</h1>
   <p style="margin:4px 0 0;color:#94a3b8;font-size:12px;">Seguimiento semanal de Acuerdos y Compromisos</p>
 </td></tr>
@@ -96,7 +96,7 @@ function generarHTML(vencidos: AcuerdoFila[], proximos: AcuerdoFila[], siteUrl: 
   </table>
 </td></tr>
 <tr><td style="padding:0 36px 32px;">
-  <a href="${siteUrl}/minutas" style="display:inline-block;background:#2563eb;color:#fff;padding:10px 22px;border-radius:8px;font-size:13px;font-weight:700;text-decoration:none;">Ver Seguimiento de Acuerdos →</a>
+  <a href="${siteUrl}/minutas" style="display:inline-block;background:#4F82C2;color:#fff;padding:10px 22px;border-radius:8px;font-size:13px;font-weight:700;text-decoration:none;">Ver Seguimiento de Acuerdos →</a>
 </td></tr>
 <tr><td style="background:#f8fafc;padding:20px 36px;border-top:1px solid #e2e8f0;">
   <p style="margin:0;color:#94a3b8;font-size:11px;text-align:center;">Sistema RCMA · Colegios Mano Amiga</p>

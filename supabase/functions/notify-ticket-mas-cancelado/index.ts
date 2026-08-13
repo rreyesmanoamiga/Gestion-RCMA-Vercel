@@ -81,26 +81,26 @@ serve(async (req) => {
         <tr><td align="center">
           <table width="600" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,0.08);">
             <tr>
-              <td style="background:#0f172a;padding:32px 40px;">
+              <td style="background:#00295A;padding:32px 40px;border-bottom:3px solid #DC2626;">
                 <h1 style="margin:0;color:#ffffff;font-size:22px;font-weight:700;">Sistema RCMA</h1>
                 <p style="margin:4px 0 0;color:#94a3b8;font-size:13px;">Coordinación de Obras — Colegios Mano Amiga</p>
               </td>
             </tr>
             <tr>
-              <td style="background:#dc2626;padding:16px 40px;">
+              <td style="background:#DC2626;padding:16px 40px;">
                 <p style="margin:0;color:#ffffff;font-size:14px;font-weight:600;">🚫 Ticket MAS Cancelado — ${folio ?? ''}</p>
               </td>
             </tr>
             <tr>
               <td style="padding:40px;">
                 <p style="color:#475569;font-size:15px;margin:0 0 8px;">Estimado(a) <strong>${solicitante ?? 'solicitante'}</strong>,</p>
-                <p style="color:#475569;font-size:15px;line-height:1.6;margin:0 0 24px;">Le informamos que el siguiente Ticket MAS ha sido <strong style="color:#dc2626;">cancelado</strong> por la Coordinación de Obras RCMA.</p>
+                <p style="color:#475569;font-size:15px;line-height:1.6;margin:0 0 24px;">Le informamos que el siguiente Ticket MAS ha sido <strong style="color:#DC2626;">cancelado</strong> por la Coordinación de Obras RCMA.</p>
                 <table width="100%" cellpadding="0" cellspacing="0" style="border:1px solid #e2e8f0;border-radius:8px;overflow:hidden;margin-bottom:32px;">
-                  <tr style="background:#fef2f2;"><td colspan="2" style="padding:10px 16px;font-size:12px;font-weight:700;color:#dc2626;border-bottom:1px solid #fecaca;">Detalles de la Cancelación</td></tr>
-                  <tr style="background:#f8fafc;"><td style="padding:12px 16px;font-size:12px;font-weight:700;color:#64748b;text-transform:uppercase;width:40%;border-bottom:1px solid #e2e8f0;">Folio</td><td style="padding:12px 16px;font-size:14px;font-weight:700;color:#dc2626;border-bottom:1px solid #e2e8f0;">${folio ?? '—'}</td></tr>
+                  <tr style="background:#fee2e2;"><td colspan="2" style="padding:10px 16px;font-size:12px;font-weight:700;color:#DC2626;border-bottom:1px solid #fecaca;">Detalles de la Cancelación</td></tr>
+                  <tr style="background:#f8fafc;"><td style="padding:12px 16px;font-size:12px;font-weight:700;color:#64748b;text-transform:uppercase;width:40%;border-bottom:1px solid #e2e8f0;">Folio</td><td style="padding:12px 16px;font-size:14px;font-weight:700;color:#DC2626;border-bottom:1px solid #e2e8f0;">${folio ?? '—'}</td></tr>
                   <tr><td style="padding:12px 16px;font-size:12px;font-weight:700;color:#64748b;text-transform:uppercase;border-bottom:1px solid #e2e8f0;">Colegio</td><td style="padding:12px 16px;font-size:14px;color:#0f172a;border-bottom:1px solid #e2e8f0;">${colegio ?? '—'}</td></tr>
                   <tr style="background:#f8fafc;"><td style="padding:12px 16px;font-size:12px;font-weight:700;color:#64748b;text-transform:uppercase;border-bottom:1px solid #e2e8f0;">Territorio</td><td style="padding:12px 16px;font-size:14px;color:#0f172a;border-bottom:1px solid #e2e8f0;">${territorio ?? '—'}</td></tr>
-                  <tr style="background:#fef2f2;"><td style="padding:12px 16px;font-size:12px;font-weight:700;color:#64748b;text-transform:uppercase;">Motivo de Cancelación</td><td style="padding:12px 16px;font-size:14px;color:#dc2626;font-weight:600;">${motivo ?? '—'}</td></tr>
+                  <tr style="background:#fee2e2;"><td style="padding:12px 16px;font-size:12px;font-weight:700;color:#64748b;text-transform:uppercase;">Motivo de Cancelación</td><td style="padding:12px 16px;font-size:14px;color:#DC2626;font-weight:600;">${motivo ?? '—'}</td></tr>
                 </table>
                 <p style="color:#64748b;font-size:14px;margin:0 0 0;">Si tiene alguna duda, comuníquese con la Coordinación de Obras RCMA.</p>
               </td>

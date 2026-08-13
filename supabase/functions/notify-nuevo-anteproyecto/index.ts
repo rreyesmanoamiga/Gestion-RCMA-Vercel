@@ -65,11 +65,11 @@ serve(async (req) => {
   <table width="100%" cellpadding="0" cellspacing="0" style="background:#f1f5f9;padding:40px 0;">
     <tr><td align="center">
       <table width="600" cellpadding="0" cellspacing="0" style="background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,.08);">
-        <tr><td style="background:#0f172a;padding:28px 36px;">
+        <tr><td style="background:#00295A;padding:28px 36px;border-bottom:3px solid #ED7102;">
           <h1 style="margin:0;color:#fff;font-size:20px;font-weight:700;">Sistema RCMA</h1>
           <p style="margin:4px 0 0;color:#94a3b8;font-size:12px;">Coordinación de Obras — Colegios Mano Amiga</p>
         </td></tr>
-        <tr><td style="background:#2563eb;padding:14px 36px;">
+        <tr><td style="background:#4F82C2;padding:14px 36px;">
           <p style="margin:0;color:#fff;font-size:14px;font-weight:700;">📐 Nuevo Anteproyecto — ${nombre_proyecto ?? '—'}</p>
         </td></tr>
         <tr><td style="padding:32px 36px;">
@@ -98,7 +98,7 @@ serve(async (req) => {
               <td style="padding:12px 16px;font-size:14px;color:#0f172a;">${subido_por ?? '—'}</td>
             </tr>
           </table>
-          ${siteUrl ? `<a href="${siteUrl}/anteproyectos" style="display:inline-block;background:#2563eb;color:#fff;padding:10px 22px;border-radius:8px;font-size:13px;font-weight:700;text-decoration:none;">Ver Anteproyecto →</a>` : ''}
+          ${siteUrl ? `<a href="${siteUrl}/anteproyectos" style="display:inline-block;background:#4F82C2;color:#fff;padding:10px 22px;border-radius:8px;font-size:13px;font-weight:700;text-decoration:none;">Ver Anteproyecto →</a>` : ''}
         </td></tr>
         <tr><td style="background:#f8fafc;padding:20px 36px;border-top:1px solid #e2e8f0;">
           <p style="margin:0;color:#94a3b8;font-size:11px;text-align:center;">Sistema RCMA · ${smtpUser}</p>

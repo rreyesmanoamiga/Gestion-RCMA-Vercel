@@ -83,16 +83,16 @@ serve(async (req) => {
   <table width="100%" cellpadding="0" cellspacing="0" style="background:#f1f5f9;padding:40px 0;">
     <tr><td align="center">
       <table width="600" cellpadding="0" cellspacing="0" style="background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,.08);">
-        <tr><td style="background:#0f172a;padding:28px 36px;">
+        <tr><td style="background:#00295A;padding:28px 36px;border-bottom:3px solid #059669;">
           <h1 style="margin:0;color:#fff;font-size:20px;font-weight:700;">Sistema RCMA</h1>
           <p style="margin:4px 0 0;color:#94a3b8;font-size:12px;">Insumos — Coordinación de Obras</p>
         </td></tr>
-        <tr><td style="background:#16a34a;padding:14px 36px;">
+        <tr><td style="background:#059669;padding:14px 36px;">
           <p style="margin:0;color:#fff;font-size:14px;font-weight:700;">✅ VoBo Autorizado — ${folio}</p>
         </td></tr>
         <tr><td style="padding:32px 36px;">
           <p style="color:#475569;font-size:15px;line-height:1.6;margin:0 0 20px;">
-            La requisición <strong>${folio}</strong> ha sido <strong style="color:#16a34a;">AUTORIZADA</strong> por <strong>${vobo_por}</strong> el ${vobo_fecha ?? 'hoy'}.
+            La requisición <strong>${folio}</strong> ha sido <strong style="color:#059669;">AUTORIZADA</strong> por <strong>${vobo_por}</strong> el ${vobo_fecha ?? 'hoy'}.
           </p>
           <table width="100%" cellpadding="0" cellspacing="0" style="border:1px solid #e2e8f0;border-radius:8px;overflow:hidden;margin-bottom:28px;">
             <tr style="background:#f8fafc;">
@@ -109,11 +109,11 @@ serve(async (req) => {
             </tr>
             <tr>
               <td style="padding:12px 16px;font-size:12px;font-weight:700;color:#64748b;text-transform:uppercase;">Total a Pagar</td>
-              <td style="padding:12px 16px;font-size:15px;color:#16a34a;font-weight:700;">${fmt(totalIVA)}</td>
+              <td style="padding:12px 16px;font-size:15px;color:#059669;font-weight:700;">${fmt(totalIVA)}</td>
             </tr>
           </table>
           <p style="color:#64748b;font-size:13px;margin:0 0 20px;">Ya puedes descargar el PDF autorizado desde el sistema y notificar al proveedor.</p>
-          <a href="${appUrl}/insumos" style="display:inline-block;background:#16a34a;color:#fff;padding:10px 22px;border-radius:8px;font-size:13px;font-weight:700;text-decoration:none;">Ver en el Sistema →</a>
+          <a href="${appUrl}/insumos" style="display:inline-block;background:#059669;color:#fff;padding:10px 22px;border-radius:8px;font-size:13px;font-weight:700;text-decoration:none;">Ver en el Sistema →</a>
         </td></tr>
         <tr><td style="background:#f8fafc;padding:20px 36px;border-top:1px solid #e2e8f0;">
           <p style="margin:0;color:#94a3b8;font-size:11px;text-align:center;">Sistema RCMA · ${smtpUser}</p>
@@ -149,11 +149,11 @@ serve(async (req) => {
   <table width="100%" cellpadding="0" cellspacing="0" style="background:#f1f5f9;padding:40px 0;">
     <tr><td align="center">
       <table width="640" cellpadding="0" cellspacing="0" style="background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,.08);">
-        <tr><td style="background:#0f172a;padding:28px 36px;">
+        <tr><td style="background:#00295A;padding:28px 36px;border-bottom:3px solid #4F82C2;">
           <h1 style="margin:0;color:#fff;font-size:20px;font-weight:700;">Sistema RCMA</h1>
           <p style="margin:4px 0 0;color:#94a3b8;font-size:12px;">Insumos — Coordinación de Obras</p>
         </td></tr>
-        <tr><td style="background:#0d8a7e;padding:14px 36px;">
+        <tr><td style="background:#4F82C2;padding:14px 36px;">
           <p style="margin:0;color:#fff;font-size:14px;font-weight:700;">📋 Solicitud de VoBo — ${folio}</p>
         </td></tr>
         <tr><td style="padding:32px 36px;">
@@ -177,7 +177,7 @@ serve(async (req) => {
 
           <table width="100%" cellpadding="0" cellspacing="0" style="border:1px solid #e2e8f0;border-radius:8px;overflow:hidden;margin-bottom:20px;">
             <thead>
-              <tr style="background:#0f172a;">
+              <tr style="background:#00295A;">
                 <th style="padding:10px 12px;color:#fff;font-size:11px;text-align:left;text-transform:uppercase;">Producto</th>
                 <th style="padding:10px 12px;color:#fff;font-size:11px;text-align:center;text-transform:uppercase;">Unidad</th>
                 <th style="padding:10px 12px;color:#fff;font-size:11px;text-align:center;text-transform:uppercase;">Cantidad</th>
@@ -195,7 +195,7 @@ serve(async (req) => {
                 <td colspan="4" style="padding:8px 12px;font-size:12px;color:#64748b;text-align:right;">IVA (${ivaPct}%):</td>
                 <td style="padding:8px 12px;font-size:12px;font-weight:600;color:#0f172a;text-align:right;">${fmt(ivaAmt)}</td>
               </tr>
-              <tr style="background:#0d8a7e;">
+              <tr style="background:#4F82C2;">
                 <td colspan="4" style="padding:12px;color:#fff;font-size:13px;font-weight:700;text-align:right;">TOTAL A PAGAR (con IVA)</td>
                 <td style="padding:12px;color:#fff;font-size:15px;font-weight:700;text-align:right;">${fmt(totalIVA)}</td>
               </tr>
@@ -204,12 +204,12 @@ serve(async (req) => {
 
           ${link_cotizacion ? `<table width="100%" cellpadding="0" cellspacing="0" style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;margin-bottom:20px;">
             <tr><td style="padding:14px 18px;">
-              <p style="font-size:12px;font-weight:700;color:#1e40af;margin:0 0 4px;">📎 Cotización del Proveedor</p>
-              <a href="${link_cotizacion}" target="_blank" style="color:#2563eb;font-size:13px;">Ver cotización original →</a>
+              <p style="font-size:12px;font-weight:700;color:#00295A;margin:0 0 4px;">📎 Cotización del Proveedor</p>
+              <a href="${link_cotizacion}" target="_blank" style="color:#4F82C2;font-size:13px;">Ver cotización original →</a>
             </td></tr>
           </table>` : ''}
 
-          <a href="${appUrl}/insumos" style="display:inline-block;background:#0f172a;color:#fff;padding:10px 22px;border-radius:8px;font-size:13px;font-weight:700;text-decoration:none;">Dar VoBo en el Sistema →</a>
+          <a href="${appUrl}/insumos" style="display:inline-block;background:#00295A;color:#fff;padding:10px 22px;border-radius:8px;font-size:13px;font-weight:700;text-decoration:none;">Dar VoBo en el Sistema →</a>
         </td></tr>
         <tr><td style="background:#f8fafc;padding:20px 36px;border-top:1px solid #e2e8f0;">
           <p style="margin:0;color:#94a3b8;font-size:11px;text-align:center;">Sistema RCMA · ${smtpUser}</p>

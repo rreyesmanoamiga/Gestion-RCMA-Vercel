@@ -89,17 +89,17 @@ serve(async (req) => {
   <table width="100%" cellpadding="0" cellspacing="0" style="background:#f1f5f9;padding:40px 0;">
     <tr><td align="center">
       <table width="600" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,0.08);">
-        <tr><td style="background:#0f172a;padding:28px 36px;">
+        <tr><td style="background:#00295A;padding:28px 36px;border-bottom:3px solid #ED7102;">
           <h1 style="margin:0;color:#fff;font-size:20px;font-weight:700;">Sistema RCMA</h1>
           <p style="margin:4px 0 0;color:#94a3b8;font-size:12px;">Coordinación de Obras — Colegios Mano Amiga</p>
         </td></tr>
-        <tr><td style="background:#1d4ed8;padding:12px 36px;">
+        <tr><td style="background:#4F82C2;padding:12px 36px;">
           <p style="margin:0;color:#fff;font-size:13px;font-weight:600;">🎫 Nuevo Ticket MAS Recibido — ${folio}</p>
         </td></tr>
         <tr><td style="padding:32px 36px;">
           <p style="color:#475569;font-size:14px;margin:0 0 20px;">Se registró un nuevo Ticket de Construcciones, Mejoras y Mantenimiento. Aquí el resumen:</p>
           <table width="100%" style="border:1px solid #e2e8f0;border-radius:8px;overflow:hidden;margin-bottom:24px;">
-            <tr style="background:#f8fafc;"><td style="padding:10px 14px;font-size:11px;font-weight:700;color:#64748b;text-transform:uppercase;width:38%;border-bottom:1px solid #e2e8f0;">Folio</td><td style="padding:10px 14px;font-size:13px;font-weight:700;color:#1d4ed8;border-bottom:1px solid #e2e8f0;">${folio}</td></tr>
+            <tr style="background:#f8fafc;"><td style="padding:10px 14px;font-size:11px;font-weight:700;color:#64748b;text-transform:uppercase;width:38%;border-bottom:1px solid #e2e8f0;">Folio</td><td style="padding:10px 14px;font-size:13px;font-weight:700;color:#4F82C2;border-bottom:1px solid #e2e8f0;">${folio}</td></tr>
             <tr><td style="padding:10px 14px;font-size:11px;font-weight:700;color:#64748b;text-transform:uppercase;border-bottom:1px solid #e2e8f0;">Colegio</td><td style="padding:10px 14px;font-size:13px;color:#0f172a;border-bottom:1px solid #e2e8f0;">${colegio ?? '—'}</td></tr>
             <tr style="background:#f8fafc;"><td style="padding:10px 14px;font-size:11px;font-weight:700;color:#64748b;text-transform:uppercase;border-bottom:1px solid #e2e8f0;">Solicitante</td><td style="padding:10px 14px;font-size:13px;color:#0f172a;border-bottom:1px solid #e2e8f0;">${solicitante ?? '—'}</td></tr>
             <tr><td style="padding:10px 14px;font-size:11px;font-weight:700;color:#64748b;text-transform:uppercase;border-bottom:1px solid #e2e8f0;">Puesto</td><td style="padding:10px 14px;font-size:13px;color:#0f172a;border-bottom:1px solid #e2e8f0;">${puesto ?? '—'}</td></tr>
@@ -108,7 +108,7 @@ serve(async (req) => {
             <tr style="background:#f8fafc;"><td style="padding:10px 14px;font-size:11px;font-weight:700;color:#64748b;text-transform:uppercase;">Descripción</td><td style="padding:10px 14px;font-size:12px;color:#475569;">${descripcion ?? '—'}</td></tr>
           </table>
           <table cellpadding="0" cellspacing="0" style="margin:0 auto;">
-            <tr><td style="background:#0f172a;border-radius:8px;padding:12px 28px;">
+            <tr><td style="background:#00295A;border-radius:8px;padding:12px 28px;">
               <a href="${siteUrl}/ticket-mas" style="color:#fff;font-size:14px;font-weight:600;text-decoration:none;">Revisar ticket en el sistema →</a>
             </td></tr>
           </table>

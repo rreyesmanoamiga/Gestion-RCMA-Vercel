@@ -119,14 +119,14 @@ serve(async (req) => {
           <table width="600" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,0.08);">
             <!-- Header -->
             <tr>
-              <td style="background:#0f172a;padding:32px 40px;">
+              <td style="background:#00295A;padding:32px 40px;border-bottom:3px solid #DC2626;">
                 <h1 style="margin:0;color:#ffffff;font-size:22px;font-weight:700;">Sistema RCMA</h1>
                 <p style="margin:4px 0 0;color:#94a3b8;font-size:13px;">Coordinación de Obras — Colegios Mano Amiga</p>
               </td>
             </tr>
             <!-- Alerta roja -->
             <tr>
-              <td style="background:#dc2626;padding:16px 40px;">
+              <td style="background:#DC2626;padding:16px 40px;">
                 <p style="margin:0;color:#ffffff;font-size:14px;font-weight:600;">
                   ❌ Solicitud cancelada — ${proyecto ?? 'Proyecto'}
                 </p>
@@ -158,7 +158,7 @@ serve(async (req) => {
                   <tr>
                     <td style="padding:12px 16px;font-size:12px;font-weight:700;color:#64748b;text-transform:uppercase;border-bottom:1px solid #e2e8f0;">Estatus</td>
                     <td style="padding:12px 16px;border-bottom:1px solid #e2e8f0;">
-                      <span style="background:#fee2e2;color:#dc2626;padding:3px 10px;border-radius:20px;font-size:12px;font-weight:700;">CANCELADA</span>
+                      <span style="background:#fee2e2;color:#DC2626;padding:3px 10px;border-radius:20px;font-size:12px;font-weight:700;">CANCELADA</span>
                     </td>
                   </tr>
                   <tr style="background:#f8fafc;">
@@ -167,7 +167,7 @@ serve(async (req) => {
                   </tr>
                 </table>
                 <p style="color:#475569;font-size:14px;line-height:1.6;margin:0 0 8px;">
-                  Si tienes alguna duda sobre esta cancelación, comunícate directamente con la Coordinación de Obras escribiendo a <a href="mailto:rreyes@manoamiga.edu.mx" style="color:#1e40af;">rreyes@manoamiga.edu.mx</a>.
+                  Si tienes alguna duda sobre esta cancelación, comunícate directamente con la Coordinación de Obras escribiendo a <a href="mailto:rreyes@manoamiga.edu.mx" style="color:#00295A;">rreyes@manoamiga.edu.mx</a>.
                 </p>
               </td>
             </tr>

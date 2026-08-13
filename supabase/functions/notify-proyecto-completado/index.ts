@@ -60,7 +60,7 @@ serve(async (req) => {
       : diff > 0 ? `+${fmtMXN(diff)} (sobrecosto ${pctDiff}%)`
       : diff < 0 ? `${fmtMXN(diff)} (ahorro ${Math.abs(pctDiff ?? 0)}%)`
       : 'Exacto (0%)';
-    const diffColor    = diff == null ? '#64748b' : diff > 0 ? '#dc2626' : diff < 0 ? '#16a34a' : '#64748b';
+    const diffColor    = diff == null ? '#64748b' : diff > 0 ? '#DC2626' : diff < 0 ? '#059669' : '#64748b';
 
     const buildHtml = () => `<!DOCTYPE html>
 <html lang="es"><head><meta charset="UTF-8"></head>
@@ -68,11 +68,11 @@ serve(async (req) => {
   <table width="100%" cellpadding="0" cellspacing="0" style="background:#f1f5f9;padding:40px 0;">
     <tr><td align="center">
       <table width="600" cellpadding="0" cellspacing="0" style="background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,.08);">
-        <tr><td style="background:#0f172a;padding:28px 36px;">
+        <tr><td style="background:#00295A;padding:28px 36px;border-bottom:3px solid #059669;">
           <h1 style="margin:0;color:#fff;font-size:20px;font-weight:700;">Sistema RCMA</h1>
           <p style="margin:4px 0 0;color:#94a3b8;font-size:12px;">Coordinación de Obras — Colegios Mano Amiga</p>
         </td></tr>
-        <tr><td style="background:#16a34a;padding:14px 36px;">
+        <tr><td style="background:#059669;padding:14px 36px;">
           <p style="margin:0;color:#fff;font-size:14px;font-weight:700;">✅ Proyecto Completado — ${nombre_proyecto ?? '—'}</p>
         </td></tr>
         <tr><td style="padding:32px 36px;">
@@ -82,7 +82,7 @@ serve(async (req) => {
           <table width="100%" cellpadding="0" cellspacing="0" style="border:1px solid #e2e8f0;border-radius:8px;overflow:hidden;margin-bottom:24px;">
             <tr style="background:#f8fafc;">
               <td style="padding:10px 14px;font-size:11px;font-weight:700;color:#64748b;text-transform:uppercase;width:40%;border-bottom:1px solid #e2e8f0;">Proyecto</td>
-              <td style="padding:10px 14px;font-size:14px;font-weight:600;color:#0f172a;border-bottom:1px solid #e2e8f0;">${nombre_proyecto ?? '—'} ${folio ? `<span style="color:#dc2626;font-size:11px;">(${folio})</span>` : ''}</td>
+              <td style="padding:10px 14px;font-size:14px;font-weight:600;color:#0f172a;border-bottom:1px solid #e2e8f0;">${nombre_proyecto ?? '—'} ${folio ? `<span style="color:#DC2626;font-size:11px;">(${folio})</span>` : ''}</td>
             </tr>
             <tr>
               <td style="padding:10px 14px;font-size:11px;font-weight:700;color:#64748b;text-transform:uppercase;border-bottom:1px solid #e2e8f0;">Colegio / Territorio</td>
@@ -109,7 +109,7 @@ serve(async (req) => {
               <td style="padding:10px 14px;font-size:14px;color:#0f172a;">${fecha}</td>
             </tr>
           </table>
-          ${site_url ? `<a href="${site_url}/proyectos" style="display:inline-block;background:#0f172a;color:#fff;padding:10px 24px;border-radius:8px;font-size:13px;font-weight:700;text-decoration:none;">Ver en Sistema RCMA →</a>` : ''}
+          ${site_url ? `<a href="${site_url}/proyectos" style="display:inline-block;background:#00295A;color:#fff;padding:10px 24px;border-radius:8px;font-size:13px;font-weight:700;text-decoration:none;">Ver en Sistema RCMA →</a>` : ''}
         </td></tr>
         <tr><td style="background:#f8fafc;padding:20px 36px;border-top:1px solid #e2e8f0;">
           <p style="margin:0;color:#94a3b8;font-size:11px;text-align:center;">Sistema RCMA · ${smtpUser}</p>

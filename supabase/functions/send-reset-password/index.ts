@@ -99,14 +99,14 @@ serve(async (req) => {
           <table width="600" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,0.08);">
 
             <tr>
-              <td style="background:#0f172a;padding:32px 40px;">
+              <td style="background:#00295A;padding:32px 40px;border-bottom:3px solid #4F82C2;">
                 <h1 style="margin:0;color:#ffffff;font-size:22px;font-weight:700;">Sistema RCMA</h1>
                 <p style="margin:4px 0 0;color:#94a3b8;font-size:13px;">Coordinación de Obras — Colegios Mano Amiga</p>
               </td>
             </tr>
 
             <tr>
-              <td style="background:#1d4ed8;padding:16px 40px;">
+              <td style="background:#4F82C2;padding:16px 40px;">
                 <p style="margin:0;color:#ffffff;font-size:14px;font-weight:600;">🔐 Restablecer contraseña</p>
               </td>
             </tr>

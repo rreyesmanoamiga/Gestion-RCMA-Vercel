@@ -31,9 +31,9 @@ serve(async (req) => {
     const { destinatario_email, destinatario_nombre, titulo, descripcion, prioridad, fecha_limite, asignado_por, siteUrl, es_directo, responsable_nombre } = await req.json();
     const smtpUser = Deno.env.get('SMTP_USER') ?? '';
     const appUrl = siteUrl ?? Deno.env.get('SITE_URL') ?? '';
-    const PRIO_COLOR: Record<string,string> = { urgente:'#dc2626', alta:'#ea580c', normal:'#2563eb', baja:'#64748b' };
+    const PRIO_COLOR: Record<string,string> = { urgente:'#DC2626', alta:'#ea580c', normal:'#4F82C2', baja:'#64748b' };
     const PRIO_LABEL: Record<string,string> = { urgente:'URGENTE', alta:'Alta', normal:'Normal', baja:'Baja' };
-    const bandColor = PRIO_COLOR[prioridad] ?? '#2563eb';
+    const bandColor = PRIO_COLOR[prioridad] ?? '#4F82C2';
 
     const introTxt = es_directo === false
       ? `Hola <strong>${destinatario_nombre}</strong>, <strong>${asignado_por}</strong> asignó el siguiente pendiente a <strong>${responsable_nombre}</strong>. Quedas en copia para tu conocimiento.`
@@ -45,7 +45,7 @@ serve(async (req) => {
   <table width="100%" cellpadding="0" cellspacing="0" style="background:#f1f5f9;padding:40px 0;">
     <tr><td align="center">
       <table width="600" cellpadding="0" cellspacing="0" style="background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,.08);">
-        <tr><td style="background:#0f172a;padding:28px 36px;">
+        <tr><td style="background:#00295A;padding:28px 36px;border-bottom:3px solid #4F82C2;">
           <h1 style="margin:0;color:#fff;font-size:20px;font-weight:700;">Sistema RCMA</h1>
           <p style="margin:4px 0 0;color:#94a3b8;font-size:12px;">NEXUS — Coordinación de Obras</p>
         </td></tr>
@@ -72,7 +72,7 @@ serve(async (req) => {
               <td style="padding:12px 16px;font-size:14px;color:#0f172a;">${fecha_limite}</td>
             </tr>` : ''}
           </table>
-          <a href="${appUrl}/nexus" style="display:inline-block;background:#0f172a;color:#fff;padding:10px 22px;border-radius:8px;font-size:13px;font-weight:700;text-decoration:none;">Ver Pendiente en el Sistema →</a>
+          <a href="${appUrl}/nexus" style="display:inline-block;background:#00295A;color:#fff;padding:10px 22px;border-radius:8px;font-size:13px;font-weight:700;text-decoration:none;">Ver Pendiente en el Sistema →</a>
         </td></tr>
         <tr><td style="background:#f8fafc;padding:20px 36px;border-top:1px solid #e2e8f0;">
           <p style="margin:0;color:#94a3b8;font-size:11px;text-align:center;">Sistema RCMA · ${smtpUser}</p>

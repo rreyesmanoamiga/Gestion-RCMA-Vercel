@@ -43,7 +43,7 @@ function baseHtml(colorBand: string, tituloBand: string, cuerpo: string) {
   <table width="100%" cellpadding="0" cellspacing="0" style="background:#f1f5f9;padding:40px 0;">
     <tr><td align="center">
       <table width="600" cellpadding="0" cellspacing="0" style="background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,.08);">
-        <tr><td style="background:#0f172a;padding:28px 36px;">
+        <tr><td style="background:#00295A;padding:28px 36px;border-bottom:3px solid #DC2626;">
           <h1 style="margin:0;color:#fff;font-size:20px;font-weight:700;">Sistema RCMA</h1>
           <p style="margin:4px 0 0;color:#94a3b8;font-size:12px;">Reporte de Problema</p>
         </td></tr>
@@ -89,19 +89,19 @@ serve(async (req) => {
         ${filaTabla('Reportado por', reportado_por_nombre ?? '—')}
         ${descripcion ? filaTabla('Descripción', descripcion) : ''}
       </table>`;
-      const boton = siteUrl ? `<a href="${siteUrl}/reportar-problema" style="display:inline-block;background:#dc2626;color:#fff;padding:10px 22px;border-radius:8px;font-size:13px;font-weight:700;text-decoration:none;">Ver Reporte →</a>` : '';
-      html = baseHtml('#dc2626', '🔧 Nuevo reporte de problema', `
+      const boton = siteUrl ? `<a href="${siteUrl}/reportar-problema" style="display:inline-block;background:#DC2626;color:#fff;padding:10px 22px;border-radius:8px;font-size:13px;font-weight:700;text-decoration:none;">Ver Reporte →</a>` : '';
+      html = baseHtml('#DC2626', '🔧 Nuevo reporte de problema', `
         <p style="color:#475569;font-size:15px;line-height:1.6;margin:0 0 20px;">Un usuario reportó una falla en el sistema:</p>
         ${tabla}${boton}`);
     } else if (tipo === 'en_revision') {
       subject = `👀 [RCMA] Tu reporte ya está siendo atendido`;
-      html = baseHtml('#2563eb', '👀 Estamos revisando tu reporte', `
+      html = baseHtml('#4F82C2', '👀 Estamos revisando tu reporte', `
         <p style="color:#475569;font-size:15px;line-height:1.6;margin:0 0 20px;">
           Hola${reportado_por_nombre ? ' ' + reportado_por_nombre : ''}, tu reporte sobre <strong>${modulo}</strong> (${tipo_problema}) ya está siendo revisado por la Coordinación de Obras. En cuanto se resuelva, te avisamos.
         </p>`);
     } else if (tipo === 'resuelto') {
       subject = `✅ [RCMA] Tu reporte ya fue resuelto`;
-      html = baseHtml('#16a34a', '✅ Problema resuelto', `
+      html = baseHtml('#059669', '✅ Problema resuelto', `
         <p style="color:#475569;font-size:15px;line-height:1.6;margin:0 0 20px;">
           Hola${reportado_por_nombre ? ' ' + reportado_por_nombre : ''}, el problema que reportaste sobre <strong>${modulo}</strong> (${tipo_problema}) ya fue corregido. Gracias por avisarnos — así ayudas a mejorar el sistema para todos.
         </p>`);
