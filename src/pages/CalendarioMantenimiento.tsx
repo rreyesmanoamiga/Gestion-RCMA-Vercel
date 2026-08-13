@@ -1,12 +1,13 @@
 import React, { useState, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { ChevronLeft, ChevronRight, Calendar, CheckCircle2, Clock, AlertTriangle, Wrench, X, Plus, Trash2, Bell, Mail, UserPlus, Pencil, Lock, Search, ChevronDown, ChevronUp, BellOff, Filter } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Calendar, CheckCircle2, Clock, AlertTriangle, Wrench, X, Plus, Trash2, Bell, Mail, UserPlus, Pencil, Lock, Search, ChevronDown, ChevronUp, BellOff, Filter, FileSpreadsheet, Loader2, FileText } from 'lucide-react';
 import { supabase } from '@/lib/supabaseClient';
 import { COLEGIOS } from '@/lib/colegios';
 import { useAuth } from '@/lib/AuthContext';
 import { usePermissions } from '@/hooks/usePermissions';
 import { toast } from 'sonner';
 import { logAudit } from '@/lib/audit';
+import { generarReporteIndividualExcel, generarReporteGeneralPDF, type CumplimientoColegioPC } from '@/lib/reportesProteccionCivil';
 
 export interface Actividad {
   id: number | string;
@@ -206,6 +207,10 @@ export default function CalendarioMantenimiento() {
   const [showModal, setShowModal] = useState(false);
   const [showGestion, setShowGestion] = useState(false);
   const [showNotificaciones, setShowNotificaciones] = useState(false);
+  const [showReportePC, setShowReportePC] = useState(false);
+  const [pcColegio, setPcColegio] = useState('');
+  const [pcAño, setPcAño] = useState(new Date().getFullYear());
+  const [pcGenerando, setPcGenerando] = useState<'individual' | 'general' | null>(null);
   const [editingItem, setEditingItem] = useState<Actividad | null>(null);
   const [showConsulta, setShowConsulta] = useState(false);
   const [consultaActividadId, setConsultaActividadId] = useState<string>('');
@@ -593,6 +598,94 @@ export default function CalendarioMantenimiento() {
   const anteriorMes = () => { if (mes === 0) { setMes(11); setAño(a => a-1); } else setMes(m => m-1); setDiaSeleccionado(null); };
   const siguienteMes = () => { if (mes === 11) { setMes(0); setAño(a => a+1); } else setMes(m => m+1); setDiaSeleccionado(null); };
   const colorCat = (cat: string) => COLORES_CATEGORIA[cat] || '#64748b';
+
+  // ─── Reportes de Protección Civil ────────────────────────────────────────
+  const handleGenerarReporteIndividual = async () => {
+    if (!pcColegio) { toast.error('Selecciona un colegio'); return; }
+    setPcGenerando('individual');
+    try {
+      const colegioInfo = COLEGIOS.find(c => c.colegio === pcColegio);
+      const inicioISO = `${pcAño}-01-01`;
+      const finISO = `${pcAño}-12-31`;
+      const { data, error } = await supabase
+        .from('maintenance_completions')
+        .select('colegio, fecha_programada, actividad_ref')
+        .eq('colegio', pcColegio)
+        .gte('fecha_programada', inicioISO)
+        .lte('fecha_programada', finISO);
+      if (error) throw error;
+
+      const completionsSet = new Set(
+        (data ?? []).map((c: any) => `${c.colegio}|${c.fecha_programada}|${c.actividad_ref}`)
+      );
+
+      await generarReporteIndividualExcel({
+        colegio: pcColegio,
+        colegioNombre: pcColegio,
+        territorio: colegioInfo?.territorio ?? '—',
+        año: pcAño,
+        todasActividades,
+        actividadRef,
+        completionsSet,
+      });
+      logAudit({ accion: 'editar', modulo: 'calendario', registro_ref: `Reporte PC Individual — ${pcColegio} ${pcAño}` });
+      toast.success('Reporte generado ✓');
+    } catch (e: any) {
+      toast.error('Error al generar el reporte: ' + (e.message ?? 'desconocido'));
+    } finally {
+      setPcGenerando(null);
+    }
+  };
+
+  const handleGenerarReporteGeneral = async () => {
+    setPcGenerando('general');
+    try {
+      const inicioISO = `${pcAño}-01-01`;
+      const finISO = `${pcAño}-12-31`;
+      const { data, error } = await supabase
+        .from('maintenance_completions')
+        .select('colegio, fecha_programada, actividad_ref')
+        .gte('fecha_programada', inicioISO)
+        .lte('fecha_programada', finISO);
+      if (error) throw error;
+
+      const completadasPorColegio = new Map<string, number>();
+      (data ?? []).forEach((c: any) => {
+        completadasPorColegio.set(c.colegio, (completadasPorColegio.get(c.colegio) ?? 0) + 1);
+      });
+
+      // Total programado del año (hasta hoy) es el mismo para todos los colegios,
+      // ya que el catálogo es universal/nacional.
+      const hoy = new Date();
+      let totalProgramado = 0;
+      for (let m = 0; m < 12; m++) {
+        if (pcAño > hoy.getFullYear() || (pcAño === hoy.getFullYear() && m > hoy.getMonth())) break;
+        todasActividades.forEach(act => {
+          totalProgramado += calcularFechasEnMes(act, pcAño, m).filter(f => f <= hoy).length;
+        });
+      }
+
+      const datos: CumplimientoColegioPC[] = COLEGIOS.map(c => ({
+        colegio: c.colegio,
+        colegioNombre: c.colegio,
+        territorio: c.territorio,
+        completadas: completadasPorColegio.get(c.colegio) ?? 0,
+        totalProgramado,
+      }));
+
+      await generarReporteGeneralPDF({
+        año: pcAño,
+        datos,
+        elaboradoPor: user?.email ?? 'Coordinación de Obras y Mantenimiento',
+      });
+      logAudit({ accion: 'editar', modulo: 'calendario', registro_ref: `Reporte PC General — ${pcAño}` });
+      toast.success('Reporte generado ✓');
+    } catch (e: any) {
+      toast.error('Error al generar el reporte: ' + (e.message ?? 'desconocido'));
+    } finally {
+      setPcGenerando(null);
+    }
+  };
   const handleFrecuencia = (freq: string) => {
     const preset = FRECUENCIAS_PRESET.find(f => f.label === freq);
     setForm(f => ({ ...f, frecuencia: freq, frecuenciaDias: preset?.dias ?? f.frecuenciaDias }));
@@ -643,6 +736,10 @@ export default function CalendarioMantenimiento() {
           </button>
           {isAdmin && (
             <>
+              <button onClick={() => setShowReportePC(true)}
+                className="px-4 py-2 rounded-md text-sm font-medium border border-orange-300 text-orange-700 bg-orange-50 hover:bg-orange-100 transition-colors flex items-center gap-2">
+                <FileSpreadsheet className="w-4 h-4" /> Protección Civil
+              </button>
               <button onClick={() => setShowNotificaciones(true)}
                 className="px-4 py-2 rounded-md text-sm font-medium border border-slate-300 text-slate-700 hover:bg-slate-50 transition-colors flex items-center gap-2 relative">
                 <Bell className="w-4 h-4" /> Notificaciones
@@ -931,6 +1028,62 @@ export default function CalendarioMantenimiento() {
                 })()}
               </div>
             ))}
+          </div>
+        </div>
+      )}
+
+      {/* Modal Reportes de Protección Civil */}
+      {showReportePC && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-lg">
+            <div className="flex items-center justify-between p-5 border-b border-slate-100">
+              <div className="flex items-center gap-2">
+                <FileSpreadsheet className="w-5 h-5 text-orange-600" />
+                <h3 className="font-bold text-slate-900">Reportes de Protección Civil</h3>
+              </div>
+              <button onClick={() => setShowReportePC(false)} className="text-slate-400 hover:text-slate-600"><X className="w-5 h-5" /></button>
+            </div>
+            <div className="p-5 space-y-5">
+              <p className="text-xs text-slate-500">
+                Genera el programa de mantenimiento con la evidencia de cumplimiento real registrada en el sistema, listo para entregar a la Gerencia de Protección Civil.
+              </p>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Año</label>
+                  <input type="number" value={pcAño} onChange={e => setPcAño(parseInt(e.target.value) || new Date().getFullYear())}
+                    className="w-full px-3 py-2 border border-slate-200 rounded-md text-sm focus:ring-2 focus:ring-orange-500 focus:outline-none" />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Colegio (para el individual)</label>
+                  <select value={pcColegio} onChange={e => setPcColegio(e.target.value)}
+                    className="w-full px-3 py-2 border border-slate-200 rounded-md text-sm focus:ring-2 focus:ring-orange-500 focus:outline-none">
+                    <option value="">Selecciona...</option>
+                    {COLEGIOS.map(c => <option key={c.colegio} value={c.colegio}>{c.colegio}</option>)}
+                  </select>
+                </div>
+              </div>
+
+              <div className="border border-slate-200 rounded-lg p-4">
+                <p className="text-sm font-bold text-slate-900 mb-1">Reporte Individual — Excel</p>
+                <p className="text-xs text-slate-500 mb-3">Cuadrícula día por día, agrupada por semana, de un colegio específico. Una pestaña por mes.</p>
+                <button onClick={handleGenerarReporteIndividual} disabled={pcGenerando !== null}
+                  className="w-full px-4 py-2 bg-orange-600 text-white rounded-md text-sm font-bold hover:bg-orange-700 disabled:opacity-50 flex items-center justify-center gap-2">
+                  {pcGenerando === 'individual' ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileSpreadsheet className="w-4 h-4" />}
+                  {pcGenerando === 'individual' ? 'Generando...' : 'Descargar Excel Individual'}
+                </button>
+              </div>
+
+              <div className="border border-slate-200 rounded-lg p-4">
+                <p className="text-sm font-bold text-slate-900 mb-1">Reporte General — PDF</p>
+                <p className="text-xs text-slate-500 mb-3">Cumplimiento de los {COLEGIOS.length} colegios, ordenado de menor a mayor avance.</p>
+                <button onClick={handleGenerarReporteGeneral} disabled={pcGenerando !== null}
+                  className="w-full px-4 py-2 bg-slate-900 text-white rounded-md text-sm font-bold hover:bg-slate-800 disabled:opacity-50 flex items-center justify-center gap-2">
+                  {pcGenerando === 'general' ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileText className="w-4 h-4" />}
+                  {pcGenerando === 'general' ? 'Generando...' : 'Descargar PDF General'}
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}
