@@ -59,12 +59,12 @@ serve(async (req) => {
 <body style="margin:0;padding:0;background:#f1f5f9;font-family:Arial,sans-serif;">
   <table width="100%" cellpadding="0" cellspacing="0" style="background:#f1f5f9;padding:40px 0;">
     <tr><td align="center">
-      <table width="600" cellpadding="0" cellspacing="0" style="background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,.08);">
-        <tr><td style="background:#00295A;padding:28px 36px;border-bottom:3px solid #ED7102;">
-          <h1 style="margin:0;color:#fff;font-size:20px;font-weight:700;">Sistema RCMA</h1>
+      <table width="600" cellpadding="0" cellspacing="0" style="background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,0.08);">
+        <tr><td style="background:#00295A;padding:32px 40px;border-bottom:3px solid #ED7102;">
+          <h1 style="margin:0;color:#fff;font-size:22px;font-weight:700;">Sistema RCMA</h1>
           <p style="margin:4px 0 0;color:#94a3b8;font-size:12px;">Coordinación de Obras — Colegios Mano Amiga</p>
         </td></tr>
-        <tr><td style="background:#4F82C2;padding:14px 36px;">
+        <tr><td style="background:#4F82C2;padding:16px 40px;">
           <p style="margin:0;color:#fff;font-size:14px;font-weight:700;">📎 Cotizaciones Subidas — ${proyecto ?? '—'}</p>
         </td></tr>
         <tr><td style="padding:32px 36px;">
