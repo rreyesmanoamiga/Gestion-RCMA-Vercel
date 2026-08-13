@@ -47,20 +47,20 @@ const ACTIVIDADES_BASE: Actividad[] = [
 
 const FECHA_BASE = new Date(2025, 0, 1);
 
-function ocurreMañana(act: Actividad, mañana: Date): boolean {
-  const diffManana = Math.floor((mañana.getTime() - FECHA_BASE.getTime()) / 86400000);
-  const esFechaNaturalManana = diffManana >= 0 && diffManana % act.frecuenciaDias === 0;
+function ocurreHoy(act: Actividad, hoy: Date): boolean {
+  const diffHoy = Math.floor((hoy.getTime() - FECHA_BASE.getTime()) / 86400000);
+  const esFechaNaturalHoy = diffHoy >= 0 && diffHoy % act.frecuenciaDias === 0;
 
   if (act.frecuenciaDias === 1) {
     // Diaria: el domingo se omite, sin correrse.
-    return esFechaNaturalManana && mañana.getDay() !== 0;
+    return esFechaNaturalHoy && hoy.getDay() !== 0;
   }
 
-  // No diaria: cuenta si mañana es su fecha natural (y no es domingo)...
-  if (esFechaNaturalManana && mañana.getDay() !== 0) return true;
-  // ...o si mañana es lunes y absorbe la fecha natural que cayó el domingo anterior.
-  if (mañana.getDay() === 1) {
-    const domingoAnterior = new Date(mañana.getTime() - 86400000);
+  // No diaria: cuenta si hoy es su fecha natural (y no es domingo)...
+  if (esFechaNaturalHoy && hoy.getDay() !== 0) return true;
+  // ...o si hoy es lunes y absorbe la fecha natural que cayó el domingo anterior.
+  if (hoy.getDay() === 1) {
+    const domingoAnterior = new Date(hoy.getTime() - 86400000);
     const diffDom = Math.floor((domingoAnterior.getTime() - FECHA_BASE.getTime()) / 86400000);
     if (diffDom >= 0 && diffDom % act.frecuenciaDias === 0) return true;
   }
@@ -141,7 +141,7 @@ async function sendEmail(to: string, subject: string, html: string) {
   tlsConn.close();
 }
 
-function generarHTML(actividades: Actividad[], fecha: Date, adminEmail: string): string {
+function generarHTML(actividades: Actividad[], fecha: Date, adminEmail: string, siteUrl: string): string {
   const MESES = ['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
   const DIAS  = ['domingo','lunes','martes','miercoles','jueves','viernes','sabado'];
   const fechaStr = `${DIAS[fecha.getDay()]} ${fecha.getDate()} de ${MESES[fecha.getMonth()]} de ${fecha.getFullYear()}`;
@@ -170,20 +170,20 @@ function generarHTML(actividades: Actividad[], fecha: Date, adminEmail: string):
 <table width="100%" cellpadding="0" cellspacing="0" style="background:#f1f5f9;padding:40px 0;">
 <tr><td align="center">
 <table width="600" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,0.08);">
-<tr><td style="background:#0f172a;padding:32px 40px;">
-  <h1 style="margin:0;color:#ffffff;font-size:22px;font-weight:700;">Sistema RCMA - Recordatorio de Mantenimiento</h1>
+<tr><td style="background:#00295A;padding:32px 40px;border-bottom:3px solid #ED7102;">
+  <h1 style="margin:0;color:#ffffff;font-size:22px;font-weight:700;">Sistema RCMA — Recordatorio de Mantenimiento</h1>
   <p style="margin:4px 0 0;color:#94a3b8;font-size:13px;">Colegios Mano Amiga</p>
 </td></tr>
 <tr><td style="padding:32px 40px 0;">
   <div style="background:#fef9c3;border:1px solid #fde047;border-radius:10px;padding:16px 20px;margin-bottom:24px;">
-    <p style="margin:0;font-size:15px;font-weight:700;color:#713f12;">Mantenimiento programado para manana</p>
+    <p style="margin:0;font-size:15px;font-weight:700;color:#713f12;">Mantenimiento programado para hoy</p>
     <p style="margin:4px 0 0;font-size:13px;color:#92400e;">${fechaStr}</p>
   </div>
   <p style="color:#475569;font-size:14px;line-height:1.6;margin:0 0 20px;">
-    Se han programado <strong>${actividades.length} actividade(s) de mantenimiento</strong> para manana.
+    Se ${actividades.length === 1 ? 'ha programado' : 'han programado'} <strong>${actividades.length} actividad${actividades.length !== 1 ? 'es' : ''} de mantenimiento</strong> para hoy.
   </p>
 </td></tr>
-<tr><td style="padding:0 40px 32px;">
+<tr><td style="padding:0 40px 24px;">
   <table width="100%" cellpadding="0" cellspacing="0" style="border:1px solid #e2e8f0;border-radius:10px;overflow:hidden;">
     <tr><td style="background:#f8fafc;padding:10px 16px;border-bottom:1px solid #e2e8f0;">
       <p style="margin:0;font-size:11px;font-weight:700;color:#94a3b8;text-transform:uppercase;">Actividades programadas</p>
@@ -191,8 +191,16 @@ function generarHTML(actividades: Actividad[], fecha: Date, adminEmail: string):
     ${actividadesHTML}
   </table>
 </td></tr>
+<tr><td style="padding:0 40px 32px;">
+  <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:10px;padding:16px 20px;">
+    <p style="margin:0;font-size:13px;color:#1e40af;">
+      <strong>No se te olvide marcar como realizado</strong> en el sistema en cuanto termines cada actividad — toma menos de un minuto y así queda tu registro al día.
+    </p>
+  </div>
+  <a href="${siteUrl}/calendario" style="display:inline-block;margin-top:16px;background:#ED7102;color:#fff;padding:10px 22px;border-radius:8px;font-size:13px;font-weight:700;text-decoration:none;">Ir a marcar en el sistema →</a>
+</td></tr>
 <tr><td style="background:#f8fafc;padding:24px 40px;border-top:1px solid #e2e8f0;">
-  <p style="margin:0;color:#94a3b8;font-size:12px;text-align:center;">Sistema RCMA - Colegios Mano Amiga - ${adminEmail}</p>
+  <p style="margin:0;color:#94a3b8;font-size:12px;text-align:center;">Sistema RCMA — Colegios Mano Amiga</p>
 </td></tr>
 </table>
 </td></tr>
@@ -213,10 +221,10 @@ serve(async (req) => {
     );
 
     const adminEmail = Deno.env.get('ADMIN_EMAIL') ?? Deno.env.get('SMTP_USER') ?? '';
+    const siteUrl = Deno.env.get('SITE_URL') ?? 'https://gestion-rcma-vercel.vercel.app';
 
-    const manana = new Date();
-    manana.setDate(manana.getDate() + 1);
-    manana.setHours(8, 0, 0, 0);
+    const hoy = new Date();
+    hoy.setHours(0, 0, 0, 0);
 
     const { data: customRaw = [] } = await supabase
       .from('custom_maintenance').select('*');
@@ -245,11 +253,11 @@ serve(async (req) => {
       }));
 
     const todasActividades = [...actividadesBase, ...customPuras];
-    const actividadesManana = todasActividades.filter(act => ocurreMañana(act, manana));
+    const actividadesHoy = todasActividades.filter(act => ocurreHoy(act, hoy));
 
-    if (actividadesManana.length === 0) {
+    if (actividadesHoy.length === 0) {
       return new Response(
-        JSON.stringify({ success: true, message: 'No hay mantenimientos para manana', sent: 0 }),
+        JSON.stringify({ success: true, message: 'No hay mantenimientos para hoy', sent: 0 }),
         { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
@@ -290,11 +298,11 @@ serve(async (req) => {
 
     let sent = 0;
     const MESES = ['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
-    const subject = `Sistema RCMA: ${actividadesManana.length} mantenimiento(s) para manana ${manana.getDate()} de ${MESES[manana.getMonth()]}`;
+    const subject = `Sistema RCMA: ${actividadesHoy.length} mantenimiento(s) para hoy ${hoy.getDate()} de ${MESES[hoy.getMonth()]}`;
 
     // Enviar al admin solo si tiene el toggle activado
     if (adminNotifActivo && adminEmail) {
-      const htmlContent = generarHTML(actividadesManana, manana, adminEmail);
+      const htmlContent = generarHTML(actividadesHoy, hoy, adminEmail, siteUrl);
       await sendEmail(adminEmail, subject, htmlContent);
       sent++;
     }
@@ -304,18 +312,18 @@ serve(async (req) => {
       if (!r.email) continue;
       // Si tiene filtro, enviar solo las actividades que le corresponden
       const actividadesParaEste: Actividad[] = r.actividades_ids == null
-        ? actividadesManana
-        : actividadesManana.filter(act => (r.actividades_ids as number[]).includes(Number(act.id)));
+        ? actividadesHoy
+        : actividadesHoy.filter(act => (r.actividades_ids as number[]).includes(Number(act.id)));
 
       if (actividadesParaEste.length === 0) continue;
 
-      const htmlContent = generarHTML(actividadesParaEste, manana, adminEmail);
+      const htmlContent = generarHTML(actividadesParaEste, hoy, adminEmail, siteUrl);
       await sendEmail(r.email, subject, htmlContent);
       sent++;
     }
 
     return new Response(
-      JSON.stringify({ success: true, message: `Recordatorio enviado a ${sent} destinatario(s)`, actividades: actividadesManana.length, sent }),
+      JSON.stringify({ success: true, message: `Recordatorio enviado a ${sent} destinatario(s)`, actividades: actividadesHoy.length, sent }),
       { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
 
