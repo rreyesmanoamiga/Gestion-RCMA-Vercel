@@ -20,7 +20,7 @@ import {
   FileSignature,
   BarChart3,
   // --- ICONO AGREGADO ---
-  BookUser, Package, Layers, ShieldAlert,
+  BookUser, Package, Layers, ShieldAlert, ListTodo,
 } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 
@@ -171,6 +171,10 @@ export default function Sidebar({ isOpen, onToggle }) {
               <Link to="/cumplimiento/alertas" onClick={handleNavClick} className={navLinkClassExacta('/cumplimiento/alertas')}>
                 <ShieldAlert className="w-[18px] h-[18px]" />
                 Alertas
+              </Link>
+              <Link to="/cumplimiento/seguimiento" onClick={handleNavClick} className={navLinkClassExacta('/cumplimiento/seguimiento')}>
+                <ListTodo className="w-[18px] h-[18px]" />
+                Seguimiento
               </Link>
             </>
           ) : (
