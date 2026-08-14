@@ -6,24 +6,66 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+// Envuelve cualquier promesa con un límite de tiempo — si no resuelve a
+// tiempo, falla con un mensaje claro en vez de dejar la función colgada
+// hasta que la plataforma la mate por IDLE_TIMEOUT (150s) sin explicación.
+function conTimeout<T>(promesa: Promise<T>, ms: number, etiqueta: string): Promise<T> {
+  return Promise.race([
+    promesa,
+    new Promise<T>((_, reject) => setTimeout(() => reject(new Error(`Timeout (${ms}ms) en: ${etiqueta}`)), ms)),
+  ]);
+}
+
 async function sendEmail(to: string, subject: string, html: string) {
   const smtpHost = Deno.env.get('SMTP_HOST') ?? 'smtp.office365.com';
   const smtpPort = parseInt(Deno.env.get('SMTP_PORT') ?? '587');
   const smtpUser = Deno.env.get('SMTP_USER') ?? '';
   const smtpPass = Deno.env.get('SMTP_PASS') ?? '';
+  if (!smtpUser || !smtpPass) throw new Error('Faltan SMTP_USER o SMTP_PASS en los Secrets de la función');
+
   const enc = new TextEncoder(); const dec = new TextDecoder();
-  const conn = await Deno.connect({ hostname: smtpHost, port: smtpPort });
-  const rd = async () => { const b = new Uint8Array(4096); const n = await conn.read(b); return dec.decode(b.subarray(0, n ?? 0)); };
-  const wr = async (d: string) => { await conn.write(enc.encode(d + '\r\n')); };
-  await rd(); await wr('EHLO outlook.com'); await rd(); await wr('STARTTLS'); await rd();
-  const tls = await Deno.startTls(conn, { hostname: smtpHost });
-  const tw = async (d: string) => { await tls.write(enc.encode(d + '\r\n')); };
-  const tr = async () => { const b = new Uint8Array(4096); const n = await tls.read(b); return dec.decode(b.subarray(0, n ?? 0)); };
-  await tw('EHLO outlook.com'); await tr(); await tw('AUTH LOGIN'); await tr();
-  await tw(btoa(smtpUser)); await tr(); await tw(btoa(smtpPass)); await tr();
-  await tw(`MAIL FROM:<${smtpUser}>`); await tr();
-  await tw(`RCPT TO:<${to}>`); await tr();
-  await tw('DATA'); await tr();
+  console.log(`[smtp] conectando a ${smtpHost}:${smtpPort}...`);
+  const conn = await conTimeout(Deno.connect({ hostname: smtpHost, port: smtpPort }), 10000, 'Deno.connect');
+  console.log('[smtp] conectado, iniciando handshake');
+
+  const rd = async (paso: string) => {
+    const b = new Uint8Array(4096);
+    const n = await conTimeout(conn.read(b), 10000, `read (${paso})`);
+    const txt = dec.decode(b.subarray(0, n ?? 0));
+    console.log(`[smtp] <- ${paso}: ${txt.trim().slice(0, 80)}`);
+    return txt;
+  };
+  const wr = async (d: string, paso: string) => {
+    console.log(`[smtp] -> ${paso}`);
+    await conTimeout(conn.write(enc.encode(d + '\r\n')), 10000, `write (${paso})`);
+  };
+
+  await rd('banner'); await wr('EHLO outlook.com', 'EHLO'); await rd('ehlo'); await wr('STARTTLS', 'STARTTLS'); await rd('starttls-ack');
+  console.log('[smtp] iniciando TLS...');
+  const tls = await conTimeout(Deno.startTls(conn, { hostname: smtpHost }), 10000, 'Deno.startTls');
+  console.log('[smtp] TLS listo, autenticando');
+
+  const tw = async (d: string, paso: string) => {
+    console.log(`[smtp] -> ${paso}`);
+    await conTimeout(tls.write(enc.encode(d + '\r\n')), 10000, `tls write (${paso})`);
+  };
+  const tr = async (paso: string) => {
+    const b = new Uint8Array(4096);
+    const n = await conTimeout(tls.read(b), 10000, `tls read (${paso})`);
+    const txt = dec.decode(b.subarray(0, n ?? 0));
+    console.log(`[smtp] <- ${paso}: ${txt.trim().slice(0, 80)}`);
+    return txt;
+  };
+
+  await tw('EHLO outlook.com', 'EHLO-tls'); await tr('ehlo-tls');
+  await tw('AUTH LOGIN', 'AUTH LOGIN'); await tr('auth-login-ack');
+  await tw(btoa(smtpUser), 'user'); await tr('user-ack');
+  await tw(btoa(smtpPass), 'pass'); const authResp = await tr('pass-ack');
+  if (!authResp.startsWith('235')) throw new Error(`SMTP rechazó la autenticación: ${authResp.trim()}`);
+
+  await tw(`MAIL FROM:<${smtpUser}>`, 'MAIL FROM'); await tr('mail-from-ack');
+  await tw(`RCPT TO:<${to}>`, 'RCPT TO'); await tr('rcpt-to-ack');
+  await tw('DATA', 'DATA'); await tr('data-ack');
   const msg = [
     `From: Sistema RCMA <${smtpUser}>`,
     `To: ${to}`,
@@ -34,7 +76,9 @@ async function sendEmail(to: string, subject: string, html: string) {
     html,
     '.',
   ].join('\r\n');
-  await tw(msg); await tr(); await tw('QUIT'); tls.close();
+  await tw(msg, 'mensaje'); await tr('mensaje-ack'); await tw('QUIT', 'QUIT');
+  tls.close();
+  console.log('[smtp] correo enviado OK');
 }
 
 interface ComplianceDoc {
@@ -52,12 +96,14 @@ interface ComplianceDoc {
 
 serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
+  console.log('=== notify-compliance-vencimiento: inicio de invocación ===');
   try {
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const serviceKey  = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const siteUrl     = Deno.env.get('SITE_URL') ?? 'https://gestion-rcma-vercel.vercel.app';
     const adminEmail  = Deno.env.get('ADMIN_EMAIL') ?? 'rreyes@manoamiga.edu.mx';
     const smtpUser    = Deno.env.get('SMTP_USER') ?? '';
+    if (!supabaseUrl || !serviceKey) throw new Error('Faltan SUPABASE_URL o SUPABASE_SERVICE_ROLE_KEY en los Secrets de la función');
     const supabase    = createClient(supabaseUrl, serviceKey);
 
     // Tipo de envío: 'vencidos' (8am) o 'por_vencer' (7pm). Sin body = ambos.
@@ -66,6 +112,7 @@ serve(async (req) => {
       const body = await req.json();
       if (body?.tipo === 'vencidos' || body?.tipo === 'por_vencer') tipo = body.tipo;
     } catch { /* sin body */ }
+    console.log(`[main] tipo solicitado: ${tipo}`);
 
     // Fecha con horario de México (UTC-6), porque el cron corre en UTC
     const ahoraMX = new Date(Date.now() - 6 * 60 * 60 * 1000);
@@ -73,25 +120,33 @@ serve(async (req) => {
     const hoyISO  = hoy.toISOString().slice(0, 10);
 
     const cols = 'id, colegio, territorio, tipo_documento, materia, estado, vigente, fecha_limite_recepcion, vigente_hasta, responsable';
+    console.log('[main] consultando compliance_documentos...');
 
     // Vencidos: no verificados y con fecha límite ya pasada
-    const { data: vencidos } = tipo !== 'por_vencer' ? await supabase
+    const resVencidos = tipo !== 'por_vencer' ? await supabase
       .from('compliance_documentos')
       .select(cols)
       .eq('activo', true)
       .neq('estado', 'Verificado')
       .not('fecha_limite_recepcion', 'is', null)
-      .lt('fecha_limite_recepcion', hoyISO) : { data: [] };
+      .lt('fecha_limite_recepcion', hoyISO) : { data: [], error: null };
+    if (resVencidos.error) throw new Error(`Error consultando vencidos: ${resVencidos.error.message}`);
+    const vencidos = resVencidos.data;
 
     // Por vencer: marcados "Por expirar" en el registro
-    const { data: porVencer } = tipo !== 'vencidos' ? await supabase
+    const resPorVencer = tipo !== 'vencidos' ? await supabase
       .from('compliance_documentos')
       .select(cols)
       .eq('activo', true)
-      .eq('vigente', 'Por expirar') : { data: [] };
+      .eq('vigente', 'Por expirar') : { data: [], error: null };
+    if (resPorVencer.error) throw new Error(`Error consultando por vencer: ${resPorVencer.error.message}`);
+    const porVencer = resPorVencer.data;
+
+    console.log(`[main] consulta OK: ${vencidos?.length ?? 0} vencidos, ${porVencer?.length ?? 0} por vencer`);
 
     const todosDocs: ComplianceDoc[] = [...(vencidos ?? []), ...(porVencer ?? [])];
     if (todosDocs.length === 0) {
+      console.log('[main] sin documentos que notificar, terminando');
       return new Response(JSON.stringify({ success: true, message: 'Sin documentos vencidos o por vencer' }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
@@ -156,7 +211,9 @@ serve(async (req) => {
       : tipo === 'por_vencer'
       ? `🟡 [RCMA] Cumplimiento: ${todosDocs.length} documento${todosDocs.length !== 1 ? 's' : ''} por expirar`
       : `⏰ [RCMA] Cumplimiento: ${todosDocs.length} documento${todosDocs.length !== 1 ? 's' : ''} requiere${todosDocs.length === 1 ? '' : 'n'} atención`;
+    console.log(`[main] enviando correo a ${adminEmail}...`);
     await sendEmail(adminEmail, asunto, html);
+    console.log('[main] correo enviado, guardando notificación interna');
 
     // Notificación interna en el sistema para el admin
     try {
@@ -171,13 +228,17 @@ serve(async (req) => {
           modulo:     'cumplimiento',
         });
       }
-    } catch { /* no bloqueante */ }
+    } catch (errNotif) {
+      console.log(`[main] aviso: no se pudo guardar notificación interna: ${errNotif instanceof Error ? errNotif.message : errNotif}`);
+    }
 
+    console.log('=== notify-compliance-vencimiento: fin OK ===');
     return new Response(
       JSON.stringify({ success: true, enviados: todosDocs.length, vencidos: vencidos?.length ?? 0, por_vencer: porVencer?.length ?? 0 }),
       { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   } catch (err) {
+    console.log(`[main] ERROR: ${err instanceof Error ? err.message : String(err)}`);
     return new Response(
       JSON.stringify({ error: err instanceof Error ? err.message : 'Error desconocido' }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
