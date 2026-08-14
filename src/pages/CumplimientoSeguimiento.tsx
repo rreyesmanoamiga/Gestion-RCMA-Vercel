@@ -37,6 +37,7 @@ interface Comentario {
   id: string; pendiente_id: string | null; seguimiento_id: string | null;
   autor_email: string | null; autor_nombre: string | null; contenido: string; created_at: string;
 }
+interface SysUser { user_email: string; nombre: string | null; territorio: string | null; colegio: string | null; puesto: string | null; }
 
 const CATEGORIAS = ['General', 'Importante', 'Ideas', 'Recordatorios', 'Colegios', 'Personal'];
 const COLORES = ['#0f172a', '#0d8a7e', '#2563eb', '#7c3aed', '#db2777', '#ea580c', '#16a34a', '#d97706'];
@@ -258,6 +259,31 @@ export default function CumplimientoSeguimiento() {
     asignado_a: '', asignado_nombre: '', prioridad: 'normal' as Pendiente['prioridad'],
     fecha_limite: '', estatus: 'pendiente' as Pendiente['estatus'], colegio: '', territorio: '',
   });
+
+  // Usuarios del sistema (para "Compartidos") — misma fuente que NEXUS.
+  // La notificación por correo se activa después; por ahora solo se guarda
+  // a quién se asignó.
+  const { data: allUsers = [] } = useQuery({
+    queryKey: ['sys_users_compliance'],
+    queryFn: async () => {
+      const { data, error } = await supabase.from('user_permissions').select('user_email, nombre, territorio, colegio, puesto').neq('user_email', autorEmail);
+      if (error) throw error;
+      return (data ?? []) as SysUser[];
+    },
+  });
+
+  const usuariosPorGrupo = useMemo(() => {
+    const colegioObj = docs.find(d => d.colegio === pendForm.colegio);
+    const territorioSel = colegioObj?.territorio;
+    const fmaUsers = allUsers.filter(u => u.territorio === 'FMA');
+    const colegioUsers = pendForm.colegio
+      ? allUsers.filter(u => u.colegio === pendForm.colegio)
+      : territorioSel
+        ? allUsers.filter(u => u.territorio === territorioSel)
+        : [];
+    return { colegioUsers, fmaUsers };
+  }, [allUsers, pendForm.colegio, docs]);
+  const todosUsuarios = [...usuariosPorGrupo.colegioUsers, ...usuariosPorGrupo.fmaUsers];
 
   const openPend = (p?: Pendiente) => {
     setEditPend(p ?? null);
@@ -594,7 +620,7 @@ export default function CumplimientoSeguimiento() {
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Tipo</label>
-                <select className={inputCls} value={pendForm.tipo} onChange={e => setPendForm(f => ({ ...f, tipo: e.target.value as 'personal' | 'compartido' }))}>
+                <select className={inputCls} value={pendForm.tipo} onChange={e => setPendForm(f => ({ ...f, tipo: e.target.value as 'personal' | 'compartido', asignado_a: '', asignado_nombre: '' }))}>
                   <option value="personal">Personal</option>
                   <option value="compartido">Compartido</option>
                 </select>
@@ -607,7 +633,7 @@ export default function CumplimientoSeguimiento() {
               </div>
               <div>
                 <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Colegio</label>
-                <select className={inputCls} value={pendForm.colegio} onChange={e => setPendForm(f => ({ ...f, colegio: e.target.value }))}>
+                <select className={inputCls} value={pendForm.colegio} onChange={e => setPendForm(f => ({ ...f, colegio: e.target.value, asignado_a: '', asignado_nombre: '' }))}>
                   <option value="">General (sin colegio)</option>
                   {colegios.map(c => <option key={c} value={c}>{c.replace('Mano Amiga ', '')}</option>)}
                 </select>
@@ -618,16 +644,32 @@ export default function CumplimientoSeguimiento() {
               </div>
             </div>
             {pendForm.tipo === 'compartido' && (
-              <div className="grid grid-cols-2 gap-3 pt-2 border-t border-slate-100">
-                <div>
-                  <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Asignado a (correo)</label>
-                  <input className={inputCls} value={pendForm.asignado_a} onChange={e => setPendForm(f => ({ ...f, asignado_a: e.target.value }))} placeholder="correo@manoamiga.edu.mx" />
-                </div>
-                <div>
-                  <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Nombre</label>
-                  <input className={inputCls} value={pendForm.asignado_nombre} onChange={e => setPendForm(f => ({ ...f, asignado_nombre: e.target.value }))} placeholder="Nombre del responsable" />
-                </div>
-                <p className="col-span-2 text-[11px] text-slate-400 italic">La notificación por correo a esta persona se activa más adelante — por ahora solo se guarda la asignación.</p>
+              <div className="bg-teal-50 border border-teal-200 rounded-lg p-3 space-y-2">
+                <p className="text-xs font-bold text-teal-700 uppercase">Asignar a usuario *</p>
+                {!pendForm.colegio ? (
+                  <p className="text-xs text-teal-600">Elige un colegio arriba para ver a los usuarios registrados ahí.</p>
+                ) : todosUsuarios.length === 0 ? (
+                  <p className="text-xs text-teal-600">No hay usuarios registrados para {pendForm.colegio.replace('Mano Amiga ', '')} todavía.</p>
+                ) : (
+                  <select className={inputCls} value={pendForm.asignado_a} onChange={e => {
+                    const u = todosUsuarios.find(u => u.user_email === e.target.value);
+                    setPendForm(f => ({ ...f, asignado_a: e.target.value, asignado_nombre: u?.nombre || e.target.value }));
+                  }}>
+                    <option value="">Selecciona un usuario...</option>
+                    {usuariosPorGrupo.colegioUsers.length > 0 && (
+                      <optgroup label={`— ${pendForm.colegio.replace('Mano Amiga ', '')} —`}>
+                        {usuariosPorGrupo.colegioUsers.map(u => <option key={u.user_email} value={u.user_email}>{u.nombre || u.user_email} — {u.puesto || u.colegio}</option>)}
+                      </optgroup>
+                    )}
+                    {usuariosPorGrupo.fmaUsers.length > 0 && (
+                      <optgroup label="— FMA Oficinas —">
+                        {usuariosPorGrupo.fmaUsers.map(u => <option key={u.user_email} value={u.user_email}>{u.nombre || u.user_email} — {u.puesto || 'FMA'}</option>)}
+                      </optgroup>
+                    )}
+                  </select>
+                )}
+                {pendForm.asignado_a && <p className="text-xs text-teal-700 font-semibold">📧 {pendForm.asignado_a}</p>}
+                <p className="text-[11px] text-teal-600 italic">La notificación por correo a esta persona se activa más adelante — por ahora solo se guarda la asignación.</p>
               </div>
             )}
           </div>
