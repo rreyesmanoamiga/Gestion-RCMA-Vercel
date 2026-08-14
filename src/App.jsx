@@ -46,7 +46,11 @@ import Reports from '@/pages/Reports';
 import UserManagement from '@/pages/UserManagement';
 import Accesos from '@/pages/Accesos';
 import Auditoria from '@/pages/Auditoria';
-import CumplimientoNormativo from '@/pages/CumplimientoNormativo';
+import CumplimientoDashboard from '@/pages/CumplimientoDashboard';
+import CumplimientoPanelGeneral from '@/pages/CumplimientoPanelGeneral';
+import CumplimientoDocumentos from '@/pages/CumplimientoDocumentos';
+import CumplimientoAlertas from '@/pages/CumplimientoAlertas';
+import CumplimientoSeguimiento from '@/pages/CumplimientoSeguimiento';
 import ReportarProblema from '@/pages/ReportarProblema';
 import Minutas from '@/pages/Minutas';
 import CalendarioMantenimiento from '@/pages/CalendarioMantenimiento';
@@ -430,10 +434,11 @@ function AuthenticatedApp() {
           <Route path="/usuarios"           element={<UserManagement />} />
           <Route path="/accesos"            element={<Accesos />} />
           <Route path="/auditoria"          element={<Auditoria />} />
-          <Route path="/cumplimiento"             element={<CumplimientoNormativo />} />
-          <Route path="/cumplimiento/documentos"  element={<CumplimientoNormativo />} />
-          <Route path="/cumplimiento/alertas"     element={<CumplimientoNormativo />} />
-          <Route path="/cumplimiento/seguimiento" element={<CumplimientoNormativo />} />
+          <Route path="/cumplimiento"              element={<CumplimientoDashboard />} />
+          <Route path="/cumplimiento/panel-general" element={<CumplimientoPanelGeneral />} />
+          <Route path="/cumplimiento/documentos"    element={<CumplimientoDocumentos />} />
+          <Route path="/cumplimiento/alertas"       element={<CumplimientoAlertas />} />
+          <Route path="/cumplimiento/seguimiento"   element={<CumplimientoSeguimiento />} />
           <Route path="/reportar-problema"  element={<ReportarProblema />} />
           <Route path="/minutas"            element={<Minutas />} />
           <Route path="/calendario"         element={<CalendarioMantenimiento />} />
