@@ -433,6 +433,7 @@ function AuthenticatedApp() {
           <Route path="/cumplimiento"             element={<CumplimientoNormativo />} />
           <Route path="/cumplimiento/documentos"  element={<CumplimientoNormativo />} />
           <Route path="/cumplimiento/alertas"     element={<CumplimientoNormativo />} />
+          <Route path="/cumplimiento/seguimiento" element={<CumplimientoNormativo />} />
           <Route path="/reportar-problema"  element={<ReportarProblema />} />
           <Route path="/minutas"            element={<Minutas />} />
           <Route path="/calendario"         element={<CalendarioMantenimiento />} />
