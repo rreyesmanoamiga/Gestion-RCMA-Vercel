@@ -38,9 +38,10 @@ export default function CumplimientoNormativo() {
         </div>
         <h2 className="text-lg font-bold text-[#00295A] mb-2">Estamos armando esta sección</h2>
         <p className="text-sm text-slate-500 max-w-md mx-auto">
-          {tabActivo.label} de Cumplimiento Normativo está en construcción — pronto vas a poder ver aquí el estatus real
-          de los documentos de Protección Civil y Donatarias Autorizadas de los 20 colegios, con seguimiento operativo
-          (responsable, cotización, fecha objetivo) que complementa al registro oficial de Compliance.
+          {tabActivo.label} de Cumplimiento Normativo está en construcción. Aquí vas a ver la <strong>tabla de seguimiento</strong> de
+          los documentos de Protección Civil y Donatarias Autorizadas de los 20 colegios (estado, vigencia, responsable, fecha objetivo)
+          — un espejo del registro oficial de Compliance, no un lugar para subir archivos. Los documentos en sí se quedan en Compliance;
+          aquí solo se les da seguimiento operativo.
         </p>
         <div className="flex items-center justify-center gap-2 mt-5 text-xs text-slate-400">
           <ShieldCheck className="w-4 h-4" />

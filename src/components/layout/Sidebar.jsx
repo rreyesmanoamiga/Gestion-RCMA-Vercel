@@ -1,5 +1,5 @@
 import React from 'react';
-import { Link, useLocation } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import {
   LayoutDashboard,
   FolderKanban,
@@ -65,8 +65,8 @@ export default function Sidebar({ isOpen, onToggle }) {
   const isAdmin     = user?.user_metadata?.role === 'admin';
   const isMobile    = useIsMobile();
   const esRicardo   = user?.email === 'rreyes@manoamiga.edu.mx';
-  const [modo, setModo] = React.useState('obras'); // 'obras' | 'compliance'
-  const modoCompliance = esRicardo && modo === 'compliance';
+  const navigate = useNavigate();
+  const modoCompliance = esRicardo && location.pathname.startsWith('/cumplimiento');
 
   const handleNavClick = () => { if (isMobile) onToggle(); };
   const handleLogout   = async () => { await signOut(); };
@@ -74,6 +74,15 @@ export default function Sidebar({ isOpen, onToggle }) {
   const navLinkClass = (path) => cn(
     'flex items-center gap-3 pl-[10px] pr-3 py-2.5 rounded-md text-sm font-medium transition-all duration-200 border-l-2',
     location.pathname === path || (path !== '/' && path !== '/solicitud' && path !== '/solicitudes' && location.pathname.startsWith(path))
+      ? 'border-[#ED7102] bg-white/[0.06] text-white'
+      : 'border-transparent text-sidebar-foreground/70 hover:text-sidebar-foreground hover:bg-sidebar-accent'
+  );
+
+  // Comparación exacta (sin prefijo) — evita que "/cumplimiento" se marque
+  // activo también en "/cumplimiento/alertas" o "/cumplimiento/documentos".
+  const navLinkClassExacta = (path) => cn(
+    'flex items-center gap-3 pl-[10px] pr-3 py-2.5 rounded-md text-sm font-medium transition-all duration-200 border-l-2',
+    location.pathname === path
       ? 'border-[#ED7102] bg-white/[0.06] text-white'
       : 'border-transparent text-sidebar-foreground/70 hover:text-sidebar-foreground hover:bg-sidebar-accent'
   );
@@ -120,19 +129,19 @@ export default function Sidebar({ isOpen, onToggle }) {
               {esRicardo ? (
                 <div className="flex bg-white/[0.07] rounded-md p-[2px] mt-1.5">
                   <button
-                    onClick={() => setModo('obras')}
+                    onClick={() => navigate('/')}
                     className={cn(
                       'flex-1 text-center py-[5px] rounded text-[9.5px] font-bold transition-colors',
-                      modo === 'obras' ? 'bg-[#ED7102] text-white' : 'text-sidebar-foreground/50 hover:text-sidebar-foreground/80'
+                      !modoCompliance ? 'bg-[#ED7102] text-white' : 'text-sidebar-foreground/50 hover:text-sidebar-foreground/80'
                     )}
                   >
                     Obras
                   </button>
                   <button
-                    onClick={() => setModo('compliance')}
+                    onClick={() => navigate('/cumplimiento')}
                     className={cn(
                       'flex-1 text-center py-[5px] rounded text-[9.5px] font-bold transition-colors',
-                      modo === 'compliance' ? 'bg-[#ED7102] text-white' : 'text-sidebar-foreground/50 hover:text-sidebar-foreground/80'
+                      modoCompliance ? 'bg-[#ED7102] text-white' : 'text-sidebar-foreground/50 hover:text-sidebar-foreground/80'
                     )}
                   >
                     Cumplimiento
@@ -151,15 +160,15 @@ export default function Sidebar({ isOpen, onToggle }) {
         <nav className="flex-1 p-4 space-y-1 overflow-y-auto scrollbar-sidebar" aria-label="Menú principal">
           {modoCompliance ? (
             <>
-              <Link to="/cumplimiento" onClick={handleNavClick} className={navLinkClass('/cumplimiento')}>
+              <Link to="/cumplimiento" onClick={handleNavClick} className={navLinkClassExacta('/cumplimiento')}>
                 <LayoutDashboard className="w-[18px] h-[18px]" />
                 Panel General
               </Link>
-              <Link to="/cumplimiento/documentos" onClick={handleNavClick} className={navLinkClass('/cumplimiento/documentos')}>
+              <Link to="/cumplimiento/documentos" onClick={handleNavClick} className={navLinkClassExacta('/cumplimiento/documentos')}>
                 <FileText className="w-[18px] h-[18px]" />
                 Documentos
               </Link>
-              <Link to="/cumplimiento/alertas" onClick={handleNavClick} className={navLinkClass('/cumplimiento/alertas')}>
+              <Link to="/cumplimiento/alertas" onClick={handleNavClick} className={navLinkClassExacta('/cumplimiento/alertas')}>
                 <ShieldAlert className="w-[18px] h-[18px]" />
                 Alertas
               </Link>
