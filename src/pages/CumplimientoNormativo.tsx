@@ -156,6 +156,22 @@ function useUpdateDoc() {
   });
 }
 
+function useUpdateDocsBulk() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ ids, patch }: { ids: string[]; patch: Partial<ComplianceDoc> }) => {
+      const { error } = await supabase.from('compliance_documentos').update(patch).in('id', ids);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['compliance_documentos'] });
+    },
+    onError: (err: any) => {
+      toast.error(`No se pudo aplicar el cambio en lote: ${err?.message ?? 'error desconocido'}`);
+    },
+  });
+}
+
 function EstadoSelect({ doc, onSaved, className }: { doc: ComplianceDoc; onSaved: () => void; className?: string }) {
   const updateDoc = useUpdateDoc();
   return (
@@ -378,6 +394,93 @@ function PanelGeneral({ docs, isLoading }: { docs: ComplianceDoc[]; isLoading: b
 // paginación, detalle y reportes.
 // ---------------------------------------------------------------------------
 
+function BulkToolbar({
+  seleccionados,
+  onLimpiar,
+  onAplicado,
+}: {
+  seleccionados: ComplianceDoc[];
+  onLimpiar: () => void;
+  onAplicado: () => void;
+}) {
+  const [responsable, setResponsable] = useState('');
+  const [nuevoEstado, setNuevoEstado] = useState('');
+  const updateBulk = useUpdateDocsBulk();
+
+  const ids = seleccionados.map(d => d.id);
+
+  const asignarResponsable = () => {
+    const limpio = responsable.trim();
+    if (!limpio) { toast.error('Escribe un nombre antes de asignar'); return; }
+    updateBulk.mutate(
+      { ids, patch: { responsable: limpio } },
+      { onSuccess: () => { toast.success(`Responsable asignado a ${ids.length} documento${ids.length !== 1 ? 's' : ''}`); setResponsable(''); onAplicado(); } }
+    );
+  };
+
+  const cambiarEstado = () => {
+    if (!nuevoEstado) { toast.error('Elige un estado antes de aplicar'); return; }
+    updateBulk.mutate(
+      { ids, patch: { estado: nuevoEstado } },
+      { onSuccess: () => { toast.success(`Estado actualizado en ${ids.length} documento${ids.length !== 1 ? 's' : ''}`); setNuevoEstado(''); onAplicado(); } }
+    );
+  };
+
+  return (
+    <div className="sticky top-0 z-10 flex flex-wrap items-center gap-2 mb-3 px-4 py-2.5 bg-[#00295A] rounded-xl text-white shadow-md">
+      <span className="text-xs font-bold whitespace-nowrap">
+        {ids.length} seleccionado{ids.length !== 1 ? 's' : ''}
+      </span>
+
+      <div className="flex items-center gap-1.5 ml-2">
+        <input
+          value={responsable}
+          onChange={e => setResponsable(e.target.value)}
+          placeholder="Nombre del responsable..."
+          disabled={updateBulk.isPending}
+          className="px-2.5 py-1.5 text-xs rounded-lg text-slate-800 min-w-[180px] disabled:opacity-50"
+        />
+        <button
+          onClick={asignarResponsable}
+          disabled={updateBulk.isPending}
+          className="px-3 py-1.5 text-xs font-bold bg-[#ED7102] rounded-lg hover:bg-[#d9640a] disabled:opacity-50 whitespace-nowrap"
+        >
+          Asignar
+        </button>
+      </div>
+
+      <div className="flex items-center gap-1.5">
+        <select
+          value={nuevoEstado}
+          onChange={e => setNuevoEstado(e.target.value)}
+          disabled={updateBulk.isPending}
+          className="px-2.5 py-1.5 text-xs rounded-lg text-slate-800 disabled:opacity-50"
+        >
+          <option value="">Cambiar estado a...</option>
+          {ESTADOS_EDITABLES.map(e => <option key={e} value={e}>{e}</option>)}
+        </select>
+        <button
+          onClick={cambiarEstado}
+          disabled={updateBulk.isPending}
+          className="px-3 py-1.5 text-xs font-bold bg-white/15 rounded-lg hover:bg-white/25 disabled:opacity-50 whitespace-nowrap"
+        >
+          Aplicar
+        </button>
+      </div>
+
+      {updateBulk.isPending && <Loader2 className="w-4 h-4 animate-spin ml-1" />}
+
+      <button
+        onClick={onLimpiar}
+        className="ml-auto p-1.5 rounded-lg hover:bg-white/15"
+        title="Cancelar selección"
+      >
+        <X className="w-4 h-4" />
+      </button>
+    </div>
+  );
+}
+
 function Documentos({ docs, isLoading }: { docs: ComplianceDoc[]; isLoading: boolean }) {
   const { user } = useAuth();
   const elaboradoPor = (user as any)?.user_metadata?.nombre || user?.email || 'Sistema RCMA';
@@ -390,6 +493,7 @@ function Documentos({ docs, isLoading }: { docs: ComplianceDoc[]; isLoading: boo
   const [pagina, setPagina] = useState(1);
   const [detalle, setDetalle] = useState<ComplianceDoc | null>(null);
   const [generando, setGenerando] = useState<'' | 'excel' | 'pdf_general' | 'pdf_colegio'>('');
+  const [seleccionados, setSeleccionados] = useState<Set<string>>(new Set());
 
   const colegios = useMemo(
     () => Array.from(new Set(docs.map(d => d.colegio))).sort(),
@@ -418,6 +522,34 @@ function Documentos({ docs, isLoading }: { docs: ComplianceDoc[]; isLoading: boo
   const pageItems = filtrados.slice((paginaSegura - 1) * PAGE_SIZE, paginaSegura * PAGE_SIZE);
 
   const resetPagina = () => setPagina(1);
+
+  const toggleSeleccion = (id: string) => {
+    setSeleccionados(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
+
+  const todosFiltradosSeleccionados = filtrados.length > 0 && filtrados.every(d => seleccionados.has(d.id));
+  const toggleSeleccionarTodosFiltrados = () => {
+    setSeleccionados(prev => {
+      if (todosFiltradosSeleccionados) {
+        // Deselecciona solo los que están en el filtro actual
+        const next = new Set(prev);
+        filtrados.forEach(d => next.delete(d.id));
+        return next;
+      }
+      const next = new Set(prev);
+      filtrados.forEach(d => next.add(d.id));
+      return next;
+    });
+  };
+
+  const docsSeleccionados = useMemo(
+    () => docs.filter(d => seleccionados.has(d.id)),
+    [docs, seleccionados]
+  );
 
   const descargarExcel = async () => {
     setGenerando('excel');
@@ -527,12 +659,29 @@ function Documentos({ docs, isLoading }: { docs: ComplianceDoc[]; isLoading: boo
 
       <p className="text-xs text-slate-400 mb-2">{filtrados.length} documentos encontrados</p>
 
+      {seleccionados.size > 0 && (
+        <BulkToolbar
+          seleccionados={docsSeleccionados}
+          onLimpiar={() => setSeleccionados(new Set())}
+          onAplicado={() => setSeleccionados(new Set())}
+        />
+      )}
+
       {/* Tabla */}
       <div className="bg-white border border-slate-200 rounded-xl overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
               <tr className="bg-slate-50 border-b border-slate-200 text-left">
+                <th className="px-3 py-2.5 w-8">
+                  <input
+                    type="checkbox"
+                    checked={todosFiltradosSeleccionados}
+                    onChange={toggleSeleccionarTodosFiltrados}
+                    title="Seleccionar todos los documentos que cumplen el filtro actual"
+                    className="cursor-pointer"
+                  />
+                </th>
                 <th className="px-4 py-2.5 text-[10px] font-bold text-slate-400 uppercase tracking-wide">Colegio</th>
                 <th className="px-4 py-2.5 text-[10px] font-bold text-slate-400 uppercase tracking-wide">Territorio</th>
                 <th className="px-4 py-2.5 text-[10px] font-bold text-slate-400 uppercase tracking-wide">Documento</th>
@@ -547,7 +696,15 @@ function Documentos({ docs, isLoading }: { docs: ComplianceDoc[]; isLoading: boo
             </thead>
             <tbody className="divide-y divide-slate-100">
               {pageItems.map(d => (
-                <tr key={d.id} className="hover:bg-slate-50 cursor-pointer" onClick={() => setDetalle(d)}>
+                <tr key={d.id} className={`hover:bg-slate-50 cursor-pointer ${seleccionados.has(d.id) ? 'bg-[#00295A]/5' : ''}`} onClick={() => setDetalle(d)}>
+                  <td className="px-3 py-2.5" onClick={e => e.stopPropagation()}>
+                    <input
+                      type="checkbox"
+                      checked={seleccionados.has(d.id)}
+                      onChange={() => toggleSeleccion(d.id)}
+                      className="cursor-pointer"
+                    />
+                  </td>
                   <td className="px-4 py-2.5 text-slate-800 whitespace-nowrap">{d.colegio.replace('Mano Amiga ', '')}</td>
                   <td className="px-4 py-2.5 text-slate-500 whitespace-nowrap">{d.territorio}</td>
                   <td className="px-4 py-2.5 text-slate-700 font-medium">{d.tipo_documento}</td>
@@ -561,7 +718,7 @@ function Documentos({ docs, isLoading }: { docs: ComplianceDoc[]; isLoading: boo
                 </tr>
               ))}
               {pageItems.length === 0 && (
-                <tr><td colSpan={10} className="text-center text-sm text-slate-400 py-8">Sin resultados para estos filtros.</td></tr>
+                <tr><td colSpan={11} className="text-center text-sm text-slate-400 py-8">Sin resultados para estos filtros.</td></tr>
               )}
             </tbody>
           </table>
