@@ -10,7 +10,7 @@ import {
   Plus, Search, Pin, Pencil, Trash2, X, FileText, ListChecks, Users,
   ClipboardList, Clock, AlertCircle, CheckCircle2, MessageSquare, Loader2,
 } from 'lucide-react';
-import { useComplianceDocs, LoadingBlock, ErrorBlock } from '@/lib/complianceShared';
+import { useComplianceDocs, LoadingBlock, ErrorBlock, COLEGIO_A_CODIGO } from '@/lib/complianceShared';
 
 // ---------------------------------------------------------------------------
 // Modelo de datos (mismo patrón que NEXUS, tablas compliance_*)
@@ -273,11 +273,12 @@ export default function CumplimientoSeguimiento() {
   });
 
   const usuariosPorGrupo = useMemo(() => {
+    const codigoColegio = COLEGIO_A_CODIGO[pendForm.colegio];
     const colegioObj = docs.find(d => d.colegio === pendForm.colegio);
     const territorioSel = colegioObj?.territorio;
     const fmaUsers = allUsers.filter(u => u.territorio === 'FMA');
-    const colegioUsers = pendForm.colegio
-      ? allUsers.filter(u => u.colegio === pendForm.colegio)
+    const colegioUsers = codigoColegio
+      ? allUsers.filter(u => u.colegio === codigoColegio)
       : territorioSel
         ? allUsers.filter(u => u.territorio === territorioSel)
         : [];
