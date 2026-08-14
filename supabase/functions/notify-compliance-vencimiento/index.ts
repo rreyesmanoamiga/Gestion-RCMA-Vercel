@@ -16,6 +16,20 @@ function conTimeout<T>(promesa: Promise<T>, ms: number, etiqueta: string): Promi
   ]);
 }
 
+// TCP/TLS write() no garantiza escribir el buffer completo en una sola
+// llamada — con mensajes grandes (como nuestro HTML con tabla de
+// documentos) puede mandar solo una parte y dejar el resto sin enviar,
+// causando que el servidor espere para siempre el resto del mensaje.
+// writeAll() sigue escribiendo hasta confirmar que se mandó TODO el buffer.
+async function writeAll(writer: { write(p: Uint8Array): Promise<number> }, data: Uint8Array) {
+  let sent = 0;
+  while (sent < data.length) {
+    const n = await writer.write(data.subarray(sent));
+    if (n === 0) throw new Error('writeAll: 0 bytes escritos, conexión posiblemente cerrada');
+    sent += n;
+  }
+}
+
 async function sendEmail(to: string, subject: string, html: string) {
   const smtpHost = Deno.env.get('SMTP_HOST') ?? 'smtp.office365.com';
   const smtpPort = parseInt(Deno.env.get('SMTP_PORT') ?? '587');
@@ -37,7 +51,7 @@ async function sendEmail(to: string, subject: string, html: string) {
   };
   const wr = async (d: string, paso: string) => {
     console.log(`[smtp] -> ${paso}`);
-    await conTimeout(conn.write(enc.encode(d + '\r\n')), 12000, `write (${paso})`);
+    await conTimeout(writeAll(conn, enc.encode(d + '\r\n')), 12000, `write (${paso})`);
   };
 
   await rd('banner'); await wr('EHLO outlook.com', 'EHLO'); await rd('ehlo'); await wr('STARTTLS', 'STARTTLS'); await rd('starttls-ack');
@@ -46,8 +60,8 @@ async function sendEmail(to: string, subject: string, html: string) {
   console.log('[smtp] TLS listo, autenticando');
 
   const tw = async (d: string, paso: string) => {
-    console.log(`[smtp] -> ${paso}`);
-    await conTimeout(tls.write(enc.encode(d + '\r\n')), 12000, `tls write (${paso})`);
+    console.log(`[smtp] -> ${paso} (${d.length} bytes)`);
+    await conTimeout(writeAll(tls, enc.encode(d + '\r\n')), 20000, `tls write (${paso})`);
   };
   const tr = async (paso: string, timeoutMs = 12000) => {
     const b = new Uint8Array(4096);
