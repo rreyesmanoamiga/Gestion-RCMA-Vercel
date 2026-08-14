@@ -1,12 +1,21 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useLocation } from 'react-router-dom';
-import { useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { toast } from 'sonner';
 import { supabase } from '@/lib/supabaseClient';
+import { useAuth } from '@/lib/AuthContext';
 import {
   ShieldCheck, FileText, ShieldAlert, LayoutDashboard, Loader2,
   Search, ChevronLeft, ChevronRight, AlertTriangle, Clock, CheckCircle2,
+  X, Download, FileSpreadsheet, FileBarChart, RefreshCw,
 } from 'lucide-react';
 import PageHeader from '@/components/shared/PageHeader';
+import {
+  generarExcelCumplimiento,
+  generarPDFGeneralCumplimiento,
+  generarPDFColegioCumplimiento,
+  type ComplianceDocReport,
+} from '@/lib/reportesCumplimiento';
 
 const TABS = [
   { path: '/cumplimiento',            label: 'Panel General', icon: LayoutDashboard },
@@ -26,10 +35,12 @@ interface ComplianceDoc {
   fecha_limite_recepcion: string | null;
   vigente_desde: string | null;
   vigente_hasta: string | null;
+  responsable: string | null;
   año: number;
 }
 
 const MATERIAS = ['Todas', 'Protección civil', 'Donatarias Autorizadas', 'Sin categoría'] as const;
+const ESTADOS_EDITABLES = ['Pendiente', 'Por revisar', 'Verificado', 'Observaciones'];
 const PAGE_SIZE = 25;
 
 // ---------------------------------------------------------------------------
@@ -53,11 +64,12 @@ function useComplianceDocs() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('compliance_documentos')
-        .select('id, colegio, territorio, materia, tipo_documento, norma, estado, vigente, fecha_limite_recepcion, vigente_desde, vigente_hasta, año')
+        .select('id, colegio, territorio, materia, tipo_documento, norma, estado, vigente, fecha_limite_recepcion, vigente_desde, vigente_hasta, responsable, año')
         .eq('activo', true);
       if (error) throw error;
       return (data ?? []) as unknown as ComplianceDoc[];
     },
+    retry: 1,
   });
 }
 
@@ -99,6 +111,169 @@ function LoadingBlock() {
   return (
     <div className="flex items-center justify-center py-20 text-slate-400">
       <Loader2 className="w-5 h-5 animate-spin mr-2" /> Cargando datos de Compliance...
+    </div>
+  );
+}
+
+function ErrorBlock({ onRetry }: { onRetry: () => void }) {
+  return (
+    <div className="bg-white border border-red-200 rounded-xl p-10 text-center">
+      <div className="w-14 h-14 rounded-full bg-red-50 flex items-center justify-center mx-auto mb-4">
+        <AlertTriangle className="w-7 h-7 text-red-600" />
+      </div>
+      <h2 className="text-lg font-bold text-red-700 mb-2">No se pudieron cargar los datos</h2>
+      <p className="text-sm text-slate-500 max-w-md mx-auto mb-5">
+        Hubo un problema al conectar con la base de datos de Compliance. Puede ser algo temporal de red
+        o de permisos — inténtalo de nuevo; si persiste, avísale a soporte del sistema.
+      </p>
+      <button
+        onClick={onRetry}
+        className="inline-flex items-center gap-2 px-4 py-2 bg-[#00295A] text-white rounded-lg text-sm font-bold hover:bg-[#003a7a] transition-colors"
+      >
+        <RefreshCw className="w-4 h-4" /> Reintentar
+      </button>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Edición inline: Estado y Responsable
+// ---------------------------------------------------------------------------
+
+function useUpdateDoc() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, patch }: { id: string; patch: Partial<ComplianceDoc> }) => {
+      const { error } = await supabase.from('compliance_documentos').update(patch).eq('id', id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['compliance_documentos'] });
+    },
+    onError: (err: any) => {
+      toast.error(`No se pudo guardar el cambio: ${err?.message ?? 'error desconocido'}`);
+    },
+  });
+}
+
+function EstadoSelect({ doc, onSaved, className }: { doc: ComplianceDoc; onSaved: () => void; className?: string }) {
+  const updateDoc = useUpdateDoc();
+  return (
+    <select
+      value={doc.estado}
+      disabled={updateDoc.isPending}
+      onClick={e => e.stopPropagation()}
+      onChange={e => {
+        const nuevoEstado = e.target.value;
+        updateDoc.mutate(
+          { id: doc.id, patch: { estado: nuevoEstado } },
+          { onSuccess: () => { toast.success('Estado actualizado'); onSaved(); } }
+        );
+      }}
+      className={`text-xs font-semibold border rounded-full px-2 py-1 bg-white cursor-pointer disabled:opacity-50 ${className ?? ''}`}
+    >
+      {ESTADOS_EDITABLES.map(e => <option key={e} value={e}>{e}</option>)}
+    </select>
+  );
+}
+
+function ResponsableInput({ doc, onSaved }: { doc: ComplianceDoc; onSaved: () => void }) {
+  const [valor, setValor] = useState(doc.responsable ?? '');
+  const updateDoc = useUpdateDoc();
+
+  useEffect(() => { setValor(doc.responsable ?? ''); }, [doc.responsable]);
+
+  const guardar = () => {
+    const limpio = valor.trim();
+    if (limpio === (doc.responsable ?? '')) return;
+    updateDoc.mutate(
+      { id: doc.id, patch: { responsable: limpio || null } },
+      { onSuccess: () => { toast.success('Responsable actualizado'); onSaved(); } }
+    );
+  };
+
+  return (
+    <input
+      value={valor}
+      onClick={e => e.stopPropagation()}
+      onChange={e => setValor(e.target.value)}
+      onBlur={guardar}
+      onKeyDown={e => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
+      placeholder="Sin asignar"
+      disabled={updateDoc.isPending}
+      className="text-xs border border-transparent hover:border-slate-200 focus:border-[#00295A] rounded px-2 py-1 w-full bg-transparent focus:bg-white outline-none disabled:opacity-50"
+    />
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Modal de detalle
+// ---------------------------------------------------------------------------
+
+function DetalleModal({ doc, onClose, onSaved }: { doc: ComplianceDoc; onClose: () => void; onSaved: () => void }) {
+  return (
+    <div className="fixed inset-0 bg-slate-900/50 z-50 flex items-center justify-center p-4" onClick={onClose}>
+      <div
+        className="bg-white rounded-xl shadow-2xl w-full max-w-lg max-h-[85vh] overflow-y-auto"
+        onClick={e => e.stopPropagation()}
+      >
+        <div className="flex items-start justify-between px-5 py-4 border-b border-slate-100 bg-slate-50 rounded-t-xl">
+          <div>
+            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wide">{doc.colegio.replace('Mano Amiga ', '')} · {doc.territorio}</p>
+            <h3 className="text-base font-bold text-[#00295A] mt-0.5">{doc.tipo_documento}</h3>
+          </div>
+          <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-slate-200 text-slate-400">
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+
+        <div className="p-5 space-y-4">
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wide mb-1">Estado</p>
+              <EstadoSelect doc={doc} onSaved={onSaved} className="w-full" />
+            </div>
+            <div>
+              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wide mb-1">Vigente</p>
+              <VigenteBadge vigente={doc.vigente} />
+            </div>
+          </div>
+
+          <div>
+            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wide mb-1">Responsable</p>
+            <div className="border border-slate-200 rounded-lg px-2">
+              <ResponsableInput doc={doc} onSaved={onSaved} />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4 pt-2 border-t border-slate-100">
+            <div>
+              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wide mb-1">Materia</p>
+              <p className="text-sm text-slate-700">{doc.materia ?? 'Sin categoría'}</p>
+            </div>
+            <div>
+              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wide mb-1">Norma / referencia</p>
+              <p className="text-sm text-slate-700">{doc.norma ?? '—'}</p>
+            </div>
+            <div>
+              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wide mb-1">Fecha límite recepción</p>
+              <p className="text-sm text-slate-700">{formatFecha(doc.fecha_limite_recepcion)}</p>
+            </div>
+            <div>
+              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wide mb-1">Año</p>
+              <p className="text-sm text-slate-700">{doc.año}</p>
+            </div>
+            <div>
+              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wide mb-1">Vigente desde</p>
+              <p className="text-sm text-slate-700">{formatFecha(doc.vigente_desde)}</p>
+            </div>
+            <div>
+              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wide mb-1">Vigente hasta</p>
+              <p className="text-sm text-slate-700">{formatFecha(doc.vigente_hasta)}</p>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
@@ -199,16 +374,22 @@ function PanelGeneral({ docs, isLoading }: { docs: ComplianceDoc[]; isLoading: b
 }
 
 // ---------------------------------------------------------------------------
-// Documentos — tabla completa con búsqueda, filtros y paginación
+// Documentos — tabla completa con búsqueda, filtros, edición inline,
+// paginación, detalle y reportes.
 // ---------------------------------------------------------------------------
 
 function Documentos({ docs, isLoading }: { docs: ComplianceDoc[]; isLoading: boolean }) {
+  const { user } = useAuth();
+  const elaboradoPor = (user as any)?.user_metadata?.nombre || user?.email || 'Sistema RCMA';
+
   const [busqueda, setBusqueda] = useState('');
   const [territorioFiltro, setTerritorioFiltro] = useState('Todos');
   const [materiaFiltro, setMateriaFiltro] = useState<typeof MATERIAS[number]>('Todas');
   const [estadoFiltro, setEstadoFiltro] = useState('Todos');
   const [colegioFiltro, setColegioFiltro] = useState('Todos');
   const [pagina, setPagina] = useState(1);
+  const [detalle, setDetalle] = useState<ComplianceDoc | null>(null);
+  const [generando, setGenerando] = useState<'' | 'excel' | 'pdf_general' | 'pdf_colegio'>('');
 
   const colegios = useMemo(
     () => Array.from(new Set(docs.map(d => d.colegio))).sort(),
@@ -238,10 +419,79 @@ function Documentos({ docs, isLoading }: { docs: ComplianceDoc[]; isLoading: boo
 
   const resetPagina = () => setPagina(1);
 
+  const descargarExcel = async () => {
+    setGenerando('excel');
+    try {
+      await generarExcelCumplimiento(docs as ComplianceDocReport[]);
+      toast.success('Excel generado');
+    } catch (err: any) {
+      toast.error(`No se pudo generar el Excel: ${err?.message ?? 'error desconocido'}`);
+    } finally {
+      setGenerando('');
+    }
+  };
+
+  const descargarPDFGeneral = async () => {
+    setGenerando('pdf_general');
+    try {
+      await generarPDFGeneralCumplimiento({ docs: docs as ComplianceDocReport[], elaboradoPor });
+      toast.success('PDF general generado');
+    } catch (err: any) {
+      toast.error(`No se pudo generar el PDF: ${err?.message ?? 'error desconocido'}`);
+    } finally {
+      setGenerando('');
+    }
+  };
+
+  const descargarPDFColegio = async () => {
+    if (colegioFiltro === 'Todos') return;
+    setGenerando('pdf_colegio');
+    try {
+      const docsColegio = docs.filter(d => d.colegio === colegioFiltro) as ComplianceDocReport[];
+      const territorio = docsColegio[0]?.territorio ?? '';
+      await generarPDFColegioCumplimiento({ colegio: colegioFiltro, territorio, docs: docsColegio, elaboradoPor });
+      toast.success(`PDF de ${colegioFiltro} generado`);
+    } catch (err: any) {
+      toast.error(`No se pudo generar el PDF: ${err?.message ?? 'error desconocido'}`);
+    } finally {
+      setGenerando('');
+    }
+  };
+
   if (isLoading) return <LoadingBlock />;
 
   return (
     <div>
+      {/* Botones de reporte */}
+      <div className="flex flex-wrap gap-2 mb-4">
+        <button
+          onClick={descargarExcel}
+          disabled={generando !== ''}
+          className="inline-flex items-center gap-2 px-3 py-1.5 text-xs font-bold rounded-lg border border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 disabled:opacity-50"
+        >
+          {generando === 'excel' ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <FileSpreadsheet className="w-3.5 h-3.5" />}
+          Excel global
+        </button>
+        <button
+          onClick={descargarPDFGeneral}
+          disabled={generando !== ''}
+          className="inline-flex items-center gap-2 px-3 py-1.5 text-xs font-bold rounded-lg border border-[#00295A]/20 bg-[#00295A]/5 text-[#00295A] hover:bg-[#00295A]/10 disabled:opacity-50"
+        >
+          {generando === 'pdf_general' ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <FileBarChart className="w-3.5 h-3.5" />}
+          PDF general
+        </button>
+        {colegioFiltro !== 'Todos' && (
+          <button
+            onClick={descargarPDFColegio}
+            disabled={generando !== ''}
+            className="inline-flex items-center gap-2 px-3 py-1.5 text-xs font-bold rounded-lg border border-[#ED7102]/30 bg-[#ED7102]/5 text-[#ED7102] hover:bg-[#ED7102]/10 disabled:opacity-50"
+          >
+            {generando === 'pdf_colegio' ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Download className="w-3.5 h-3.5" />}
+            PDF de {colegioFiltro.replace('Mano Amiga ', '')}
+          </button>
+        )}
+      </div>
+
       {/* Filtros */}
       <div className="flex flex-wrap gap-2 mb-4">
         <div className="relative flex-1 min-w-[220px]">
@@ -289,23 +539,29 @@ function Documentos({ docs, isLoading }: { docs: ComplianceDoc[]; isLoading: boo
                 <th className="px-4 py-2.5 text-[10px] font-bold text-slate-400 uppercase tracking-wide">Materia</th>
                 <th className="px-4 py-2.5 text-[10px] font-bold text-slate-400 uppercase tracking-wide">Estado</th>
                 <th className="px-4 py-2.5 text-[10px] font-bold text-slate-400 uppercase tracking-wide">Vigente</th>
+                <th className="px-4 py-2.5 text-[10px] font-bold text-slate-400 uppercase tracking-wide">Vigente desde</th>
+                <th className="px-4 py-2.5 text-[10px] font-bold text-slate-400 uppercase tracking-wide">Vigente hasta</th>
+                <th className="px-4 py-2.5 text-[10px] font-bold text-slate-400 uppercase tracking-wide">Responsable</th>
                 <th className="px-4 py-2.5 text-[10px] font-bold text-slate-400 uppercase tracking-wide">Fecha límite</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
               {pageItems.map(d => (
-                <tr key={d.id} className="hover:bg-slate-50">
+                <tr key={d.id} className="hover:bg-slate-50 cursor-pointer" onClick={() => setDetalle(d)}>
                   <td className="px-4 py-2.5 text-slate-800 whitespace-nowrap">{d.colegio.replace('Mano Amiga ', '')}</td>
                   <td className="px-4 py-2.5 text-slate-500 whitespace-nowrap">{d.territorio}</td>
-                  <td className="px-4 py-2.5 text-slate-700">{d.tipo_documento}</td>
+                  <td className="px-4 py-2.5 text-slate-700 font-medium">{d.tipo_documento}</td>
                   <td className="px-4 py-2.5 text-slate-500 whitespace-nowrap">{d.materia ?? '—'}</td>
-                  <td className="px-4 py-2.5"><EstadoBadge estado={d.estado} /></td>
+                  <td className="px-4 py-2.5"><EstadoSelect doc={d} onSaved={() => {}} /></td>
                   <td className="px-4 py-2.5"><VigenteBadge vigente={d.vigente} /></td>
+                  <td className="px-4 py-2.5 text-slate-500 whitespace-nowrap">{formatFecha(d.vigente_desde)}</td>
+                  <td className="px-4 py-2.5 text-slate-500 whitespace-nowrap">{formatFecha(d.vigente_hasta)}</td>
+                  <td className="px-4 py-2.5 min-w-[140px]" onClick={e => e.stopPropagation()}><ResponsableInput doc={d} onSaved={() => {}} /></td>
                   <td className="px-4 py-2.5 text-slate-500 whitespace-nowrap">{formatFecha(d.fecha_limite_recepcion)}</td>
                 </tr>
               ))}
               {pageItems.length === 0 && (
-                <tr><td colSpan={7} className="text-center text-sm text-slate-400 py-8">Sin resultados para estos filtros.</td></tr>
+                <tr><td colSpan={10} className="text-center text-sm text-slate-400 py-8">Sin resultados para estos filtros.</td></tr>
               )}
             </tbody>
           </table>
@@ -336,6 +592,10 @@ function Documentos({ docs, isLoading }: { docs: ComplianceDoc[]; isLoading: boo
           </div>
         )}
       </div>
+
+      {detalle && (
+        <DetalleModal doc={detalle} onClose={() => setDetalle(null)} onSaved={() => setDetalle(null)} />
+      )}
     </div>
   );
 }
@@ -346,6 +606,7 @@ function Documentos({ docs, isLoading }: { docs: ComplianceDoc[]; isLoading: boo
 
 function Alertas({ docs, isLoading }: { docs: ComplianceDoc[]; isLoading: boolean }) {
   const hoy = useMemo(() => { const d = new Date(); d.setHours(0, 0, 0, 0); return d; }, []);
+  const [detalle, setDetalle] = useState<ComplianceDoc | null>(null);
 
   const vencidos = useMemo(() => {
     return docs
@@ -387,10 +648,10 @@ function Alertas({ docs, isLoading }: { docs: ComplianceDoc[]; isLoading: boolea
           </div>
           <div className="divide-y divide-slate-100 max-h-[420px] overflow-y-auto">
             {vencidos.map(d => (
-              <div key={d.id} className="flex items-center justify-between px-4 py-2.5">
+              <div key={d.id} className="flex items-center justify-between px-4 py-2.5 cursor-pointer hover:bg-slate-50" onClick={() => setDetalle(d)}>
                 <div className="min-w-0">
                   <p className="text-sm text-slate-800 truncate">{d.tipo_documento}</p>
-                  <p className="text-[11px] text-slate-400">{d.colegio.replace('Mano Amiga ', '')} · {d.territorio} · vencía {formatFecha(d.fecha_limite_recepcion)}</p>
+                  <p className="text-[11px] text-slate-400">{d.colegio.replace('Mano Amiga ', '')} · {d.territorio} · vencía {formatFecha(d.fecha_limite_recepcion)}{d.responsable ? ` · ${d.responsable}` : ''}</p>
                 </div>
                 <span className="text-xs font-bold text-white bg-red-600 px-2.5 py-1 rounded-full whitespace-nowrap ml-3">
                   {d.dias} día{d.dias !== 1 ? 's' : ''} de retraso
@@ -411,10 +672,10 @@ function Alertas({ docs, isLoading }: { docs: ComplianceDoc[]; isLoading: boolea
           </div>
           <div className="divide-y divide-slate-100 max-h-[420px] overflow-y-auto">
             {porExpirar.map(d => (
-              <div key={d.id} className="flex items-center justify-between px-4 py-2.5">
+              <div key={d.id} className="flex items-center justify-between px-4 py-2.5 cursor-pointer hover:bg-slate-50" onClick={() => setDetalle(d)}>
                 <div className="min-w-0">
                   <p className="text-sm text-slate-800 truncate">{d.tipo_documento}</p>
-                  <p className="text-[11px] text-slate-400">{d.colegio.replace('Mano Amiga ', '')} · {d.territorio} · vence {formatFecha(d.vigente_hasta)}</p>
+                  <p className="text-[11px] text-slate-400">{d.colegio.replace('Mano Amiga ', '')} · {d.territorio} · vence {formatFecha(d.vigente_hasta)}{d.responsable ? ` · ${d.responsable}` : ''}</p>
                 </div>
                 <span className="text-xs font-bold text-white bg-[#ED7102] px-2.5 py-1 rounded-full whitespace-nowrap ml-3">
                   {d.dias} día{d.dias !== 1 ? 's' : ''} restantes
@@ -423,6 +684,10 @@ function Alertas({ docs, isLoading }: { docs: ComplianceDoc[]; isLoading: boolea
             ))}
           </div>
         </div>
+      )}
+
+      {detalle && (
+        <DetalleModal doc={detalle} onClose={() => setDetalle(null)} onSaved={() => setDetalle(null)} />
       )}
     </div>
   );
@@ -435,7 +700,7 @@ function Alertas({ docs, isLoading }: { docs: ComplianceDoc[]; isLoading: boolea
 export default function CumplimientoNormativo() {
   const location = useLocation();
   const tabActivo = TABS.find(t => t.path === location.pathname) ?? TABS[0];
-  const { data: docs = [], isLoading } = useComplianceDocs();
+  const { data: docs = [], isLoading, isError, refetch } = useComplianceDocs();
 
   return (
     <div className="p-6 lg:p-8 max-w-6xl mx-auto">
@@ -456,9 +721,15 @@ export default function CumplimientoNormativo() {
         })}
       </div>
 
-      {tabActivo.path === '/cumplimiento' && <PanelGeneral docs={docs} isLoading={isLoading} />}
-      {tabActivo.path === '/cumplimiento/documentos' && <Documentos docs={docs} isLoading={isLoading} />}
-      {tabActivo.path === '/cumplimiento/alertas' && <Alertas docs={docs} isLoading={isLoading} />}
+      {isError ? (
+        <ErrorBlock onRetry={() => refetch()} />
+      ) : (
+        <>
+          {tabActivo.path === '/cumplimiento' && <PanelGeneral docs={docs} isLoading={isLoading} />}
+          {tabActivo.path === '/cumplimiento/documentos' && <Documentos docs={docs} isLoading={isLoading} />}
+          {tabActivo.path === '/cumplimiento/alertas' && <Alertas docs={docs} isLoading={isLoading} />}
+        </>
+      )}
 
       <div className="flex items-center justify-center gap-2 mt-6 text-xs text-slate-400">
         <ShieldCheck className="w-4 h-4" />
