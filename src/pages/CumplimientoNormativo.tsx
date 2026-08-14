@@ -227,13 +227,51 @@ function ResponsableInput({ doc, onSaved }: { doc: ComplianceDoc; onSaved: () =>
 // ---------------------------------------------------------------------------
 
 function DetalleModal({ doc, onClose, onSaved }: { doc: ComplianceDoc; onClose: () => void; onSaved: () => void }) {
+  const updateDoc = useUpdateDoc();
+
+  const [form, setForm] = useState({
+    estado: doc.estado,
+    vigente: doc.vigente ?? '',
+    materia: doc.materia ?? '',
+    norma: doc.norma ?? '',
+    fecha_limite_recepcion: doc.fecha_limite_recepcion ?? '',
+    vigente_desde: doc.vigente_desde ?? '',
+    vigente_hasta: doc.vigente_hasta ?? '',
+    año: String(doc.año ?? ''),
+    responsable: doc.responsable ?? '',
+  });
+
+  const set = (campo: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
+    setForm(f => ({ ...f, [campo]: e.target.value }));
+
+  const guardarTodo = () => {
+    const patch: Partial<ComplianceDoc> = {
+      estado: form.estado,
+      vigente: form.vigente || null,
+      materia: form.materia || null,
+      norma: form.norma.trim() || null,
+      fecha_limite_recepcion: form.fecha_limite_recepcion || null,
+      vigente_desde: form.vigente_desde || null,
+      vigente_hasta: form.vigente_hasta || null,
+      año: form.año ? parseInt(form.año, 10) : doc.año,
+      responsable: form.responsable.trim() || null,
+    };
+    updateDoc.mutate(
+      { id: doc.id, patch },
+      { onSuccess: () => { toast.success('Documento actualizado'); onSaved(); } }
+    );
+  };
+
+  const inputCls = "w-full text-sm border border-slate-200 rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-[#00295A]/20 disabled:opacity-50";
+  const labelCls = "text-[10px] font-bold text-slate-400 uppercase tracking-wide mb-1 block";
+
   return (
     <div className="fixed inset-0 bg-slate-900/50 z-50 flex items-center justify-center p-4" onClick={onClose}>
       <div
-        className="bg-white rounded-xl shadow-2xl w-full max-w-lg max-h-[85vh] overflow-y-auto"
+        className="bg-white rounded-xl shadow-2xl w-full max-w-xl max-h-[90vh] overflow-y-auto"
         onClick={e => e.stopPropagation()}
       >
-        <div className="flex items-start justify-between px-5 py-4 border-b border-slate-100 bg-slate-50 rounded-t-xl">
+        <div className="flex items-start justify-between px-5 py-4 border-b border-slate-100 bg-slate-50 rounded-t-xl sticky top-0 z-10">
           <div>
             <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wide">{doc.colegio.replace('Mano Amiga ', '')} · {doc.territorio}</p>
             <h3 className="text-base font-bold text-[#00295A] mt-0.5">{doc.tipo_documento}</h3>
@@ -246,48 +284,71 @@ function DetalleModal({ doc, onClose, onSaved }: { doc: ComplianceDoc; onClose: 
         <div className="p-5 space-y-4">
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wide mb-1">Estado</p>
-              <EstadoSelect doc={doc} onSaved={onSaved} className="w-full" />
+              <label className={labelCls}>Estado</label>
+              <select value={form.estado} onChange={set('estado')} disabled={updateDoc.isPending} className={inputCls}>
+                {ESTADOS_EDITABLES.map(e => <option key={e} value={e}>{e}</option>)}
+              </select>
             </div>
             <div>
-              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wide mb-1">Vigente</p>
-              <VigenteBadge vigente={doc.vigente} />
+              <label className={labelCls}>Vigente</label>
+              <select value={form.vigente} onChange={set('vigente')} disabled={updateDoc.isPending} className={inputCls}>
+                <option value="">— Sin dato —</option>
+                <option value="Si">Sí</option>
+                <option value="No">No</option>
+                <option value="Por expirar">Por expirar</option>
+              </select>
             </div>
           </div>
 
           <div>
-            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wide mb-1">Responsable</p>
-            <div className="border border-slate-200 rounded-lg px-2">
-              <ResponsableInput doc={doc} onSaved={onSaved} />
-            </div>
+            <label className={labelCls}>Responsable</label>
+            <input value={form.responsable} onChange={set('responsable')} disabled={updateDoc.isPending} placeholder="Sin asignar" className={inputCls} />
           </div>
 
-          <div className="grid grid-cols-2 gap-4 pt-2 border-t border-slate-100">
+          <div className="grid grid-cols-2 gap-4 pt-3 border-t border-slate-100">
             <div>
-              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wide mb-1">Materia</p>
-              <p className="text-sm text-slate-700">{doc.materia ?? 'Sin categoría'}</p>
+              <label className={labelCls}>Materia</label>
+              <select value={form.materia} onChange={set('materia')} disabled={updateDoc.isPending} className={inputCls}>
+                <option value="">Sin categoría</option>
+                <option value="Protección civil">Protección civil</option>
+                <option value="Donatarias Autorizadas">Donatarias Autorizadas</option>
+              </select>
             </div>
             <div>
-              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wide mb-1">Norma / referencia</p>
-              <p className="text-sm text-slate-700">{doc.norma ?? '—'}</p>
+              <label className={labelCls}>Norma / referencia</label>
+              <input value={form.norma} onChange={set('norma')} disabled={updateDoc.isPending} placeholder="—" className={inputCls} />
             </div>
             <div>
-              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wide mb-1">Fecha límite recepción</p>
-              <p className="text-sm text-slate-700">{formatFecha(doc.fecha_limite_recepcion)}</p>
+              <label className={labelCls}>Fecha límite recepción</label>
+              <input type="date" value={form.fecha_limite_recepcion} onChange={set('fecha_limite_recepcion')} disabled={updateDoc.isPending} className={inputCls} />
             </div>
             <div>
-              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wide mb-1">Año</p>
-              <p className="text-sm text-slate-700">{doc.año}</p>
+              <label className={labelCls}>Año</label>
+              <input type="number" value={form.año} onChange={set('año')} disabled={updateDoc.isPending} className={inputCls} />
             </div>
             <div>
-              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wide mb-1">Vigente desde</p>
-              <p className="text-sm text-slate-700">{formatFecha(doc.vigente_desde)}</p>
+              <label className={labelCls}>Vigente desde</label>
+              <input type="date" value={form.vigente_desde} onChange={set('vigente_desde')} disabled={updateDoc.isPending} className={inputCls} />
             </div>
             <div>
-              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wide mb-1">Vigente hasta</p>
-              <p className="text-sm text-slate-700">{formatFecha(doc.vigente_hasta)}</p>
+              <label className={labelCls}>Vigente hasta</label>
+              <input type="date" value={form.vigente_hasta} onChange={set('vigente_hasta')} disabled={updateDoc.isPending} className={inputCls} />
             </div>
           </div>
+        </div>
+
+        <div className="flex items-center justify-end gap-2 px-5 py-4 border-t border-slate-100 bg-slate-50 rounded-b-xl sticky bottom-0">
+          <button onClick={onClose} disabled={updateDoc.isPending} className="px-4 py-2 text-sm font-semibold text-slate-500 hover:bg-slate-200 rounded-lg disabled:opacity-50">
+            Cancelar
+          </button>
+          <button
+            onClick={guardarTodo}
+            disabled={updateDoc.isPending}
+            className="inline-flex items-center gap-2 px-4 py-2 text-sm font-bold text-white bg-[#00295A] hover:bg-[#003a7a] rounded-lg disabled:opacity-50"
+          >
+            {updateDoc.isPending && <Loader2 className="w-4 h-4 animate-spin" />}
+            Guardar cambios
+          </button>
         </div>
       </div>
     </div>
@@ -860,7 +921,7 @@ export default function CumplimientoNormativo() {
   const { data: docs = [], isLoading, isError, refetch } = useComplianceDocs();
 
   return (
-    <div className="p-6 lg:p-8 max-w-6xl mx-auto">
+    <div className="p-6 lg:p-8 max-w-[1700px] mx-auto">
       <PageHeader title="Cumplimiento Normativo" subtitle="Protección Civil, Donatarias y documentación regulatoria — motor de ejecución sobre el registro oficial de Compliance" />
 
       <div className="flex gap-2 mb-6 border-b border-slate-200">
