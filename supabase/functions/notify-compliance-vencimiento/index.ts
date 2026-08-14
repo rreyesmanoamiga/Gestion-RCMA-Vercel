@@ -28,30 +28,30 @@ async function sendEmail(to: string, subject: string, html: string) {
   const conn = await conTimeout(Deno.connect({ hostname: smtpHost, port: smtpPort }), 10000, 'Deno.connect');
   console.log('[smtp] conectado, iniciando handshake');
 
-  const rd = async (paso: string) => {
+  const rd = async (paso: string, timeoutMs = 12000) => {
     const b = new Uint8Array(4096);
-    const n = await conTimeout(conn.read(b), 10000, `read (${paso})`);
+    const n = await conTimeout(conn.read(b), timeoutMs, `read (${paso})`);
     const txt = dec.decode(b.subarray(0, n ?? 0));
     console.log(`[smtp] <- ${paso}: ${txt.trim().slice(0, 80)}`);
     return txt;
   };
   const wr = async (d: string, paso: string) => {
     console.log(`[smtp] -> ${paso}`);
-    await conTimeout(conn.write(enc.encode(d + '\r\n')), 10000, `write (${paso})`);
+    await conTimeout(conn.write(enc.encode(d + '\r\n')), 12000, `write (${paso})`);
   };
 
   await rd('banner'); await wr('EHLO outlook.com', 'EHLO'); await rd('ehlo'); await wr('STARTTLS', 'STARTTLS'); await rd('starttls-ack');
   console.log('[smtp] iniciando TLS...');
-  const tls = await conTimeout(Deno.startTls(conn, { hostname: smtpHost }), 10000, 'Deno.startTls');
+  const tls = await conTimeout(Deno.startTls(conn, { hostname: smtpHost }), 12000, 'Deno.startTls');
   console.log('[smtp] TLS listo, autenticando');
 
   const tw = async (d: string, paso: string) => {
     console.log(`[smtp] -> ${paso}`);
-    await conTimeout(tls.write(enc.encode(d + '\r\n')), 10000, `tls write (${paso})`);
+    await conTimeout(tls.write(enc.encode(d + '\r\n')), 12000, `tls write (${paso})`);
   };
-  const tr = async (paso: string) => {
+  const tr = async (paso: string, timeoutMs = 12000) => {
     const b = new Uint8Array(4096);
-    const n = await conTimeout(tls.read(b), 10000, `tls read (${paso})`);
+    const n = await conTimeout(tls.read(b), timeoutMs, `tls read (${paso})`);
     const txt = dec.decode(b.subarray(0, n ?? 0));
     console.log(`[smtp] <- ${paso}: ${txt.trim().slice(0, 80)}`);
     return txt;
@@ -65,7 +65,12 @@ async function sendEmail(to: string, subject: string, html: string) {
 
   await tw(`MAIL FROM:<${smtpUser}>`, 'MAIL FROM'); await tr('mail-from-ack');
   await tw(`RCPT TO:<${to}>`, 'RCPT TO'); await tr('rcpt-to-ack');
-  await tw('DATA', 'DATA'); await tr('data-ack');
+  await tw('DATA', 'DATA'); await tr('data-ack', 20000);
+
+  // Normaliza a CRLF estricto y aplica "dot-stuffing" (RFC 5321 §4.5.2):
+  // cualquier línea que empiece con "." se duplica el punto, para que el
+  // servidor no la confunda con el terminador de mensaje "." solo en su línea.
+  const bodyLines = html.split(/\r\n|\r|\n/).map(l => (l.startsWith('.') ? '.' + l : l));
   const msg = [
     `From: Sistema RCMA <${smtpUser}>`,
     `To: ${to}`,
@@ -73,10 +78,13 @@ async function sendEmail(to: string, subject: string, html: string) {
     'MIME-Version: 1.0',
     'Content-Type: text/html; charset=UTF-8',
     '',
-    html,
+    ...bodyLines,
     '.',
   ].join('\r\n');
-  await tw(msg, 'mensaje'); await tr('mensaje-ack'); await tw('QUIT', 'QUIT');
+  console.log(`[smtp] enviando cuerpo del mensaje (${msg.length} bytes)...`);
+  await tw(msg, 'mensaje');
+  await tr('mensaje-ack', 30000);
+  await tw('QUIT', 'QUIT');
   tls.close();
   console.log('[smtp] correo enviado OK');
 }
