@@ -64,6 +64,9 @@ export default function Sidebar({ isOpen, onToggle }) {
   const { can }     = usePermissions();
   const isAdmin     = user?.user_metadata?.role === 'admin';
   const isMobile    = useIsMobile();
+  const esRicardo   = user?.email === 'rreyes@manoamiga.edu.mx';
+  const [modo, setModo] = React.useState('obras'); // 'obras' | 'compliance'
+  const modoCompliance = esRicardo && modo === 'compliance';
 
   const handleNavClick = () => { if (isMobile) onToggle(); };
   const handleLogout   = async () => { await signOut(); };
@@ -110,21 +113,59 @@ export default function Sidebar({ isOpen, onToggle }) {
             <div className="w-10 h-10 rounded-lg bg-sidebar-primary flex items-center justify-center shadow-inner">
               <Building2 className="w-5 h-5 text-sidebar-primary-foreground" />
             </div>
-            <div>
+            <div className="flex-1 min-w-0">
               <h1 className="text-base font-display font-semibold text-sidebar-foreground leading-tight tracking-tight">
                 Sistema RCMA
               </h1>
-              <p className="text-[10px] font-bold text-sidebar-foreground/60 uppercase tracking-widest">
-                Coordinación de Obras
-              </p>
+              {esRicardo ? (
+                <div className="flex bg-white/[0.07] rounded-md p-[2px] mt-1.5">
+                  <button
+                    onClick={() => setModo('obras')}
+                    className={cn(
+                      'flex-1 text-center py-[5px] rounded text-[9.5px] font-bold transition-colors',
+                      modo === 'obras' ? 'bg-[#ED7102] text-white' : 'text-sidebar-foreground/50 hover:text-sidebar-foreground/80'
+                    )}
+                  >
+                    Obras
+                  </button>
+                  <button
+                    onClick={() => setModo('compliance')}
+                    className={cn(
+                      'flex-1 text-center py-[5px] rounded text-[9.5px] font-bold transition-colors',
+                      modo === 'compliance' ? 'bg-[#ED7102] text-white' : 'text-sidebar-foreground/50 hover:text-sidebar-foreground/80'
+                    )}
+                  >
+                    Cumplimiento
+                  </button>
+                </div>
+              ) : (
+                <p className="text-[10px] font-bold text-sidebar-foreground/60 uppercase tracking-widest">
+                  Coordinación de Obras
+                </p>
+              )}
             </div>
           </div>
         </div>
 
         {/* Navegación */}
         <nav className="flex-1 p-4 space-y-1 overflow-y-auto scrollbar-sidebar" aria-label="Menú principal">
-
-          {/* 1 — Dashboard */}
+          {modoCompliance ? (
+            <>
+              <Link to="/cumplimiento" onClick={handleNavClick} className={navLinkClass('/cumplimiento')}>
+                <LayoutDashboard className="w-[18px] h-[18px]" />
+                Panel General
+              </Link>
+              <Link to="/cumplimiento/documentos" onClick={handleNavClick} className={navLinkClass('/cumplimiento/documentos')}>
+                <FileText className="w-[18px] h-[18px]" />
+                Documentos
+              </Link>
+              <Link to="/cumplimiento/alertas" onClick={handleNavClick} className={navLinkClass('/cumplimiento/alertas')}>
+                <ShieldAlert className="w-[18px] h-[18px]" />
+                Alertas
+              </Link>
+            </>
+          ) : (
+          <>
           {(isAdmin || can('ver_dashboard')) && (
             <Link to="/" onClick={handleNavClick} className={navLinkClass('/')}>
               <LayoutDashboard className="w-[18px] h-[18px]" />
@@ -267,6 +308,8 @@ export default function Sidebar({ isOpen, onToggle }) {
               <ShieldAlert className="w-[18px] h-[18px]" />
               Auditoría
             </Link>
+          )}
+          </>
           )}
 
         </nav>
