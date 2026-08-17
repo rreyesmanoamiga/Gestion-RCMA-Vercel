@@ -48,6 +48,15 @@ const ACTIVIDADES_BASE: Actividad[] = [
 
 const FECHA_BASE = new Date(2025, 0, 1);
 
+// Mismo catálogo que src/lib/colegios.ts — Edge Functions no pueden
+// importar del bundle del frontend, así que se duplica aquí solo el
+// código de colegio (para saber a quién avisar cuando hay un
+// destinatario "global" que debe recibir de TODOS los colegios).
+const TODOS_LOS_COLEGIOS = [
+  'MA AGS', 'MA GDL', 'MA CIM', 'MA LEO', 'MA MTY', 'MA PIE', 'MA SCA', 'MA TIJ', 'MA TOR', 'MA VSJ',
+  'MA ACA', 'MA CAN', 'MA CHA', 'MA CON', 'MA LER', 'MA MOR', 'MA PUE', 'MA QRO', 'MA TAP', 'MA ZOM',
+];
+
 // Misma regla que en el sistema: diarias se omiten en domingo (sin correrse);
 // el resto se corre al lunes si su única fecha del periodo cae en domingo.
 function ocurreHoy(act: Actividad, hoy: Date): boolean {
@@ -200,20 +209,31 @@ serve(async (req) => {
 
     const actividadRef = (act: Actividad) => act._esBase ? `base:${act.id}` : `custom:${act.id}`;
 
-    // ── Colegios con administrador asignado (colegio específico + ver_calendario) ──
-    const { data: admins = [] } = await supabase
-      .from('user_permissions')
-      .select('user_email, nombre, colegio')
-      .eq('ver_calendario', true)
-      .not('colegio', 'is', null)
-      .neq('colegio', '')
-      .neq('colegio', 'ECO');
+    // ── Destinatarios configurados en el modal de Notificaciones del
+    //    Calendario (maintenance_notification_recipients). Ya NO se usa
+    //    user_permissions.ver_calendario — eso mandaba avisos a cualquiera
+    //    con acceso al calendario, aunque no estuviera en la lista elegida.
+    const { data: recipientsRaw = [] } = await supabase
+      .from('maintenance_notification_recipients')
+      .select('email, nombre, colegio')
+      .eq('activo', true);
 
-    const colegiosConAdmin = [...new Set((admins || []).map((a: any) => a.colegio))];
-    if (colegiosConAdmin.length === 0) {
-      return new Response(JSON.stringify({ success: true, message: 'Sin administradores de colegio configurados', sent: 0 }),
+    const recipients = (recipientsRaw || []) as { email: string; nombre: string | null; colegio: string | null }[];
+    if (recipients.length === 0) {
+      return new Response(JSON.stringify({ success: true, message: 'Sin destinatarios configurados en el modal de Notificaciones', sent: 0 }),
         { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     }
+
+    // Colegios que tienen al menos un destinatario específico asignado
+    const colegiosConAdminEspecifico = [...new Set(
+      recipients.filter(r => r.colegio).map(r => r.colegio as string)
+    )];
+    const hayGlobales = recipients.some(r => !r.colegio);
+    // Si hay destinatarios "globales" (colegio null), hay que revisar TODOS
+    // los colegios del catálogo, no solo los que tienen alguien específico.
+    const colegiosARevisar = hayGlobales
+      ? [...new Set([...TODOS_LOS_COLEGIOS, ...colegiosConAdminEspecifico])]
+      : colegiosConAdminEspecifico;
 
     // ── Lo que ya se marcó hoy, por colegio ─────────────────────────────────
     const { data: completions = [] } = await supabase
@@ -224,24 +244,29 @@ serve(async (req) => {
     const completadoSet = new Set((completions || []).map((c: any) => `${c.colegio}|${c.actividad_ref}`));
 
     let sent = 0;
-    for (const colegio of colegiosConAdmin) {
+    const erroresEnvio: string[] = [];
+
+    for (const colegio of colegiosARevisar) {
       const pendientes = actividadesHoy.filter(act => !completadoSet.has(`${colegio}|${actividadRef(act)}`));
       if (pendientes.length === 0) continue; // ya marcó todo — no se le manda nada
 
-      const destinatarios = (admins || []).filter((a: any) => a.colegio === colegio);
+      const destinatarios = recipients.filter(r => r.colegio === colegio || !r.colegio);
       if (destinatarios.length === 0) continue;
 
-      const html = generarHTML(colegio as string, pendientes, siteUrl);
+      const html = generarHTML(colegio, pendientes, siteUrl);
       const subject = `⚠️ ${colegio}: ${pendientes.length} mantenimiento(s) sin marcar hoy`;
 
-      for (const d of destinatarios as any[]) {
-        if (!d.user_email) continue;
-        try { await sendEmail(d.user_email, subject, html); sent++; }
-        catch (e) { console.error(`Error enviando a ${d.user_email}:`, e); }
+      for (const d of destinatarios) {
+        try { await sendEmail(d.email, subject, html); sent++; }
+        catch (e) {
+          const msg = e instanceof Error ? e.message : String(e);
+          console.error(`Error enviando a ${d.email}:`, msg);
+          erroresEnvio.push(`${d.email}: ${msg}`);
+        }
       }
     }
 
-    return new Response(JSON.stringify({ success: true, colegiosConPendientes: sent > 0, sent }),
+    return new Response(JSON.stringify({ success: true, colegiosConPendientes: sent > 0, sent, errores: erroresEnvio }),
       { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Error desconocido';

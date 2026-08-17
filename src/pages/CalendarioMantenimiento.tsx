@@ -30,6 +30,7 @@ interface NotificationRecipient {
   nombre: string;
   activo: boolean;
   actividades_ids: number[] | null; // null = todos los mttos
+  colegio: string | null; // null = todos los colegios (para el recordatorio "sin marcar hoy")
 }
 
 export const ACTIVIDADES_BASE: Actividad[] = [
@@ -233,6 +234,7 @@ export default function CalendarioMantenimiento() {
   });
 
   const [formRecipient, setFormRecipient] = useState({ email: '', nombre: '' });
+  const [formRecipientColegio, setFormRecipientColegio] = useState('');
   const [recipientModoManual, setRecipientModoManual] = useState(false);
   const [recipientSeleccionado, setRecipientSeleccionado] = useState('');
 
@@ -384,17 +386,18 @@ export default function CalendarioMantenimiento() {
   });
 
   const addRecipientMutation = useMutation({
-    mutationFn: async (data: { email: string; nombre: string; actividades_ids: number[] | null }) => {
+    mutationFn: async (data: { email: string; nombre: string; actividades_ids: number[] | null; colegio: string | null }) => {
       if (!puedeCrear) throw new Error('No tienes permiso para agregar destinatarios de notificación.');
       const { error } = await supabase.from('maintenance_notification_recipients')
-        .insert({ email: data.email.toLowerCase().trim(), nombre: data.nombre.trim(), activo: true, actividades_ids: data.actividades_ids });
+        .insert({ email: data.email.toLowerCase().trim(), nombre: data.nombre.trim(), activo: true, actividades_ids: data.actividades_ids, colegio: data.colegio });
       if (error) throw error;
-      logAudit({ accion: 'crear', modulo: 'calendario', registro_ref: `Destinatario: ${data.nombre}`, detalle: { email: data.email } });
+      logAudit({ accion: 'crear', modulo: 'calendario', registro_ref: `Destinatario: ${data.nombre}`, detalle: { email: data.email, colegio: data.colegio } });
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['maintenanceRecipients'] });
       toast.success('Destinatario agregado');
       setFormRecipient({ email: '', nombre: '' });
+      setFormRecipientColegio('');
       setFormRecipientTodos(true);
       setFormRecipientIds([]);
       setRecipientSeleccionado('');
@@ -1160,6 +1163,13 @@ export default function CalendarioMantenimiento() {
                 </button>
               </div>
 
+              <div className="mb-2">
+                <select value={formRecipientColegio} onChange={e => setFormRecipientColegio(e.target.value)} className={inputClass}>
+                  <option value="">Todos los colegios (recibe de todos)</option>
+                  {COLEGIOS.map(c => <option key={c.colegio} value={c.colegio}>{c.colegio} — {c.territorio}</option>)}
+                </select>
+              </div>
+
               {recipientModoManual ? (
                 <div className="flex gap-2 mb-3">
                   <div className="flex-1 space-y-2">
@@ -1170,7 +1180,7 @@ export default function CalendarioMantenimiento() {
                   </div>
                   <button
                     disabled={!formRecipient.email || !formRecipient.nombre || !isValidEmail(formRecipient.email) || addRecipientMutation.isPending || (!formRecipientTodos && formRecipientIds.length === 0)}
-                    onClick={() => addRecipientMutation.mutate({ ...formRecipient, actividades_ids: formRecipientTodos ? null : formRecipientIds })}
+                    onClick={() => addRecipientMutation.mutate({ ...formRecipient, actividades_ids: formRecipientTodos ? null : formRecipientIds, colegio: formRecipientColegio || null })}
                     className="px-3 py-2 bg-slate-900 text-white rounded-md text-sm font-medium hover:bg-slate-800 disabled:opacity-40 transition-colors flex items-center gap-1.5 self-end">
                     <UserPlus className="w-4 h-4" />
                     {addRecipientMutation.isPending ? '...' : 'Agregar'}
@@ -1195,7 +1205,7 @@ export default function CalendarioMantenimiento() {
                   </select>
                   <button
                     disabled={!formRecipient.email || !formRecipient.nombre || addRecipientMutation.isPending || (!formRecipientTodos && formRecipientIds.length === 0)}
-                    onClick={() => addRecipientMutation.mutate({ ...formRecipient, actividades_ids: formRecipientTodos ? null : formRecipientIds })}
+                    onClick={() => addRecipientMutation.mutate({ ...formRecipient, actividades_ids: formRecipientTodos ? null : formRecipientIds, colegio: formRecipientColegio || null })}
                     className="px-3 py-2 bg-slate-900 text-white rounded-md text-sm font-medium hover:bg-slate-800 disabled:opacity-40 transition-colors flex items-center gap-1.5">
                     <UserPlus className="w-4 h-4" />
                     {addRecipientMutation.isPending ? '...' : 'Agregar'}
@@ -1266,6 +1276,8 @@ export default function CalendarioMantenimiento() {
                         <p className="text-xs text-slate-500 truncate">{r.email}</p>
                         <p className="text-[10px] text-slate-400 mt-0.5">
                           {r.actividades_ids == null ? 'Todos los mttos' : `${r.actividades_ids.length} mtto(s) seleccionado(s)`}
+                          {' · '}
+                          {r.colegio ? r.colegio : 'Todos los colegios'}
                         </p>
                       </div>
                       <div className="flex items-center gap-2 shrink-0">
