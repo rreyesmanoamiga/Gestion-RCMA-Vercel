@@ -322,17 +322,22 @@ export default function CalendarioMantenimiento() {
   const { data: usuariosRegistrados = [] } = useQuery({
     queryKey: ['usuariosRegistradosNotif'],
     queryFn: async () => {
-      const { data, error } = await supabase.from('user_permissions').select('user_email, nombre').order('nombre');
+      const { data, error } = await supabase.from('user_permissions').select('user_email, nombre, colegio, territorio').order('nombre');
       if (error) throw error;
-      return (data ?? []) as { user_email: string; nombre: string | null }[];
+      return (data ?? []) as { user_email: string; nombre: string | null; colegio: string | null; territorio: string | null }[];
     },
   });
 
-  // Solo los que aún NO están configurados como destinatarios de mantenimiento
+  // Solo los que aún NO están configurados como destinatarios de mantenimiento,
+  // y si se eligió un colegio arriba, solo los usuarios ligados a ESE colegio.
   const usuariosDisponibles = useMemo(() => {
     const yaAgregados = new Set(recipients.map(r => r.email.toLowerCase()));
-    return usuariosRegistrados.filter(u => !yaAgregados.has(u.user_email.toLowerCase()));
-  }, [usuariosRegistrados, recipients]);
+    let base = usuariosRegistrados.filter(u => !yaAgregados.has(u.user_email.toLowerCase()));
+    if (formRecipientColegio) {
+      base = base.filter(u => u.colegio === formRecipientColegio);
+    }
+    return base;
+  }, [usuariosRegistrados, recipients, formRecipientColegio]);
 
   const addMutation = useMutation({
     mutationFn: async (data: typeof form) => {
@@ -1197,7 +1202,11 @@ export default function CalendarioMantenimiento() {
                     }}
                     className={inputClass + ' flex-1'}>
                     <option value="">
-                      {usuariosDisponibles.length === 0 ? 'Todos los usuarios ya reciben notificaciones' : 'Selecciona un usuario...'}
+                      {usuariosDisponibles.length === 0
+                        ? (formRecipientColegio
+                            ? `Sin usuarios registrados en ${formRecipientColegio}`
+                            : 'Todos los usuarios ya reciben notificaciones')
+                        : 'Selecciona un usuario...'}
                     </option>
                     {usuariosDisponibles.map(u => (
                       <option key={u.user_email} value={u.user_email}>{u.nombre || u.user_email} — {u.user_email}</option>
