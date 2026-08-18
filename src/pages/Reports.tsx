@@ -4,11 +4,12 @@ import { supabase } from '@/lib/supabaseClient';
 import { useQuery } from '@tanstack/react-query';
 import {
   BarChart3, Download, FileSpreadsheet, FileText,
-  PieChart, Filter, TrendingUp, ClockAlert, Wrench, Package, Building2,
+  PieChart, Filter, TrendingUp, ClockAlert, Wrench, Package, Building2, ShieldCheck,
 } from 'lucide-react';
 import PageHeader from '@/components/shared/PageHeader';
 import { mergeActividadesConCustom, calcularFechasEnMes } from './CalendarioMantenimiento';
 import { COLEGIOS } from '@/lib/colegios';
+import { useComplianceDocs, esRetraso, type ComplianceDoc } from '@/lib/complianceShared';
 
 const btnOutline = "flex items-center gap-2 px-4 py-2.5 border border-slate-300 rounded-lg text-sm font-bold text-slate-700 hover:bg-slate-50 transition-all shadow-sm disabled:opacity-40 disabled:cursor-not-allowed";
 const cardClass  = "bg-white p-6 rounded-xl border border-slate-200 shadow-sm";
@@ -25,6 +26,9 @@ interface EntregableLev { id: string; plantel_id?: string; mecanica_suelos?: boo
 interface NexusNota { id: string; titulo?: string; categoria?: string; colegio?: string; territorio?: string; fijada?: boolean; created_at?: string; updated_at?: string; }
 interface NexusPendiente { id: string; titulo?: string; tipo?: string; asignado_nombre?: string; asignado_cc?: string; asignado_cc_nombre?: string; prioridad?: string; fecha_limite?: string | null; estatus?: string; colegio?: string; territorio?: string; created_at?: string; }
 interface ReporteLevDiario { id: string; plantel_id?: string | null; plantel_id_2?: string | null; fecha_reporte?: string; archivo_nombre?: string; notas?: string | null; }
+interface CompliancePendiente { id: string; titulo?: string; colegio?: string | null; territorio?: string | null; prioridad?: string; estatus?: string; fecha_limite?: string | null; asignado_a?: string | null; tipo?: string; }
+interface ComplianceNota { id: string; titulo?: string; categoria?: string; colegio?: string | null; territorio?: string | null; fijada?: boolean; updated_at?: string; }
+interface ComplianceSeguimiento { id: string; colegio?: string; territorio?: string | null; resumen?: string; estatus?: string; created_at?: string; }
 interface Stats    { total: number; completed: number; avgProgress: number; }
 
 // ─── Helpers de dibujo ────────────────────────────────────────────────────────
@@ -385,12 +389,13 @@ async function exportIncidenciasPDF({ projects, pendientes, ticketsMas, minimos,
 }
 
 // ─── Export PDF mejorado ──────────────────────────────────────────────────────
-async function exportResumenPDF({ stats, projects, checklists, solicitudes, tickets, pendientes, ticketsMas, minimos, anteproyectos, solicitudesAll, cumplimiento, requisiciones, planteles, pagosLev, entregablesLev }: {
+async function exportResumenPDF({ stats, projects, checklists, solicitudes, tickets, pendientes, ticketsMas, minimos, anteproyectos, solicitudesAll, cumplimiento, requisiciones, planteles, pagosLev, entregablesLev, complianceDocs, compliancePendientes }: {
   stats: Stats; projects: Project[]; checklists: unknown[];
   solicitudes: Solicitud[]; tickets: Ticket[]; pendientes: Pendiente[];
   ticketsMas: any[]; minimos: any[]; anteproyectos: any[]; solicitudesAll: any[];
   cumplimiento: ColegioCumplimiento[]; requisiciones: ReqInsumo[];
   planteles: PlantelLev[]; pagosLev: PagoLev[]; entregablesLev: EntregableLev[];
+  complianceDocs: ComplianceDoc[]; compliancePendientes: CompliancePendiente[];
 }): Promise<void> {
   const JsPDF = await loadJsPDF();
   const doc = new JsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
@@ -954,6 +959,55 @@ async function exportResumenPDF({ stats, projects, checklists, solicitudes, tick
   }
   y += 4;
 
+  // ─── SECCIÓN 14: Cumplimiento Normativo (PC / Donatarias) ─────────────────
+  if (y > getH() - 40) { doc.addPage(); y = 20; }
+  section('14. Cumplimiento Normativo (Protección Civil / Donatarias)');
+
+  const hoyCump = new Date(); hoyCump.setHours(0, 0, 0, 0);
+  const cumpTotal      = complianceDocs.length;
+  const cumpRetraso    = complianceDocs.filter(d => esRetraso(d, hoyCump)).length;
+  const cumpPorExpirar = complianceDocs.filter(d => d.vigente === 'Por expirar').length;
+  const cumpVerificado = complianceDocs.filter(d => d.estado === 'Verificado').length;
+  const cumpPendActivos = compliancePendientes.filter(p => p.estatus !== 'completado' && p.estatus !== 'cancelado').length;
+
+  y = drawKPIBoxes(doc, 20, y, W, [
+    { label: 'Documentos',        value: String(cumpTotal),       color: [15, 23, 42]   },
+    { label: 'En Retraso',        value: String(cumpRetraso),     color: [220, 38, 38]  },
+    { label: 'Por Expirar',       value: String(cumpPorExpirar),  color: [237, 113, 2]  },
+    { label: 'Verificados',       value: String(cumpVerificado),  color: [22, 163, 74]  },
+    { label: 'Pendientes Activos', value: String(cumpPendActivos), color: [99, 102, 241] },
+  ]);
+  y += 4;
+
+  if (complianceDocs.length > 0) {
+    const porColegioMap = new Map<string, { territorio: string; total: number; retraso: number; verificados: number }>();
+    complianceDocs.forEach(d => {
+      const cur = porColegioMap.get(d.colegio) ?? { territorio: d.territorio, total: 0, retraso: 0, verificados: 0 };
+      cur.total++;
+      if (esRetraso(d, hoyCump)) cur.retraso++;
+      if (d.estado === 'Verificado') cur.verificados++;
+      porColegioMap.set(d.colegio, cur);
+    });
+    const cumpNormRows = Array.from(porColegioMap.entries())
+      .sort((a, b) => b[1].retraso - a[1].retraso)
+      .map(([colegio, s]) => [
+        colegio.replace('Mano Amiga ', ''), s.territorio, `${s.verificados} / ${s.total}`,
+        s.total > 0 ? `${Math.round((s.verificados / s.total) * 100)}%` : '0%',
+        String(s.retraso),
+      ]);
+    y = drawTable(doc, y, W, [
+      { label: 'Colegio',        x: 20  },
+      { label: 'Territorio',     x: 90  },
+      { label: 'Verificados',    x: 140, align: 'right' },
+      { label: '% Cumplimiento', x: 180, align: 'right' },
+      { label: 'En Retraso',     x: 215, align: 'right' },
+    ], cumpNormRows, 30, 210);
+  } else {
+    doc.setFontSize(9); doc.setFont('helvetica', 'normal'); doc.setTextColor(150, 150, 150);
+    doc.text('Sin documentos de Cumplimiento Normativo registrados.', 20, y); y += 10;
+  }
+  y += 4;
+
   // ─── PIE DE PÁGINA ─────────────────────────────────────────────────────────
   const pages = doc.getNumberOfPages();
   for (let i = 1; i <= pages; i++) {
@@ -992,6 +1046,8 @@ async function exportMatrizExcel(data: {
   minimos: unknown[]; ticketsMas: unknown[]; cumplimiento: ColegioCumplimiento[];
   requisiciones: unknown[]; planteles: unknown[]; pagosLev: unknown[];
   nexusNotas: unknown[]; nexusPendientes: unknown[]; reportesLev: unknown[];
+  complianceDocs: ComplianceDoc[]; compliancePendientes: CompliancePendiente[];
+  complianceNotas: ComplianceNota[]; complianceSeguimientos: ComplianceSeguimiento[];
 }) {
   const XLSX = await loadXLSX();
   const wb   = XLSX.utils.book_new();
@@ -1232,6 +1288,45 @@ async function exportMatrizExcel(data: {
     ] as (string | number | null | undefined)[]),
     [32, 14, 22, 22, 12, 14, 16, 18, 12]);
 
+  // ── Cumplimiento Normativo — Documentos ──────────────────────────────────
+  buildSheet('📋 Cumpl. Documentos', 'Cumplimiento Normativo — Documentos — Sistema RCMA',
+    ['Colegio', 'Territorio', 'Materia', 'Documento', 'Estado', 'Vigente', 'Fecha Límite', 'Vigente Hasta', 'Responsable'],
+    data.complianceDocs.map(d => [
+      d.colegio.replace('Mano Amiga ', ''), d.territorio, d.materia ?? 'Sin categoría',
+      d.tipo_documento, d.estado, d.vigente ?? '—',
+      fmt(d.fecha_limite_recepcion as string), fmt(d.vigente_hasta as string),
+      d.responsable ?? 'Sin asignar',
+    ] as (string | number | null | undefined)[]),
+    [22, 12, 20, 34, 14, 12, 14, 14, 20]);
+
+  // ── Cumplimiento Normativo — Pendientes ──────────────────────────────────
+  buildSheet('✅ Cumpl. Pendientes', 'Cumplimiento Normativo — Pendientes — Sistema RCMA',
+    ['Título', 'Colegio', 'Territorio', 'Tipo', 'Prioridad', 'Estatus', 'Fecha Límite', 'Asignado a'],
+    data.compliancePendientes.map(p => [
+      p.titulo ?? '—', p.colegio ? p.colegio.replace('Mano Amiga ', '') : 'General',
+      p.territorio ?? '—', p.tipo === 'compartido' ? 'Compartido' : 'Personal',
+      p.prioridad ?? '—', p.estatus ?? '—', fmt(p.fecha_limite as string), p.asignado_a ?? '—',
+    ] as (string | number | null | undefined)[]),
+    [30, 20, 12, 14, 12, 14, 16, 24]);
+
+  // ── Cumplimiento Normativo — Notas ────────────────────────────────────────
+  buildSheet('📝 Cumpl. Notas', 'Cumplimiento Normativo — Notas — Sistema RCMA',
+    ['Título', 'Categoría', 'Colegio', 'Territorio', 'Fijada', 'Última Actualización'],
+    data.complianceNotas.map(n => [
+      n.titulo ?? '—', n.categoria ?? '—', n.colegio ? n.colegio.replace('Mano Amiga ', '') : '—',
+      n.territorio ?? '—', n.fijada ? 'Sí' : 'No', fmt(n.updated_at as string),
+    ] as (string | number | null | undefined)[]),
+    [32, 16, 20, 14, 10, 18]);
+
+  // ── Cumplimiento Normativo — Seguimientos ────────────────────────────────
+  buildSheet('📌 Cumpl. Seguim.', 'Cumplimiento Normativo — Seguimientos — Sistema RCMA',
+    ['Colegio', 'Territorio', 'Resumen', 'Estatus', 'Fecha Inicio'],
+    data.complianceSeguimientos.map(s => [
+      s.colegio ? s.colegio.replace('Mano Amiga ', '') : '—', s.territorio ?? '—',
+      s.resumen ?? '—', s.estatus === 'activo' ? 'Activo' : 'Completado', fmt(s.created_at as string),
+    ] as (string | number | null | undefined)[]),
+    [20, 12, 44, 14, 16]);
+
   // Resumen ejecutivo
   const ws7: Record<string, unknown> = {};
   const nexusPendCompartidos = (data.nexusPendientes as Record<string, unknown>[]).filter(p => !!p.asignado_cc).length;
@@ -1250,6 +1345,10 @@ async function exportMatrizExcel(data: {
     { label: 'NEXUS — Notas', count: data.nexusNotas.length },
     { label: 'NEXUS — Pendientes', count: data.nexusPendientes.length },
     { label: 'NEXUS — Pendientes Compartidos', count: nexusPendCompartidos },
+    { label: 'Cumplimiento Normativo — Documentos', count: data.complianceDocs.length },
+    { label: 'Cumplimiento Normativo — Pendientes', count: data.compliancePendientes.length },
+    { label: 'Cumplimiento Normativo — Notas', count: data.complianceNotas.length },
+    { label: 'Cumplimiento Normativo — Seguimientos', count: data.complianceSeguimientos.length },
   ];
   const totalGeneral = resRows.filter(r => r.label !== 'NEXUS — Pendientes Compartidos').reduce((a, r) => a + r.count, 0);
   const sRT = { font: { bold: true, sz: 16, name: 'Calibri', color: { rgb: 'FFFFFFFF' } }, fill: { patternType: 'solid', fgColor: { rgb: 'FF0F172A' } }, alignment: { horizontal: 'left', vertical: 'center' } };
@@ -1283,6 +1382,7 @@ async function exportMatrizExcel(data: {
     'Minimos Indispensables', 'Minimos Detalle',
     '🔧 Cumplimiento Mtto.', '📦 Requisiciones', '🏫 Levant. Planteles', '💵 Levant. Pagos', '📄 Levant. Reportes',
     '📝 Nexus Notas', '✅ Nexus Pendientes',
+    '📋 Cumpl. Documentos', '✅ Cumpl. Pendientes', '📝 Cumpl. Notas', '📌 Cumpl. Seguim.',
   ];
   XLSX.writeFile(wb, `Matriz_Sistema_RCMA_${new Date().toISOString().slice(0, 10)}.xlsx`);
 }
@@ -1378,6 +1478,21 @@ export default function Reports() {
     queryFn: async () => { const { data, error } = await supabase.from('nexus_pendientes').select('*').order('created_at', { ascending: false }); if (error) throw error; return data ?? []; },
   });
 
+  // ── Cumplimiento Normativo — reusa el mismo hook que usan sus propias páginas ──
+  const { data: rawComplianceDocs = [] } = useComplianceDocs();
+  const { data: rawCompliancePendientes = [] } = useQuery({
+    queryKey: ['compliance_pendientes-report'],
+    queryFn: async () => { const { data, error } = await supabase.from('compliance_pendientes').select('*').order('created_at', { ascending: false }); if (error) throw error; return data ?? []; },
+  });
+  const { data: rawComplianceNotas = [] } = useQuery({
+    queryKey: ['compliance_notas-report'],
+    queryFn: async () => { const { data, error } = await supabase.from('compliance_notas').select('*').order('updated_at', { ascending: false }); if (error) throw error; return data ?? []; },
+  });
+  const { data: rawComplianceSeguimientos = [] } = useQuery({
+    queryKey: ['compliance_seguimientos-report'],
+    queryFn: async () => { const { data, error } = await supabase.from('compliance_seguimientos').select('*').order('created_at', { ascending: false }); if (error) throw error; return data ?? []; },
+  });
+
   const projects    = rawProjects    as unknown as Project[];
   const checklists  = rawChecklists  as unknown[];
   const solicitudes = rawSolicitudes as unknown as Solicitud[];
@@ -1430,6 +1545,8 @@ export default function Reports() {
     solicitudesAll: rawSolicitudesAll as any[],
     cumplimiento, requisiciones, planteles, pagosLev,
     entregablesLev: rawEntregablesLev as unknown as EntregableLev[],
+    complianceDocs: rawComplianceDocs as ComplianceDoc[],
+    compliancePendientes: rawCompliancePendientes as unknown as CompliancePendiente[],
   }).catch(e => { console.error('Error generando PDF:', e); alert('Error al generar PDF: ' + (e?.message ?? e)); });
 
   const handleExportExcel = () => exportMatrizExcel({
@@ -1439,6 +1556,10 @@ export default function Reports() {
     ticketsMas: rawTicketsMas, cumplimiento,
     requisiciones: rawRequisiciones, planteles: rawPlanteles, pagosLev: rawPagosLev,
     nexusNotas: rawNexusNotas, nexusPendientes: rawNexusPendientes, reportesLev: rawReportesLev,
+    complianceDocs: rawComplianceDocs as ComplianceDoc[],
+    compliancePendientes: rawCompliancePendientes as unknown as CompliancePendiente[],
+    complianceNotas: rawComplianceNotas as unknown as ComplianceNota[],
+    complianceSeguimientos: rawComplianceSeguimientos as unknown as ComplianceSeguimiento[],
   }).catch(e => console.error('Error generando Excel:', e));
 
   const handleExportEstatusColegio = () => exportEstatusColegioPDF({
@@ -1522,6 +1643,19 @@ export default function Reports() {
             <ClockAlert className="w-8 h-8 text-red-50" />
           </div>
           <p className="text-xs text-slate-400 mt-1">{pagosLev.length} pagos en total</p>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className={`${cardClass} border-l-4 border-l-sky-500`}>
+          <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Cumplimiento Normativo</p>
+          <div className="flex items-center justify-between">
+            <h3 className="text-3xl font-black text-slate-900">{(rawComplianceDocs as ComplianceDoc[]).length}</h3>
+            <ShieldCheck className="w-8 h-8 text-sky-50" />
+          </div>
+          <p className="text-xs text-slate-400 mt-1">
+            {(rawComplianceDocs as ComplianceDoc[]).filter(d => esRetraso(d, new Date())).length} en retraso
+          </p>
         </div>
       </div>
 
