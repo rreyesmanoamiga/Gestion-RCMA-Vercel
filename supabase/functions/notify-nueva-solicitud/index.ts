@@ -1,4 +1,5 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -92,36 +93,24 @@ serve(async (req) => {
   try {
     const { nombre, proyecto, centro, correoSolicitante, puesto, territorio: territorioRecibido, correoCAR } = await req.json();
 
-    // ── Mapa de territorio como respaldo server-side ──────────────────────────
-    // Si el frontend no pudo determinar el territorio, lo calculamos aquí
-    const COLEGIO_TERRITORIO: Record<string, string> = {
-      'Mano Amiga Acapulco':          'MEXICO',
-      'Mano Amiga Aguascalientes':     'NORTE',
-      'Mano Amiga Cancún':             'MEXICO',
-      'Mano Amiga Chalco':             'MEXICO',
-      'Mano Amiga La Cima':            'NORTE',
-      'Mano Amiga Conkal':             'MEXICO',
-      'Mano Amiga Guadalajara':        'NORTE',
-      'Mano Amiga León':               'NORTE',
-      'Mano Amiga Lerma':              'MEXICO',
-      'Mano Amiga Morelia':            'MEXICO',
-      'Mano Amiga Monterrey':          'NORTE',
-      'Mano Amiga Piedras Negras':     'NORTE',
-      'Mano Amiga Puebla':             'MEXICO',
-      'Mano Amiga Querétaro':          'MEXICO',
-      'Mano Amiga Santa Catarina':     'NORTE',
-      'Mano Amiga Tapachula':          'MEXICO',
-      'Mano Amiga Tijuana':            'NORTE',
-      'Mano Amiga Torreón':            'NORTE',
-      'Mano Amiga Villas de San Juan': 'NORTE',
-      'Mano Amiga Zomeyucan':          'MEXICO',
-      'FIA': 'FMA', 'FMA': 'FMA', 'AUN': 'FMA',
-    };
+    // ── Respaldo server-side: si el frontend no pudo mandar territorio/CAR,
+    //    se consulta en vivo a Directorio (fuente única) en vez de un mapa fijo. ──
+    let territorio = territorioRecibido && territorioRecibido !== '' ? territorioRecibido : '';
+    let carCorreoDirectorio = correoCAR && correoCAR !== '' ? correoCAR : '';
 
-    // Usar el territorio recibido; si viene vacío, determinarlo del centro
-    const territorio = (territorioRecibido && territorioRecibido !== '')
-      ? territorioRecibido
-      : (COLEGIO_TERRITORIO[centro] ?? '—');
+    if ((!territorio || !carCorreoDirectorio) && centro) {
+      const supabaseUrl = Deno.env.get('SUPABASE_URL');
+      const serviceKey  = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+      if (supabaseUrl && serviceKey) {
+        const supabase = createClient(supabaseUrl, serviceKey);
+        const { data: fila } = await supabase.from('directorio').select('territorio, car_correo').eq('nombre', centro).maybeSingle();
+        if (fila) {
+          if (!territorio) territorio = fila.territorio ?? '—';
+          if (!carCorreoDirectorio) carCorreoDirectorio = fila.car_correo ?? '';
+        }
+      }
+    }
+    if (!territorio) territorio = '—';
 
     const adminEmail = Deno.env.get('ADMIN_EMAIL') ?? '';
     const smtpUser   = Deno.env.get('SMTP_USER')   ?? '';
@@ -212,15 +201,9 @@ serve(async (req) => {
     const subject = `📋 Nueva Solicitud: ${proyecto ?? 'Sin nombre'} — ${centro ?? ''}`;
 
     // Enviar al administrador
-    // ── Mapa de CARs server-side (respaldo si el frontend no lo manda) ────────
-    const CAR_CORREOS: Record<string, string> = {
-      NORTE:  'jalvarado@manoamiga.edu.mx',
-      MEXICO: 'gromero@manoamiga.edu.mx',
-      FMA:    'fguerra@manoamiga.edu.mx',
-    };
-    const carCorreo = (correoCAR && correoCAR !== '')
-      ? correoCAR
-      : (CAR_CORREOS[territorio] ?? '');
+    // El correo del CAR ya se resolvió arriba (recibido del frontend, o
+    // consultado en vivo a Directorio como respaldo).
+    const carCorreo = carCorreoDirectorio;
 
     const ccList = [carCorreo].filter(Boolean).filter(c => c !== adminEmail);
 
