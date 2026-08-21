@@ -1,13 +1,8 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
 const ALLOWED_ORIGIN = Deno.env.get('SITE_URL') ?? '*';
 const corsHeaders = { 'Access-Control-Allow-Origin': ALLOWED_ORIGIN, 'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type' };
-
-const CAR_CORREOS: Record<string, string> = {
-  NORTE:  'jalvarado@manoamiga.edu.mx',
-  MEXICO: 'gromero@manoamiga.edu.mx',
-  FMA:    'fguerra@manoamiga.edu.mx',
-};
 
 async function sendEmail(to: string, cc: string[], subject: string, html: string) {
   const smtpHost = Deno.env.get('SMTP_HOST') ?? 'smtp.office365.com';
@@ -48,7 +43,21 @@ serve(async (req) => {
     const smtpUser   = Deno.env.get('SMTP_USER') ?? '';
     const adminEmail = Deno.env.get('ADMIN_EMAIL') ?? 'rreyes@manoamiga.edu.mx';
     const appUrl     = siteUrl ?? Deno.env.get('SITE_URL') ?? '';
-    const carEmail   = CAR_CORREOS[territorio] ?? '';
+
+    // CAR del colegio + Gerente (Ángel) en vivo desde Directorio — fuente única.
+    let carEmail = '';
+    let gerenteEmail = 'arodriguez@manoamiga.edu.mx'; // respaldo si Directorio no responde
+    const supabaseUrl = Deno.env.get('SUPABASE_URL');
+    const serviceKey  = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+    if (supabaseUrl && serviceKey) {
+      const supabase = createClient(supabaseUrl, serviceKey);
+      if (centro) {
+        const { data: fila } = await supabase.from('directorio').select('car_correo').eq('nombre', centro).maybeSingle();
+        carEmail = fila?.car_correo ?? '';
+      }
+      const { data: general } = await supabase.from('directorio').select('gerente_correo').eq('codigo', 'GENERAL').maybeSingle();
+      if (general?.gerente_correo) gerenteEmail = general.gerente_correo;
+    }
 
     const archivosHTML = (archivos as string[] ?? []).map((a: string) =>
       `<li style="padding:6px 0;font-size:13px;color:#0f172a;list-style:none;">📎 ${a}</li>`
@@ -99,7 +108,7 @@ serve(async (req) => {
   </table>
 </body></html>`;
 
-    const ccList = [carEmail, 'arodriguez@manoamiga.edu.mx'].filter(c => c && c !== adminEmail);
+    const ccList = [carEmail, gerenteEmail].filter(c => c && c !== adminEmail);
     await sendEmail(adminEmail, ccList, `📎 [RCMA] Cotizaciones subidas — ${proyecto ?? '—'} | ${centro ?? '—'}`, html);
 
     return new Response(JSON.stringify({ success: true }), { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });

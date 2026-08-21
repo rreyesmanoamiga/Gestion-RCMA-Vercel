@@ -1,4 +1,5 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': Deno.env.get('SITE_URL') ?? 'https://gestion-rcma-vercel.vercel.app',
@@ -69,18 +70,24 @@ serve(async (req) => {
     const smtpUser   = Deno.env.get('SMTP_USER')   ?? '';
     const siteUrl    = Deno.env.get('SITE_URL')     ?? '';
 
-    // CC: jefe + ambos CARs (o solo el CAR del territorio si se conoce)
-    const CAR_CORREOS: Record<string, string> = {
-      NORTE:  'jalvarado@manoamiga.edu.mx',
-      MEXICO: 'gromero@manoamiga.edu.mx',
-    };
-    const carTerritorio = correo_car ?? (territorio ? CAR_CORREOS[territorio] ?? '' : '');
-    const ccList = [
-      'arodriguez@manoamiga.edu.mx',
-      'ecastaneda@manoamiga.edu.mx',
-      'jalvarado@manoamiga.edu.mx',
-      'gromero@manoamiga.edu.mx',
-    ].filter((addr, i, arr) => addr && arr.indexOf(addr) === i); // deduplicar
+    // CC: Gerente + Director Nacional + CAR del colegio — en vivo desde Directorio.
+    let carEmail = correo_car ?? '';
+    let gerenteEmail = 'arodriguez@manoamiga.edu.mx';        // respaldo
+    let directorNacionalEmail = 'ecastaneda@manoamiga.edu.mx'; // respaldo
+    const supabaseUrl = Deno.env.get('SUPABASE_URL');
+    const serviceKey  = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+    if (supabaseUrl && serviceKey) {
+      const supabase = createClient(supabaseUrl, serviceKey);
+      if (!carEmail && colegio) {
+        const { data: fila } = await supabase.from('directorio').select('car_correo').eq('nombre', colegio).maybeSingle();
+        carEmail = fila?.car_correo ?? '';
+      }
+      const { data: general } = await supabase.from('directorio').select('gerente_correo, director_nacional_correo').eq('codigo', 'GENERAL').maybeSingle();
+      if (general?.gerente_correo) gerenteEmail = general.gerente_correo;
+      if (general?.director_nacional_correo) directorNacionalEmail = general.director_nacional_correo;
+    }
+    const ccList = [gerenteEmail, directorNacionalEmail, carEmail]
+      .filter((addr, i, arr) => addr && arr.indexOf(addr) === i); // deduplicar
 
     const html = `<!DOCTYPE html>
 <html lang="es">

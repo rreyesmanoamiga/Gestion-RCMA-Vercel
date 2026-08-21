@@ -1,4 +1,5 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -98,12 +99,17 @@ serve(async (req) => {
       );
     }
 
-    const CAR_CORREOS: Record<string, string> = {
-      NORTE:  'jalvarado@manoamiga.edu.mx',
-      MEXICO: 'gromero@manoamiga.edu.mx',
-    };
     const adminEmail = correoAdmin || Deno.env.get('ADMIN_EMAIL') || 'rreyes@manoamiga.edu.mx';
-    const carEmail    = territorio ? (CAR_CORREOS[territorio] ?? '') : '';
+
+    // CAR del colegio en vivo desde Directorio (respaldo al territorio si no hay colegio).
+    let carEmail = '';
+    const supabaseUrl = Deno.env.get('SUPABASE_URL');
+    const serviceKey  = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+    if (supabaseUrl && serviceKey && centro) {
+      const supabase = createClient(supabaseUrl, serviceKey);
+      const { data: fila } = await supabase.from('directorio').select('car_correo').eq('nombre', centro).maybeSingle();
+      carEmail = fila?.car_correo ?? '';
+    }
     const ccList      = [adminEmail, carEmail].filter(Boolean).filter((c, i, arr) => arr.indexOf(c) === i && c !== correo);
 
     const smtpUser = Deno.env.get('SMTP_USER') ?? '';

@@ -1,20 +1,16 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
 const ALLOWED_ORIGIN = Deno.env.get('SITE_URL') ?? '*';
 const corsHeaders = { 'Access-Control-Allow-Origin': ALLOWED_ORIGIN, 'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type' };
 
-// Asesores de Procuración de Fondos — siempre van en "Para:"
+// Asesores de Procuración de Fondos — siempre van en "Para:" (equipo fijo,
+// no forma parte de Directorio, no se toca).
 const ASESORES_FONDOS = [
   'mromo@manoamiga.edu.mx',
   'smendoza@manoamiga.edu.mx',
   'lsanchez@manoamiga.edu.mx',
 ];
-
-const CAR_CORREOS: Record<string, string> = {
-  NORTE:  'jalvarado@manoamiga.edu.mx',
-  MEXICO: 'gromero@manoamiga.edu.mx',
-  FMA:    'fguerra@manoamiga.edu.mx',
-};
 
 async function sendEmail(to: string[], cc: string[], subject: string, html: string) {
   const smtpHost = Deno.env.get('SMTP_HOST') ?? 'smtp.office365.com';
@@ -55,7 +51,23 @@ serve(async (req) => {
     const { nombre_proyecto, colegio, territorio, presupuesto, subido_por, siteUrl } = await req.json();
     const smtpUser  = Deno.env.get('SMTP_USER') ?? '';
     const adminEmail = Deno.env.get('ADMIN_EMAIL') ?? 'rreyes@manoamiga.edu.mx';
-    const carEmail   = CAR_CORREOS[territorio] ?? '';
+
+    // CAR del colegio + Gerente/Director Nacional en vivo desde Directorio.
+    let carEmail = '';
+    let gerenteEmail = 'arodriguez@manoamiga.edu.mx';       // respaldo
+    let directorNacionalEmail = 'ecastaneda@manoamiga.edu.mx'; // respaldo
+    const supabaseUrl = Deno.env.get('SUPABASE_URL');
+    const serviceKey  = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+    if (supabaseUrl && serviceKey) {
+      const supabase = createClient(supabaseUrl, serviceKey);
+      if (colegio) {
+        const { data: fila } = await supabase.from('directorio').select('car_correo').eq('nombre', colegio).maybeSingle();
+        carEmail = fila?.car_correo ?? '';
+      }
+      const { data: general } = await supabase.from('directorio').select('gerente_correo, director_nacional_correo').eq('codigo', 'GENERAL').maybeSingle();
+      if (general?.gerente_correo) gerenteEmail = general.gerente_correo;
+      if (general?.director_nacional_correo) directorNacionalEmail = general.director_nacional_correo;
+    }
 
     const presupuestoTxt = presupuesto ? '$' + Number(presupuesto).toLocaleString('es-MX', { minimumFractionDigits: 2 }) : '—';
 
@@ -108,7 +120,7 @@ serve(async (req) => {
   </table>
 </body></html>`;
 
-    const ccList = [adminEmail, 'arodriguez@manoamiga.edu.mx', 'ecastaneda@manoamiga.edu.mx', carEmail].filter(Boolean);
+    const ccList = [adminEmail, gerenteEmail, directorNacionalEmail, carEmail].filter(Boolean);
     await sendEmail(ASESORES_FONDOS, ccList, `📐 [RCMA] Nuevo Anteproyecto: ${nombre_proyecto ?? '—'}`, html);
 
     return new Response(JSON.stringify({ success: true }), { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
