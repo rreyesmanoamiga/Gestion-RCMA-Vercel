@@ -325,6 +325,42 @@ export default function Directorio() {
 
                   {/* Director + Admin mini cards */}
                   <div className="mt-3 grid grid-cols-2 gap-2">
+                    {c.codigo === 'GENERAL' && c.gerente_nombre && (
+                      <div className="bg-slate-50 rounded-lg p-2.5 border border-slate-100">
+                        <p className={labelCls}>Gerente</p>
+                        <p className="text-xs font-semibold text-slate-800 mt-0.5 leading-tight">{c.gerente_nombre}</p>
+                        {c.gerente_correo && (
+                          <a href={`mailto:${c.gerente_correo}`}
+                            className="text-[10px] text-blue-600 hover:underline block truncate mt-0.5">
+                            {c.gerente_correo}
+                          </a>
+                        )}
+                        {c.gerente_tel_movil && (
+                          <a href={`tel:${c.gerente_tel_movil}`}
+                            className="text-[10px] text-slate-500 flex items-center gap-1 mt-0.5">
+                            <Phone className="w-2.5 h-2.5" />{c.gerente_tel_movil}
+                          </a>
+                        )}
+                      </div>
+                    )}
+                    {c.codigo === 'GENERAL' && c.director_nacional_nombre && (
+                      <div className="bg-slate-50 rounded-lg p-2.5 border border-slate-100">
+                        <p className={labelCls}>Director Nacional</p>
+                        <p className="text-xs font-semibold text-slate-800 mt-0.5 leading-tight">{c.director_nacional_nombre}</p>
+                        {c.director_nacional_correo && (
+                          <a href={`mailto:${c.director_nacional_correo}`}
+                            className="text-[10px] text-blue-600 hover:underline block truncate mt-0.5">
+                            {c.director_nacional_correo}
+                          </a>
+                        )}
+                        {c.director_nacional_tel_movil && (
+                          <a href={`tel:${c.director_nacional_tel_movil}`}
+                            className="text-[10px] text-slate-500 flex items-center gap-1 mt-0.5">
+                            <Phone className="w-2.5 h-2.5" />{c.director_nacional_tel_movil}
+                          </a>
+                        )}
+                      </div>
+                    )}
                     {c.dir_nombre && (
                       <div className="bg-slate-50 rounded-lg p-2.5 border border-slate-100">
                         <p className={labelCls}>Director</p>
@@ -440,6 +476,28 @@ export default function Directorio() {
 
               {/* Grid de contactos */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+
+                {/* Gerente + Director Nacional (solo fila GENERAL) */}
+                {viewModal.codigo === 'GENERAL' && viewModal.gerente_nombre && (
+                  <div className="bg-slate-50 rounded-lg p-3 border border-slate-100">
+                    <SectionHeader emoji="🏛️" title="Gerente" />
+                    <div className="space-y-1 pl-1">
+                      <CRow icon={User}  value={viewModal.gerente_nombre} />
+                      <CRow icon={Mail}  value={viewModal.gerente_correo} email />
+                      <CRow icon={Phone} label="Móvil" value={viewModal.gerente_tel_movil} phone />
+                    </div>
+                  </div>
+                )}
+                {viewModal.codigo === 'GENERAL' && viewModal.director_nacional_nombre && (
+                  <div className="bg-slate-50 rounded-lg p-3 border border-slate-100">
+                    <SectionHeader emoji="🏛️" title="Director Nacional" />
+                    <div className="space-y-1 pl-1">
+                      <CRow icon={User}  value={viewModal.director_nacional_nombre} />
+                      <CRow icon={Mail}  value={viewModal.director_nacional_correo} email />
+                      <CRow icon={Phone} label="Móvil" value={viewModal.director_nacional_tel_movil} phone />
+                    </div>
+                  </div>
+                )}
 
                 {/* Director */}
                 {viewModal.dir_nombre && (
