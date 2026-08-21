@@ -1,4 +1,5 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': Deno.env.get('SITE_URL') ?? 'https://gestion-rcma-vercel.vercel.app',
@@ -73,11 +74,23 @@ serve(async (req) => {
             fecha_recepcion, fecha_inicio, fecha_fin, descripcion, clasificacion } = await req.json();
     const smtpUser = Deno.env.get('SMTP_USER') ?? '';
 
+    // Gerente/Director Nacional en vivo desde Directorio.
+    let gerenteEmail = 'arodriguez@manoamiga.edu.mx';        // respaldo
+    let directorNacionalEmail = 'ecastaneda@manoamiga.edu.mx'; // respaldo
+    const supabaseUrl = Deno.env.get('SUPABASE_URL');
+    const serviceKey  = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+    if (supabaseUrl && serviceKey) {
+      const supabase = createClient(supabaseUrl, serviceKey);
+      const { data: general } = await supabase.from('directorio').select('gerente_correo, director_nacional_correo').eq('codigo', 'GENERAL').maybeSingle();
+      if (general?.gerente_correo) gerenteEmail = general.gerente_correo;
+      if (general?.director_nacional_correo) directorNacionalEmail = general.director_nacional_correo;
+    }
+
     // CC fijos + CAR de zona
     const ccList = [
       'rreyes@manoamiga.edu.mx',
-      'arodriguez@manoamiga.edu.mx',
-      'ecastaneda@manoamiga.edu.mx',
+      gerenteEmail,
+      directorNacionalEmail,
       correo_car ?? '',
     ].filter(Boolean);
 

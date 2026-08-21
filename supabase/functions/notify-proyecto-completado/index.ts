@@ -1,4 +1,5 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -121,7 +122,19 @@ serve(async (req) => {
 
     const errores: string[] = [];
     const adminEmail = correo_admin || 'rreyes@manoamiga.edu.mx';
-    const ccList = [correo_car ?? '', 'arodriguez@manoamiga.edu.mx', 'ecastaneda@manoamiga.edu.mx']
+
+    // Gerente/Director Nacional en vivo desde Directorio.
+    let gerenteEmail = 'arodriguez@manoamiga.edu.mx';        // respaldo
+    let directorNacionalEmail = 'ecastaneda@manoamiga.edu.mx'; // respaldo
+    const supabaseUrl = Deno.env.get('SUPABASE_URL');
+    const serviceKey  = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+    if (supabaseUrl && serviceKey) {
+      const supabase = createClient(supabaseUrl, serviceKey);
+      const { data: general } = await supabase.from('directorio').select('gerente_correo, director_nacional_correo').eq('codigo', 'GENERAL').maybeSingle();
+      if (general?.gerente_correo) gerenteEmail = general.gerente_correo;
+      if (general?.director_nacional_correo) directorNacionalEmail = general.director_nacional_correo;
+    }
+    const ccList = [correo_car ?? '', gerenteEmail, directorNacionalEmail]
       .filter(c => c && c !== adminEmail);
 
     try {

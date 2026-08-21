@@ -968,7 +968,9 @@ export default function TicketMAS() {
             : t
         )
       );
-      const correoCAR_cancel = cancelModal.territorio === 'NORTE' ? 'jalvarado@manoamiga.edu.mx' : cancelModal.territorio === 'MEXICO' ? 'gromero@manoamiga.edu.mx' : '';
+      // CAR del colegio en vivo desde Directorio (no por territorio — más preciso)
+      const colegioCancel = colegiosTicket.find(c => c.nombre === cancelModal.colegio);
+      const correoCAR_cancel = colegioCancel?.car_correo ?? '';
       const { error: emailError } = await supabase.functions.invoke('notify-ticket-mas-cancelado', {
         body: {
           folio: cancelModal.folio, colegio: cancelModal.colegio,

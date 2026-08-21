@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { supabase } from '@/lib/supabaseClient';
+import { useDirectorio, getGerenteFMA } from '@/lib/directorio';
 import {
   BookOpen,
   Download,
@@ -133,6 +134,13 @@ const colorMap: Record<string, { bg: string; border: string; badge: string; icon
 export default function ProtocoloProyectos() {
   const [loadingFile, setLoadingFile] = useState<string | null>(null);
 
+  // Correo del Gerente en vivo desde Directorio — el texto del protocolo
+  // (definido más arriba, fuera del componente) menciona su correo a mano;
+  // aquí se sustituye por el actual al momento de mostrarlo.
+  const { data: directorioRows = [] } = useDirectorio();
+  const gerenteEmail = getGerenteFMA(directorioRows).correo || 'arodriguez@manoamiga.edu.mx';
+  const conCorreoActual = (texto: string) => texto.replaceAll('arodriguez@manoamiga.edu.mx', gerenteEmail);
+
   const handleDownload = async (filename: string) => {
     setLoadingFile(filename);
     try {
@@ -215,7 +223,7 @@ export default function ProtocoloProyectos() {
                   {fase.pasos.map((paso, i) => (
                     <div key={i} className="flex items-start gap-3">
                       <ChevronRight className={`w-4 h-4 mt-0.5 flex-shrink-0 ${c.icon}`} />
-                      <p className="text-sm text-slate-600 leading-relaxed">{paso}</p>
+                      <p className="text-sm text-slate-600 leading-relaxed">{conCorreoActual(paso)}</p>
                     </div>
                   ))}
 

@@ -15,6 +15,7 @@ import StatusBadge from '@/components/shared/StatusBadge';
 import PriorityBadge from '@/components/shared/PriorityBadge';
 import { toast } from 'sonner';
 import { usePermissions } from '@/hooks/usePermissions';
+import { useDirectorio, findColegio } from '@/lib/directorio';
 
 const btnDanger  = "inline-flex items-center gap-2 px-4 py-2 border border-red-200 text-red-600 rounded-md text-sm font-bold hover:bg-red-50 transition-colors";
 const btnOutline = "inline-flex items-center gap-2 px-4 py-2 border border-slate-300 rounded-md text-sm font-bold text-slate-700 hover:bg-slate-50 transition-colors disabled:opacity-40 disabled:cursor-not-allowed";
@@ -45,6 +46,7 @@ export default function ProjectDetail() {
   const queryClient = useQueryClient();
   const { isAdmin, can } = usePermissions();
   const puedeEditar   = isAdmin || can('editar_proyectos');
+  const { data: directorioRows = [] } = useDirectorio();
   const puedeEliminar = isAdmin || can('eliminar_proyectos');
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [showEdit, setShowEdit] = useState(false);
@@ -129,10 +131,9 @@ export default function ProjectDetail() {
       // Si el status cambia a completado, notificar por correo
       if (formData.status === 'completado' && project?.status !== 'completado') {
         const territorio = (formData.territorio ?? project?.territorio) as string ?? '';
-        const correoCAR  = territorio === 'NORTE'  ? 'jalvarado@manoamiga.edu.mx'
-                         : territorio === 'MEXICO' ? 'gromero@manoamiga.edu.mx' : '';
-        const nombreProyecto = (formData.name as string) ?? project?.name ?? 'Proyecto';
         const colegioProyecto = (formData.colegio as string) ?? project?.colegio ?? '';
+        const correoCAR  = findColegio(directorioRows, colegioProyecto)?.car_correo ?? '';
+        const nombreProyecto = (formData.name as string) ?? project?.name ?? 'Proyecto';
 
         notifyByEmail('rreyes@manoamiga.edu.mx', {
           tipo:    'exito',
