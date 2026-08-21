@@ -14,6 +14,7 @@ import { useAuth } from '@/lib/AuthContext';
 import { logAudit } from '@/lib/audit';
 import { useSharePointUpload } from '@/hooks/useSharePointUpload';
 import { TERRITORIOS, getColegiosByTerritorio } from '@/lib/colegios';
+import { useDirectorio, getGerenteFMA, getDirectorNacional } from '@/lib/directorio';
 
 interface Minuta {
   id: string;
@@ -74,10 +75,6 @@ const TIPO_CFG: Record<string, { label: string; labelCorto: string; color: strin
 
 const inputCls   = 'w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none bg-white';
 const PAGE_SIZE   = 20;
-const CAR_CORREOS: Record<string, { email: string; nombre: string }> = {
-  NORTE:  { email: 'jalvarado@manoamiga.edu.mx', nombre: 'Julián Alvarado (CAR Norte)' },
-  MEXICO: { email: 'gromero@manoamiga.edu.mx',   nombre: 'Gonzalo Romero (CAR México)' },
-};
 const FORM_INIT = {
   tipo: 'minuta' as 'minuta' | 'nota_tecnica',
   asunto: '', fecha: format(new Date(), 'yyyy-MM-dd'),
@@ -89,6 +86,18 @@ export default function Minutas() {
   const { user } = useAuth();
   const qc = useQueryClient();
   const { uploadCustom, uploading } = useSharePointUpload();
+
+  // Fuente única de verdad: Gerente/Director Nacional/CAR en vivo desde Directorio.
+  const { data: directorioRows = [] } = useDirectorio();
+  const gerenteFMA = useMemo(() => getGerenteFMA(directorioRows), [directorioRows]);
+  const directorNacional = useMemo(() => getDirectorNacional(directorioRows), [directorioRows]);
+  const carPorColegioMap = useMemo(() => {
+    const map: Record<string, { email: string; nombre: string }> = {};
+    directorioRows.forEach(r => {
+      if (r.car_correo) map[r.nombre] = { email: r.car_correo, nombre: r.car_nombre || 'CAR' };
+    });
+    return map;
+  }, [directorioRows]);
 
   const puedeCrear    = isAdmin || can('crear_minutas');
   const puedeEditar   = isAdmin || can('editar_minutas');
@@ -376,12 +385,12 @@ export default function Minutas() {
           // Un solo correo: Para Angel, con Enrique / CAR / administrador(es) de colegio en CC
           // (antes se mandaba un correo aparte al administrador; ahora se une en este mismo).
           const ccList: string[] = ['rreyes@manoamiga.edu.mx'];
-          if (notifEnrique) ccList.push('ecastaneda@manoamiga.edu.mx');
-          if (notifCAR && form.territorio && CAR_CORREOS[form.territorio]) {
-            ccList.push(CAR_CORREOS[form.territorio].email);
+          if (notifEnrique && directorNacional.correo) ccList.push(directorNacional.correo);
+          if (notifCAR && form.colegio && carPorColegioMap[form.colegio]) {
+            ccList.push(carPorColegioMap[form.colegio].email);
           }
           ccList.push(...adminEmails);
-          await enviarCorreo('arodriguez@manoamiga.edu.mx', ccList);
+          await enviarCorreo(gerenteFMA.correo || 'arodriguez@manoamiga.edu.mx', ccList);
         } else if (adminEmails.length > 0) {
           // Angel no fue notificado esta vez: el administrador del colegio va como
           // destinatario principal (el primero) y el resto, si hay más de uno, en CC.
@@ -712,10 +721,10 @@ export default function Minutas() {
                         <input type="checkbox" checked={notifEnrique} onChange={e => setNotifEnrique(e.target.checked)} className="w-4 h-4 rounded" />
                         Enrique Castañeda
                       </label>
-                      <label className={`flex items-center gap-2 text-sm ${form.territorio && CAR_CORREOS[form.territorio] ? 'cursor-pointer' : 'text-slate-400 cursor-not-allowed'}`}>
-                        <input type="checkbox" checked={notifCAR} disabled={!form.territorio || !CAR_CORREOS[form.territorio]}
+                      <label className={`flex items-center gap-2 text-sm ${form.colegio && carPorColegioMap[form.colegio] ? 'cursor-pointer' : 'text-slate-400 cursor-not-allowed'}`}>
+                        <input type="checkbox" checked={notifCAR} disabled={!form.colegio || !carPorColegioMap[form.colegio]}
                           onChange={e => setNotifCAR(e.target.checked)} className="w-4 h-4 rounded" />
-                        {form.territorio && CAR_CORREOS[form.territorio] ? CAR_CORREOS[form.territorio].nombre : 'CAR del Territorio (selecciona territorio primero)'}
+                        {form.colegio && carPorColegioMap[form.colegio] ? carPorColegioMap[form.colegio].nombre + ' (CAR)' : 'CAR del Colegio (selecciona colegio primero)'}
                       </label>
                     </div>
                   )}

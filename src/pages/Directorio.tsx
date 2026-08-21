@@ -42,6 +42,16 @@ interface Colegio {
   ljo_nombre: string;
   ljo_correo: string;
   ljo_tel_movil: string;
+  sociedad: string;
+  centro_gestor: string;
+  contador_nombre: string;
+  contador_correo: string;
+  gerente_nombre: string;
+  gerente_correo: string;
+  gerente_tel_movil: string;
+  director_nacional_nombre: string;
+  director_nacional_correo: string;
+  director_nacional_tel_movil: string;
   niveles?: string[]; // Preescolar, Primaria, Secundaria, Preparatoria
   updated_at?: string;
 }
@@ -580,6 +590,24 @@ export default function Directorio() {
                 { k: 'dir_fisica',     label: 'Dirección Física', full: true, area: true },
                 { k: 'dir_fiscal',     label: 'Dirección Fiscal', full: true, area: true },
               ]} />
+
+              <EditSection title="💰 Datos Fiscales / Administrativos" editForm={editForm} onSet={set} fields={[
+                { k: 'sociedad',        label: 'Sociedad' },
+                { k: 'centro_gestor',   label: 'Centro Gestor' },
+                { k: 'contador_nombre', label: 'Contador' },
+                { k: 'contador_correo', label: 'Correo del Contador' },
+              ]} />
+
+              {editModal.codigo === 'GENERAL' && (
+                <EditSection title="🏛️ Roles Federación Mano Amiga" editForm={editForm} onSet={set} fields={[
+                  { k: 'gerente_nombre',                label: 'Gerente — Nombre', full: true },
+                  { k: 'gerente_correo',                label: 'Gerente — Correo', full: true },
+                  { k: 'gerente_tel_movil',              label: 'Gerente — Tel. Móvil' },
+                  { k: 'director_nacional_nombre',       label: 'Director Nacional — Nombre', full: true },
+                  { k: 'director_nacional_correo',       label: 'Director Nacional — Correo', full: true },
+                  { k: 'director_nacional_tel_movil',    label: 'Director Nacional — Tel. Móvil' },
+                ]} />
+              )}
 
               <EditSection title="👤 Director" editForm={editForm} onSet={set} fields={[
                 { k: 'dir_nombre',    label: 'Nombre',     full: true },

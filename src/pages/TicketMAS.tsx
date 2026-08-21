@@ -7,6 +7,7 @@ import { es } from 'date-fns/locale';
 import { useAuth } from '@/lib/AuthContext';
 import { usePermissions } from '@/hooks/usePermissions';
 import { useEcoLookup } from '@/hooks/useEcoLookup';
+import { useDirectorio, type DirectorioColegio, getGerenteFMA, getDirectorNacional, findColegio } from '@/lib/directorio';
 import {
   Send, CheckCircle, Eye, X, Printer, ClipboardList,
   ChevronDown, FileCheck, Clock, Trash2, Ban, RefreshCw, AlertCircle, AlertTriangle, FolderPlus, Loader2
@@ -27,50 +28,52 @@ const readOnlyClass = "w-full px-2 py-1.5 border border-slate-300 text-sm bg-sla
 const labelClass    = "text-[11px] font-bold text-slate-600 uppercase tracking-wide";
 const selectClass   = "w-full px-2 py-1.5 border border-slate-400 text-sm focus:ring-1 focus:ring-slate-700 focus:outline-none bg-white text-slate-900 rounded";
 
-// ─── Datos completos de colegios ──────────────────────────────────────────────
-const COLEGIOS_TICKET = [
-  { nombre:'Mano Amiga Acapulco',          codigo:'ACA', razon:'Centro Educativo Cualcan Acapulco, S. C.',                           sociedad:'1214', centro_gestor:'MXI008', territorio:'MEXICO', director:'Guadalupe García Gaspar',         admin:'Noemi Ignacio Garzón',          contador:'FELICITAS TAPIA',   correo_contador:'ftapia@admmx.org'  },
-  { nombre:'Mano Amiga Aguascalientes',     codigo:'AGS', razon:'Mano Amiga Aguascalientes S.C.',                                    sociedad:'1250', centro_gestor:'MXI016', territorio:'NORTE',  director:'María del Pilar Gómez Cañizo',    admin:'Gabriela García Pérez',         contador:'JUAN PEDRO DE LUNA',correo_contador:'jdeluna@admmx.org' },
-  { nombre:'Mano Amiga Cancún',             codigo:'CAN', razon:'Mano Amiga Cancún, S.C.',                                          sociedad:'1263', centro_gestor:'MXI020', territorio:'MEXICO', director:'Francisco Paul Martínez Contreras',admin:'ÁNGEL MARTÍN KU UUH',           contador:'VALERIA GAMEZ',     correo_contador:'vgamez@admmx.org'  },
-  { nombre:'Mano Amiga Chalco',             codigo:'CHA', razon:'Mano Amiga de Chalco, S.C.',                                       sociedad:'1135', centro_gestor:'MXI010', territorio:'MEXICO', director:'José Manuel Fierro Partida',      admin:'Elizabeth Reyes Rivas',         contador:'FELICITAS TAPIA',   correo_contador:'ftapia@admmx.org'  },
-  { nombre:'Mano Amiga La Cima',            codigo:'CIM', razon:'Mano Amiga La Cima A.B.P.',                                        sociedad:'1260', centro_gestor:'MXI001', territorio:'NORTE',  director:'Daniel Garcia de la Torre',       admin:'Juan Carlos Cepeda Scott',      contador:'JUAN PEDRO DE LUNA',correo_contador:'jdeluna@admmx.org' },
-  { nombre:'Mano Amiga Conkal',             codigo:'CON', razon:'Mano Amiga Yucatán Conkal A.C.',                                   sociedad:'1263', centro_gestor:'MXI014', territorio:'MEXICO', director:'Carolina Rodriguez Galván',      admin:'Margarita Pech Rodriguez',      contador:'VALERIA GAMEZ',     correo_contador:'vgamez@admmx.org'  },
-  { nombre:'Mano Amiga Guadalajara',        codigo:'GDL', razon:'Mano Amiga de Guadalajara, S.C.',                                  sociedad:'1077', centro_gestor:'MXI004', territorio:'NORTE',  director:'Lorena López Taymani',            admin:'Jose Ramon Iturbero Apecechea', contador:'EDITH IBARRA',      correo_contador:'edibarra@admmx.org'},
-  { nombre:'Mano Amiga León',               codigo:'LEO', razon:'Mano Amiga de León, A.C.',                                         sociedad:'1145', centro_gestor:'MXI003', territorio:'NORTE',  director:'Víctor Hugo Martínez Guerrero',   admin:'José Antonio Ávalos Ortega',    contador:'VALERIA GAMEZ',     correo_contador:'vgamez@admmx.org'  },
-  { nombre:'Mano Amiga Lerma',              codigo:'LER', razon:'Centro Escolar Lerma, S.C.',                                       sociedad:'1175', centro_gestor:'MXI009', territorio:'MEXICO', director:'Alejandro de la Garza Ransom',    admin:'María Candelaria Morones',      contador:'JUAN PEDRO DE LUNA',correo_contador:'jdeluna@admmx.org' },
-  { nombre:'Mano Amiga Morelia',            codigo:'MOR', razon:'Mano Amiga Tarimbaro. S. C.',                                      sociedad:'1263', centro_gestor:'MXI022', territorio:'MEXICO', director:'César Augusto González Rodríguez',admin:'Rodrigo Vargas Hernández',      contador:'VALERIA GAMEZ',     correo_contador:'vgamez@admmx.org'  },
-  { nombre:'Mano Amiga Monterrey',          codigo:'MTY', razon:'Instituto Mano Amiga de Monterrey, S.C.',                          sociedad:'1010', centro_gestor:'MXI006', territorio:'NORTE',  director:'Adriana Gómez Díaz',              admin:'Claudia Nelly Rojas Hernández', contador:'JUAN PEDRO DE LUNA',correo_contador:'jdeluna@admmx.org' },
-  { nombre:'Mano Amiga Piedras Negras',     codigo:'PIE', razon:'Mano Amiga Piedras Negras AC',                                     sociedad:'1210', centro_gestor:'MXI007', territorio:'NORTE',  director:'Paolo René Oscos Snowball',       admin:'Ana Gabriela Gauna López',      contador:'FELICITAS TAPIA',   correo_contador:'ftapia@admmx.org'  },
-  { nombre:'Mano Amiga Puebla',             codigo:'PUE', razon:'Mano Amiga de Puebla S.C.',                                        sociedad:'1172', centro_gestor:'MXI018', territorio:'MEXICO', director:'Juan Francisco Serrano Garcia',   admin:'Erika Iliana Aguilar Tlapanco', contador:'EDITH IBARRA',      correo_contador:'edibarra@admmx.org'},
-  { nombre:'Mano Amiga Querétaro',          codigo:'QRO', razon:'Escuela Mano Amiga del Estado de Querétaro S.C.',                  sociedad:'1170', centro_gestor:'MXI013', territorio:'MEXICO', director:'Justino Gómez Pedraza',           admin:'Claudia Janett Arreola Camacho',contador:'FELICITAS TAPIA',   correo_contador:'ftapia@admmx.org'  },
-  { nombre:'Mano Amiga Santa Catarina',     codigo:'SCA', razon:'Centro de Desarrollo y Avance, S.C.',                              sociedad:'1259', centro_gestor:'MXI005', territorio:'NORTE',  director:'Jesús Gerardo Castillo Oliva',    admin:'Alma Nelly Blanco Lopez',       contador:'JUAN PEDRO DE LUNA',correo_contador:'jdeluna@admmx.org' },
-  { nombre:'Mano Amiga Tapachula',          codigo:'TAP', razon:'Mano Amiga Chiapas. S.C',                                          sociedad:'1251', centro_gestor:'MXI015', territorio:'MEXICO', director:'José Octavio Ramos Martínez',     admin:'Eliabet Salas Escobar',         contador:'FELICITAS TAPIA',   correo_contador:'ftapia@admmx.org'  },
-  { nombre:'Mano Amiga Tijuana',            codigo:'TIJ', razon:'Mano Amiga Baja California S.C.',                                  sociedad:'1256', centro_gestor:'MXI019', territorio:'NORTE',  director:'Francisco Daniel Robles Noriega', admin:'Juana Rosa Cornejo Ledesma',    contador:'EDITH IBARRA',      correo_contador:'edibarra@admmx.org'},
-  { nombre:'Mano Amiga Torreón',            codigo:'TOR', razon:'Instituto Mano Amiga de Torreón S.C',                              sociedad:'1134', centro_gestor:'MXI002', territorio:'NORTE',  director:'Ma. Teresa Robles Limones',       admin:'Maria Alicia Vilchis Esquivel', contador:'EDITH IBARRA',      correo_contador:'edibarra@admmx.org'},
-  { nombre:'Mano Amiga Villas de San Juan', codigo:'VSJ', razon:'Mano Amiga de León A.C.',                                          sociedad:'1145', centro_gestor:'MXI012', territorio:'NORTE',  director:'Gonzalo Heredia Camacho',         admin:'Ivonne Coss Sanchez',           contador:'VALERIA GAMEZ',     correo_contador:'vgamez@admmx.org'  },
-  { nombre:'Mano Amiga ZOM',                codigo:'ZOM', razon:'Mano Amiga S.C.',                                                  sociedad:'1005', centro_gestor:'MXI011', territorio:'MEXICO', director:'Edgar Omar Díaz Marías',          admin:'Ana María Barrón Montaño',      contador:'EDITH IBARRA',      correo_contador:'edibarra@admmx.org'},
-  { nombre:'OF. MTY', codigo:'MTY-OF',  razon:'Federación Mano Amiga A.C.',                                          sociedad:'1238', centro_gestor:'MXM010', territorio:'FMA', director:'Ángel Eduardo Rodriguez Martinez', admin:'Félix Guerra Herrera', contador:'YAZMIN CRUZ', correo_contador:'ycruz@admmx.org' },
-  { nombre:'OF. CDMX',      codigo:'CDMX-OF', razon:'Federación Mano Amiga A.C.',                                          sociedad:'1238', centro_gestor:'MXM010', territorio:'FMA', director:'Ángel Eduardo Rodriguez Martinez', admin:'Félix Guerra Herrera', contador:'YAZMIN CRUZ', correo_contador:'ycruz@admmx.org' },
-  { nombre:'GENERAL', codigo:'FMA-GEN', razon:'Federación Mano Amiga A.C.', sociedad:'1238', centro_gestor:'MXM010', territorio:'FMA', director:'Ángel Eduardo Rodriguez Martinez', admin:'Félix Guerra Herrera', contador:'YAZMIN CRUZ', correo_contador:'ycruz@admmx.org' },
+// Esqueleto fijo (nombre, código interno, territorio) para los 3 renglones de
+// oficina/FMA que hoy no están individualizados en Directorio. Los 20 colegios
+// reales se generan dinámicamente desde `directorio` en buildColegiosTicket().
+const COLEGIOS_TICKET_FMA = [
+  { nombre: 'OF. MTY',  codigo: 'MTY-OF',  territorio: 'FMA' },
+  { nombre: 'OF. CDMX', codigo: 'CDMX-OF', territorio: 'FMA' },
+  { nombre: 'GENERAL',  codigo: 'FMA-GEN', territorio: 'FMA' },
 ];
 
-// Traduce el colegio guardado en el Ticket MAS (nombre completo, ej. "Mano Amiga
-// Querétaro") al código corto estándar que usa el resto del sistema (ej. "MA QRO"),
-// para que el Proyecto que se crea automáticamente al autorizar quede consistente
-// con Proyectos, Directorio, ECO, etc. Si ya viene en formato corto, lo deja igual.
-function colegioCodigoCorto(nombreOColegio: string | null | undefined): string | null {
+/** Arma la lista de colegios que usa este módulo — TODO sale en vivo de
+ *  Directorio (fuente única), incluyendo sociedad/centro gestor/contador. */
+function buildColegiosTicket(directorioRows: DirectorioColegio[]) {
+  const deColegios = directorioRows
+    .filter(r => r.territorio === 'NORTE' || r.territorio === 'MEXICO')
+    .map(r => ({
+      nombre: r.nombre, codigo: r.codigo.replace(/^MA\s+/, ''), razon: r.nombre_oficial,
+      territorio: r.territorio, director: r.dir_nombre, admin: r.adm_nombre, car_correo: r.car_correo,
+      sociedad: r.sociedad ?? '', centro_gestor: r.centro_gestor ?? '',
+      contador: r.contador_nombre ?? '', correo_contador: r.contador_correo ?? '',
+    }));
+  const deFMA = COLEGIOS_TICKET_FMA.map(f => {
+    // OF. MTY y OF. CDMX comparten fiscalía y personal con la fila GENERAL —
+    // no tienen fila propia en Directorio, así que siempre se resuelven contra ella.
+    const general = findColegio(directorioRows, 'GENERAL');
+    const gerente = getGerenteFMA(directorioRows);
+    const directorNac = getDirectorNacional(directorioRows);
+    return {
+      nombre: f.nombre, codigo: f.codigo, razon: general?.nombre_oficial ?? 'Federación Mano Amiga A.C.',
+      territorio: f.territorio, director: directorNac.nombre, admin: gerente.nombre,
+      car_correo: general?.car_correo ?? '',
+      sociedad: general?.sociedad ?? '', centro_gestor: general?.centro_gestor ?? '',
+      contador: general?.contador_nombre ?? '', correo_contador: general?.contador_correo ?? '',
+    };
+  });
+  return [...deColegios, ...deFMA];
+}
+
+
+function colegioCodigoCorto(nombreOColegio: string | null | undefined, colegiosTicket: ReturnType<typeof buildColegiosTicket>): string | null {
   if (!nombreOColegio) return null;
-  const c = COLEGIOS_TICKET.find(x => x.nombre === nombreOColegio);
+  const c = colegiosTicket.find(x => x.nombre === nombreOColegio);
   if (!c) return nombreOColegio; // ya viene en otro formato o no se encontró — se deja igual, no se pierde el dato
   if (c.codigo === 'FMA-GEN') return 'GENERAL';
   if (c.codigo.endsWith('-OF')) return 'OF. ' + c.codigo.replace('-OF', '');
   return 'MA ' + c.codigo;
 }
-
-const CAR_CORREOS: Record<string, string> = {
-  NORTE:  'jalvarado@manoamiga.edu.mx',
-  MEXICO: 'gromero@manoamiga.edu.mx',
-};
 
 const TERRITORIOS          = ['NORTE', 'MEXICO', 'FMA'];
 const CLASIFICACIONES      = ['CONSTRUCCION NUEVA','REMODELACION','AMPLIACION','ADECUACION','MEJORA','MANTENIMIENTO ORDINARIO','MANTENIMIENTO EXTRAORDINARIO','PORTAFOLIO','GARANTIAS','REVISION'];
@@ -282,6 +285,11 @@ export default function TicketMAS() {
   const isAdmin   = user?.user_metadata?.role === 'admin';
   const qc        = useQueryClient();
 
+  // Fuente única de verdad: nombre/director/administrador/razón social/correo
+  // del CAR en vivo desde Directorio — ya no hay copia hardcodeada aquí.
+  const { data: directorioRows = [] } = useDirectorio();
+  const colegiosTicket = useMemo(() => buildColegiosTicket(directorioRows), [directorioRows]);
+
   const canVerLista  = isAdmin || can('ver_ticket_mas');
   const soloFormulario = !isAdmin && !can('ver_ticket_mas') && can('enviar_ticket_mas');
   const puedeCrear     = isAdmin || can('enviar_ticket_mas');
@@ -362,7 +370,7 @@ export default function TicketMAS() {
   const [changingStatus, setChangingStatus] = useState<string | null>(null);
 
   const colegiosFiltrados = useMemo(() =>
-    form.territorio ? COLEGIOS_TICKET.filter(c => c.territorio === form.territorio) : [],
+    form.territorio ? colegiosTicket.filter(c => c.territorio === form.territorio) : [],
     [form.territorio]
   );
 
@@ -379,7 +387,7 @@ export default function TicketMAS() {
 
   // Al seleccionar colegio, auto-rellenar datos
   const onColegioChange = (nombre: string) => {
-    const c = COLEGIOS_TICKET.find(x => x.nombre === nombre);
+    const c = colegiosTicket.find(x => x.nombre === nombre);
     if (c) {
       setForm(p => ({
         ...p, colegio: nombre,
@@ -662,8 +670,9 @@ export default function TicketMAS() {
         detalle:      { colegio: updatedRow.colegio, monto: updatedRow.cot1_importe, proveedor: updatedRow.cot1_proveedor },
       });
 
-      // Correo CAR según territorio
-      const correoCAR = CAR_CORREOS[viewing.territorio ?? ''] ?? '';
+      // Correo del CAR — en vivo desde Directorio, del colegio específico del ticket
+      const colegioTk = colegiosTicket.find(c => c.nombre === viewing.colegio);
+      const correoCAR = colegioTk?.car_correo ?? '';
 
       if (correoCAR) {
         notifyByEmail(correoCAR, {
@@ -695,8 +704,8 @@ export default function TicketMAS() {
       const { error: ticketRegError } = await supabase.from('tickets').insert({
         folio:               updatedRow.folio             ?? null,
         territorio:          updatedRow.territorio        ?? null,
-        colegio:             colegioCodigoCorto(updatedRow.colegio),
-        eco:                 getEco(colegioCodigoCorto(updatedRow.colegio) ?? '') || null,
+        colegio:             colegioCodigoCorto(updatedRow.colegio, colegiosTicket),
+        eco:                 getEco(colegioCodigoCorto(updatedRow.colegio, colegiosTicket) ?? '') || null,
         fecha:               adminForm.fecha_recepcion    ?? null,
         estatus:             'aprobado',
         tipo_proyecto:       updatedRow.clasificacion     ?? null,
@@ -718,8 +727,8 @@ export default function TicketMAS() {
           status:        'en_espera',
           priority:      'media',
           territorio:    updatedRow.territorio    ?? null,
-          colegio:       colegioCodigoCorto(updatedRow.colegio),
-          eco:           getEco(colegioCodigoCorto(updatedRow.colegio) ?? '') || null,
+          colegio:       colegioCodigoCorto(updatedRow.colegio, colegiosTicket),
+          eco:           getEco(colegioCodigoCorto(updatedRow.colegio, colegiosTicket) ?? '') || null,
           tipo_proyecto: updatedRow.clasificacion ?? null,
           notes:         updatedRow.descripcion   ?? null,
           folio:         updatedRow.folio         ?? null,
