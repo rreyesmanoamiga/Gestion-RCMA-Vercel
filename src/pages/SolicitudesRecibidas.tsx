@@ -4,16 +4,11 @@ import { supabase } from '@/lib/supabaseClient';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
-import { ChevronDown, CheckCircle, Eye, X, Building2, User, Mail, Calendar, DollarSign, Printer, Trash2, Ban } from 'lucide-react';
+import { ChevronDown, CheckCircle, Eye, X, Building2, User, Mail, Calendar, DollarSign, Printer, Trash2, Ban, Send } from 'lucide-react';
 import { useSharePointUpload, renameCarpetaSharePoint } from '@/hooks/useSharePointUpload';
 import { logAudit } from '@/lib/audit';
 import PageHeader from '@/components/shared/PageHeader';
-
-const CAR_CORREOS: Record<string, string> = {
-  NORTE:  'jalvarado@manoamiga.edu.mx',
-  MEXICO: 'gromero@manoamiga.edu.mx',
-  FMA:    'fguerra@manoamiga.edu.mx',
-};
+import { useDirectorio } from '@/lib/directorio';
 
 const PAGE_SIZE = 20;
 
@@ -40,39 +35,21 @@ interface Solicitud {
   estatus?:              string;
   created_at?:           string;
   recibida_at?:          string;
+  ticket_mas_habilitado_at?: string | null;
 }
-
-// Territorios por colegio (nombre completo → territorio)
-const COLEGIO_TERRITORIO: Record<string, string> = {
-  'Mano Amiga Acapulco':          'MEXICO',
-  'Mano Amiga Aguascalientes':     'NORTE',
-  'Mano Amiga Cancún':             'MEXICO',
-  'Mano Amiga Chalco':             'MEXICO',
-  'Mano Amiga La Cima':            'NORTE',
-  'Mano Amiga Conkal':             'MEXICO',
-  'Mano Amiga Guadalajara':        'NORTE',
-  'Mano Amiga León':               'NORTE',
-  'Mano Amiga Lerma':              'MEXICO',
-  'Mano Amiga Morelia':            'MEXICO',
-  'Mano Amiga Monterrey':          'NORTE',
-  'Mano Amiga Piedras Negras':     'NORTE',
-  'Mano Amiga Puebla':             'MEXICO',
-  'Mano Amiga Querétaro':          'MEXICO',
-  'Mano Amiga Santa Catarina':     'NORTE',
-  'Mano Amiga Tapachula':          'MEXICO',
-  'Mano Amiga Tijuana':            'NORTE',
-  'Mano Amiga Torreón':            'NORTE',
-  'Mano Amiga Villas de San Juan': 'NORTE',
-  'ZOM':                           'MEXICO',
-  'FIA':                           'FMA',
-  'FMA':                           'FMA',
-  'AUN':                           'FMA',
-};
 
 const fmx = (n?: number | null) =>
   n != null ? Number(n).toLocaleString('es-MX', { style: 'currency', currency: 'MXN' }) : '—';
 
 export default function SolicitudesRecibidas() {
+  // Fuente única de verdad: territorio de cada colegio en vivo desde Directorio.
+  const { data: directorioRows = [] } = useDirectorio();
+  const colegioTerritorioMap = useMemo(() => {
+    const map: Record<string, string> = {};
+    directorioRows.forEach(r => { map[r.nombre] = r.territorio; });
+    return map;
+  }, [directorioRows]);
+
   const handlePrint = (s: Solicitud) => {
     const fmxP = (n?: number | null) =>
       n != null ? Number(n).toLocaleString('es-MX', { style: 'currency', currency: 'MXN' }) : '—';
@@ -238,7 +215,7 @@ export default function SolicitudesRecibidas() {
           nombre:      sol.nombre_solicitante,
           proyecto:    sol.nombre_proyecto,
           centro:      sol.nombre_centro,
-          territorio:  sol.nombre_centro ? (COLEGIO_TERRITORIO[sol.nombre_centro] ?? '') : '',
+          territorio:  sol.nombre_centro ? (colegioTerritorioMap[sol.nombre_centro] ?? '') : '',
           correoAdmin: 'rreyes@manoamiga.edu.mx',
         },
       });
@@ -257,6 +234,57 @@ export default function SolicitudesRecibidas() {
       toast.success('Solicitud marcada como recibida y notificación enviada');
     },
     onError: () => toast.error('Error al procesar la solicitud'),
+  });
+
+  // ── Habilitar Ticket MAS: activa el permiso al solicitante y le avisa por correo ──
+  const habilitarTicketMasMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const sol = solicitudes.find(s => s.id === id);
+      if (!sol) throw new Error('No encontrada');
+      if (!sol.correo_solicitante) throw new Error('Esta solicitud no tiene correo de solicitante');
+
+      // 1. Activar permisos de Ticket MAS al usuario, y confirmar que sí existía la cuenta
+      const { data: actualizado, error: permErr } = await supabase
+        .from('user_permissions')
+        .update({ ver_ticket_mas: true, enviar_ticket_mas: true })
+        .eq('user_email', sol.correo_solicitante)
+        .select('user_email');
+      if (permErr) throw permErr;
+      if (!actualizado || actualizado.length === 0) {
+        throw new Error(`${sol.correo_solicitante} no tiene cuenta en Accesos — créala ahí primero`);
+      }
+
+      // 2. Correo avisando que proceda a llenar el Ticket MAS
+      const { error: mailErr } = await supabase.functions.invoke('notify-ticket-mas-habilitado', {
+        body: {
+          correo:   sol.correo_solicitante,
+          nombre:   sol.nombre_solicitante,
+          proyecto: sol.nombre_proyecto,
+          centro:   sol.nombre_centro,
+        },
+      });
+      if (mailErr) throw mailErr;
+
+      // 3. Marcar en la solicitud que ya se hizo, para que el botón cambie
+      const { error: upErr } = await supabase
+        .from('solicitudes')
+        .update({ ticket_mas_habilitado_at: new Date().toISOString() })
+        .eq('id', id);
+      if (upErr) throw upErr;
+
+      logAudit({
+        accion:       'editar',
+        modulo:       'solicitudes',
+        registro_id:  sol.id,
+        registro_ref: sol.nombre_proyecto,
+        detalle:      { accion_especial: 'ticket_mas_habilitado', correo: sol.correo_solicitante },
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['solicitudes'] });
+      toast.success('Ticket MAS habilitado y correo enviado');
+    },
+    onError: (err: unknown) => toast.error(err instanceof Error ? err.message : 'No se pudo habilitar Ticket MAS'),
   });
 
   const deleteMutation = useMutation({
@@ -302,7 +330,7 @@ export default function SolicitudesRecibidas() {
           nombre:      sol.nombre_solicitante,
           proyecto:    sol.nombre_proyecto,
           centro:      sol.nombre_centro,
-          territorio:  sol.nombre_centro ? (COLEGIO_TERRITORIO[sol.nombre_centro] ?? '') : '',
+          territorio:  sol.nombre_centro ? (colegioTerritorioMap[sol.nombre_centro] ?? '') : '',
           correoAdmin: 'rreyes@manoamiga.edu.mx',
         },
       });
@@ -459,6 +487,20 @@ export default function SolicitudesRecibidas() {
                       <CheckCircle className="w-4 h-4" /> Recibida
                     </button>
                   )}
+                  {s.estatus === 'recibida' && !s.ticket_mas_habilitado_at && (
+                    <button onClick={() => habilitarTicketMasMutation.mutate(s.id)}
+                      disabled={habilitarTicketMasMutation.isPending}
+                      title="Activa el acceso a Ticket MAS del solicitante y le avisa por correo"
+                      className="flex items-center gap-1.5 px-3 py-2 bg-blue-600 text-white rounded-md text-sm font-bold hover:bg-blue-700 transition-colors disabled:opacity-50">
+                      <Send className="w-4 h-4" /> {habilitarTicketMasMutation.isPending ? 'Enviando...' : 'Habilitar Ticket MAS'}
+                    </button>
+                  )}
+                  {s.estatus === 'recibida' && s.ticket_mas_habilitado_at && (
+                    <span title={`Habilitado el ${new Date(s.ticket_mas_habilitado_at).toLocaleDateString('es-MX')}`}
+                      className="flex items-center gap-1.5 px-3 py-2 bg-blue-50 text-blue-700 border border-blue-200 rounded-md text-sm font-medium">
+                      <CheckCircle className="w-4 h-4" /> Ticket MAS habilitado
+                    </span>
+                  )}
                   {s.estatus !== 'cancelada' && (
                     <button onClick={() => setCancelandoId(s)}
                       className="flex items-center gap-1.5 px-3 py-2 border border-red-200 text-red-600 rounded-md text-sm font-medium hover:bg-red-50 transition-colors">
@@ -598,6 +640,20 @@ export default function SolicitudesRecibidas() {
                     <CheckCircle className="w-4 h-4" />
                     {recibirMutation.isPending ? 'Procesando...' : 'Marcar como Recibida'}
                   </button>
+                )}
+                {viewing.estatus === 'recibida' && !viewing.ticket_mas_habilitado_at && (
+                  <button onClick={() => habilitarTicketMasMutation.mutate(viewing.id)}
+                    disabled={habilitarTicketMasMutation.isPending}
+                    title="Activa el acceso a Ticket MAS del solicitante y le avisa por correo"
+                    className="flex items-center gap-2 px-5 py-2 bg-blue-600 text-white rounded-md text-sm font-bold hover:bg-blue-700 transition-colors disabled:opacity-50">
+                    <Send className="w-4 h-4" />
+                    {habilitarTicketMasMutation.isPending ? 'Enviando...' : 'Habilitar Ticket MAS'}
+                  </button>
+                )}
+                {viewing.estatus === 'recibida' && viewing.ticket_mas_habilitado_at && (
+                  <span className="flex items-center gap-2 px-5 py-2 bg-blue-50 text-blue-700 border border-blue-200 rounded-md text-sm font-medium">
+                    <CheckCircle className="w-4 h-4" /> Ticket MAS habilitado
+                  </span>
                 )}
               </div>
             </div>
