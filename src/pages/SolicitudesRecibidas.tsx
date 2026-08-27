@@ -243,10 +243,13 @@ export default function SolicitudesRecibidas() {
       if (!sol) throw new Error('No encontrada');
       if (!sol.correo_solicitante) throw new Error('Esta solicitud no tiene correo de solicitante');
 
-      // 1. Activar permisos de Ticket MAS al usuario, y confirmar que sí existía la cuenta
+      // 1. Activar SOLO el permiso de enviar (no "ver") — así el solicitante
+      // cae en modo "solo formulario" (ver TicketMAS.tsx: soloFormulario) y
+      // nunca ve el listado completo de tickets de todos los colegios, que
+      // es información confidencial de otras personas.
       const { data: actualizado, error: permErr } = await supabase
         .from('user_permissions')
-        .update({ ver_ticket_mas: true, enviar_ticket_mas: true })
+        .update({ enviar_ticket_mas: true })
         .eq('user_email', sol.correo_solicitante)
         .select('user_email');
       if (permErr) throw permErr;
