@@ -488,6 +488,10 @@ export async function generarReporteIndividualPDFFirma(opts: {
     const fechasActivasSet = new Set(calcularFechasEnMes(act, año, mes).map(fechaISO));
     fechas.forEach((fecha, i) => {
       const x = colDiaInicio + anchoDia * i;
+      // Resetear color/grosor de línea SIEMPRE antes del borde — si la celda
+      // anterior dibujó una ✓ o ✕, cambió el color de línea y se quedaba
+      // "pegado" en las celdas siguientes si no se restauraba aquí.
+      doc.setDrawColor(215, 220, 225); doc.setLineWidth(0.15);
       doc.rect(x, y, anchoDia, filaAlto, 'S');
       if (!fechasActivasSet.has(fechaISO(fecha))) {
         doc.setFillColor(243, 244, 246); doc.rect(x, y, anchoDia, filaAlto, 'F');
