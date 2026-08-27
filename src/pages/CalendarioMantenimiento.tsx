@@ -7,7 +7,8 @@ import { useAuth } from '@/lib/AuthContext';
 import { usePermissions } from '@/hooks/usePermissions';
 import { toast } from 'sonner';
 import { logAudit } from '@/lib/audit';
-import { generarReporteIndividualExcel, generarReporteGeneralPDF, type CumplimientoColegioPC } from '@/lib/reportesProteccionCivil';
+import { generarReporteIndividualExcel, generarReporteGeneralPDF, generarReporteIndividualPDFFirma, type CumplimientoColegioPC } from '@/lib/reportesProteccionCivil';
+import { useDirectorio, getDirector, getAdministrador } from '@/lib/directorio';
 
 export interface Actividad {
   id: number | string;
@@ -211,7 +212,9 @@ export default function CalendarioMantenimiento() {
   const [showReportePC, setShowReportePC] = useState(false);
   const [pcColegio, setPcColegio] = useState('');
   const [pcAño, setPcAño] = useState(new Date().getFullYear());
-  const [pcGenerando, setPcGenerando] = useState<'individual' | 'general' | null>(null);
+  const [pcMes, setPcMes] = useState(new Date().getMonth());
+  const [pcGenerando, setPcGenerando] = useState<'individual' | 'general' | 'firma' | null>(null);
+  const { data: directorioRowsPC = [] } = useDirectorio();
   const [editingItem, setEditingItem] = useState<Actividad | null>(null);
   const [showConsulta, setShowConsulta] = useState(false);
   const [consultaActividadId, setConsultaActividadId] = useState<string>('');
@@ -640,6 +643,46 @@ export default function CalendarioMantenimiento() {
       toast.success('Reporte generado ✓');
     } catch (e: any) {
       toast.error('Error al generar el reporte: ' + (e.message ?? 'desconocido'));
+    } finally {
+      setPcGenerando(null);
+    }
+  };
+
+  const handleGenerarReporteFirma = async () => {
+    if (!pcColegio) { toast.error('Selecciona un colegio'); return; }
+    setPcGenerando('firma');
+    try {
+      const colegioInfo = COLEGIOS.find(c => c.colegio === pcColegio);
+      const inicioISO = `${pcAño}-${String(pcMes + 1).padStart(2, '0')}-01`;
+      const finISO = `${pcAño}-${String(pcMes + 1).padStart(2, '0')}-${new Date(pcAño, pcMes + 1, 0).getDate()}`;
+      const { data, error } = await supabase
+        .from('maintenance_completions')
+        .select('colegio, fecha_programada, actividad_ref')
+        .eq('colegio', pcColegio)
+        .gte('fecha_programada', inicioISO)
+        .lte('fecha_programada', finISO);
+      if (error) throw error;
+
+      const completionsSet = new Set(
+        (data ?? []).map((c: any) => `${c.colegio}|${c.fecha_programada}|${c.actividad_ref}`)
+      );
+
+      await generarReporteIndividualPDFFirma({
+        colegio: pcColegio,
+        colegioNombre: pcColegio,
+        territorio: colegioInfo?.territorio ?? '—',
+        año: pcAño,
+        mes: pcMes,
+        todasActividades,
+        actividadRef,
+        completionsSet,
+        directorNombre: getDirector(directorioRowsPC, pcColegio).nombre,
+        administradorNombre: getAdministrador(directorioRowsPC, pcColegio).nombre,
+      });
+      logAudit({ accion: 'editar', modulo: 'calendario', registro_ref: `Reporte PC Firma — ${pcColegio} ${new Date(pcAño, pcMes, 1).toLocaleDateString('es-MX', { month: 'long' })} ${pcAño}` });
+      toast.success('PDF generado ✓');
+    } catch (e: any) {
+      toast.error('Error al generar el PDF: ' + (e.message ?? 'desconocido'));
     } finally {
       setPcGenerando(null);
     }
@@ -1074,11 +1117,30 @@ export default function CalendarioMantenimiento() {
 
               <div className="border border-slate-200 rounded-lg p-4">
                 <p className="text-sm font-bold text-slate-900 mb-1">Reporte Individual — Excel</p>
-                <p className="text-xs text-slate-500 mb-3">Cuadrícula día por día, agrupada por semana, de un colegio específico. Una pestaña por mes.</p>
+                <p className="text-xs text-slate-500 mb-3">Cuadrícula día por día, agrupada por semana, de un colegio específico. Una pestaña por mes. Para uso interno.</p>
                 <button onClick={handleGenerarReporteIndividual} disabled={pcGenerando !== null}
                   className="w-full px-4 py-2 bg-orange-600 text-white rounded-md text-sm font-bold hover:bg-orange-700 disabled:opacity-50 flex items-center justify-center gap-2">
                   {pcGenerando === 'individual' ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileSpreadsheet className="w-4 h-4" />}
                   {pcGenerando === 'individual' ? 'Generando...' : 'Descargar Excel Individual'}
+                </button>
+              </div>
+
+              <div className="border border-blue-200 bg-blue-50/40 rounded-lg p-4">
+                <p className="text-sm font-bold text-slate-900 mb-1">Reporte Mensual con Firma — PDF</p>
+                <p className="text-xs text-slate-500 mb-3">Un solo mes, con partida de firmas (Director, Administrador, Responsable de Mantenimiento) al final. Para compartir con el colegio y que lo firmen.</p>
+                <div className="mb-3">
+                  <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Mes</label>
+                  <select value={pcMes} onChange={e => setPcMes(parseInt(e.target.value))}
+                    className="w-full px-3 py-2 border border-slate-200 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none">
+                    {Array.from({ length: 12 }, (_, i) => (
+                      <option key={i} value={i}>{new Date(2000, i, 1).toLocaleDateString('es-MX', { month: 'long' })}</option>
+                    ))}
+                  </select>
+                </div>
+                <button onClick={handleGenerarReporteFirma} disabled={pcGenerando !== null}
+                  className="w-full px-4 py-2 bg-blue-600 text-white rounded-md text-sm font-bold hover:bg-blue-700 disabled:opacity-50 flex items-center justify-center gap-2">
+                  {pcGenerando === 'firma' ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileText className="w-4 h-4" />}
+                  {pcGenerando === 'firma' ? 'Generando...' : 'Descargar PDF con Firma'}
                 </button>
               </div>
 

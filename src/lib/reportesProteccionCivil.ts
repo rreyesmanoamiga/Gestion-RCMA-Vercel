@@ -320,7 +320,6 @@ export interface CumplimientoColegioPC {
   completadas: number;
   totalProgramado: number;
 }
-
 export async function generarReporteGeneralPDF(opts: {
   año: number;
   datos: CumplimientoColegioPC[]; // ya calculado por colegio, orden libre (se reordena aca)
@@ -406,4 +405,134 @@ export async function generarReporteGeneralPDF(opts: {
 
   pdfFooterPC(doc);
   doc.save(`Reporte_General_ProteccionCivil_${año}.pdf`);
+}
+
+// ============================================================================
+// REPORTE INDIVIDUAL (PDF, un mes, para firma) — mismo contenido que la hoja
+// del mes en el Excel individual, pero en PDF y con partida de firmas al
+// final (Director / Administrador / Responsable de Mantenimiento), para
+// compartir mensualmente con el colegio y que lo firmen.
+// ============================================================================
+export async function generarReporteIndividualPDFFirma(opts: {
+  colegio: string;
+  colegioNombre: string;
+  territorio: string;
+  año: number;
+  mes: number; // 0-11
+  todasActividades: Actividad[];
+  actividadRef: (act: Actividad) => string;
+  completionsSet: Set<string>; // key = `${colegio}|${fechaISO}|${actividadRef}`
+  directorNombre: string;
+  administradorNombre: string;
+}) {
+  const { colegio, colegioNombre, territorio, año, mes, todasActividades, actividadRef, completionsSet, directorNombre, administradorNombre } = opts;
+  const jsPDFctor = await loadJsPDF();
+  const doc = new jsPDFctor({ unit: 'mm', format: 'letter', orientation: 'landscape' }) as Doc;
+  const W = (doc as any).internal.pageSize.getWidth();
+  const H = (doc as any).internal.pageSize.getHeight();
+
+  const hoy = new Date(); hoy.setHours(0, 0, 0, 0);
+  const diasEnMes = new Date(año, mes + 1, 0).getDate();
+  const fechas: Date[] = Array.from({ length: diasEnMes }, (_, i) => new Date(año, mes, i + 1));
+
+  await pdfHeaderPC(doc, W, `Colegio: ${colegioNombre}   |   Territorio: ${territorio}   |   Periodo: ${MESES_ES[mes]} ${año}`);
+
+  let y = 34;
+  const margenL = 16, margenR = W - 16;
+  const anchoAct = 48, anchoFrec = 14;
+  const anchoDias = margenR - margenL - anchoAct - anchoFrec;
+  const anchoDia = anchoDias / diasEnMes;
+  const colAct = margenL, colFrec = margenL + anchoAct, colDiaInicio = colFrec + anchoFrec;
+
+  const dibujarEncabezadoTabla = () => {
+    doc.setFillColor(0, 41, 90); doc.rect(colAct, y, anchoAct + anchoFrec, 6, 'F');
+    doc.setFillColor(0, 41, 90); doc.rect(colDiaInicio, y, anchoDias, 6, 'F');
+    doc.setFontSize(6.5); doc.setFont('helvetica', 'bold'); doc.setTextColor(255, 255, 255);
+    doc.text('ACTIVIDAD', colAct + 1.5, y + 4);
+    doc.text('FREC.', colFrec + anchoFrec / 2, y + 4, { align: 'center' });
+    fechas.forEach((f, i) => {
+      doc.setFontSize(5.5);
+      doc.text(String(f.getDate()), colDiaInicio + anchoDia * i + anchoDia / 2, y + 4, { align: 'center' });
+    });
+    y += 6;
+  };
+
+  dibujarEncabezadoTabla();
+
+  let catActual: string | null = null;
+  todasActividades.forEach(act => {
+    if (y > H - 45) { // deja espacio para firmas en la última página; si no alcanza, nueva página
+      doc.addPage();
+      y = 16;
+      dibujarEncabezadoTabla();
+    }
+    if (act.categoria !== catActual) {
+      catActual = act.categoria;
+      doc.setFillColor(237, 113, 2); doc.rect(colAct, y, (margenR - margenL), 5, 'F');
+      doc.setFontSize(6.5); doc.setFont('helvetica', 'bold'); doc.setTextColor(255, 255, 255);
+      doc.text(act.categoria.toUpperCase(), colAct + 1.5, y + 3.5);
+      y += 5;
+    }
+
+    const filaAlto = 4.6;
+    doc.setDrawColor(215, 220, 225); doc.setLineWidth(0.15);
+    doc.rect(colAct, y, anchoAct, filaAlto, 'S');
+    doc.rect(colFrec, y, anchoFrec, filaAlto, 'S');
+    doc.setFontSize(6); doc.setFont('helvetica', 'normal'); doc.setTextColor(30, 41, 59);
+    const nombreAct = act.actividad.length > 38 ? act.actividad.slice(0, 36) + '…' : act.actividad;
+    doc.text(nombreAct, colAct + 1, y + 3.2);
+    doc.setFontSize(5.5); doc.setTextColor(79, 130, 194);
+    doc.text(act.frecuencia, colFrec + anchoFrec / 2, y + 3.2, { align: 'center' });
+
+    const fechasActivasSet = new Set(calcularFechasEnMes(act, año, mes).map(fechaISO));
+    fechas.forEach((fecha, i) => {
+      const x = colDiaInicio + anchoDia * i;
+      doc.rect(x, y, anchoDia, filaAlto, 'S');
+      if (!fechasActivasSet.has(fechaISO(fecha))) {
+        doc.setFillColor(243, 244, 246); doc.rect(x, y, anchoDia, filaAlto, 'F');
+        return;
+      }
+      if (fecha > hoy) {
+        doc.setFillColor(239, 246, 255); doc.rect(x, y, anchoDia, filaAlto, 'F');
+        return;
+      }
+      const key = `${colegio}|${fechaISO(fecha)}|${actividadRef(act)}`;
+      const hecho = completionsSet.has(key);
+      doc.setFillColor(hecho ? 5 : 254, hecho ? 150 : 226, hecho ? 105 : 226);
+      doc.rect(x, y, anchoDia, filaAlto, 'F');
+      doc.setFontSize(5.5); doc.setFont('helvetica', 'bold');
+      doc.setTextColor(hecho ? 255 : 220, hecho ? 255 : 38, hecho ? 255 : 38);
+      doc.text(hecho ? '✓' : '✕', x + anchoDia / 2, y + 3.2, { align: 'center' });
+    });
+    y += filaAlto;
+  });
+
+  // ── Partida de firmas ──
+  if (y > H - 42) { doc.addPage(); y = 20; }
+  y += 10;
+  doc.setDrawColor(0, 41, 90); doc.setLineWidth(0.4);
+  doc.line(margenL, y, margenR, y);
+  y += 6;
+  doc.setFontSize(8.5); doc.setFont('helvetica', 'bold'); doc.setTextColor(0, 41, 90);
+  doc.text('VISTO BUENO Y FIRMAS — COLEGIO', margenL, y);
+  y += 10;
+
+  const anchoFirma = (margenR - margenL - 20) / 3;
+  const firmas: { rol: string; nombre: string }[] = [
+    { rol: 'Director del Colegio', nombre: directorNombre || '—' },
+    { rol: 'Administrador del Colegio', nombre: administradorNombre || '—' },
+    { rol: 'Responsable de Mantenimiento', nombre: '' },
+  ];
+  firmas.forEach((f, i) => {
+    const x = margenL + i * (anchoFirma + 10);
+    doc.setDrawColor(100, 116, 139); doc.setLineWidth(0.3);
+    doc.line(x, y + 14, x + anchoFirma, y + 14);
+    doc.setFontSize(7.5); doc.setFont('helvetica', 'bold'); doc.setTextColor(30, 41, 59);
+    doc.text(f.nombre || 'Nombre y firma', x + anchoFirma / 2, y + 18, { align: 'center' });
+    doc.setFontSize(7); doc.setFont('helvetica', 'normal'); doc.setTextColor(107, 114, 128);
+    doc.text(f.rol, x + anchoFirma / 2, y + 22, { align: 'center' });
+  });
+
+  pdfFooterPC(doc);
+  doc.save(`Firma_Mantenimiento_${colegio.replace(/\s+/g, '_')}_${MESES_ES[mes]}_${año}.pdf`);
 }
