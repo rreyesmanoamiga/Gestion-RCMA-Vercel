@@ -424,8 +424,9 @@ export async function generarReporteIndividualPDFFirma(opts: {
   completionsSet: Set<string>; // key = `${colegio}|${fechaISO}|${actividadRef}`
   directorNombre: string;
   administradorNombre: string;
+  elaboradoPor: string;
 }) {
-  const { colegio, colegioNombre, territorio, año, mes, todasActividades, actividadRef, completionsSet, directorNombre, administradorNombre } = opts;
+  const { colegio, colegioNombre, territorio, año, mes, todasActividades, actividadRef, completionsSet, directorNombre, administradorNombre, elaboradoPor } = opts;
   const jsPDFctor = await loadJsPDF();
   const doc = new jsPDFctor({ unit: 'mm', format: 'letter', orientation: 'landscape' }) as Doc;
   const W = (doc as any).internal.pageSize.getWidth();
@@ -500,9 +501,18 @@ export async function generarReporteIndividualPDFFirma(opts: {
       const hecho = completionsSet.has(key);
       doc.setFillColor(hecho ? 5 : 254, hecho ? 150 : 226, hecho ? 105 : 226);
       doc.rect(x, y, anchoDia, filaAlto, 'F');
-      doc.setFontSize(5.5); doc.setFont('helvetica', 'bold');
-      doc.setTextColor(hecho ? 255 : 220, hecho ? 255 : 38, hecho ? 255 : 38);
-      doc.text(hecho ? '✓' : '✕', x + anchoDia / 2, y + 3.2, { align: 'center' });
+      // Símbolo dibujado con líneas (evita el problema de fuentes que no
+      // soportan los caracteres Unicode ✓/✕ en jsPDF).
+      const cx = x + anchoDia / 2, cy = y + filaAlto / 2, s = Math.min(anchoDia, filaAlto) * 0.28;
+      if (hecho) {
+        doc.setDrawColor(255, 255, 255); doc.setLineWidth(0.35);
+        doc.line(cx - s, cy, cx - s * 0.2, cy + s * 0.8);
+        doc.line(cx - s * 0.2, cy + s * 0.8, cx + s, cy - s * 0.8);
+      } else {
+        doc.setDrawColor(220, 38, 38); doc.setLineWidth(0.35);
+        doc.line(cx - s, cy - s, cx + s, cy + s);
+        doc.line(cx - s, cy + s, cx + s, cy - s);
+      }
     });
     y += filaAlto;
   });
@@ -514,11 +524,12 @@ export async function generarReporteIndividualPDFFirma(opts: {
   doc.line(margenL, y, margenR, y);
   y += 6;
   doc.setFontSize(8.5); doc.setFont('helvetica', 'bold'); doc.setTextColor(0, 41, 90);
-  doc.text('VISTO BUENO Y FIRMAS — COLEGIO', margenL, y);
+  doc.text('VISTO BUENO Y FIRMAS', margenL, y);
   y += 10;
 
-  const anchoFirma = (margenR - margenL - 20) / 3;
+  const anchoFirma = (margenR - margenL - 30) / 4;
   const firmas: { rol: string; nombre: string }[] = [
+    { rol: 'Coordinación de Obras y Mantenimiento', nombre: elaboradoPor },
     { rol: 'Director del Colegio', nombre: directorNombre || '—' },
     { rol: 'Administrador del Colegio', nombre: administradorNombre || '—' },
     { rol: 'Responsable de Mantenimiento', nombre: '' },
@@ -527,9 +538,11 @@ export async function generarReporteIndividualPDFFirma(opts: {
     const x = margenL + i * (anchoFirma + 10);
     doc.setDrawColor(100, 116, 139); doc.setLineWidth(0.3);
     doc.line(x, y + 14, x + anchoFirma, y + 14);
-    doc.setFontSize(7.5); doc.setFont('helvetica', 'bold'); doc.setTextColor(30, 41, 59);
-    doc.text(f.nombre || 'Nombre y firma', x + anchoFirma / 2, y + 18, { align: 'center' });
-    doc.setFontSize(7); doc.setFont('helvetica', 'normal'); doc.setTextColor(107, 114, 128);
+    doc.setFontSize(7); doc.setFont('helvetica', 'bold'); doc.setTextColor(30, 41, 59);
+    const nombreMostrar = f.nombre || 'Nombre y firma';
+    const nombreCorto = nombreMostrar.length > 34 ? nombreMostrar.slice(0, 32) + '…' : nombreMostrar;
+    doc.text(nombreCorto, x + anchoFirma / 2, y + 18, { align: 'center' });
+    doc.setFontSize(6.5); doc.setFont('helvetica', 'normal'); doc.setTextColor(107, 114, 128);
     doc.text(f.rol, x + anchoFirma / 2, y + 22, { align: 'center' });
   });
 

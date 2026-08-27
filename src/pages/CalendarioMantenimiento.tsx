@@ -678,6 +678,7 @@ export default function CalendarioMantenimiento() {
         completionsSet,
         directorNombre: getDirector(directorioRowsPC, pcColegio).nombre,
         administradorNombre: getAdministrador(directorioRowsPC, pcColegio).nombre,
+        elaboradoPor: 'Ing. Ricardo Joanathan Reyes Medina — Coordinador de Obras y Mantenimiento',
       });
       logAudit({ accion: 'editar', modulo: 'calendario', registro_ref: `Reporte PC Firma — ${pcColegio} ${new Date(pcAño, pcMes, 1).toLocaleDateString('es-MX', { month: 'long' })} ${pcAño}` });
       toast.success('PDF generado ✓');
