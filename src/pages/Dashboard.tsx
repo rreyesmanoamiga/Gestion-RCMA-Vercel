@@ -22,10 +22,6 @@ interface Project {
 interface Checklist {
   id: string; overall_status?: string; colegio?: string; territorio?: string;
 }
-interface MaintenanceRecord {
-  id: string; title?: string; status?: string; priority?: string;
-  colegio?: string; territorio?: string; type?: string; scheduled_date?: string;
-}
 interface Pendiente {
   id: string; nombre_proyecto?: string; estatus?: string;
   colegio?: string; territorio?: string; created_at?: string;
@@ -108,23 +104,58 @@ const CustomTooltip = ({ active, payload }: { active?: boolean; payload?: { name
 
 // ─── Componente principal ─────────────────────────────────────────────────────
 export default function Dashboard() {
-  const projectsQuery    = useQuery({ queryKey: ['projects'],    queryFn: () => db.Project.list('-created_at', 500) });
-  const checklistsQuery  = useQuery({ queryKey: ['checklists'],  queryFn: () => db.Checklist.list('-created_at', 500) });
-  const maintenanceQuery = useQuery({ queryKey: ['maintenance'], queryFn: () => db.MaintenanceRecord.list('-created_at', 500) });
+  const projectsQuery    = useQuery({ queryKey: ['projects'],    queryFn: () => db.Project.list('-created_at', 500), refetchInterval: 60000 });
+  const checklistsQuery  = useQuery({ queryKey: ['checklists'],  queryFn: () => db.Checklist.list('-created_at', 500), refetchInterval: 60000 });
   const ticketsQuery     = useQuery({
     queryKey: ['tickets'],
     queryFn: async () => {
-      const { data } = await supabase.from('tickets').select('*').order('created_at', { ascending: false }).limit(100);
+      const { data } = await supabase.from('tickets').select('*').order('created_at', { ascending: false }).limit(500);
       return data ?? [];
     },
+    refetchInterval: 60000,
   });
 
   const projects    = useMemo(() => (projectsQuery.data    ?? []) as unknown as Project[],           [projectsQuery.data]);
   const checklists  = useMemo(() => (checklistsQuery.data  ?? []) as unknown as Checklist[],         [checklistsQuery.data]);
-  const maintenance = useMemo(() => (maintenanceQuery.data ?? []) as unknown as MaintenanceRecord[], [maintenanceQuery.data]);
   const tickets     = useMemo(() => (ticketsQuery.data     ?? []) as unknown as TicketRecord[],      [ticketsQuery.data]);
 
-  const isLoading = projectsQuery.isLoading || checklistsQuery.isLoading || maintenanceQuery.isLoading;
+  const isLoading = projectsQuery.isLoading || checklistsQuery.isLoading;
+
+  // ─── Mantenimiento — datos REALES del Calendario (antes leía de la tabla
+  // maintenance_records, abandonada; nada le escribe desde hace tiempo) ──────
+  const { data: colegiosConMtto = [] } = useQuery({
+    queryKey: ['mtto_colegios_activos_dashboard'],
+    queryFn: async () => {
+      const inicioMes = new Date(); inicioMes.setDate(1); inicioMes.setHours(0, 0, 0, 0);
+      const { data } = await supabase
+        .from('maintenance_completions')
+        .select('colegio')
+        .gte('fecha_programada', inicioMes.toISOString().slice(0, 10));
+      return Array.from(new Set((data ?? []).map((r: any) => r.colegio)));
+    },
+    refetchInterval: 60000,
+  });
+  const totalColegiosRed = COLEGIOS.filter((c: Colegio) => c.territorio === 'NORTE' || c.territorio === 'MEXICO').length;
+  const colegiosSinMtto = useMemo(() =>
+    COLEGIOS.filter((c: Colegio) => (c.territorio === 'NORTE' || c.territorio === 'MEXICO') && !colegiosConMtto.includes(c.colegio)).map(c => c.colegio),
+    [colegiosConMtto]
+  );
+
+  // ─── Cumplimiento Normativo (Protección Civil / Donatarias) ───────────────
+  const { data: cumplimientoStats = { vencidos: 0, porExpirar: 0 } } = useQuery({
+    queryKey: ['cumplimiento_dashboard_resumen'],
+    queryFn: async () => {
+      const hoyISO = new Date().toISOString().slice(0, 10);
+      const [{ count: vencidos }, { count: porExpirar }] = await Promise.all([
+        supabase.from('compliance_documentos').select('*', { count: 'exact', head: true })
+          .eq('activo', true).neq('estado', 'Verificado').not('fecha_limite_recepcion', 'is', null).lt('fecha_limite_recepcion', hoyISO),
+        supabase.from('compliance_documentos').select('*', { count: 'exact', head: true })
+          .eq('activo', true).eq('vigente', 'Por expirar'),
+      ]);
+      return { vencidos: vencidos ?? 0, porExpirar: porExpirar ?? 0 };
+    },
+    refetchInterval: 60000,
+  });
 
   // ─── NEXUS pendientes activos ─────────────────────────────────────────────
   const { data: nexusPendientesActivos = 0 } = useQuery({
@@ -196,7 +227,6 @@ export default function Dashboard() {
     activeProjects:     projects.filter(p => p.status === 'en_proceso' || p.status === 'en_espera').length,
     completedProjects:  projects.filter(p => p.status === 'completado').length,
     criticalChecklists: checklists.filter(c => c.overall_status === 'critico' || c.overall_status === 'malo').length,
-    pendingMaintenance: 0,
     urgentItems:        projects.filter(p => p.priority === 'urgente' && p.status !== 'completado' && p.status !== 'cancelado').length,
     openTickets:        tickets.filter(t => t.estatus !== 'cerrado' && t.estatus !== 'resuelto').length,
   }), [projects, checklists, tickets]);
@@ -255,10 +285,10 @@ export default function Dashboard() {
   const urgentColegios = useMemo(() => {
     const s = new Set<string>();
     projects.forEach(p => { if (p.priority === 'urgente' && p.status !== 'completado' && p.colegio) s.add(p.colegio); });
-    maintenance.forEach(m => { if (m.priority === 'urgente' && m.status !== 'completado' && m.colegio) s.add(m.colegio); });
     checklists.forEach(c => { if ((c.overall_status === 'critico' || c.overall_status === 'malo') && c.colegio) s.add(c.colegio); });
+    colegiosSinMtto.forEach(colegio => s.add(colegio));
     return s;
-  }, [projects, maintenance, checklists]);
+  }, [projects, checklists, colegiosSinMtto]);
 
   // ─── Resumen por territorio ────────────────────────────────────────────────
   const territorySummary = useMemo(() =>
@@ -266,12 +296,12 @@ export default function Dashboard() {
       const colegios  = COLEGIOS.filter((c: Colegio) => c.territorio === territorio);
       const tProjects = projects.filter(p => p.territorio === territorio);
       const tCheck    = checklists.filter(c => c.territorio === territorio);
-      const tMaint    = maintenance.filter(m => m.territorio === territorio);
+      const tSinMtto  = colegiosSinMtto.filter(colegio => colegios.some(c => c.colegio === colegio)).length;
       const sinAlertas = colegios.filter(c => !urgentColegios.has(c.colegio)).length;
       const pct        = colegios.length > 0 ? Math.round((sinAlertas / colegios.length) * 100) : 100;
-      return { territorio, colegios, tProjects, tCheck, tMaint, sinAlertas, pct };
+      return { territorio, colegios, tProjects, tCheck, tSinMtto, sinAlertas, pct };
     }),
-    [projects, checklists, maintenance, urgentColegios]
+    [projects, checklists, urgentColegios, colegiosSinMtto]
   );
 
   // ─── Feed de actividad reciente ────────────────────────────────────────────
@@ -404,7 +434,7 @@ export default function Dashboard() {
       )}
 
       {/* ─── KPIs ────────────────────────────────────────────────────────────── */}
-      <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
+      <div className="grid grid-cols-2 lg:grid-cols-7 gap-3">
         <KPICard title="Proyectos Activos" value={stats.activeProjects}
           subtitle={`${stats.completedProjects} completados`}
           icon={FolderKanban} color="blue" to="/proyectos"
@@ -421,6 +451,14 @@ export default function Dashboard() {
           subtitle={stats.criticalChecklists > 0 ? 'requieren atención' : 'sin alertas críticas'}
           icon={ClipboardCheck} color={stats.criticalChecklists > 0 ? 'red' : 'green'} to="/checklists"
           trend={stats.criticalChecklists > 0 ? 'down' : 'up'} trendLabel={`${checklists.length} total`} />
+        <KPICard title="Mantenimiento" value={`${totalColegiosRed - colegiosSinMtto.length}/${totalColegiosRed}`}
+          subtitle="Colegios con registro este mes"
+          icon={Wrench} color={colegiosSinMtto.length === 0 ? 'green' : 'orange'} to="/calendario"
+          trend={colegiosSinMtto.length === 0 ? 'up' : 'down'} trendLabel={`${colegiosSinMtto.length} sin registro`} />
+        <KPICard title="Cumplimiento Norm." value={cumplimientoStats.vencidos}
+          subtitle={`${cumplimientoStats.porExpirar} por expirar`}
+          icon={BarChart3} color={cumplimientoStats.vencidos > 0 ? 'red' : 'green'} to="/cumplimiento"
+          trend={cumplimientoStats.vencidos > 0 ? 'down' : 'up'} trendLabel="vencidos" />
         <KPICard title="Urgentes" value={stats.urgentItems}
           subtitle="Acción inmediata"
           icon={AlertTriangle} color={stats.urgentItems > 0 ? 'red' : 'green'}
@@ -536,7 +574,7 @@ export default function Dashboard() {
 
       {/* ─── Territorios ──────────────────────────────────────────────────────── */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {territorySummary.map(({ territorio, colegios, tProjects, tCheck, tMaint, sinAlertas, pct }) => (
+        {territorySummary.map(({ territorio, colegios, tProjects, tCheck, tSinMtto, sinAlertas, pct }) => (
           <div key={territorio} className="bg-white rounded-xl border border-slate-200 p-5">
             <div className="flex items-center justify-between mb-4">
               <div className="flex items-center gap-2">
@@ -569,7 +607,7 @@ export default function Dashboard() {
               {[
                 { label: 'Proyectos',    value: tProjects.length },
                 { label: 'Inspecciones', value: tCheck.length },
-                { label: 'Mtto. Pend.',  value: tMaint.filter(m => m.status !== 'completado').length },
+                { label: 'Mtto. sin registro', value: tSinMtto },
               ].map(s => (
                 <div key={s.label} className="text-center p-2 bg-slate-50 rounded-lg border border-slate-100">
                   <p className="text-xl font-black text-slate-900">{s.value}</p>
