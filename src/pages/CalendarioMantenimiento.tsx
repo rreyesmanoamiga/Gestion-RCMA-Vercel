@@ -8,7 +8,7 @@ import { usePermissions } from '@/hooks/usePermissions';
 import { toast } from 'sonner';
 import { logAudit } from '@/lib/audit';
 import { generarReporteIndividualExcel, generarReporteGeneralPDF, generarReporteIndividualPDFFirma, type CumplimientoColegioPC } from '@/lib/reportesProteccionCivil';
-import { useDirectorio, getDirector, getAdministrador } from '@/lib/directorio';
+import { useDirectorio, getDirector, getAdministrador, findColegio } from '@/lib/directorio';
 
 export interface Actividad {
   id: number | string;
@@ -667,9 +667,12 @@ export default function CalendarioMantenimiento() {
         (data ?? []).map((c: any) => `${c.colegio}|${c.fecha_programada}|${c.actividad_ref}`)
       );
 
+      const colegioDirectorio = findColegio(directorioRowsPC, pcColegio);
       await generarReporteIndividualPDFFirma({
         colegio: pcColegio,
-        colegioNombre: pcColegio,
+        colegioNombre: colegioDirectorio?.nombre ?? pcColegio,
+        nombreFiscal: colegioDirectorio?.nombre_oficial ?? '',
+        direccionFiscal: colegioDirectorio?.dir_fiscal ?? '',
         territorio: colegioInfo?.territorio ?? '—',
         año: pcAño,
         mes: pcMes,

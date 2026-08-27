@@ -299,6 +299,54 @@ async function pdfHeaderPC(doc: Doc, W: number, subtitle: string) {
   } catch { /* sin logo */ }
 }
 
+// Encabezado del reporte INDIVIDUAL por colegio — el que se entrega a
+// Protección Civil de cada entidad para el VoBo de licencia de funcionamiento.
+// Trae los datos oficiales del colegio (nombre completo, fiscal, dirección
+// fiscal) que exige ese trámite, además del título oficial del formato.
+async function pdfHeaderPCIndividual(doc: Doc, W: number, opts: {
+  colegioNombre: string; nombreFiscal: string; direccionFiscal: string; lineaInferior: string;
+}) {
+  const { colegioNombre, nombreFiscal, direccionFiscal, lineaInferior } = opts;
+  const ALTO = 40;
+  doc.setFillColor(0, 41, 90); doc.rect(0, 0, W, ALTO, 'F');
+  doc.setFillColor(237, 113, 2); doc.rect(0, ALTO, W, 1.2, 'F');
+
+  doc.setFontSize(13); doc.setFont('helvetica', 'bold'); doc.setTextColor(255, 255, 255);
+  doc.text('COLEGIOS MANO AMIGA — PROGRAMA DE MANTENIMIENTO', 34, 10);
+  doc.setFontSize(7.6); doc.setFont('helvetica', 'normal'); doc.setTextColor(255, 190, 140);
+  doc.text('Programa de Mantenimiento de Edificios, locales, instalaciones y áreas en los centros de trabajo. Condiciones de seguridad.', 34, 15.5, { maxWidth: W - 40 });
+
+  doc.setDrawColor(79, 130, 194); doc.setLineWidth(0.3); doc.line(34, 19.5, W - 12, 19.5);
+
+  doc.setFontSize(6.8); doc.setFont('helvetica', 'bold'); doc.setTextColor(190, 200, 220);
+  doc.text('COLEGIO', 34, 24);
+  doc.setFontSize(10.5); doc.setFont('helvetica', 'bold'); doc.setTextColor(255, 255, 255);
+  doc.text(colegioNombre || '—', 34, 28.5);
+
+  doc.setFontSize(6.8); doc.setFont('helvetica', 'bold'); doc.setTextColor(190, 200, 220);
+  doc.text('NOMBRE FISCAL', 34, 33);
+  doc.setFontSize(8); doc.setFont('helvetica', 'normal'); doc.setTextColor(220, 228, 240);
+  doc.text(nombreFiscal || '—', 34, 36.5);
+
+  doc.setFontSize(6.8); doc.setFont('helvetica', 'bold'); doc.setTextColor(190, 200, 220);
+  doc.text('DIRECCIÓN FISCAL', 110, 33);
+  doc.setFontSize(8); doc.setFont('helvetica', 'normal'); doc.setTextColor(220, 228, 240);
+  doc.text(direccionFiscal || '—', 110, 36.5, { maxWidth: W - 122 });
+
+  doc.setFontSize(7); doc.setFont('helvetica', 'italic'); doc.setTextColor(255, 170, 110);
+  doc.text(lineaInferior, W - 12, ALTO - 3, { align: 'right' });
+
+  try {
+    const logoImg = await new Promise<string>((res, rej) => {
+      const img = new Image(); img.crossOrigin = 'anonymous';
+      img.onload = () => { const c = document.createElement('canvas'); c.width = img.width; c.height = img.height; c.getContext('2d')!.drawImage(img, 0, 0); res(c.toDataURL('image/png')); };
+      img.onerror = rej; img.src = '/logo.png';
+    });
+    doc.addImage(logoImg, 'PNG', 6, 3, 22, 22);
+  } catch { /* sin logo */ }
+  return ALTO;
+}
+
 function pdfFooterPC(doc: Doc) {
   const pages = doc.getNumberOfPages();
   for (let i = 1; i <= pages; i++) {
@@ -416,6 +464,8 @@ export async function generarReporteGeneralPDF(opts: {
 export async function generarReporteIndividualPDFFirma(opts: {
   colegio: string;
   colegioNombre: string;
+  nombreFiscal: string;
+  direccionFiscal: string;
   territorio: string;
   año: number;
   mes: number; // 0-11
@@ -426,7 +476,7 @@ export async function generarReporteIndividualPDFFirma(opts: {
   administradorNombre: string;
   elaboradoPor: string;
 }) {
-  const { colegio, colegioNombre, territorio, año, mes, todasActividades, actividadRef, completionsSet, directorNombre, administradorNombre, elaboradoPor } = opts;
+  const { colegio, colegioNombre, nombreFiscal, direccionFiscal, territorio, año, mes, todasActividades, actividadRef, completionsSet, directorNombre, administradorNombre, elaboradoPor } = opts;
   const jsPDFctor = await loadJsPDF();
   const doc = new jsPDFctor({ unit: 'mm', format: 'letter', orientation: 'landscape' }) as Doc;
   const W = (doc as any).internal.pageSize.getWidth();
@@ -436,9 +486,14 @@ export async function generarReporteIndividualPDFFirma(opts: {
   const diasEnMes = new Date(año, mes + 1, 0).getDate();
   const fechas: Date[] = Array.from({ length: diasEnMes }, (_, i) => new Date(año, mes, i + 1));
 
-  await pdfHeaderPC(doc, W, `Colegio: ${colegioNombre}   |   Territorio: ${territorio}   |   Periodo: ${MESES_ES[mes]} ${año}`);
+  await pdfHeaderPCIndividual(doc, W, {
+    colegioNombre,
+    nombreFiscal,
+    direccionFiscal,
+    lineaInferior: `Territorio: ${territorio}   |   Periodo: ${MESES_ES[mes]} ${año}`,
+  });
 
-  let y = 34;
+  let y = 46;
   const margenL = 16, margenR = W - 16;
   const anchoAct = 48, anchoFrec = 14;
   const anchoDias = margenR - margenL - anchoAct - anchoFrec;
