@@ -108,7 +108,15 @@ export default function ProjectDetail() {
   const updateMutation = useMutation({
     mutationFn: async (formData: Record<string, unknown>) => {
       if (!puedeEditar) throw new Error('No tienes permiso para editar proyectos.');
-      await db.Project.update(id!, formData);
+
+      // Si el status cambia a completado, sella la fecha real de cierre —
+      // updated_at ni siquiera existe como columna en projects — por eso se
+      // necesita este campo dedicado, sellado justo al momento de completar.
+      const datosGuardar = { ...formData };
+      if (formData.status === 'completado' && project?.status !== 'completado') {
+        datosGuardar.completado_at = new Date().toISOString();
+      }
+      await db.Project.update(id!, datosGuardar);
 
       // Auditoría: distinguir completar / cancelar / editar / actualizar costo real
       const statusAnterior = project?.status;

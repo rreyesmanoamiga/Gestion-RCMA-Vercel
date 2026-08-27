@@ -17,7 +17,7 @@ import {
 interface Project {
   id: string; name?: string; status?: string; priority?: string;
   colegio?: string; territorio?: string; location?: string; progress?: number;
-  created_at?: string; updated_at?: string; budget?: number; costo_real?: number;
+  created_at?: string; completado_at?: string; budget?: number; costo_real?: number;
 }
 interface Checklist {
   id: string; overall_status?: string; colegio?: string; territorio?: string;
@@ -261,8 +261,9 @@ export default function Dashboard() {
   const proyectosCompletadosPorMes = useMemo(() =>
     ultimosMeses.map(({ year, month, label }) => {
       const count = projects.filter(p => {
-        if (p.status !== 'completado' || !p.updated_at) return false;
-        const d = new Date(p.updated_at);
+        const fecha = p.completado_at;
+        if (p.status !== 'completado' || !fecha) return false;
+        const d = new Date(fecha);
         return d.getFullYear() === year && d.getMonth() === month;
       }).length;
       return { name: label, Completados: count };
@@ -272,8 +273,9 @@ export default function Dashboard() {
   const presupuestoVsRealPorMes = useMemo(() =>
     ultimosMeses.map(({ year, month, label }) => {
       const delMes = projects.filter(p => {
-        if (p.status !== 'completado' || !p.updated_at || p.costo_real == null) return false;
-        const d = new Date(p.updated_at);
+        const fecha = p.completado_at;
+        if (p.status !== 'completado' || !fecha || p.costo_real == null) return false;
+        const d = new Date(fecha);
         return d.getFullYear() === year && d.getMonth() === month;
       });
       const planeado = delMes.reduce((s, p) => s + (p.budget ?? 0), 0);
