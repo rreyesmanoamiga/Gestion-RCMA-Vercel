@@ -9,6 +9,30 @@ import { toast } from 'sonner';
 import { logAudit } from '@/lib/audit';
 import { generarReporteIndividualExcel, generarReporteGeneralPDF, generarReporteIndividualPDFFirma, type CumplimientoColegioPC } from '@/lib/reportesProteccionCivil';
 import { useDirectorio, getDirector, getAdministrador, findColegio } from '@/lib/directorio';
+import { useSharePointUpload } from '@/hooks/useSharePointUpload';
+
+// Comprime/redimensiona una foto antes de subirla — clave para que la
+// evidencia obligatoria de mantenimiento no dispare el uso de almacenamiento.
+// Reduce al lado más largo a 1600px y reencoda a JPEG calidad 75%.
+async function comprimirFotoEvidencia(file: File): Promise<File> {
+  const bitmap = await createImageBitmap(file);
+  const MAX_LADO = 1600;
+  const escala = Math.min(1, MAX_LADO / Math.max(bitmap.width, bitmap.height));
+  const w = Math.round(bitmap.width * escala);
+  const h = Math.round(bitmap.height * escala);
+
+  const canvas = document.createElement('canvas');
+  canvas.width = w; canvas.height = h;
+  const ctx = canvas.getContext('2d')!;
+  ctx.drawImage(bitmap, 0, 0, w, h);
+
+  const blob: Blob = await new Promise((resolve, reject) => {
+    canvas.toBlob(b => b ? resolve(b) : reject(new Error('No se pudo comprimir la imagen')), 'image/jpeg', 0.75);
+  });
+
+  const nombreBase = file.name.replace(/\.[^.]+$/, '');
+  return new File([blob], `${nombreBase}.jpg`, { type: 'image/jpeg' });
+}
 
 export interface Actividad {
   id: number | string;
@@ -200,6 +224,72 @@ export default function CalendarioMantenimiento() {
   // determina para qué colegio puede marcar mantenimientos como realizados.
   const miColegio      = String((permsRecord as any)?.colegio ?? '');
   const esAdminColegio = !isAdmin && !!miColegio && miColegio !== 'ECO';
+  const miTerritorio   = COLEGIOS.find(c => c.colegio === miColegio)?.territorio ?? '';
+
+  // ── Evidencia fotográfica obligatoria al marcar una actividad realizada ──
+  // Flujo en 2 pasos: 1) se sube la foto en cuanto se elige (no se puede
+  // avanzar sin que esto termine bien), 2) "Marcar como realizado" solo se
+  // habilita una vez que la subida ya tiene URL confirmada.
+  const { uploadCustom: subirEvidenciaCustom, uploading: subiendoEvidencia } = useSharePointUpload();
+  const [evidenciaPendiente, setEvidenciaPendiente] = useState<{ act: Actividad; fecha: Date } | null>(null);
+  const [evidenciaPreview, setEvidenciaPreview] = useState<string | null>(null);
+  const [evidenciaUrlSubida, setEvidenciaUrlSubida] = useState<string | null>(null);
+  const [evidenciaError, setEvidenciaError] = useState<string | null>(null);
+
+  const abrirModalEvidencia = (act: Actividad, fecha: Date) => {
+    setEvidenciaPendiente({ act, fecha });
+    setEvidenciaPreview(null);
+    setEvidenciaUrlSubida(null);
+    setEvidenciaError(null);
+  };
+  const cerrarModalEvidencia = () => {
+    setEvidenciaPendiente(null);
+    if (evidenciaPreview) URL.revokeObjectURL(evidenciaPreview);
+    setEvidenciaPreview(null);
+    setEvidenciaUrlSubida(null);
+    setEvidenciaError(null);
+  };
+
+  // Carpeta dedicada, propia del Calendario — separada de "Evidencias" (que ya
+  // usan Checklists y Mínimos Indispensables) para que quede lista y limpia
+  // por si Protección Civil la pide.
+  // Evidencia Calendario Mantenimiento / Año / Territorio / Colegio / Categoría / Fecha_Actividad.jpg
+  const construirCarpetaEvidencia = (act: Actividad, fecha: Date) => {
+    const año = fecha.getFullYear();
+    const categoriaLimpia = act.categoria.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-zA-Z0-9 ]/g, '').trim();
+    return `Evidencia Calendario Mantenimiento/${año}/${miTerritorio || 'SIN_TERRITORIO'}/${miColegio || 'SIN_COLEGIO'}/${categoriaLimpia}`;
+  };
+
+  const handleSeleccionFoto = async (file: File | undefined) => {
+    if (!file || !evidenciaPendiente) return;
+    setEvidenciaPreview(URL.createObjectURL(file));
+    setEvidenciaUrlSubida(null);
+    setEvidenciaError(null);
+    try {
+      const comprimida = await comprimirFotoEvidencia(file);
+      const { act, fecha } = evidenciaPendiente;
+      const actividadLimpia = act.actividad.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-zA-Z0-9 ]/g, '').trim().replace(/\s+/g, '-');
+      const nombreArchivo = `${fechaISO(fecha)}_${actividadLimpia}.jpg`;
+      const carpeta = construirCarpetaEvidencia(act, fecha);
+      const url = await subirEvidenciaCustom(comprimida, carpeta, nombreArchivo);
+      if (!url) { setEvidenciaError('No se pudo subir la evidencia. Intenta de nuevo.'); return; }
+      setEvidenciaUrlSubida(url);
+    } catch (err: any) {
+      setEvidenciaError('No se pudo procesar la foto: ' + (err.message ?? 'error desconocido'));
+    }
+  };
+
+  const confirmarMarcarRealizado = async () => {
+    if (!evidenciaPendiente || !evidenciaUrlSubida) return;
+    try {
+      await toggleCompletionMutation.mutateAsync({
+        act: evidenciaPendiente.act, fecha: evidenciaPendiente.fecha, marcar: true, evidenciaUrl: evidenciaUrlSubida,
+      });
+      cerrarModalEvidencia();
+    } catch (err: any) {
+      toast.error(err.message ?? 'No se pudo marcar la actividad');
+    }
+  };
 
   const [año, setAño] = useState(hoy.getFullYear());
   const [mes, setMes] = useState(hoy.getMonth());
@@ -520,7 +610,7 @@ export default function CalendarioMantenimiento() {
         .gte('fecha_programada', inicioMesISO)
         .lte('fecha_programada', finMesISO);
       if (error) throw error;
-      return data as { id: string; actividad_ref: string; colegio: string; fecha_programada: string }[];
+      return data as { id: string; actividad_ref: string; colegio: string; fecha_programada: string; evidencia_url: string | null }[];
     },
   });
 
@@ -534,9 +624,14 @@ export default function CalendarioMantenimiento() {
     completions.forEach(c => map.set(`${c.colegio}|${c.fecha_programada}|${c.actividad_ref}`, c.id));
     return map;
   }, [completions]);
+  const completionsEvidenciaMap = useMemo(() => {
+    const map = new Map<string, string>(); // key -> url de la evidencia, si tiene
+    completions.forEach(c => { if (c.evidencia_url) map.set(`${c.colegio}|${c.fecha_programada}|${c.actividad_ref}`, c.evidencia_url); });
+    return map;
+  }, [completions]);
 
   const toggleCompletionMutation = useMutation({
-    mutationFn: async ({ act, fecha, marcar }: { act: Actividad; fecha: Date; marcar: boolean }) => {
+    mutationFn: async ({ act, fecha, marcar, evidenciaUrl }: { act: Actividad; fecha: Date; marcar: boolean; evidenciaUrl?: string }) => {
       if (!miColegio) throw new Error('Tu usuario no tiene un colegio asignado.');
       const fechaStr = fechaISO(fecha);
       const key = `${miColegio}|${fechaStr}|${actividadRef(act)}`;
@@ -544,9 +639,10 @@ export default function CalendarioMantenimiento() {
         const { error } = await supabase.from('maintenance_completions').insert({
           actividad_ref: actividadRef(act), actividad_nombre: act.actividad, categoria: act.categoria,
           colegio: miColegio, fecha_programada: fechaStr, realizado_por: user?.email ?? null,
+          evidencia_url: evidenciaUrl ?? null,
         });
         if (error) throw error;
-        logAudit({ accion: 'crear', modulo: 'calendario', registro_ref: `Realizado: ${act.actividad}`, detalle: { colegio: miColegio, fecha: fechaStr } });
+        logAudit({ accion: 'crear', modulo: 'calendario', registro_ref: `Realizado: ${act.actividad}`, detalle: { colegio: miColegio, fecha: fechaStr, evidencia: !!evidenciaUrl } });
       } else {
         const id = completionsMap.get(key);
         if (id) {
@@ -912,7 +1008,7 @@ export default function CalendarioMantenimiento() {
                         <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${act.tipo==='Limpiar'?'bg-blue-100 text-blue-700':act.tipo==='Renovar'?'bg-amber-100 text-amber-700':'bg-emerald-100 text-emerald-700'}`}>{act.tipo}</span>
                         {esAdminColegio && (
                           <button
-                            onClick={() => toggleCompletionMutation.mutate({ act, fecha: fechaDia, marcar: !realizado })}
+                            onClick={() => realizado ? toggleCompletionMutation.mutate({ act, fecha: fechaDia, marcar: false }) : abrirModalEvidencia(act, fechaDia)}
                             disabled={toggleCompletionMutation.isPending}
                             className={`flex items-center gap-1 px-2 py-1 rounded-full text-[10px] font-bold border transition-colors ${
                               realizado ? 'bg-green-50 text-green-700 border-green-200' : 'bg-white text-slate-500 border-slate-300 hover:border-slate-400'
@@ -1069,16 +1165,25 @@ export default function CalendarioMantenimiento() {
                 {esAdminColegio && (() => {
                   const key = `${miColegio}|${fechaISO(new Date(año, mes, diaSeleccionado!))}|${actividadRef(act)}`;
                   const realizado = completionsSet.has(key);
+                  const evidenciaUrl = completionsEvidenciaMap.get(key);
                   return (
-                    <button
-                      onClick={() => toggleCompletionMutation.mutate({ act, fecha: new Date(año, mes, diaSeleccionado!), marcar: !realizado })}
-                      disabled={toggleCompletionMutation.isPending}
-                      className={`shrink-0 mt-0.5 flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-bold border transition-colors ${
-                        realizado ? 'bg-green-50 text-green-700 border-green-200 hover:bg-green-100' : 'bg-white text-slate-500 border-slate-300 hover:border-slate-400'
-                      }`}>
-                      <CheckCircle2 className="w-3.5 h-3.5" />
-                      {realizado ? 'Realizado' : 'Marcar realizado'}
-                    </button>
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      <button
+                        onClick={() => realizado ? toggleCompletionMutation.mutate({ act, fecha: new Date(año, mes, diaSeleccionado!), marcar: false }) : abrirModalEvidencia(act, new Date(año, mes, diaSeleccionado!))}
+                        disabled={toggleCompletionMutation.isPending}
+                        className={`mt-0.5 flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-bold border transition-colors ${
+                          realizado ? 'bg-green-50 text-green-700 border-green-200 hover:bg-green-100' : 'bg-white text-slate-500 border-slate-300 hover:border-slate-400'
+                        }`}>
+                        <CheckCircle2 className="w-3.5 h-3.5" />
+                        {realizado ? 'Realizado' : 'Marcar realizado'}
+                      </button>
+                      {evidenciaUrl && (
+                        <a href={evidenciaUrl} target="_blank" rel="noopener noreferrer"
+                          className="mt-0.5 flex items-center gap-1 px-2 py-1.5 rounded-lg text-[11px] font-medium text-blue-600 border border-blue-200 bg-blue-50 hover:bg-blue-100 transition-colors">
+                          Ver evidencia
+                        </a>
+                      )}
+                    </div>
                   );
                 })()}
               </div>
@@ -1840,6 +1945,83 @@ export default function CalendarioMantenimiento() {
           </div>
         );
       })()}
+
+      {/* ── Modal: evidencia fotográfica obligatoria al marcar realizado ── */}
+      {evidenciaPendiente && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4">
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-md">
+            <div className="p-5 border-b border-slate-100">
+              <h3 className="font-bold text-slate-800 flex items-center gap-2">
+                <Wrench className="w-4 h-4 text-orange-600" /> Evidencia fotográfica
+              </h3>
+              <p className="text-xs text-slate-500 mt-1">
+                {evidenciaPendiente.act.actividad} — {DIAS_SEMANA[evidenciaPendiente.fecha.getDay()]} {evidenciaPendiente.fecha.getDate()} de {MESES[evidenciaPendiente.fecha.getMonth()]}
+              </p>
+            </div>
+
+            <div className="p-5 space-y-3">
+              {/* Paso 1 */}
+              <div className="flex items-center gap-2">
+                <span className={`flex items-center justify-center w-5 h-5 rounded-full text-[10px] font-bold ${evidenciaUrlSubida ? 'bg-green-100 text-green-700' : 'bg-orange-100 text-orange-700'}`}>1</span>
+                <p className="text-xs font-bold text-slate-700">Subir foto de evidencia</p>
+              </div>
+
+              {evidenciaPreview ? (
+                <div className="relative">
+                  <img src={evidenciaPreview} alt="Evidencia" className="w-full h-48 object-cover rounded-lg border border-slate-200" />
+                  {subiendoEvidencia && (
+                    <div className="absolute inset-0 bg-white/80 rounded-lg flex flex-col items-center justify-center gap-2">
+                      <Loader2 className="w-6 h-6 text-orange-600 animate-spin" />
+                      <span className="text-xs font-bold text-orange-700">Subiendo a OneDrive...</span>
+                    </div>
+                  )}
+                  {evidenciaUrlSubida && !subiendoEvidencia && (
+                    <div className="absolute top-2 left-2 bg-green-600 text-white text-[10px] font-bold px-2 py-1 rounded-full flex items-center gap-1">
+                      <CheckCircle2 className="w-3 h-3" /> Subida
+                    </div>
+                  )}
+                  {!subiendoEvidencia && (
+                    <button onClick={() => { if (evidenciaPreview) URL.revokeObjectURL(evidenciaPreview); setEvidenciaPreview(null); setEvidenciaUrlSubida(null); setEvidenciaError(null); }}
+                      className="absolute top-2 right-2 bg-white/90 hover:bg-white text-slate-600 rounded-full p-1.5 shadow">
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                </div>
+              ) : (
+                <label className="flex flex-col items-center justify-center gap-2 h-40 border-2 border-dashed border-slate-300 rounded-lg cursor-pointer hover:border-orange-400 hover:bg-orange-50/50 transition-colors">
+                  <Plus className="w-6 h-6 text-slate-400" />
+                  <span className="text-xs font-medium text-slate-500">Tomar o elegir foto</span>
+                  <input type="file" accept="image/*" capture="environment" className="hidden"
+                    onChange={e => handleSeleccionFoto(e.target.files?.[0])} />
+                </label>
+              )}
+
+              {evidenciaError && (
+                <p className="text-xs text-red-600 font-medium">{evidenciaError}</p>
+              )}
+
+              {/* Paso 2 */}
+              <div className="flex items-center gap-2 pt-2">
+                <span className={`flex items-center justify-center w-5 h-5 rounded-full text-[10px] font-bold ${evidenciaUrlSubida ? 'bg-orange-100 text-orange-700' : 'bg-slate-100 text-slate-400'}`}>2</span>
+                <p className={`text-xs font-bold ${evidenciaUrlSubida ? 'text-slate-700' : 'text-slate-400'}`}>Marcar la actividad como realizada</p>
+              </div>
+            </div>
+
+            <div className="p-4 border-t border-slate-100 bg-slate-50 flex justify-end gap-2">
+              <button onClick={cerrarModalEvidencia} disabled={subiendoEvidencia}
+                className="px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-200 rounded-md transition-colors disabled:opacity-50">
+                Cancelar
+              </button>
+              <button onClick={confirmarMarcarRealizado} disabled={!evidenciaUrlSubida || subiendoEvidencia}
+                title={!evidenciaUrlSubida ? 'Primero sube la foto de evidencia' : undefined}
+                className="px-4 py-2 text-sm font-bold text-white bg-orange-600 hover:bg-orange-700 rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2">
+                <CheckCircle2 className="w-4 h-4" />
+                Marcar como realizado
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
     </div>
   );
