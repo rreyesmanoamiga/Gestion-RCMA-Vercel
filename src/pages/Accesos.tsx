@@ -2,7 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabaseClient';
 import { PERMISSIONS, PERMISSION_GROUPS, DEFAULT_PERMISSIONS } from '@/lib/permissions';
-import { Lock, UserPlus, Mail, Pencil, X, Trash2, ShieldCheck, Users, Search, User, Building2, MapPin, Briefcase } from 'lucide-react';
+import { Lock, UserPlus, Mail, Pencil, X, Trash2, ShieldCheck, Users, Search, User, Building2, MapPin, Briefcase, Camera } from 'lucide-react';
 import { toast } from 'sonner';
 import PageHeader from '@/components/shared/PageHeader';
 import { COLEGIOS, TERRITORIOS, getColegiosByTerritorio } from '@/lib/colegios';
@@ -11,6 +11,66 @@ const cardClass  = 'bg-white rounded-xl border border-slate-200 shadow-sm overfl
 const btnPrimary = 'px-4 py-2 bg-slate-900 text-white rounded-md text-sm font-medium hover:bg-slate-800 disabled:opacity-50 transition-colors';
 const btnDanger  = 'px-4 py-2 border border-red-200 rounded-md text-sm font-medium text-red-600 hover:bg-red-50 transition-colors flex items-center gap-2';
 const inputClass = 'w-full px-3 py-2 border border-slate-300 rounded-md text-sm focus:ring-2 focus:ring-slate-900 focus:outline-none';
+
+// Sube una imagen de avatar al bucket "avatars" de Supabase Storage y regresa su URL pública.
+// Requiere que el bucket "avatars" exista y sea público (ver instrucciones al pie del archivo).
+async function uploadAvatar(email: string, file: File): Promise<string> {
+  const ext = file.name.split('.').pop() || 'jpg';
+  const path = `${email.replace(/[^a-zA-Z0-9]/g, '_')}-${Date.now()}.${ext}`;
+  const { error } = await supabase.storage.from('avatars').upload(path, file, { upsert: true });
+  if (error) throw new Error('No se pudo subir la foto: ' + error.message);
+  const { data } = supabase.storage.from('avatars').getPublicUrl(path);
+  return data.publicUrl;
+}
+
+interface AvatarCircleProps {
+  url?: string | null;
+  name: string;
+  size?: number;
+}
+
+function AvatarCircle({ url, name, size = 40 }: AvatarCircleProps) {
+  const initials = (name || '?').slice(0, 2).toUpperCase();
+  const style = { width: size, height: size };
+  if (url) {
+    return <img src={url} alt={name} style={style} className="rounded-full object-cover shrink-0 border border-slate-200" />;
+  }
+  return (
+    <div style={style} className="rounded-full bg-slate-900 flex items-center justify-center shrink-0">
+      <span className="font-bold text-white" style={{ fontSize: size * 0.32 }}>{initials}</span>
+    </div>
+  );
+}
+
+// Selector de avatar para usar dentro de los modales (foto actual + botón para cambiarla)
+interface AvatarPickerProps {
+  currentUrl?: string | null;
+  previewUrl?: string | null;
+  name: string;
+  onSelect: (file: File) => void;
+}
+
+function AvatarPicker({ currentUrl, previewUrl, name, onSelect }: AvatarPickerProps) {
+  const inputId = useMemo(() => `avatar-input-${Math.random().toString(36).slice(2)}`, []);
+  return (
+    <div className="flex items-center gap-4">
+      <div className="relative">
+        <AvatarCircle url={previewUrl ?? currentUrl} name={name} size={64} />
+        <label htmlFor={inputId} className="absolute -bottom-1 -right-1 w-6 h-6 rounded-full bg-slate-900 border-2 border-white flex items-center justify-center cursor-pointer hover:bg-slate-700 transition-colors">
+          <Camera className="w-3 h-3 text-white" />
+        </label>
+        <input id={inputId} type="file" accept="image/*" className="hidden"
+          onChange={e => { const f = e.target.files?.[0]; if (f) onSelect(f); }} />
+      </div>
+      <div>
+        <label htmlFor={inputId} className="text-xs font-semibold text-slate-600 hover:text-slate-900 cursor-pointer underline underline-offset-2">
+          {currentUrl || previewUrl ? 'Cambiar foto de perfil' : 'Subir foto de perfil'}
+        </label>
+        <p className="text-[11px] text-slate-400 mt-0.5">JPG o PNG, se mostrará en la esquina superior del sistema</p>
+      </div>
+    </div>
+  );
+}
 
 
 interface PermRecord {
@@ -21,6 +81,7 @@ interface PermRecord {
   puesto?:    string;
   territorio?: string;
   colegio?:   string;
+  avatar_url?: string;
   [key: string]: unknown;
 }
 
@@ -30,6 +91,7 @@ interface EditingUser {
   puesto:     string;
   territorio: string;
   colegio:    string;
+  avatarUrl:  string;
   permsId:    string | null;
   perms:      Record<string, boolean>;
 }
@@ -82,6 +144,10 @@ export default function Accesos() {
   const [inviteTerritorio, setInviteTerritorio] = useState('');
   const [inviteColegio,    setInviteColegio]    = useState('');
   const [invitePerms,      setInvitePerms]      = useState<Record<string, boolean>>(DEFAULT_PERMISSIONS);
+  const [inviteAvatarFile, setInviteAvatarFile] = useState<File | null>(null);
+  const [inviteAvatarPreview, setInviteAvatarPreview] = useState<string | null>(null);
+  const [editAvatarFile,   setEditAvatarFile]   = useState<File | null>(null);
+  const [editAvatarPreview, setEditAvatarPreview] = useState<string | null>(null);
 
   const { data: rawPerms = [] } = useQuery({
     queryKey: ['userPermissions'],
@@ -108,13 +174,13 @@ export default function Accesos() {
 
   // ── Update permisos + datos del usuario ───────────────────────────────────
   const updatePermsMutation = useMutation({
-    mutationFn: async ({ email, perms, nombre, puesto, territorio, colegio }: {
+    mutationFn: async ({ email, perms, nombre, puesto, territorio, colegio, avatarUrl }: {
       email: string; perms: Record<string, boolean>;
-      nombre: string; puesto: string; territorio: string; colegio: string;
+      nombre: string; puesto: string; territorio: string; colegio: string; avatarUrl: string;
     }) => {
       const { error } = await supabase
         .from('user_permissions')
-        .update({ ...perms, nombre, puesto, territorio, colegio })
+        .update({ ...perms, nombre, puesto, territorio, colegio, avatar_url: avatarUrl || null })
         .eq('user_email', email);
       if (error) throw error;
     },
@@ -146,6 +212,10 @@ export default function Accesos() {
     e.preventDefault();
     setInviting(true);
     try {
+      let avatarUrl = '';
+      if (inviteAvatarFile) {
+        avatarUrl = await uploadAvatar(inviteEmail, inviteAvatarFile);
+      }
       const { error } = await supabase
         .from('user_permissions')
         .upsert({
@@ -154,6 +224,7 @@ export default function Accesos() {
           puesto:      invitePuesto,
           territorio:  inviteTerritorio,
           colegio:     inviteColegio,
+          avatar_url:  avatarUrl || null,
           ...invitePerms,
         }, { onConflict: 'user_email' });
 
@@ -178,22 +249,34 @@ export default function Accesos() {
     setInviteEmail(''); setInviteNombre(''); setInvitePuesto('');
     setInviteTerritorio(''); setInviteColegio('');
     setInvitePerms(DEFAULT_PERMISSIONS);
+    setInviteAvatarFile(null); setInviteAvatarPreview(null);
   };
 
   const openEdit = (u: PermRecord) => {
+    setEditAvatarFile(null); setEditAvatarPreview(null);
     setEditingUser({
       email:      String(u.user_email),
       nombre:     String(u.nombre ?? ''),
       puesto:     String(u.puesto ?? ''),
       territorio: String(u.territorio ?? ''),
       colegio:    String(u.colegio ?? ''),
+      avatarUrl:  String(u.avatar_url ?? ''),
       permsId:    u.id ?? null,
       perms:      { ...(u as Record<string, boolean>) },
     });
   };
 
-  const handleSaveEdit = () => {
+  const handleSaveEdit = async () => {
     if (!editingUser) return;
+    let avatarUrl = editingUser.avatarUrl;
+    if (editAvatarFile) {
+      try {
+        avatarUrl = await uploadAvatar(editingUser.email, editAvatarFile);
+      } catch (err: unknown) {
+        toast.error(err instanceof Error ? err.message : 'Error al subir la foto');
+        return;
+      }
+    }
     updatePermsMutation.mutate({
       email:      editingUser.email,
       perms:      editingUser.perms,
@@ -201,6 +284,7 @@ export default function Accesos() {
       puesto:     editingUser.puesto,
       territorio: editingUser.territorio,
       colegio:    editingUser.colegio,
+      avatarUrl,
     });
   };
 
@@ -268,16 +352,13 @@ export default function Accesos() {
               ) : (
                 filteredUsers.map(u => {
                   const activePerms = Object.keys(PERMISSIONS).filter(k => u[k]);
-                  const initials = (u.nombre ? String(u.nombre) : String(u.user_email)).slice(0, 2).toUpperCase();
                   return (
                     <div key={u.id} className="px-4 sm:px-5 py-3 sm:py-4 hover:bg-slate-50/50 transition-colors">
                       {/* Mobile card */}
                       <div className="md:hidden space-y-3">
                         <div className="flex items-center justify-between gap-2">
                           <div className="flex items-center gap-3 min-w-0">
-                            <div className="w-10 h-10 rounded-full bg-slate-900 flex items-center justify-center shrink-0">
-                              <span className="text-xs font-bold text-white">{initials}</span>
-                            </div>
+                            <AvatarCircle url={u.avatar_url} name={String(u.nombre || u.user_email)} size={40} />
                             <div className="min-w-0">
                               <p className="text-sm font-bold text-slate-900 truncate">{String(u.nombre || u.user_email)}</p>
                               <p className="text-xs text-slate-500 truncate">{String(u.user_email)}</p>
@@ -306,9 +387,7 @@ export default function Accesos() {
                       <div className="hidden md:grid grid-cols-12 gap-3 items-center">
                         {/* Nombre / Correo */}
                         <div className="col-span-3 flex items-center gap-3 min-w-0">
-                          <div className="w-9 h-9 rounded-full bg-slate-900 flex items-center justify-center shrink-0">
-                            <span className="text-xs font-bold text-white">{initials}</span>
-                          </div>
+                          <AvatarCircle url={u.avatar_url} name={String(u.nombre || u.user_email)} size={36} />
                           <div className="min-w-0">
                             <p className="text-sm font-bold text-slate-900 truncate">{String(u.nombre || '—')}</p>
                             <p className="text-[11px] text-slate-400 truncate">{String(u.user_email)}</p>
@@ -410,6 +489,13 @@ export default function Accesos() {
                 <div className="space-y-4 mb-6">
                   <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">Datos del usuario</p>
 
+                  <AvatarPicker
+                    currentUrl={null}
+                    previewUrl={inviteAvatarPreview}
+                    name={inviteNombre || inviteEmail}
+                    onSelect={(file) => { setInviteAvatarFile(file); setInviteAvatarPreview(URL.createObjectURL(file)); }}
+                  />
+
                   <div>
                     <label className="block text-xs font-bold text-slate-500 uppercase mb-1.5 tracking-wide">Nombre completo</label>
                     <div className="relative">
@@ -504,6 +590,13 @@ export default function Accesos() {
               {/* Datos editables */}
               <div className="space-y-4">
                 <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">Datos del usuario</p>
+
+                <AvatarPicker
+                  currentUrl={editingUser.avatarUrl}
+                  previewUrl={editAvatarPreview}
+                  name={editingUser.nombre || editingUser.email}
+                  onSelect={(file) => { setEditAvatarFile(file); setEditAvatarPreview(URL.createObjectURL(file)); }}
+                />
 
                 <div>
                   <label className="block text-xs font-bold text-slate-500 uppercase mb-1.5 tracking-wide">Nombre completo</label>
