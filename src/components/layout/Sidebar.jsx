@@ -11,7 +11,6 @@ import {
   X,
   LogOut, Wrench,
   Lock,
-  ClockAlert,
   CalendarDays,
   TicketCheck,
   ClipboardEdit,
@@ -19,10 +18,16 @@ import {
   BookOpen,
   FileSignature,
   BarChart3,
-  // --- ICONO AGREGADO ---
   BookUser, Package, Layers, ShieldAlert, ShieldCheck, ListTodo,
+  Network, Clock3,
 } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
+import SidebarAccordionGroup from './SidebarAccordionGroup';
+import { useAuth } from '@/lib/AuthContext';
+import { cn } from '@/lib/utils';
+import { useIsMobile } from '@/hooks/use-mobile';
+import { supabase } from '@/lib/supabaseClient';
+import { usePermissions } from '@/hooks/usePermissions';
 
 function NexusLink({ navLinkClass, handleNavClick, userEmail, isAdmin }) {
   const { data: badge = 0 } = useQuery({
@@ -52,11 +57,22 @@ function NexusLink({ navLinkClass, handleNavClick, userEmail, isAdmin }) {
     </Link>
   );
 }
-import { useAuth } from '@/lib/AuthContext';
-import { cn } from '@/lib/utils';
-import { useIsMobile } from '@/hooks/use-mobile';
-import { supabase } from '@/lib/supabaseClient';
-import { usePermissions } from '@/hooks/usePermissions';
+
+/** Item pendiente de implementación: se muestra deshabilitado, sin enlazar a una ruta 404. */
+function PendingItem({ icon: Icon, label }) {
+  return (
+    <div
+      title="Próximamente"
+      className="flex items-center gap-3 pl-[10px] pr-3 py-2.5 rounded-md text-sm font-medium border-l-2 border-transparent text-sidebar-foreground/30 cursor-not-allowed select-none"
+    >
+      <Icon className="w-[18px] h-[18px]" />
+      <span className="flex-1">{label}</span>
+      <span className="text-[9px] font-bold uppercase tracking-wide bg-white/[0.06] text-sidebar-foreground/45 px-1.5 py-0.5 rounded">
+        Próx.
+      </span>
+    </div>
+  );
+}
 
 export default function Sidebar({ isOpen, onToggle }) {
   const location    = useLocation();
@@ -71,9 +87,15 @@ export default function Sidebar({ isOpen, onToggle }) {
   const handleNavClick = () => { if (isMobile) onToggle(); };
   const handleLogout   = async () => { await signOut(); };
 
+  // Comparación "activa" compartida por clases y por el estado inicial de los acordeones.
+  const isActive = (path) => (
+    location.pathname === path ||
+    (path !== '/' && path !== '/solicitud' && path !== '/solicitudes' && location.pathname.startsWith(path))
+  );
+
   const navLinkClass = (path) => cn(
     'flex items-center gap-3 pl-[10px] pr-3 py-2.5 rounded-md text-sm font-medium transition-all duration-200 border-l-2',
-    location.pathname === path || (path !== '/' && path !== '/solicitud' && path !== '/solicitudes' && location.pathname.startsWith(path))
+    isActive(path)
       ? 'border-[#ED7102] bg-white/[0.06] text-white'
       : 'border-transparent text-sidebar-foreground/70 hover:text-sidebar-foreground hover:bg-sidebar-accent'
   );
@@ -86,6 +108,71 @@ export default function Sidebar({ isOpen, onToggle }) {
       ? 'border-[#ED7102] bg-white/[0.06] text-white'
       : 'border-transparent text-sidebar-foreground/70 hover:text-sidebar-foreground hover:bg-sidebar-accent'
   );
+
+  const renderLink = ({ to, icon: Icon, label }) => (
+    <Link key={to} to={to} onClick={handleNavClick} className={navLinkClass(to)}>
+      <Icon className="w-[18px] h-[18px]" />
+      {label}
+    </Link>
+  );
+
+  // ---------------------------------------------------------------------
+  // MÓDULO: OBRAS Y MANTENIMIENTO — visibilidad calculada según permisos
+  // ---------------------------------------------------------------------
+  const nexusVisible = isAdmin || can('ver_nexus');
+
+  const gGestionProyectos = [
+    { to: '/protocolo',    icon: BookOpen,      label: 'Protocolo de Proyectos', visible: true },
+    { to: '/solicitud',    icon: ClipboardEdit, label: 'Solicitud de Proyecto',  visible: can('ver_solicitud_proyecto') },
+    { to: '/solicitudes',  icon: Inbox,         label: 'Solicitudes Recibidas',  visible: isAdmin },
+    { to: '/anteproyectos',icon: FolderOpen,    label: 'Anteproyectos',          visible: can('ver_anteproyectos') },
+  ].filter(i => i.visible);
+
+  const gOperacion = [
+    { to: '/ticket-mas',    icon: FileSignature, label: 'Ticket MAS',            visible: isAdmin || can('ver_ticket_mas') || can('enviar_ticket_mas') },
+    { to: '/tickets',       icon: TicketCheck,   label: 'Tickets Registrados',   visible: can('ver_tickets') },
+    { to: '/proyectos',     icon: FolderKanban,  label: 'Proyectos',             visible: can('ver_proyectos') },
+    { to: '/levantamiento', icon: Layers,        label: 'Levantamiento Nal.',    visible: isAdmin || can('ver_levantamiento') },
+    { to: '/checklists',    icon: ClipboardCheck,label: 'Checklists',            visible: can('ver_checklists') },
+    { to: '/minutas',       icon: FileSignature, label: 'Minutas',               visible: isAdmin || can('ver_minutas') },
+  ].filter(i => i.visible);
+
+  const gFinanciero = [
+    { to: '/presupuestos', icon: BarChart3, label: 'Presupuesto vs Real', visible: isAdmin || can('ver_reportes') },
+    { to: '/insumos',      icon: Package,   label: 'Insumos',             visible: isAdmin || can('ver_insumos') },
+  ].filter(i => i.visible);
+
+  const gPlataformaResto = [
+    { to: '/calendario', icon: CalendarDays, label: 'Calendario', visible: can('ver_calendario') },
+    { to: '/directorio', icon: BookUser,     label: 'Directorio', visible: true },
+    { to: '/accesos',    icon: Lock,         label: 'Accesos',    visible: isAdmin },
+  ].filter(i => i.visible);
+  const gPlataformaVisible = nexusVisible || gPlataformaResto.length > 0;
+
+  const gCalidad = [
+    { to: '/reportes',  icon: FileText,     label: 'Reportes',  visible: can('ver_reportes') },
+    { to: '/auditoria', icon: ShieldAlert,  label: 'Auditoría', visible: isAdmin },
+  ].filter(i => i.visible);
+
+  // ---------------------------------------------------------------------
+  // MÓDULO: CUMPLIMIENTO Y PROTECCIÓN CIVIL (solo perfil de coordinación)
+  // ---------------------------------------------------------------------
+  const cControlNormativo = [
+    { to: '/cumplimiento/panel-general', icon: ShieldCheck, label: 'Panel General de Cumplimiento' },
+    { to: '/cumplimiento/documentos',    icon: FileText,    label: 'Validación de Vigencias' },
+  ];
+  const cGestionPC = [
+    { to: '/cumplimiento/alertas', icon: ShieldAlert, label: 'Inspecciones y Alertas Críticas' },
+  ];
+  const cGestionPCPending = [
+    { icon: Clock3, label: 'Jornada Presupuestal' },
+  ];
+  const cMonitoreo = [
+    { to: '/cumplimiento/seguimiento', icon: ListTodo, label: 'Seguimiento de Trámites' },
+  ];
+  const cMonitoreoPending = [
+    { icon: BarChart3, label: 'Generador de Reportes Ejecutivos' },
+  ];
 
   return (
     <>
@@ -116,7 +203,7 @@ export default function Sidebar({ isOpen, onToggle }) {
           isOpen ? 'translate-x-0' : '-translate-x-full'
         )}
       >
-        {/* Logo */}
+        {/* Logo + Selector de módulo */}
         <div className="p-6 border-b border-sidebar-border">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-lg bg-sidebar-primary flex items-center justify-center shadow-inner">
@@ -131,7 +218,7 @@ export default function Sidebar({ isOpen, onToggle }) {
                   <button
                     onClick={() => navigate('/')}
                     className={cn(
-                      'flex-1 text-center py-[5px] rounded text-[9.5px] font-bold transition-colors',
+                      'flex-1 text-center py-[5px] rounded text-[9.5px] font-bold transition-colors duration-200',
                       !modoCompliance ? 'bg-[#ED7102] text-white' : 'text-sidebar-foreground/50 hover:text-sidebar-foreground/80'
                     )}
                   >
@@ -140,7 +227,7 @@ export default function Sidebar({ isOpen, onToggle }) {
                   <button
                     onClick={() => navigate('/cumplimiento')}
                     className={cn(
-                      'flex-1 text-center py-[5px] rounded text-[9.5px] font-bold transition-colors',
+                      'flex-1 text-center py-[5px] rounded text-[9.5px] font-bold transition-colors duration-200',
                       modoCompliance ? 'bg-[#ED7102] text-white' : 'text-sidebar-foreground/50 hover:text-sidebar-foreground/80'
                     )}
                   >
@@ -157,178 +244,102 @@ export default function Sidebar({ isOpen, onToggle }) {
         </div>
 
         {/* Navegación */}
-        <nav className="flex-1 p-4 space-y-1 overflow-y-auto scrollbar-sidebar" aria-label="Menú principal">
+        <nav className="flex-1 p-3 space-y-0.5 overflow-y-auto scrollbar-sidebar" aria-label="Menú principal">
           {modoCompliance ? (
             <>
               <Link to="/cumplimiento" onClick={handleNavClick} className={navLinkClassExacta('/cumplimiento')}>
                 <LayoutDashboard className="w-[18px] h-[18px]" />
                 Dashboard
               </Link>
-              <Link to="/cumplimiento/panel-general" onClick={handleNavClick} className={navLinkClassExacta('/cumplimiento/panel-general')}>
-                <ShieldCheck className="w-[18px] h-[18px]" />
-                Panel General
-              </Link>
-              <Link to="/cumplimiento/documentos" onClick={handleNavClick} className={navLinkClassExacta('/cumplimiento/documentos')}>
-                <FileText className="w-[18px] h-[18px]" />
-                Documentos
-              </Link>
-              <Link to="/cumplimiento/alertas" onClick={handleNavClick} className={navLinkClassExacta('/cumplimiento/alertas')}>
-                <ShieldAlert className="w-[18px] h-[18px]" />
-                Alertas
-              </Link>
-              <Link to="/cumplimiento/seguimiento" onClick={handleNavClick} className={navLinkClassExacta('/cumplimiento/seguimiento')}>
-                <ListTodo className="w-[18px] h-[18px]" />
-                Seguimiento
-              </Link>
+
+              <div className="pt-2" />
+
+              <SidebarAccordionGroup
+                label="Control Normativo"
+                icon={ShieldCheck}
+                defaultOpen={cControlNormativo.some(i => isActive(i.to))}
+              >
+                {cControlNormativo.map(renderLink)}
+              </SidebarAccordionGroup>
+
+              <SidebarAccordionGroup
+                label="Gestión de Protección Civil"
+                icon={ShieldAlert}
+                defaultOpen={cGestionPC.some(i => isActive(i.to))}
+              >
+                {cGestionPC.map(renderLink)}
+                {cGestionPCPending.map((i) => <PendingItem key={i.label} {...i} />)}
+              </SidebarAccordionGroup>
+
+              <SidebarAccordionGroup
+                label="Monitoreo y Reportes"
+                icon={ListTodo}
+                defaultOpen={cMonitoreo.some(i => isActive(i.to))}
+              >
+                {cMonitoreo.map(renderLink)}
+                {cMonitoreoPending.map((i) => <PendingItem key={i.label} {...i} />)}
+              </SidebarAccordionGroup>
             </>
           ) : (
-          <>
-          {(isAdmin || can('ver_dashboard')) && (
-            <Link to="/" onClick={handleNavClick} className={navLinkClass('/')}>
-              <LayoutDashboard className="w-[18px] h-[18px]" />
-              Dashboard
-            </Link>
+            <>
+              {(isAdmin || can('ver_dashboard')) && (
+                <Link to="/" onClick={handleNavClick} className={navLinkClass('/')}>
+                  <LayoutDashboard className="w-[18px] h-[18px]" />
+                  Dashboard
+                </Link>
+              )}
+
+              <div className="pt-2" />
+
+              <SidebarAccordionGroup
+                label="Gestión de Proyectos"
+                icon={FolderKanban}
+                hidden={gGestionProyectos.length === 0}
+                defaultOpen={gGestionProyectos.some(i => isActive(i.to))}
+              >
+                {gGestionProyectos.map(renderLink)}
+              </SidebarAccordionGroup>
+
+              <SidebarAccordionGroup
+                label="Operación Diaria"
+                icon={ListTodo}
+                hidden={gOperacion.length === 0}
+                defaultOpen={gOperacion.some(i => isActive(i.to))}
+              >
+                {gOperacion.map(renderLink)}
+              </SidebarAccordionGroup>
+
+              <SidebarAccordionGroup
+                label="Control Financiero"
+                icon={BarChart3}
+                hidden={gFinanciero.length === 0}
+                defaultOpen={gFinanciero.some(i => isActive(i.to))}
+              >
+                {gFinanciero.map(renderLink)}
+              </SidebarAccordionGroup>
+
+              <SidebarAccordionGroup
+                label="Plataforma y Red"
+                icon={Network}
+                hidden={!gPlataformaVisible}
+                defaultOpen={isActive('/nexus') || gPlataformaResto.some(i => isActive(i.to))}
+              >
+                {nexusVisible && (
+                  <NexusLink navLinkClass={navLinkClass} handleNavClick={handleNavClick} userEmail={user?.email} isAdmin={isAdmin} />
+                )}
+                {gPlataformaResto.map(renderLink)}
+              </SidebarAccordionGroup>
+
+              <SidebarAccordionGroup
+                label="Control de Calidad"
+                icon={ClipboardCheck}
+                hidden={gCalidad.length === 0}
+                defaultOpen={gCalidad.some(i => isActive(i.to))}
+              >
+                {gCalidad.map(renderLink)}
+              </SidebarAccordionGroup>
+            </>
           )}
-
-          {/* 2 — Protocolo de Proyectos */}
-          <Link to="/protocolo" onClick={handleNavClick} className={navLinkClass('/protocolo')}>
-            <BookOpen className="w-[18px] h-[18px]" />
-            Protocolo de Proyectos
-          </Link>
-
-          {/* 3 — Solicitud de Proyecto */}
-          {can('ver_solicitud_proyecto') && (
-            <Link to="/solicitud" onClick={handleNavClick} className={navLinkClass('/solicitud')}>
-              <ClipboardEdit className="w-[18px] h-[18px]" />
-              Solicitud de Proyecto
-            </Link>
-          )}
-
-          {/* 4 — Solicitudes Recibidas */}
-          {isAdmin && (
-            <Link to="/solicitudes" onClick={handleNavClick} className={navLinkClass('/solicitudes')}>
-              <Inbox className="w-[18px] h-[18px]" />
-              Solicitudes Recibidas
-            </Link>
-          )}
-
-          {/* 5 — Ticket MAS */}
-          {(isAdmin || can('ver_ticket_mas') || can('enviar_ticket_mas')) && (
-            <Link to="/ticket-mas" onClick={handleNavClick} className={navLinkClass('/ticket-mas')}>
-              <FileSignature className="w-[18px] h-[18px]" />
-              Ticket MAS
-            </Link>
-          )}
-
-          {/* 6 — Tickets Registrados */}
-          {can('ver_tickets') && (
-            <Link to="/tickets" onClick={handleNavClick} className={navLinkClass('/tickets')}>
-              <TicketCheck className="w-[18px] h-[18px]" />
-              Tickets Registrados
-            </Link>
-          )}
-
-          {/* 7 — Proyectos */}
-          {can('ver_proyectos') && (
-            <Link to="/proyectos" onClick={handleNavClick} className={navLinkClass('/proyectos')}>
-              <FolderKanban className="w-[18px] h-[18px]" />
-              Proyectos
-            </Link>
-          )}
-
-          {/* 8 — Presupuesto vs Real */}
-          {(isAdmin || can('ver_reportes')) && (
-            <Link to="/presupuestos" onClick={handleNavClick} className={navLinkClass('/presupuestos')}>
-              <BarChart3 className="w-[18px] h-[18px]" />
-              Presupuesto vs Real
-            </Link>
-          )}
-
-          {/* 9 — Anteproyectos */}
-          {can('ver_anteproyectos') && (
-            <Link to="/anteproyectos" onClick={handleNavClick} className={navLinkClass('/anteproyectos')}>
-              <FolderOpen className="w-[18px] h-[18px]" />
-              Anteproyectos
-            </Link>
-          )}
-
-          {/* 10 — Levantamiento Nal. */}
-          {(isAdmin || can('ver_levantamiento')) && (
-            <Link to="/levantamiento" onClick={handleNavClick} className={navLinkClass('/levantamiento')}>
-              <Layers className="w-[18px] h-[18px]" />
-              Levantamiento Nal.
-            </Link>
-          )}
-
-          {/* 11 — Minutas */}
-          {(isAdmin || can('ver_minutas')) && (
-            <Link to="/minutas" onClick={handleNavClick} className={navLinkClass('/minutas')}>
-              <FileSignature className="w-[18px] h-[18px]" />
-              Minutas
-            </Link>
-          )}
-
-          {/* 12 — NEXUS */}
-          {(isAdmin || can('ver_nexus')) && (
-            <NexusLink navLinkClass={navLinkClass} handleNavClick={handleNavClick} userEmail={user?.email} isAdmin={isAdmin} />
-          )}
-
-          {/* 13 — Checklists */}
-          {can('ver_checklists') && (
-            <Link to="/checklists" onClick={handleNavClick} className={navLinkClass('/checklists')}>
-              <ClipboardCheck className="w-[18px] h-[18px]" />
-              Checklists
-            </Link>
-          )}
-
-          {/* 14 — Calendario */}
-          {can('ver_calendario') && (
-            <Link to="/calendario" onClick={handleNavClick} className={navLinkClass('/calendario')}>
-              <CalendarDays className="w-[18px] h-[18px]" />
-              Calendario
-            </Link>
-          )}
-
-          {/* 15 — Insumos */}
-          {(isAdmin || can('ver_insumos')) && (
-            <Link to="/insumos" onClick={handleNavClick} className={navLinkClass('/insumos')}>
-              <Package className="w-[18px] h-[18px]" />
-              Insumos
-            </Link>
-          )}
-
-          {/* 16 — Reportes */}
-          {can('ver_reportes') && (
-            <Link to="/reportes" onClick={handleNavClick} className={navLinkClass('/reportes')}>
-              <FileText className="w-[18px] h-[18px]" />
-              Reportes
-            </Link>
-          )}
-
-          {/* 17 — Directorio */}
-          <Link to="/directorio" onClick={handleNavClick} className={navLinkClass('/directorio')}>
-            <BookUser className="w-[18px] h-[18px]" />
-            Directorio
-          </Link>
-
-          {/* 18 — Accesos */}
-          {isAdmin && (
-            <Link to="/accesos" onClick={handleNavClick} className={navLinkClass('/accesos')}>
-              <Lock className="w-[18px] h-[18px]" />
-              Accesos
-            </Link>
-          )}
-
-          {/* 19 — Auditoría */}
-          {isAdmin && (
-            <Link to="/auditoria" onClick={handleNavClick} className={navLinkClass('/auditoria')}>
-              <ShieldAlert className="w-[18px] h-[18px]" />
-              Auditoría
-            </Link>
-          )}
-          </>
-          )}
-
         </nav>
 
         {/* Footer */}

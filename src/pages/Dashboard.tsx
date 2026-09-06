@@ -1,10 +1,12 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import { db } from '@/lib/db';
 import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
-import {FolderKanban, ClipboardCheck, Wrench, AlertTriangle, ArrowRight,
+import {FolderKanban, ClipboardCheck, Wrench, AlertTriangle,
   Building2, MapPin, TicketCheck, FolderOpen, CalendarDays, ClockAlert,
-  ChevronRight, Activity, type LucideIcon, BookOpen, Bell, BarChart3 } from 'lucide-react';
+  ChevronRight, Activity, type LucideIcon, BookOpen, Bell, BarChart3, ShieldAlert } from 'lucide-react';
+import { formatDistanceToNow } from 'date-fns';
+import { es } from 'date-fns/locale';
 import { supabase } from '@/lib/supabaseClient';
 import StatusBadge from '@/components/shared/StatusBadge';
 import { COLEGIOS, type Colegio } from '@/lib/colegios';
@@ -323,6 +325,37 @@ export default function Dashboard() {
 
   const recentProjects = useMemo(() => projects.slice(0, 5), [projects]);
 
+  // ─── Filtro de la tabla "Proyectos Actuales" (solo UI, misma data de `projects`) ──
+  const [tableStatusFilter, setTableStatusFilter] = useState<string>('todos');
+  const tableProjects = useMemo(() => {
+    const filtrados = tableStatusFilter === 'todos'
+      ? projects
+      : projects.filter(p => p.status === tableStatusFilter);
+    return filtrados.slice(0, 8);
+  }, [projects, tableStatusFilter]);
+
+  // ─── Timeline (estilo Gantt) — a partir de las fechas reales de `recentProjects` ──
+  const ganttData = useMemo(() => {
+    const hoy = new Date();
+    const conFechas = recentProjects
+      .filter(p => p.created_at)
+      .map(p => ({
+        id: p.id,
+        name: (p.name ?? 'Sin nombre').length > 22 ? `${(p.name ?? '').slice(0, 22)}…` : (p.name ?? 'Sin nombre'),
+        start: new Date(p.created_at as string),
+        end: p.completado_at ? new Date(p.completado_at) : hoy,
+        color: STATUS_COLORS[p.status ?? ''] ?? '#8F9DAE',
+      }));
+    if (conFechas.length === 0) return [];
+    const minStart = new Date(Math.min(...conFechas.map(p => p.start.getTime())));
+    return conFechas.map(p => ({
+      name: p.name,
+      offset: Math.max(0, Math.round((p.start.getTime() - minStart.getTime()) / 86400000)),
+      duration: Math.max(1, Math.round((p.end.getTime() - p.start.getTime()) / 86400000)),
+      color: p.color,
+    }));
+  }, [recentProjects]);
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center py-20">
@@ -361,6 +394,110 @@ export default function Dashboard() {
         </div>
         <div className="hidden sm:flex items-center justify-center bg-white rounded-xl p-3 shadow-sm border border-slate-100">
           <img src="/logo.png" alt="Mano Amiga" className="h-16 w-auto object-contain" />
+        </div>
+      </div>
+
+      {/* ─── Resumen rápido (4 tarjetas) ─────────────────────────────────────── */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        {[
+          { label: 'Obras Activas',           value: stats.activeProjects,                                  to: '/proyectos' },
+          { label: 'Mantenimientos Pendientes', value: colegiosSinMtto.length,                              to: '/calendario' },
+          { label: 'Tickets Abiertos',         value: stats.openTickets,                                     to: '/tickets' },
+          { label: 'Alertas de PC',            value: cumplimientoStats.vencidos + cumplimientoStats.porExpirar, to: '/cumplimiento' },
+        ].map(({ label, value, to }) => (
+          <Link key={label} to={to} className="bg-white rounded-xl border border-slate-200 p-5 hover:shadow-md hover:border-slate-300 transition-all duration-200">
+            <p className="text-3xl font-display font-semibold text-slate-900 leading-none mb-2">{value}</p>
+            <p className="text-xs font-semibold text-slate-500">{label}</p>
+          </Link>
+        ))}
+      </div>
+
+      {/* ─── Proyectos Actuales (tabla) + Timeline ───────────────────────────── */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+          <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100">
+            <h2 className="text-sm font-bold text-slate-800 uppercase tracking-tight">Proyectos Actuales</h2>
+            <select
+              value={tableStatusFilter}
+              onChange={(e) => setTableStatusFilter(e.target.value)}
+              className="text-xs font-semibold text-slate-600 border border-slate-200 rounded-lg px-2 py-1.5 bg-white"
+            >
+              <option value="todos">Todos los proyectos</option>
+              {Object.entries(STATUS_LABELS).map(([value, label]) => (
+                <option key={value} value={value}>{label}</option>
+              ))}
+            </select>
+          </div>
+          {tableProjects.length === 0 ? (
+            <p className="p-5 text-sm text-slate-400 text-center">No hay proyectos registrados</p>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="text-left text-[10px] font-bold text-slate-400 uppercase tracking-wide">
+                    <th className="px-5 py-2">Nombre</th>
+                    <th className="px-3 py-2">Status</th>
+                    <th className="px-3 py-2">% Completado</th>
+                    <th className="px-5 py-2">Fecha</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-50">
+                  {tableProjects.map(project => (
+                    <tr key={project.id} className="hover:bg-slate-50 transition-colors">
+                      <td className="px-5 py-3">
+                        <Link to={`/proyectos/${project.id}`} className="font-semibold text-slate-800 hover:text-blue-600 transition-colors">
+                          {project.name ?? 'Sin nombre'}
+                        </Link>
+                        <p className="text-xs text-slate-400">{project.colegio ?? project.location ?? 'Sin ubicación'}</p>
+                      </td>
+                      <td className="px-3 py-3"><StatusBadge status={project.status} /></td>
+                      <td className="px-3 py-3 text-slate-600">{typeof project.progress === 'number' ? `${project.progress}%` : '—'}</td>
+                      <td className="px-5 py-3 text-slate-500 text-xs">
+                        {project.completado_at
+                          ? new Date(project.completado_at).toLocaleDateString('es-MX')
+                          : project.created_at
+                            ? new Date(project.created_at).toLocaleDateString('es-MX')
+                            : '—'}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+
+        <div className="bg-white rounded-xl border border-slate-200 p-5 relative overflow-hidden">
+          <h2 className="text-sm font-bold text-slate-800 uppercase tracking-tight mb-4">Cronograma — Proyectos Recientes</h2>
+
+          {/* Alerta flotante de Protección Civil — usa cumplimientoStats ya calculado */}
+          {cumplimientoStats.porExpirar > 0 && (
+            <Link to="/cumplimiento/documentos"
+              className="absolute top-4 right-4 z-10 bg-white border border-red-200 rounded-lg shadow-sm px-3 py-2 flex items-start gap-2 max-w-[190px] hover:shadow-md transition-shadow">
+              <ShieldAlert className="w-4 h-4 text-red-600 shrink-0 mt-0.5" />
+              <div className="min-w-0">
+                <p className="text-[11px] font-bold text-red-700 leading-tight">Alerta Protección Civil</p>
+                <p className="text-[10px] text-red-500 leading-tight mt-0.5">
+                  {cumplimientoStats.porExpirar} documento{cumplimientoStats.porExpirar !== 1 ? 's' : ''} por vencer
+                </p>
+              </div>
+            </Link>
+          )}
+
+          {ganttData.length === 0 ? (
+            <div className="flex items-center justify-center h-48 text-sm text-slate-400">Sin proyectos recientes con fecha</div>
+          ) : (
+            <ResponsiveContainer width="100%" height={Math.max(180, ganttData.length * 44)}>
+              <BarChart data={ganttData} layout="vertical" margin={{ top: 5, right: 10, left: 0, bottom: 5 }}>
+                <XAxis type="number" tick={{ fontSize: 10 }} tickFormatter={(v) => `${v}d`} />
+                <YAxis type="category" dataKey="name" tick={{ fontSize: 11 }} width={140} />
+                <Bar dataKey="offset" stackId="a" fill="transparent" />
+                <Bar dataKey="duration" stackId="a" radius={[0, 4, 4, 0]}>
+                  {ganttData.map((entry, i) => <Cell key={i} fill={entry.color} />)}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          )}
         </div>
       </div>
 
@@ -676,70 +813,38 @@ export default function Dashboard() {
         )}
       </div>
 
-      {/* ─── Proyectos recientes + Actividad ──────────────────────────────────── */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <div className="bg-white rounded-xl border border-slate-200">
-          <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100">
-            <h2 className="text-sm font-bold text-slate-800 uppercase tracking-tight flex items-center gap-2">
-              <FolderKanban className="w-4 h-4 text-blue-600" /> Proyectos Recientes
-            </h2>
-            <Link to="/proyectos" className="text-xs text-blue-600 font-semibold flex items-center gap-1 hover:underline">
-              Ver todos <ArrowRight className="w-3 h-3" />
-            </Link>
-          </div>
-          <div className="divide-y divide-slate-50">
-            {recentProjects.length === 0 && (
-              <p className="p-5 text-sm text-slate-400 text-center">No hay proyectos registrados</p>
-            )}
-            {recentProjects.map(project => (
-              <Link key={project.id} to={`/proyectos/${project.id}`}
-                className="flex items-center justify-between px-5 py-3 hover:bg-slate-50 transition-colors group">
-                <div className="min-w-0 flex-1">
-                  <p className="text-sm font-semibold text-slate-800 truncate">{project.name}</p>
-                  <p className="text-xs text-slate-400">{project.colegio ?? project.location ?? 'Sin ubicación'}</p>
-                  {typeof project.progress === 'number' && (
-                    <div className="mt-1.5 h-1.5 bg-slate-100 rounded-full w-32">
-                      <div className="h-full bg-blue-500 rounded-full" style={{ width: `${project.progress}%` }} />
-                    </div>
-                  )}
-                </div>
-                <div className="flex items-center gap-2 ml-3">
-                  <StatusBadge status={project.status} />
-                  <ChevronRight className="w-3 h-3 text-slate-300 opacity-0 group-hover:opacity-100" />
-                </div>
-              </Link>
-            ))}
-          </div>
+      {/* ─── Actividad Reciente (feed) ────────────────────────────────────────── */}
+      <div className="bg-white rounded-xl border border-slate-200">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100">
+          <h2 className="text-sm font-bold text-slate-800 uppercase tracking-tight flex items-center gap-2">
+            <Activity className="w-4 h-4 text-purple-600" /> Actividad Reciente
+          </h2>
         </div>
-
-        <div className="bg-white rounded-xl border border-slate-200">
-          <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100">
-            <h2 className="text-sm font-bold text-slate-800 uppercase tracking-tight flex items-center gap-2">
-              <Activity className="w-4 h-4 text-purple-600" /> Actividad Reciente
-            </h2>
-          </div>
-          <div className="divide-y divide-slate-50">
-            {recentActivity.length === 0 && (
-              <p className="p-5 text-sm text-slate-400 text-center">Sin actividad reciente</p>
-            )}
-            {recentActivity.map(item => {
-              const Icon = typeIcon[item.type] ?? Activity;
-              const col  = typeColor[item.type] ?? 'bg-slate-100 text-slate-500';
-              return (
-                <Link key={item.id} to={item.to ?? '#'}
-                  className="flex items-center gap-3 px-5 py-3 hover:bg-slate-50 transition-colors group">
-                  <div className={`w-7 h-7 rounded-lg ${col} flex items-center justify-center shrink-0`}>
-                    <Icon className="w-3.5 h-3.5" />
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <p className="text-sm font-semibold text-slate-800 truncate">{item.label}</p>
-                    <p className="text-xs text-slate-400">{item.sub || item.type}</p>
-                  </div>
-                  <ChevronRight className="w-3 h-3 text-slate-300 opacity-0 group-hover:opacity-100 shrink-0" />
-                </Link>
-              );
-            })}
-          </div>
+        <div className="divide-y divide-slate-50">
+          {recentActivity.length === 0 && (
+            <p className="p-5 text-sm text-slate-400 text-center">Sin actividad reciente</p>
+          )}
+          {recentActivity.map(item => {
+            const Icon = typeIcon[item.type] ?? Activity;
+            const col  = typeColor[item.type] ?? 'bg-slate-100 text-slate-500';
+            let tiempo = '';
+            try {
+              tiempo = item.date ? formatDistanceToNow(new Date(item.date), { addSuffix: true, locale: es }) : '';
+            } catch { tiempo = ''; }
+            return (
+              <Link key={item.id} to={item.to ?? '#'}
+                className="flex items-center gap-3 px-5 py-3 hover:bg-slate-50 transition-colors group">
+                <div className={`w-9 h-9 rounded-full ${col} flex items-center justify-center shrink-0`}>
+                  <Icon className="w-4 h-4" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-semibold text-slate-800 truncate">{item.label}</p>
+                  <p className="text-xs text-slate-400">{item.sub || item.type}{tiempo ? ` · ${tiempo}` : ''}</p>
+                </div>
+                <ChevronRight className="w-3 h-3 text-slate-300 opacity-0 group-hover:opacity-100 shrink-0" />
+              </Link>
+            );
+          })}
         </div>
       </div>
 
