@@ -219,7 +219,12 @@ export default function ProjectDetail() {
     antes: [], durante: [], despues: [],
   });
 
-  const limpiarNombre = (s: string) => s.replace(/[/\\:*?"<>|]/g, '_');
+  const limpiarNombre = (s: string) => s
+    .normalize('NFC')
+    .replace(/[/\\:*?"<>|]/g, '_')
+    .trim()
+    .replace(/[. ]+$/, '')   // OneDrive rechaza nombres que terminan en espacio o punto
+    .replace(/^[. ]+/, '');
 
   const subirEvidenciaFotografica = async () => {
     const totalArchivos = evidenciaFiles.antes.length + evidenciaFiles.durante.length + evidenciaFiles.despues.length;

@@ -28,6 +28,18 @@ const readOnlyClass = "w-full px-2 py-1.5 border border-slate-300 text-sm bg-sla
 const labelClass    = "text-[11px] font-bold text-slate-600 uppercase tracking-wide";
 const selectClass   = "w-full px-2 py-1.5 border border-slate-400 text-sm focus:ring-1 focus:ring-slate-700 focus:outline-none bg-white text-slate-900 rounded";
 
+// Limpia un segmento de nombre de carpeta/archivo para OneDrive: quita caracteres
+// inválidos y evita que el truncado a maxLen deje espacios o puntos al final
+// (SharePoint/OneDrive rechaza nombres que terminan o empiezan así).
+const limpiarSegmento = (s: string, maxLen = 60) => s
+  .normalize('NFC')
+  .slice(0, maxLen)
+  .replace(/[/\\:*?"<>|]/g, '_')
+  .trim()
+  .replace(/[. ]+$/, '')
+  .replace(/^[. ]+/, '');
+
+
 // Esqueleto fijo (nombre, código interno, territorio) para los 3 renglones de
 // oficina/FMA que hoy no están individualizados en Directorio. Los 20 colegios
 // reales se generan dinámicamente desde `directorio` en buildColegiosTicket().
@@ -559,9 +571,9 @@ export default function TicketMAS() {
     setCreandoExpediente(true);
     try {
       const anio = t.created_at ? new Date(t.created_at).getFullYear() : new Date().getFullYear();
-      const colegioCarpeta  = (t.colegio ?? 'SIN_COLEGIO').replace(/[/\\:*?"<>|]/g, '_');
+      const colegioCarpeta  = limpiarSegmento(t.colegio ?? 'SIN_COLEGIO', 80);
       const folioCarpeta    = t.folio ?? 'SIN_FOLIO';
-      const nombreCarpeta   = (t.nombre_proyecto ?? t.descripcion ?? 'Sin nombre').slice(0, 60).replace(/[/\\:*?"<>|]/g, '_');
+      const nombreCarpeta   = limpiarSegmento(t.nombre_proyecto ?? t.descripcion ?? 'Sin nombre');
       const raiz = `Expedientes/${anio}/${colegioCarpeta}/${folioCarpeta} - ${nombreCarpeta}`;
 
       const { data: sessionData } = await supabase.auth.getSession();
@@ -595,7 +607,8 @@ export default function TicketMAS() {
         `${raiz}/ECO/06 - Fotografías/Después`,
       ];
       for (const carpeta of subcarpetas) {
-        await spUp(placeholder, carpeta, '.keep');
+        const r = await spUp(placeholder, carpeta, '.keep');
+        if (r?.error) throw new Error(`No se pudo crear "${carpeta}": ${r.error}`);
       }
 
       // Subir archivos que el usuario adjuntó
@@ -751,9 +764,9 @@ export default function TicketMAS() {
 
       // ── Crear estructura de expediente en OneDrive + subir PDF autorizado ────────
       try {
-        const colegioCarpeta = updatedRow.colegio?.replace(/[/\\:*?"<>|]/g, '_') ?? 'SIN_COLEGIO';
+        const colegioCarpeta = limpiarSegmento(updatedRow.colegio ?? 'SIN_COLEGIO', 80);
         const folioCarpeta   = updatedRow.folio ?? 'SIN_FOLIO';
-        const descripCarpeta = (updatedRow.nombre_proyecto ?? updatedRow.descripcion ?? 'Sin nombre').slice(0, 60).replace(/[/\\:*?"<>|]/g, '_');
+        const descripCarpeta = limpiarSegmento(updatedRow.nombre_proyecto ?? updatedRow.descripcion ?? 'Sin nombre');
         const anioAuth = new Date().getFullYear();
         const raiz = `Expedientes/${anioAuth}/${colegioCarpeta}/${folioCarpeta} - ${descripCarpeta}`;
 
@@ -797,6 +810,7 @@ export default function TicketMAS() {
           const archivo = partes.pop()!;
           const carpeta = partes.join('/');
           const r = await spUpload(placeholder, carpeta, archivo);
+          if (r?.error) throw new Error(`No se pudo crear "${carpeta}": ${r.error}`);
           // Capturar la primera URL que retorne para derivar la raíz
           if (!expedienteUrl && r?.webUrl) expedienteUrl = r.webUrl;
         }
@@ -823,7 +837,8 @@ export default function TicketMAS() {
       } catch (expErr) {
         console.error('Error creando expediente en OneDrive:', expErr);
         // No bloqueamos la autorización si falla el expediente
-        toast.warning('Ticket autorizado, pero no se pudo crear el expediente en OneDrive.');
+        const detalle = expErr instanceof Error ? expErr.message : '';
+        toast.warning('Ticket autorizado, pero no se pudo crear el expediente en OneDrive.' + (detalle ? ` (${detalle})` : ''));
       }
 
       // Refetch inmediato desde el servidor
@@ -922,9 +937,9 @@ export default function TicketMAS() {
       if (cancelModal.expediente_url && cancelModal.estatus === 'autorizado') {
         try {
           const anio           = cancelModal.created_at ? new Date(cancelModal.created_at).getFullYear() : new Date().getFullYear();
-          const colegioCarpeta = (cancelModal.colegio ?? 'SIN_COLEGIO').replace(/[/\\:*?"<>|]/g, '_');
+          const colegioCarpeta = limpiarSegmento(cancelModal.colegio ?? 'SIN_COLEGIO', 80);
           const folioCarpeta   = cancelModal.folio ?? 'SIN_FOLIO';
-          const nombreCarpeta  = (cancelModal.nombre_proyecto ?? cancelModal.descripcion ?? 'Sin nombre').slice(0, 60).replace(/[/\\:*?"<>|]/g, '_');
+          const nombreCarpeta  = limpiarSegmento(cancelModal.nombre_proyecto ?? cancelModal.descripcion ?? 'Sin nombre');
           const carpetaActual  = `Expedientes/${anio}/${colegioCarpeta}/${folioCarpeta} - ${nombreCarpeta}`;
           const nuevoNombre    = `${folioCarpeta} - ${nombreCarpeta} — CANCELADO`;
           const renombrado     = await renameCarpetaSharePoint(carpetaActual, nuevoNombre);
