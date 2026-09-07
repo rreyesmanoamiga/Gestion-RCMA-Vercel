@@ -37,7 +37,7 @@ interface Project {
   start_date?: string; progress?: number; folio?: string;
   territorio?: string; colegio?: string; eco?: string;
   notes?: string; budget?: number; end_date?: string;
-  ticket_number?: number; costo_real?: number | null;
+  ticket_number?: number; costo_real?: number | null; motivo_sobrecosto?: string | null;
 }
 
 export default function ProjectDetail() {
@@ -52,6 +52,7 @@ export default function ProjectDetail() {
   const [showEdit, setShowEdit] = useState(false);
   const [showCostoReal, setShowCostoReal] = useState(false);
   const [costoRealInput, setCostoRealInput] = useState('');
+  const [motivoSobrecostoInput, setMotivoSobrecostoInput] = useState('');
 
   const { data, isLoading, isError } = useQuery({
     queryKey: ['projects', id],
@@ -208,7 +209,15 @@ export default function ProjectDetail() {
   const handleGuardarCostoReal = () => {
     const valor = parseFloat(parseMXN(costoRealInput));
     if (isNaN(valor) || valor <= 0) { toast.error('Ingresa un monto válido'); return; }
-    updateMutation.mutate({ costo_real: valor });
+    const esSobrecostoNuevo = tienePresupuesto && valor > project.budget!;
+    if (esSobrecostoNuevo && !motivoSobrecostoInput.trim()) {
+      toast.error('El costo real supera el presupuesto — escribe el motivo del sobrecosto antes de guardar.');
+      return;
+    }
+    updateMutation.mutate({
+      costo_real: valor,
+      motivo_sobrecosto: esSobrecostoNuevo ? motivoSobrecostoInput.trim() : null,
+    });
   };
 
   // ── Evidencia Fotográfica (Antes / Durante / Después) ─────────────────────
@@ -431,7 +440,7 @@ export default function ProjectDetail() {
               Presupuesto vs Costo Real
             </h3>
             {!showCostoReal && (
-              <button onClick={() => { setShowCostoReal(true); setCostoRealInput(project.costo_real ? String(project.costo_real) : ''); }}
+              <button onClick={() => { setShowCostoReal(true); setCostoRealInput(project.costo_real ? String(project.costo_real) : ''); setMotivoSobrecostoInput(project.motivo_sobrecosto ?? ''); }}
                 className="text-xs font-bold text-blue-600 hover:underline flex items-center gap-1">
                 <Pencil className="w-3 h-3" />
                 {tieneCostoReal ? 'Editar costo real' : 'Registrar costo real'}
@@ -462,6 +471,21 @@ export default function ProjectDetail() {
                     <X className="w-4 h-4" />
                   </button>
                 </div>
+
+                {tienePresupuesto && parseFloat(parseMXN(costoRealInput) || '0') > project.budget! && (
+                  <div className="mt-3 pt-3 border-t border-blue-200">
+                    <label className="block text-xs font-bold text-red-600 uppercase mb-1.5 tracking-wide">
+                      Motivo del sobrecosto *
+                    </label>
+                    <textarea
+                      className={inputClass + ' resize-none'}
+                      rows={2}
+                      placeholder="Explica por qué el costo real superó el presupuesto inicial..."
+                      value={motivoSobrecostoInput}
+                      onChange={e => setMotivoSobrecostoInput(e.target.value)}
+                    />
+                  </div>
+                )}
               </div>
             )}
 
@@ -519,6 +543,14 @@ export default function ProjectDetail() {
                 )}
               </div>
             </div>
+
+            {/* Motivo del sobrecosto (si aplica y ya se guardó) */}
+            {esSobrecosto && project.motivo_sobrecosto && (
+              <div className="bg-red-50 border border-red-200 rounded-xl p-4">
+                <p className="text-[10px] font-bold text-red-500 uppercase tracking-widest mb-1">Motivo del sobrecosto</p>
+                <p className="text-sm text-red-800">{project.motivo_sobrecosto}</p>
+              </div>
+            )}
 
             {/* Barra visual */}
             {tienePresupuesto && tieneCostoReal && (

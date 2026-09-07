@@ -35,6 +35,7 @@ interface FormData {
   notes:          string;
   budget:         string;
   costo_real:     string;
+  motivo_sobrecosto: string;
   ticket_number:  string;
 }
 
@@ -53,6 +54,7 @@ const INITIAL_FORM: FormData = {
   notes:          '',
   budget:         '',
   costo_real:     '',
+  motivo_sobrecosto: '',
   ticket_number:  '',
 };
 
@@ -85,6 +87,7 @@ export default function ProjectForm({ open, onClose, onSubmit, project = null }:
         notes:         String(project.notes          ?? ''),
         budget:        project.budget != null ? String(project.budget) : '',
         costo_real:    project.costo_real != null ? String(project.costo_real) : '',
+        motivo_sobrecosto: String(project.motivo_sobrecosto ?? ''),
         ticket_number: project.ticket_number != null ? String(project.ticket_number) : '',
       });
     } else {
@@ -102,6 +105,13 @@ export default function ProjectForm({ open, onClose, onSubmit, project = null }:
       toast.error('Captura el Costo Real Final antes de marcar el proyecto como Completado — así el correo de aviso sale con el dato correcto.');
       return;
     }
+    const presupuestoNum = formData.budget ? parseFloat(formData.budget) : null;
+    const costoRealNum   = formData.costo_real ? parseFloat(formData.costo_real) : null;
+    const esSobrecosto   = presupuestoNum != null && costoRealNum != null && costoRealNum > presupuestoNum;
+    if (formData.status === 'completado' && esSobrecosto && !formData.motivo_sobrecosto.trim()) {
+      toast.error('El costo real supera el presupuesto — escribe el motivo del sobrecosto antes de completar el proyecto.');
+      return;
+    }
     const folio = (formData.ticket_number as string)?.trim() || null;
     onSubmit({
       name:          formData.name,
@@ -116,8 +126,9 @@ export default function ProjectForm({ open, onClose, onSubmit, project = null }:
       end_date:      formData.end_date   || null,
       progress:      formData.progress   || 0,
       notes:         formData.notes,
-      budget:        formData.budget ? parseFloat(formData.budget) : null,
-      costo_real:    formData.costo_real ? parseFloat(formData.costo_real) : null,
+      budget:        presupuestoNum,
+      costo_real:    costoRealNum,
+      motivo_sobrecosto: esSobrecosto ? formData.motivo_sobrecosto.trim() : null,
       ticket_number: null,
       folio,
       type:          DEFAULT_PROJECT_TYPE,
@@ -228,6 +239,19 @@ export default function ProjectForm({ open, onClose, onSubmit, project = null }:
               <p className="text-[11px] text-emerald-700 mt-1">
                 Requerido para completar el proyecto — este dato se incluye en el correo de aviso que se manda al cerrar.
               </p>
+
+              {formData.budget && formData.costo_real && parseFloat(formData.costo_real) > parseFloat(formData.budget) && (
+                <div className="mt-3 pt-3 border-t border-emerald-200">
+                  <label className={labelClass + ' mt-0 text-red-600'}>Motivo del sobrecosto *</label>
+                  <textarea
+                    className={inputClass + ' resize-none'}
+                    rows={2}
+                    placeholder="Explica por qué el costo real superó el presupuesto inicial..."
+                    value={formData.motivo_sobrecosto}
+                    onChange={e => setFormData(prev => ({ ...prev, motivo_sobrecosto: e.target.value }))}
+                  />
+                </div>
+              )}
             </div>
           )}
 
