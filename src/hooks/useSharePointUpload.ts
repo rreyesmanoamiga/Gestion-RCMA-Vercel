@@ -9,6 +9,8 @@ interface UploadOptions {
   territorio?: string;
   colegio?:    string;
   referencia?: string;
+  // Solo para modulo: 'Insumos' — separa los documentos en 3 subcarpetas claras.
+  categoria?:  'Requisiciones' | 'Cotizaciones' | 'Autorizaciones';
 }
 
 interface UploadResult {
@@ -179,7 +181,7 @@ export function useSharePointUpload() {
       if (options.modulo === 'Evidencias') {
         carpeta = `Evidencias/${options.territorio ?? 'SIN_TERRITORIO'}/${options.colegio ?? 'SIN_COLEGIO'}/${options.referencia ?? 'General'}/${mes}`;
       } else if (options.modulo === 'Insumos') {
-        carpeta = `Insumos/${anio}/${options.referencia ?? 'SIN_FOLIO'}`;
+        carpeta = `Insumos/${options.categoria ?? 'Cotizaciones'}/${anio}/${options.referencia ?? 'SIN_FOLIO'}`;
       } else if (options.modulo === 'Anteproyectos') {
         carpeta = `Anteproyectos/${anio}/${options.colegio ?? 'SIN_COLEGIO'}/${options.referencia ?? 'SIN_NOMBRE'}`;
       } else if (options.modulo === 'Reportes') {
