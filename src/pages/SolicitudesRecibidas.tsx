@@ -9,6 +9,8 @@ import { useSharePointUpload, renameCarpetaSharePoint } from '@/hooks/useSharePo
 import { logAudit } from '@/lib/audit';
 import { useScope } from '@/hooks/useScope';
 import PageHeader from '@/components/shared/PageHeader';
+import { usePermissions } from '@/hooks/usePermissions';
+import AccesoRestringido from '@/components/shared/AccesoRestringido';
 import { useDirectorio } from '@/lib/directorio';
 
 const PAGE_SIZE = 20;
@@ -43,6 +45,7 @@ const fmx = (n?: number | null) =>
   n != null ? Number(n).toLocaleString('es-MX', { style: 'currency', currency: 'MXN' }) : '—';
 
 export default function SolicitudesRecibidas() {
+  const { isAdmin } = usePermissions();
   // Fuente única de verdad: territorio de cada colegio en vivo desde Directorio.
   const { data: directorioRows = [] } = useDirectorio();
   const { filtrarPorAlcance } = useScope();
@@ -380,6 +383,15 @@ export default function SolicitudesRecibidas() {
     recibidas:  solicitudes.filter(s => s.estatus === 'recibida').length,
     canceladas: solicitudes.filter(s => s.estatus === 'cancelada').length,
   }), [solicitudes]);
+
+  if (!isAdmin) {
+    return (
+      <div className="max-w-6xl mx-auto p-4 sm:p-6">
+        <PageHeader title="Solicitudes Recibidas" subtitle="Gestión de solicitudes de inicio de obra o mantenimiento" />
+        <AccesoRestringido />
+      </div>
+    );
+  }
 
   if (isLoading) return (
     <div className="flex items-center justify-center py-20">

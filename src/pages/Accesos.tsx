@@ -5,6 +5,8 @@ import { PERMISSIONS, PERMISSION_GROUPS, DEFAULT_PERMISSIONS } from '@/lib/permi
 import { Lock, UserPlus, Mail, Pencil, X, Trash2, ShieldCheck, Users, Search, User, Building2, MapPin, Briefcase, Camera } from 'lucide-react';
 import { toast } from 'sonner';
 import PageHeader from '@/components/shared/PageHeader';
+import { usePermissions } from '@/hooks/usePermissions';
+import AccesoRestringido from '@/components/shared/AccesoRestringido';
 import { COLEGIOS, TERRITORIOS, getColegiosByTerritorio } from '@/lib/colegios';
 
 const cardClass  = 'bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden';
@@ -183,6 +185,7 @@ function PermissionEditor({ perms, onChange, area }: PermissionEditorProps) {
 }
 
 export default function Accesos() {
+  const { isAdmin } = usePermissions();
   const qc = useQueryClient();
   const [showInvite, setShowInvite]   = useState(false);
   const [editingUser, setEditingUser] = useState<EditingUser | null>(null);
@@ -347,6 +350,15 @@ export default function Accesos() {
   };
 
   const closeModal = () => { setShowInvite(false); setEditingUser(null); };
+
+  if (!isAdmin) {
+    return (
+      <div className="max-w-6xl mx-auto p-4 sm:p-6">
+        <PageHeader title="Accesos" subtitle="Gestiona quién puede entrar y qué puede hacer en el sistema" />
+        <AccesoRestringido mensaje="Solo el administrador del sistema puede gestionar accesos de usuarios." />
+      </div>
+    );
+  }
 
   return (
     <div className="max-w-6xl mx-auto p-4 sm:p-6 space-y-8">
