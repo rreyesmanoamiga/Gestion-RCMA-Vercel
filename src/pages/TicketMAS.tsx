@@ -90,6 +90,10 @@ function colegioCodigoCorto(nombreOColegio: string | null | undefined, colegiosT
 
 const TERRITORIOS          = ['NORTE', 'MEXICO', 'FMA'];
 const CLASIFICACIONES      = ['CONSTRUCCION NUEVA','REMODELACION','AMPLIACION','ADECUACION','MEJORA','MANTENIMIENTO ORDINARIO','MANTENIMIENTO EXTRAORDINARIO','PORTAFOLIO','GARANTIAS','REVISION'];
+// Estas clasificaciones son las que Deyna (Activo Fijo) da seguimiento — el Número
+// de Activo se vuelve obligatorio y se le pone CC al autorizar el ticket.
+const CLASES_REQUIEREN_ACTIVO = ['CONSTRUCCION NUEVA', 'REMODELACION', 'MEJORA'];
+const CORREO_ACTIVO_FIJO = 'dbalderas@admmx.org';
 const CLASES_MANTENIMIENTO = ['MANTENIMIENTO ORDINARIO','MANTENIMIENTO EXTRAORDINARIO'];
 const PERIODICIDADES       = ['URGENTE','NORMAL'];
 const TIPOS_MANT           = ['PREVENTIVO','CORRECTIVO'];
@@ -393,10 +397,12 @@ export default function TicketMAS() {
   };
 
   const esMant = CLASES_MANTENIMIENTO.includes(form.clasificacion);
+  const requiereActivo = CLASES_REQUIEREN_ACTIVO.includes(form.clasificacion);
 
   const onClasificacionChange = (v: string) => {
     const m = CLASES_MANTENIMIENTO.includes(v);
-    setForm(p => ({ ...p, clasificacion: v, tipo_mantenimiento: m ? '' : 'N/A' }));
+    const requiere = CLASES_REQUIEREN_ACTIVO.includes(v);
+    setForm(p => ({ ...p, clasificacion: v, tipo_mantenimiento: m ? '' : 'N/A', numero_activo: requiere ? p.numero_activo : '' }));
   };
 
   // Al seleccionar colegio, auto-rellenar datos
@@ -451,6 +457,10 @@ export default function TicketMAS() {
     }
     if (form.orden_interna === 'SI' && (!form.numero_orden_interna || form.numero_orden_interna === 'N/A')) {
       toast.error('Debes ingresar el Número de Orden Interna');
+      return;
+    }
+    if (requiereActivo && !form.numero_activo.trim()) {
+      toast.error('Esta clasificación requiere el Número de Activo — captúralo antes de continuar.');
       return;
     }
     if (form.clasificacion !== 'GARANTIAS') {
@@ -1144,8 +1154,16 @@ export default function TicketMAS() {
                 )}
               </div>
               <div>
-                <label className={labelClass}>Número de Activo <span className="text-slate-400 font-normal normal-case">(opcional)</span></label>
-                <input className={inputClass} value={form.numero_activo} onChange={e => set('numero_activo', e.target.value)} />
+                <label className={labelClass}>
+                  Número de Activo {requiereActivo ? <span className="text-red-500">*</span> : <span className="text-slate-400 font-normal normal-case">(no aplica para esta clasificación)</span>}
+                </label>
+                <input
+                  className={requiereActivo ? inputClass : readOnlyClass}
+                  value={form.numero_activo}
+                  onChange={e => set('numero_activo', e.target.value)}
+                  disabled={!requiereActivo}
+                  placeholder={requiereActivo ? 'Captura el número de activo' : ''}
+                />
               </div>
               <div>
                 <label className={labelClass}>Orden Interna</label>

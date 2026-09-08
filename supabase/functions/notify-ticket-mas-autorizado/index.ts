@@ -87,11 +87,15 @@ serve(async (req) => {
     }
 
     // CC fijos + CAR de zona
+    // Deyna (Activo Fijo) solo cuando la clasificación implica dar de alta un activo.
+    const CLASES_REQUIEREN_ACTIVO = ['CONSTRUCCION NUEVA', 'REMODELACION', 'MEJORA'];
+    const requiereActivo = CLASES_REQUIEREN_ACTIVO.includes((clasificacion ?? '').toUpperCase());
     const ccList = [
       'rreyes@manoamiga.edu.mx',
       gerenteEmail,
       directorNacionalEmail,
       correo_car ?? '',
+      requiereActivo ? 'dbalderas@admmx.org' : '',
     ].filter(Boolean);
 
     const html = `
