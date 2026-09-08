@@ -507,6 +507,38 @@ export default function Insumos() {
   // ── Dar VoBo ──────────────────────────────────────────────────────────────
   // Genera y sube el PDF autorizado a OneDrive — reutilizable desde el VoBo
   // automático y desde el botón de "Reintentar" si la primera vez falló.
+  // Genera el PDF de la Requisición (no autorizada) y lo sube a OneDrive —
+  // para las requisiciones que se crearon antes de que esto existiera.
+  const generarYSubirRequisicion = async (req: Requisicion) => {
+    try {
+      const items = await getItems(req.id);
+      const pdfBlob = await generarPDFBlob(req, items, false);
+      if (!pdfBlob) throw new Error('No se pudo generar el PDF (jsPDF no cargó)');
+      const pdfFile = new File([pdfBlob], `${req.folio}.pdf`, { type: 'application/pdf' });
+      const result = await spUpload(pdfFile, { modulo: 'Insumos', categoria: 'Requisiciones', referencia: req.folio });
+      if (!result) throw new Error('spUpload no regresó resultado');
+      await supabase.from('insumos_requisiciones').update({ requisicion_sp_url: result.webUrl, requisicion_sp_nombre: result.fileName }).eq('id', req.id);
+      qc.invalidateQueries({ queryKey: ['insumos_requisiciones'] });
+      toast.success('Requisición generada y subida a OneDrive ✓');
+    } catch (err: any) {
+      toast.error('No se pudo generar/subir la requisición: ' + (err?.message ?? 'error desconocido'));
+    }
+  };
+
+  // Sube manualmente un archivo que el usuario ya elaboró (Word, escaneado, etc.)
+  // en vez de generar el PDF automático — útil para requisiciones viejas.
+  const subirRequisicionManual = async (req: Requisicion, file: File) => {
+    try {
+      const result = await spUpload(file, { modulo: 'Insumos', categoria: 'Requisiciones', referencia: req.folio });
+      if (!result) throw new Error('spUpload no regresó resultado');
+      await supabase.from('insumos_requisiciones').update({ requisicion_sp_url: result.webUrl, requisicion_sp_nombre: result.fileName }).eq('id', req.id);
+      qc.invalidateQueries({ queryKey: ['insumos_requisiciones'] });
+      toast.success('Archivo subido a OneDrive ✓');
+    } catch (err: any) {
+      toast.error('No se pudo subir el archivo: ' + (err?.message ?? 'error desconocido'));
+    }
+  };
+
   const subirPdfAutorizado = async (reqId: string, folio: string, mostrarExito = true) => {
     try {
       const fresh = await supabase.from('insumos_requisiciones').select('*').eq('id', reqId).single();
@@ -717,6 +749,19 @@ export default function Insumos() {
                           className="inline-flex items-center gap-1 text-xs font-bold text-slate-600 bg-slate-100 border border-slate-200 px-2 py-0.5 rounded-full hover:bg-slate-200 transition">
                           <FileArchive className="w-3 h-3"/> Requisición
                         </a>
+                      )}
+                      {!req.requisicion_sp_url && (
+                        <>
+                          <button onClick={() => generarYSubirRequisicion(req)}
+                            className="inline-flex items-center gap-1 text-xs font-bold text-amber-700 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-full hover:bg-amber-100 transition">
+                            <FileArchive className="w-3 h-3"/> Generar Requisición
+                          </button>
+                          <label className="inline-flex items-center gap-1 text-xs font-bold text-slate-500 bg-white border border-slate-200 px-2 py-0.5 rounded-full hover:bg-slate-50 transition cursor-pointer">
+                            <FileArchive className="w-3 h-3"/> O sube la que ya tienes
+                            <input type="file" accept=".pdf,.doc,.docx" className="hidden"
+                              onChange={e => { const f = e.target.files?.[0]; if (f) subirRequisicionManual(req, f); }} />
+                          </label>
+                        </>
                       )}
                       {req.cotizacion_sp_url && (
                         <a href={req.cotizacion_sp_url} target="_blank" rel="noreferrer"
