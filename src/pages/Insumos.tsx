@@ -417,6 +417,7 @@ export default function Insumos() {
 
   // ── Capturar precios de cotización ────────────────────────────────────────
   const [pricingItems, setPricingItems] = useState<ReqItem[]>([]);
+  const [precioTexto, setPrecioTexto]   = useState<Record<number, string>>({});
   const [linkCotizacion, setLinkCotizacion] = useState('');
   const [ivaPercent, setIvaPercent] = useState('16');
   const [cotizacionFile, setCotizacionFile] = useState<File | null>(null);
@@ -424,6 +425,7 @@ export default function Insumos() {
   const openPricing = async (req: Requisicion) => {
     const items = await getItems(req.id);
     setPricingItems(items);
+    setPrecioTexto(Object.fromEntries(items.map((it, i) => [i, it.precio_cotizado != null ? String(it.precio_cotizado) : ''])));
     setLinkCotizacion(req.link_cotizacion ?? '');
     setIvaPercent('16');
     setPricingModal(req);
@@ -1107,10 +1109,18 @@ export default function Insumos() {
                           inputMode="decimal"
                           className="w-full pl-7 pr-3 py-1.5 border border-slate-300 rounded-lg text-sm text-right font-mono focus:ring-2 focus:ring-teal-500 focus:outline-none bg-white [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
                           placeholder="0.00"
-                          value={it.precio_cotizado ?? ''}
+                          value={precioTexto[i] ?? ''}
                           onChange={e => {
-                            const val = e.target.value.replace(/[^0-9.]/g, '');
-                            setPricingItems(prev => prev.map((p, idx) => idx === i ? { ...p, precio_cotizado: val === '' ? null : parseFloat(val) || null } : p));
+                            // Permite dígitos y un solo punto decimal — sin redondear
+                            // ni "limpiar" mientras se escribe, para no perder el punto.
+                            let val = e.target.value.replace(/[^0-9.]/g, '');
+                            const primerPunto = val.indexOf('.');
+                            if (primerPunto !== -1) {
+                              val = val.slice(0, primerPunto + 1) + val.slice(primerPunto + 1).replace(/\./g, '');
+                            }
+                            setPrecioTexto(prev => ({ ...prev, [i]: val }));
+                            const num = val === '' || val === '.' ? null : parseFloat(val);
+                            setPricingItems(prev => prev.map((p, idx) => idx === i ? { ...p, precio_cotizado: (num != null && !isNaN(num)) ? num : null } : p));
                           }}
                         />
                       </div>
