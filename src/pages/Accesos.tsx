@@ -32,12 +32,12 @@ const getAreaInfo = (value?: string) => AREAS.find(a => a.value === value) ?? nu
 const AREA_GRUPOS_RELEVANTES: Record<string, string[]> = {
   colegio:            ['Dashboard', 'Solicitud de Proyecto', 'Calendario', 'Checklists', 'Minutas', 'NEXUS'],
   director_colegio:   ['Dashboard', 'Solicitud de Proyecto', 'Calendario', 'Checklists', 'Minutas', 'Reportes', 'NEXUS'],
-  coordinacion_rcma:  ['Dashboard', 'Proyectos', 'Tickets', 'Ticket MAS', 'Reportes', 'Calendario', 'Checklists'],
+  coordinacion_rcma:  ['Dashboard', 'Proyectos', 'Tickets', 'Ticket MAS', 'Reportes', 'Calendario', 'Checklists', 'Cumplimiento'],
   orser_finanzas:     ['Reportes', 'Insumos', 'Proyectos', 'Dashboard'],
-  orser_juridico:     ['Reportes', 'Ticket MAS', 'Anteproyectos', 'Minutas'],
+  orser_juridico:     ['Reportes', 'Ticket MAS', 'Anteproyectos', 'Minutas', 'Cumplimiento'],
   orser_fiscal:       ['Reportes', 'Insumos', 'Proyectos'],
   orser_eco:          ['Proyectos', 'Anteproyectos', 'Checklists', 'Reportes'],
-  orser_pc:           ['Checklists', 'Calendario', 'Reportes'],
+  orser_pc:           ['Cumplimiento', 'Checklists', 'Calendario', 'Reportes'],
 };
 
 // Áreas que se ubican en un colegio específico (Territorio → Colegio, como hoy).

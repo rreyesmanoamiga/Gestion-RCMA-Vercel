@@ -55,6 +55,9 @@ const PERMISSION_DEFS: PermissionDef[] = [
   { key: 'crear_minutas',             label: 'Subir Minutas',                     group: 'Minutas',               default: false },
   { key: 'editar_minutas',            label: 'Editar Minutas',                    group: 'Minutas',               default: false },
   { key: 'eliminar_minutas',          label: 'Eliminar Minutas',                  group: 'Minutas',               default: false },
+  { key: 'ver_cumplimiento',          label: 'Ver Cumplimiento y Protección Civil', group: 'Cumplimiento',        default: false },
+  { key: 'descargar_cumplimiento',    label: 'Descargar Reportes',                group: 'Cumplimiento',          default: false },
+  { key: 'editar_cumplimiento',       label: 'Editar Documentos/Estatus',         group: 'Cumplimiento',          default: false },
 ];
 
 export const PERMISSIONS: Record<string, string> = Object.fromEntries(

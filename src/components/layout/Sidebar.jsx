@@ -80,9 +80,11 @@ export default function Sidebar({ isOpen, onToggle }) {
   const { can }     = usePermissions();
   const isAdmin     = user?.user_metadata?.role === 'admin';
   const isMobile    = useIsMobile();
-  const esRicardo   = user?.email === 'rreyes@manoamiga.edu.mx';
+  // Antes esto estaba fijo al correo de Ricardo; ahora cualquiera con el
+  // permiso "Ver Cumplimiento y Protección Civil" (o admin) puede entrar.
+  const puedeVerCumplimiento = isAdmin || can('ver_cumplimiento');
   const navigate = useNavigate();
-  const modoCompliance = esRicardo && location.pathname.startsWith('/cumplimiento');
+  const modoCompliance = puedeVerCumplimiento && location.pathname.startsWith('/cumplimiento');
 
   const handleNavClick = () => { if (isMobile) onToggle(); };
   const handleLogout   = async () => { await signOut(); };
@@ -213,7 +215,7 @@ export default function Sidebar({ isOpen, onToggle }) {
               <h1 className="text-base font-display font-semibold text-sidebar-foreground leading-tight tracking-tight">
                 Sistema RCMA
               </h1>
-              {esRicardo ? (
+              {puedeVerCumplimiento ? (
                 <div className="flex bg-white/[0.07] rounded-md p-[2px] mt-1.5">
                   <button
                     onClick={() => navigate('/')}

@@ -3,8 +3,11 @@ import PageHeader from '@/components/shared/PageHeader';
 import {
   useComplianceDocs, esRetraso, MATERIAS, LoadingBlock, ErrorBlock,
 } from '@/lib/complianceShared';
+import { usePermissions } from '@/hooks/usePermissions';
+import AccesoRestringido from '@/components/shared/AccesoRestringido';
 
 export default function CumplimientoPanelGeneral() {
+  const { isAdmin, can } = usePermissions();
   const { data: docs = [], isLoading, isError, refetch } = useComplianceDocs();
   const [materiaFiltro, setMateriaFiltro] = useState<typeof MATERIAS[number]>('Todas');
   const hoy = useMemo(() => { const d = new Date(); d.setHours(0, 0, 0, 0); return d; }, []);
@@ -34,6 +37,15 @@ export default function CumplimientoPanelGeneral() {
     });
     return Array.from(mapa.values()).sort((a, b) => b.retraso - a.retraso);
   }, [docsFiltrados, hoy]);
+
+  if (!isAdmin && !can('ver_cumplimiento')) {
+    return (
+      <div className="p-6 lg:p-8 max-w-[1700px] mx-auto">
+        <PageHeader title="Panel General" subtitle="Cumplimiento por colegio y materia — registro oficial de Compliance" />
+        <AccesoRestringido />
+      </div>
+    );
+  }
 
   return (
     <div className="p-6 lg:p-8 max-w-[1700px] mx-auto">

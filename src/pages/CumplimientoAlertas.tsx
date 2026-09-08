@@ -3,6 +3,8 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { supabase } from '@/lib/supabaseClient';
 import PageHeader from '@/components/shared/PageHeader';
+import { usePermissions } from '@/hooks/usePermissions';
+import AccesoRestringido from '@/components/shared/AccesoRestringido';
 import { AlertTriangle, Clock, CheckCircle2, Bell, X, Mail, UserPlus, Trash2 } from 'lucide-react';
 import {
   useComplianceDocs, esRetraso, diasDiferencia, formatFecha,
@@ -217,6 +219,7 @@ function NotificacionesModal({ docs, onClose }: { docs: ComplianceDoc[]; onClose
 }
 
 export default function CumplimientoAlertas() {
+  const { isAdmin, can } = usePermissions();
   const { data: docs = [], isLoading, isError, refetch } = useComplianceDocs();
   const hoy = useMemo(() => { const d = new Date(); d.setHours(0, 0, 0, 0); return d; }, []);
   const [detalle, setDetalle] = useState<ComplianceDoc | null>(null);
@@ -235,6 +238,15 @@ export default function CumplimientoAlertas() {
       .map(d => ({ ...d, dias: diasDiferencia(d.vigente_hasta as string, hoy) }))
       .sort((a, b) => a.dias - b.dias);
   }, [docs, hoy]);
+
+  if (!isAdmin && !can('ver_cumplimiento')) {
+    return (
+      <div className="p-6 lg:p-8 max-w-[1700px] mx-auto">
+        <PageHeader title="Alertas" subtitle="Documentos vencidos y por expirar — priorizados de mayor a menor urgencia" />
+        <AccesoRestringido />
+      </div>
+    );
+  }
 
   return (
     <div className="p-6 lg:p-8 max-w-[1700px] mx-auto">

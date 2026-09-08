@@ -11,6 +11,8 @@ import {
   ClipboardList, Clock, AlertCircle, CheckCircle2, MessageSquare, Loader2,
 } from 'lucide-react';
 import { useComplianceDocs, LoadingBlock, ErrorBlock, COLEGIO_A_CODIGO } from '@/lib/complianceShared';
+import { usePermissions } from '@/hooks/usePermissions';
+import AccesoRestringido from '@/components/shared/AccesoRestringido';
 
 // ---------------------------------------------------------------------------
 // Modelo de datos (mismo patrón que NEXUS, tablas compliance_*)
@@ -156,6 +158,7 @@ function Comentarios({ targetField, targetId }: { targetField: 'pendiente_id' | 
 // Página principal
 // ---------------------------------------------------------------------------
 export default function CumplimientoSeguimiento() {
+  const { isAdmin, can } = usePermissions();
   const { user } = useAuth();
   const autorEmail = user?.email ?? '';
   const autorNombre = (user as any)?.user_metadata?.nombre || user?.email || 'Usuario';
@@ -399,6 +402,15 @@ export default function CumplimientoSeguimiento() {
       })}
     </div>
   );
+
+  if (!isAdmin && !can('ver_cumplimiento')) {
+    return (
+      <div className="p-6 lg:p-8 max-w-[1700px] mx-auto">
+        <PageHeader title="Seguimiento" subtitle="Notas, pendientes y seguimiento de la documentación de Cumplimiento" />
+        <AccesoRestringido />
+      </div>
+    );
+  }
 
   return (
     <div className="p-6 lg:p-8 max-w-[1700px] mx-auto">

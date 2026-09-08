@@ -12,6 +12,8 @@ import {
   LoadingBlock, ErrorBlock, VigenteBadge, EstadoSelect, ResponsableInput, DetalleModal,
   type ComplianceDoc,
 } from '@/lib/complianceShared';
+import { usePermissions } from '@/hooks/usePermissions';
+import AccesoRestringido from '@/components/shared/AccesoRestringido';
 import {
   generarExcelCumplimiento,
   generarPDFGeneralCumplimiento,
@@ -80,6 +82,7 @@ function BulkToolbar({
 }
 
 export default function CumplimientoDocumentos() {
+  const { isAdmin, can } = usePermissions();
   const { data: docs = [], isLoading, isError, refetch } = useComplianceDocs();
   const { user } = useAuth();
   const elaboradoPor = (user as any)?.user_metadata?.nombre || user?.email || 'Sistema RCMA';
@@ -167,6 +170,15 @@ export default function CumplimientoDocumentos() {
       toast.error(`No se pudo generar el PDF: ${err?.message ?? 'error desconocido'}`);
     } finally { setGenerando(''); }
   };
+
+  if (!isAdmin && !can('ver_cumplimiento')) {
+    return (
+      <div className="p-6 lg:p-8 max-w-[1700px] mx-auto">
+        <PageHeader title="Documentos" subtitle="Registro completo de documentos de Cumplimiento — filtra, edita y descarga reportes" />
+        <AccesoRestringido />
+      </div>
+    );
+  }
 
   return (
     <div className="p-6 lg:p-8 max-w-[1700px] mx-auto">

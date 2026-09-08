@@ -12,6 +12,8 @@ import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid,
 } from 'recharts';
 import { useComplianceDocs, esRetraso, LoadingBlock, ErrorBlock } from '@/lib/complianceShared';
+import { usePermissions } from '@/hooks/usePermissions';
+import AccesoRestringido from '@/components/shared/AccesoRestringido';
 
 const ESTADO_COLORS: Record<string, string> = {
   Verificado: '#10b981',
@@ -54,6 +56,7 @@ const CustomTooltip = ({ active, payload }: { active?: boolean; payload?: { name
 };
 
 export default function CumplimientoDashboard() {
+  const { isAdmin, can } = usePermissions();
   const { data: docs = [], isLoading, isError, refetch } = useComplianceDocs();
 
   const { data: pendientesActivos = 0 } = useQuery({
@@ -95,6 +98,15 @@ export default function CumplimientoDashboard() {
       .sort((a, b) => b.retraso - a.retraso)
       .slice(0, 8);
   }, [docs, hoy]);
+
+  if (!isAdmin && !can('ver_cumplimiento')) {
+    return (
+      <div className="p-6 lg:p-8 max-w-[1700px] mx-auto">
+        <PageHeader title="Dashboard" subtitle="Vista general de Cumplimiento Normativo — Protección Civil y Donatarias Autorizadas" />
+        <AccesoRestringido />
+      </div>
+    );
+  }
 
   return (
     <div className="p-6 lg:p-8 max-w-[1700px] mx-auto">
