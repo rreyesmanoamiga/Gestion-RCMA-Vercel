@@ -402,15 +402,15 @@ export default function Insumos() {
       try {
         const freshItems = await supabase.from('insumos_items').select('*').eq('requisicion_id', req.id);
         const pdfBlob = await generarPDFBlob(req as Requisicion, (freshItems.data ?? []) as ReqItem[], false);
-        if (pdfBlob) {
-          const pdfFile = new File([pdfBlob], `${req.folio}.pdf`, { type: 'application/pdf' });
-          const result = await spUpload(pdfFile, { modulo: 'Insumos', categoria: 'Requisiciones', referencia: req.folio });
-          if (result) {
-            await supabase.from('insumos_requisiciones').update({ requisicion_sp_url: result.webUrl, requisicion_sp_nombre: result.fileName }).eq('id', req.id);
-            qc.invalidateQueries({ queryKey: ['insumos_requisiciones'] });
-          }
-        }
-      } catch { /* PDF upload opcional, no bloquea la creación */ }
+        if (!pdfBlob) throw new Error('No se pudo generar el PDF (jsPDF no cargó)');
+        const pdfFile = new File([pdfBlob], `${req.folio}.pdf`, { type: 'application/pdf' });
+        const result = await spUpload(pdfFile, { modulo: 'Insumos', categoria: 'Requisiciones', referencia: req.folio });
+        if (!result) throw new Error('spUpload no regresó resultado');
+        await supabase.from('insumos_requisiciones').update({ requisicion_sp_url: result.webUrl, requisicion_sp_nombre: result.fileName }).eq('id', req.id);
+        qc.invalidateQueries({ queryKey: ['insumos_requisiciones'] });
+      } catch (err: any) {
+        toast.error('La requisición se creó, pero no se pudo subir su PDF a OneDrive: ' + (err?.message ?? 'error desconocido'));
+      }
     },
     onError: (e: any) => toast.error(e.message ?? 'Error al crear'),
   });
@@ -505,6 +505,26 @@ export default function Insumos() {
   });
 
   // ── Dar VoBo ──────────────────────────────────────────────────────────────
+  // Genera y sube el PDF autorizado a OneDrive — reutilizable desde el VoBo
+  // automático y desde el botón de "Reintentar" si la primera vez falló.
+  const subirPdfAutorizado = async (reqId: string, folio: string, mostrarExito = true) => {
+    try {
+      const fresh = await supabase.from('insumos_requisiciones').select('*').eq('id', reqId).single();
+      const freshItems = await supabase.from('insumos_items').select('*').eq('requisicion_id', reqId);
+      if (!fresh.data) throw new Error('No se encontró la requisición');
+      const pdfBlob = await generarPDFBlob(fresh.data as any, (freshItems.data ?? []) as any, true);
+      if (!pdfBlob) throw new Error('No se pudo generar el PDF (jsPDF no cargó)');
+      const pdfFile = new File([pdfBlob], `${folio}-AUTORIZADO.pdf`, { type: 'application/pdf' });
+      const result = await spUpload(pdfFile, { modulo: 'Insumos', categoria: 'Autorizaciones', referencia: folio });
+      if (!result) throw new Error('spUpload no regresó resultado (revisa el toast de error de arriba)');
+      await supabase.from('insumos_requisiciones').update({ pdf_sp_url: result.webUrl, pdf_sp_nombre: result.fileName }).eq('id', reqId);
+      qc.invalidateQueries({ queryKey: ['insumos_requisiciones'] });
+      if (mostrarExito) toast.success('PDF autorizado subido a SharePoint ✓');
+    } catch (err: any) {
+      toast.error('No se pudo subir el PDF autorizado a OneDrive: ' + (err?.message ?? 'error desconocido'));
+    }
+  };
+
   const darVoBo = useMutation({
     mutationFn: async (req: Requisicion) => {
       const nombre = user?.user_metadata?.nombre || user?.email || 'Usuario';
@@ -537,22 +557,8 @@ export default function Insumos() {
     onSuccess: async (_data: void, req: Requisicion) => {
       qc.invalidateQueries({ queryKey: ['insumos_requisiciones'] });
       toast.success('VoBo registrado correctamente ✓');
-      // Auto-subir PDF autorizado a SharePoint (opcional)
-      try {
-        const fresh = await supabase.from('insumos_requisiciones').select('*').eq('id', req.id).single();
-        const freshItems = await supabase.from('insumos_items').select('*').eq('requisicion_id', req.id);
-        if (fresh.data) {
-          const pdfBlob = await generarPDFBlob(fresh.data as any, (freshItems.data ?? []) as any, true);
-          if (pdfBlob) {
-            const pdfFile = new File([pdfBlob], `${req.folio}-AUTORIZADO.pdf`, { type: 'application/pdf' });
-            const result = await spUpload(pdfFile, { modulo: 'Insumos', categoria: 'Autorizaciones', referencia: req.folio });
-            if (result) {
-              await supabase.from('insumos_requisiciones').update({ pdf_sp_url: result.webUrl, pdf_sp_nombre: result.fileName }).eq('id', req.id);
-              toast.success('PDF autorizado subido a SharePoint ✓');
-            }
-          }
-        }
-      } catch { /* PDF upload opcional */ }
+      // Auto-subir PDF autorizado a SharePoint — ya no se silencia el error
+      await subirPdfAutorizado(req.id, req.folio);
       setVoboModal(null);
     },
     onError: (e: any) => toast.error(e.message ?? 'Error'),
@@ -723,6 +729,12 @@ export default function Insumos() {
                           className="inline-flex items-center gap-1 text-xs font-bold text-emerald-600 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full hover:bg-emerald-100 transition">
                           <FileArchive className="w-3 h-3"/> PDF Autorizado
                         </a>
+                      )}
+                      {req.estatus === 'autorizado' && !req.pdf_sp_url && (
+                        <button onClick={() => subirPdfAutorizado(req.id, req.folio)}
+                          className="inline-flex items-center gap-1 text-xs font-bold text-amber-700 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-full hover:bg-amber-100 transition">
+                          <FileArchive className="w-3 h-3"/> Reintentar subir PDF a OneDrive
+                        </button>
                       )}
                     </div>
                     <p className="text-xs text-slate-500 mt-0.5">
