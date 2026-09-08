@@ -12,6 +12,25 @@ const btnPrimary = 'px-4 py-2 bg-slate-900 text-white rounded-md text-sm font-me
 const btnDanger  = 'px-4 py-2 border border-red-200 rounded-md text-sm font-medium text-red-600 hover:bg-red-50 transition-colors flex items-center gap-2';
 const inputClass = 'w-full px-3 py-2 border border-slate-300 rounded-md text-sm focus:ring-2 focus:ring-slate-900 focus:outline-none';
 
+// ─── Áreas / Organización ───────────────────────────────────────────────────
+// Identifica a QUÉ pertenece el usuario. Separado del alcance (qué tanto ve).
+const AREAS: { value: string; label: string; color: string }[] = [
+  { value: 'colegio',           label: 'Colegio (Mano Amiga)',   color: 'bg-blue-50 text-blue-700 border-blue-200' },
+  { value: 'director_colegio',  label: 'Director de Colegio',    color: 'bg-indigo-50 text-indigo-700 border-indigo-200' },
+  { value: 'coordinacion_rcma', label: 'Coordinación RCMA',      color: 'bg-orange-50 text-orange-700 border-orange-200' },
+  { value: 'orser_finanzas',    label: 'Finanzas (ORSER)',       color: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
+  { value: 'orser_juridico',    label: 'Jurídico (ORSER)',       color: 'bg-purple-50 text-purple-700 border-purple-200' },
+  { value: 'orser_fiscal',      label: 'Fiscal (ORSER)',         color: 'bg-amber-50 text-amber-700 border-amber-200' },
+  { value: 'orser_eco',         label: 'ECO (ORSER)',            color: 'bg-teal-50 text-teal-700 border-teal-200' },
+  { value: 'orser_pc',          label: 'Protección Civil (ORSER)', color: 'bg-red-50 text-red-700 border-red-200' },
+];
+const getAreaInfo = (value?: string) => AREAS.find(a => a.value === value) ?? null;
+
+// Áreas que se ubican en un colegio específico (Territorio → Colegio, como hoy).
+// El resto (Coordinación RCMA y las áreas ORSER) se manejan por Alcance: Norte / México / General.
+const AREAS_CON_COLEGIO = ['colegio', 'director_colegio'];
+const ALCANCES = ['NORTE', 'MEXICO', 'GENERAL'];
+
 // Sube una imagen de avatar al bucket "avatars" de Supabase Storage y regresa su URL pública.
 // Requiere que el bucket "avatars" exista y sea público (ver instrucciones al pie del archivo).
 async function uploadAvatar(email: string, file: File): Promise<string> {
@@ -79,6 +98,7 @@ interface PermRecord {
   role?:      string;
   nombre?:    string;
   puesto?:    string;
+  area?:      string;
   territorio?: string;
   colegio?:   string;
   avatar_url?: string;
@@ -89,6 +109,7 @@ interface EditingUser {
   email:      string;
   nombre:     string;
   puesto:     string;
+  area:       string;
   territorio: string;
   colegio:    string;
   avatarUrl:  string;
@@ -141,6 +162,7 @@ export default function Accesos() {
   const [inviteEmail,      setInviteEmail]      = useState('');
   const [inviteNombre,     setInviteNombre]     = useState('');
   const [invitePuesto,     setInvitePuesto]     = useState('');
+  const [inviteArea,       setInviteArea]       = useState('colegio');
   const [inviteTerritorio, setInviteTerritorio] = useState('');
   const [inviteColegio,    setInviteColegio]    = useState('');
   const [invitePerms,      setInvitePerms]      = useState<Record<string, boolean>>(DEFAULT_PERMISSIONS);
@@ -168,19 +190,20 @@ export default function Accesos() {
       String(u.user_email).toLowerCase().includes(q) ||
       String(u.nombre ?? '').toLowerCase().includes(q) ||
       String(u.puesto ?? '').toLowerCase().includes(q) ||
-      String(u.colegio ?? '').toLowerCase().includes(q)
+      String(u.colegio ?? '').toLowerCase().includes(q) ||
+      (getAreaInfo(String(u.area ?? ''))?.label.toLowerCase().includes(q) ?? false)
     );
   }, [nonAdminUsers, search]);
 
   // ── Update permisos + datos del usuario ───────────────────────────────────
   const updatePermsMutation = useMutation({
-    mutationFn: async ({ email, perms, nombre, puesto, territorio, colegio, avatarUrl }: {
+    mutationFn: async ({ email, perms, nombre, puesto, area, territorio, colegio, avatarUrl }: {
       email: string; perms: Record<string, boolean>;
-      nombre: string; puesto: string; territorio: string; colegio: string; avatarUrl: string;
+      nombre: string; puesto: string; area: string; territorio: string; colegio: string; avatarUrl: string;
     }) => {
       const { error } = await supabase
         .from('user_permissions')
-        .update({ ...perms, nombre, puesto, territorio, colegio, avatar_url: avatarUrl || null })
+        .update({ ...perms, nombre, puesto, area, territorio, colegio, avatar_url: avatarUrl || null })
         .eq('user_email', email);
       if (error) throw error;
     },
@@ -222,6 +245,7 @@ export default function Accesos() {
           user_email:  inviteEmail,
           nombre:      inviteNombre,
           puesto:      invitePuesto,
+          area:        inviteArea,
           territorio:  inviteTerritorio,
           colegio:     inviteColegio,
           avatar_url:  avatarUrl || null,
@@ -247,7 +271,7 @@ export default function Accesos() {
 
   const resetInviteForm = () => {
     setInviteEmail(''); setInviteNombre(''); setInvitePuesto('');
-    setInviteTerritorio(''); setInviteColegio('');
+    setInviteArea('colegio'); setInviteTerritorio(''); setInviteColegio('');
     setInvitePerms(DEFAULT_PERMISSIONS);
     setInviteAvatarFile(null); setInviteAvatarPreview(null);
   };
@@ -258,6 +282,7 @@ export default function Accesos() {
       email:      String(u.user_email),
       nombre:     String(u.nombre ?? ''),
       puesto:     String(u.puesto ?? ''),
+      area:       String(u.area ?? 'colegio'),
       territorio: String(u.territorio ?? ''),
       colegio:    String(u.colegio ?? ''),
       avatarUrl:  String(u.avatar_url ?? ''),
@@ -282,6 +307,7 @@ export default function Accesos() {
       perms:      editingUser.perms,
       nombre:     editingUser.nombre,
       puesto:     editingUser.puesto,
+      area:       editingUser.area,
       territorio: editingUser.territorio,
       colegio:    editingUser.colegio,
       avatarUrl,
@@ -373,7 +399,12 @@ export default function Accesos() {
                             </button>
                           </div>
                         </div>
-                        <div className="flex flex-wrap gap-2 text-xs text-slate-500">
+                        <div className="flex flex-wrap gap-2 text-xs text-slate-500 items-center">
+                          {u.area && getAreaInfo(String(u.area)) && (
+                            <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded-full border ${getAreaInfo(String(u.area))!.color}`}>
+                              {getAreaInfo(String(u.area))!.label}
+                            </span>
+                          )}
                           {u.puesto && <span className="flex items-center gap-1"><Briefcase className="w-3 h-3" />{String(u.puesto)}</span>}
                           {u.territorio && <span className="flex items-center gap-1"><MapPin className="w-3 h-3" />{String(u.territorio)}</span>}
                           {u.colegio && <span className="flex items-center gap-1"><Building2 className="w-3 h-3" />{String(u.colegio)}</span>}
@@ -391,6 +422,11 @@ export default function Accesos() {
                           <div className="min-w-0">
                             <p className="text-sm font-bold text-slate-900 truncate">{String(u.nombre || '—')}</p>
                             <p className="text-[11px] text-slate-400 truncate">{String(u.user_email)}</p>
+                            {u.area && getAreaInfo(String(u.area)) && (
+                              <span className={`inline-block mt-1 text-[9px] font-bold uppercase px-1.5 py-0.5 rounded-full border ${getAreaInfo(String(u.area))!.color}`}>
+                                {getAreaInfo(String(u.area))!.label}
+                              </span>
+                            )}
                           </div>
                         </div>
                         {/* Puesto */}
@@ -515,6 +551,15 @@ export default function Accesos() {
                   </div>
 
                   <div>
+                    <label className="block text-xs font-bold text-slate-500 uppercase mb-1.5 tracking-wide">Área / Organización</label>
+                    <select className={`${inputClass} bg-white`}
+                      value={inviteArea}
+                      onChange={e => { setInviteArea(e.target.value); setInviteTerritorio(''); setInviteColegio(''); }}>
+                      {AREAS.map(a => <option key={a.value} value={a.value}>{a.label}</option>)}
+                    </select>
+                  </div>
+
+                  <div>
                     <label className="block text-xs font-bold text-slate-500 uppercase mb-1.5 tracking-wide">Puesto</label>
                     <div className="relative">
                       <Briefcase className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
@@ -523,37 +568,56 @@ export default function Accesos() {
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  {AREAS_CON_COLEGIO.includes(inviteArea) ? (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-xs font-bold text-slate-500 uppercase mb-1.5 tracking-wide">Territorio</label>
+                        <div className="relative">
+                          <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                          <select className={`${inputClass} pl-10 bg-white`}
+                            value={inviteTerritorio} onChange={e => { setInviteTerritorio(e.target.value); setInviteColegio(''); }}>
+                            <option value="">Seleccionar...</option>
+                            {TERRITORIOS.map(t => <option key={t} value={t}>{t}</option>)}
+                          </select>
+                        </div>
+                      </div>
+                      <div>
+                        <label className="block text-xs font-bold text-slate-500 uppercase mb-1.5 tracking-wide">Colegio</label>
+                        <div className="relative">
+                          <Building2 className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                          <select className={`${inputClass} pl-10 bg-white`} disabled={!inviteTerritorio}
+                            value={inviteColegio} onChange={e => setInviteColegio(e.target.value)}>
+                            <option value="">{inviteTerritorio ? 'Seleccionar colegio...' : 'Primero selecciona territorio'}</option>
+                            {inviteTerritorio && <option value="ECO">── ECO (cubre varios colegios) ──</option>}
+                            {inviteTerritorio && getColegiosByTerritorio(inviteTerritorio).map(c => <option key={c} value={c}>{c}</option>)}
+                          </select>
+                        </div>
+                        {inviteColegio && inviteColegio !== 'ECO' && (
+                          <p className="text-[11px] text-slate-400 mt-1.5">
+                            Si le das permiso de "Ver Minutas", solo verá las minutas de <strong>{inviteColegio}</strong> que tú marques
+                            para notificarle — nunca notas técnicas ni minutas de otros colegios.
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  ) : (
                     <div>
-                      <label className="block text-xs font-bold text-slate-500 uppercase mb-1.5 tracking-wide">Territorio</label>
+                      <label className="block text-xs font-bold text-slate-500 uppercase mb-1.5 tracking-wide">Alcance</label>
                       <div className="relative">
                         <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
                         <select className={`${inputClass} pl-10 bg-white`}
-                          value={inviteTerritorio} onChange={e => { setInviteTerritorio(e.target.value); setInviteColegio(''); }}>
+                          value={inviteTerritorio} onChange={e => setInviteTerritorio(e.target.value)}>
                           <option value="">Seleccionar...</option>
-                          {TERRITORIOS.map(t => <option key={t} value={t}>{t}</option>)}
+                          <option value="NORTE">Norte</option>
+                          <option value="MEXICO">México</option>
+                          <option value="GENERAL">General (todos los territorios)</option>
                         </select>
                       </div>
+                      <p className="text-[11px] text-slate-400 mt-1.5">
+                        Esta área no se ubica en un colegio en particular — define solo con qué territorio trabaja, o General si ve todo.
+                      </p>
                     </div>
-                    <div>
-                      <label className="block text-xs font-bold text-slate-500 uppercase mb-1.5 tracking-wide">Colegio</label>
-                      <div className="relative">
-                        <Building2 className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                        <select className={`${inputClass} pl-10 bg-white`} disabled={!inviteTerritorio}
-                          value={inviteColegio} onChange={e => setInviteColegio(e.target.value)}>
-                          <option value="">{inviteTerritorio ? 'Seleccionar colegio...' : 'Primero selecciona territorio'}</option>
-                          {inviteTerritorio && <option value="ECO">── ECO (cubre varios colegios) ──</option>}
-                          {inviteTerritorio && getColegiosByTerritorio(inviteTerritorio).map(c => <option key={c} value={c}>{c}</option>)}
-                        </select>
-                      </div>
-                      {inviteColegio && inviteColegio !== 'ECO' && (
-                        <p className="text-[11px] text-slate-400 mt-1.5">
-                          Si le das permiso de "Ver Minutas", solo verá las minutas de <strong>{inviteColegio}</strong> que tú marques
-                          para notificarle — nunca notas técnicas ni minutas de otros colegios.
-                        </p>
-                      )}
-                    </div>
-                  </div>
+                  )}
                 </div>
 
                 {/* Permisos */}
@@ -609,6 +673,15 @@ export default function Accesos() {
                 </div>
 
                 <div>
+                  <label className="block text-xs font-bold text-slate-500 uppercase mb-1.5 tracking-wide">Área / Organización</label>
+                  <select className={`${inputClass} bg-white`}
+                    value={editingUser.area}
+                    onChange={e => setEditingUser(prev => prev ? { ...prev, area: e.target.value, territorio: '', colegio: '' } : null)}>
+                    {AREAS.map(a => <option key={a.value} value={a.value}>{a.label}</option>)}
+                  </select>
+                </div>
+
+                <div>
                   <label className="block text-xs font-bold text-slate-500 uppercase mb-1.5 tracking-wide">Puesto</label>
                   <div className="relative">
                     <Briefcase className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
@@ -618,39 +691,59 @@ export default function Accesos() {
                   </div>
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {AREAS_CON_COLEGIO.includes(editingUser.area) ? (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-xs font-bold text-slate-500 uppercase mb-1.5 tracking-wide">Territorio</label>
+                      <div className="relative">
+                        <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                        <select className={`${inputClass} pl-10 bg-white`}
+                          value={editingUser.territorio}
+                          onChange={e => setEditingUser(prev => prev ? { ...prev, territorio: e.target.value, colegio: '' } : null)}>
+                          <option value="">Seleccionar...</option>
+                          {TERRITORIOS.map(t => <option key={t} value={t}>{t}</option>)}
+                        </select>
+                      </div>
+                    </div>
+                    <div>
+                      <label className="block text-xs font-bold text-slate-500 uppercase mb-1.5 tracking-wide">Colegio</label>
+                      <div className="relative">
+                        <Building2 className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                        <select className={`${inputClass} pl-10 bg-white`} disabled={!editingUser.territorio}
+                          value={editingUser.colegio}
+                          onChange={e => setEditingUser(prev => prev ? { ...prev, colegio: e.target.value } : null)}>
+                          <option value="">{editingUser.territorio ? 'Seleccionar colegio...' : 'Primero selecciona territorio'}</option>
+                          {editingUser.territorio && <option value="ECO">── ECO (cubre varios colegios) ──</option>}
+                          {editingUser.territorio && getColegiosByTerritorio(editingUser.territorio).map(c => <option key={c} value={c}>{c}</option>)}
+                        </select>
+                      </div>
+                      {editingUser.colegio && editingUser.colegio !== 'ECO' && (
+                        <p className="text-[11px] text-slate-400 mt-1.5">
+                          Si tiene permiso de "Ver Minutas", solo ve las minutas de <strong>{editingUser.colegio}</strong> marcadas
+                          para notificarle — nunca notas técnicas ni de otros colegios.
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                ) : (
                   <div>
-                    <label className="block text-xs font-bold text-slate-500 uppercase mb-1.5 tracking-wide">Territorio</label>
+                    <label className="block text-xs font-bold text-slate-500 uppercase mb-1.5 tracking-wide">Alcance</label>
                     <div className="relative">
                       <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
                       <select className={`${inputClass} pl-10 bg-white`}
                         value={editingUser.territorio}
-                        onChange={e => setEditingUser(prev => prev ? { ...prev, territorio: e.target.value, colegio: '' } : null)}>
+                        onChange={e => setEditingUser(prev => prev ? { ...prev, territorio: e.target.value } : null)}>
                         <option value="">Seleccionar...</option>
-                        {TERRITORIOS.map(t => <option key={t} value={t}>{t}</option>)}
+                        <option value="NORTE">Norte</option>
+                        <option value="MEXICO">México</option>
+                        <option value="GENERAL">General (todos los territorios)</option>
                       </select>
                     </div>
+                    <p className="text-[11px] text-slate-400 mt-1.5">
+                      Esta área no se ubica en un colegio en particular — define solo con qué territorio trabaja, o General si ve todo.
+                    </p>
                   </div>
-                  <div>
-                    <label className="block text-xs font-bold text-slate-500 uppercase mb-1.5 tracking-wide">Colegio</label>
-                    <div className="relative">
-                      <Building2 className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                      <select className={`${inputClass} pl-10 bg-white`} disabled={!editingUser.territorio}
-                        value={editingUser.colegio}
-                        onChange={e => setEditingUser(prev => prev ? { ...prev, colegio: e.target.value } : null)}>
-                        <option value="">{editingUser.territorio ? 'Seleccionar colegio...' : 'Primero selecciona territorio'}</option>
-                        {editingUser.territorio && <option value="ECO">── ECO (cubre varios colegios) ──</option>}
-                        {editingUser.territorio && getColegiosByTerritorio(editingUser.territorio).map(c => <option key={c} value={c}>{c}</option>)}
-                      </select>
-                    </div>
-                    {editingUser.colegio && editingUser.colegio !== 'ECO' && (
-                      <p className="text-[11px] text-slate-400 mt-1.5">
-                        Si tiene permiso de "Ver Minutas", solo ve las minutas de <strong>{editingUser.colegio}</strong> marcadas
-                        para notificarle — nunca notas técnicas ni de otros colegios.
-                      </p>
-                    )}
-                  </div>
-                </div>
+                )}
               </div>
 
               {/* Permisos */}
