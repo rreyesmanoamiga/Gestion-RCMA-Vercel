@@ -10,6 +10,7 @@ import {
 } from 'lucide-react';
 import PageHeader from '@/components/shared/PageHeader';
 import { usePermissions } from '@/hooks/usePermissions';
+import { useScope } from '@/hooks/useScope';
 import { useAuth } from '@/lib/AuthContext';
 import { logAudit } from '@/lib/audit';
 import { useSharePointUpload } from '@/hooks/useSharePointUpload';
@@ -109,6 +110,12 @@ export default function Minutas() {
   const miColegio       = String((permsRecord as any)?.colegio ?? '');
   const esAdminColegio  = !isAdmin && !!miColegio && miColegio !== 'ECO';
 
+  // Usuarios con alcance por territorio (ORSER, Coordinación, ECO) que NO son admin
+  // de colegio ni tienen alcance General: ven minutas y notas técnicas, pero solo
+  // de su territorio (Norte / México).
+  const { esGeneral, territorio: miTerritorioAlcance } = useScope();
+  const esTerritorioScoped = !isAdmin && !esAdminColegio && !esGeneral && !!miTerritorioAlcance;
+
   const [search, setSearch]           = useState('');
   const [filterTipo, setFilterTipo]   = useState<'all' | 'minuta' | 'nota_tecnica'>('all');
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
@@ -132,7 +139,7 @@ export default function Minutas() {
 
   // ── Data ────────────────────────────────────────────────────────────────
   const { data: minutas = [], isLoading } = useQuery({
-    queryKey: ['minutas', esAdminColegio, miColegio],
+    queryKey: ['minutas', esAdminColegio, miColegio, esTerritorioScoped, miTerritorioAlcance],
     queryFn: async () => {
       let query = supabase.from('minutas').select('*').order('fecha', { ascending: false });
       if (esAdminColegio) {
@@ -142,6 +149,10 @@ export default function Minutas() {
           .eq('tipo', 'minuta')
           .eq('colegio', miColegio)
           .eq('notificar_admin_colegio', true);
+      } else if (esTerritorioScoped) {
+        // ORSER / Coordinación con alcance de territorio (no General): ve minutas y
+        // notas técnicas, pero solo de su territorio.
+        query = query.eq('territorio', miTerritorioAlcance);
       }
       const { data, error } = await query;
       if (error) throw error;
@@ -427,7 +438,11 @@ export default function Minutas() {
   return (
     <div className="space-y-5">
       <PageHeader
-        title={esAdminColegio ? `Minutas — ${miColegio}` : 'Minutas y Notas Técnicas'}
+        title={
+          esAdminColegio ? `Minutas — ${miColegio}` :
+          esTerritorioScoped ? `Minutas y Notas Técnicas — ${miTerritorioAlcance}` :
+          'Minutas y Notas Técnicas'
+        }
         subtitle={esAdminColegio
           ? 'Minutas de reunión de tu colegio compartidas contigo'
           : 'Repositorio de minutas de reunión y notas técnicas de seguimiento'}
