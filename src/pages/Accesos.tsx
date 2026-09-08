@@ -26,6 +26,20 @@ const AREAS: { value: string; label: string; color: string }[] = [
 ];
 const getAreaInfo = (value?: string) => AREAS.find(a => a.value === value) ?? null;
 
+// Qué grupos de permisos son los típicamente relevantes para cada área — solo
+// para RESALTARLOS primero en el formulario; el resto sigue disponible abajo
+// por si hace falta una excepción puntual. No oculta ni bloquea nada.
+const AREA_GRUPOS_RELEVANTES: Record<string, string[]> = {
+  colegio:            ['Dashboard', 'Solicitud de Proyecto', 'Calendario', 'Checklists', 'Minutas', 'NEXUS'],
+  director_colegio:   ['Dashboard', 'Solicitud de Proyecto', 'Calendario', 'Checklists', 'Minutas', 'Reportes', 'NEXUS'],
+  coordinacion_rcma:  ['Dashboard', 'Proyectos', 'Tickets', 'Ticket MAS', 'Reportes', 'Calendario', 'Checklists'],
+  orser_finanzas:     ['Reportes', 'Insumos', 'Proyectos', 'Dashboard'],
+  orser_juridico:     ['Reportes', 'Ticket MAS', 'Anteproyectos', 'Minutas'],
+  orser_fiscal:       ['Reportes', 'Insumos', 'Proyectos'],
+  orser_eco:          ['Proyectos', 'Anteproyectos', 'Checklists', 'Reportes'],
+  orser_pc:           ['Checklists', 'Calendario', 'Reportes'],
+};
+
 // Áreas que se ubican en un colegio específico (Territorio → Colegio, como hoy).
 // El resto (Coordinación RCMA y las áreas ORSER) se manejan por Alcance: Norte / México / General.
 const AREAS_CON_COLEGIO = ['colegio', 'director_colegio'];
@@ -120,32 +134,50 @@ interface EditingUser {
 interface PermissionEditorProps {
   perms:    Record<string, boolean>;
   onChange: (perms: Record<string, boolean>) => void;
+  area?:    string;
 }
 
-function PermissionEditor({ perms, onChange }: PermissionEditorProps) {
+function PermissionEditor({ perms, onChange, area }: PermissionEditorProps) {
+  const relevantes = area ? (AREA_GRUPOS_RELEVANTES[area] ?? []) : [];
+  const gruposOrdenados = useMemo(() => {
+    if (relevantes.length === 0) return { destacados: PERMISSION_GROUPS, resto: [] as typeof PERMISSION_GROUPS };
+    const destacados = PERMISSION_GROUPS.filter(g => relevantes.includes(g.label));
+    const resto       = PERMISSION_GROUPS.filter(g => !relevantes.includes(g.label));
+    return { destacados, resto };
+  }, [relevantes]);
+
+  const renderGrupo = (group: typeof PERMISSION_GROUPS[number], destacado: boolean) => (
+    <div key={group.label} className={`p-4 rounded-lg border ${destacado ? 'bg-blue-50/60 border-blue-200' : 'bg-slate-50 border-slate-100'}`}>
+      <p className={`text-xs font-bold uppercase tracking-widest mb-3 flex items-center gap-2 ${destacado ? 'text-blue-600' : 'text-slate-400'}`}>
+        {group.label}
+        {destacado && <span className="text-[9px] font-bold bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded-full normal-case tracking-normal">Típico de esta área</span>}
+      </p>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        {group.permissions.map(perm => (
+          <label key={perm} className="flex items-center gap-3 cursor-pointer group">
+            <div className="relative inline-flex items-center">
+              <input type="checkbox" className="sr-only peer"
+                checked={!!perms[perm]}
+                onChange={e => onChange({ ...perms, [perm]: e.target.checked })}
+              />
+              <div className="w-9 h-5 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-slate-800" />
+            </div>
+            <span className="text-sm text-slate-600 group-hover:text-slate-900 transition-colors">
+              {PERMISSIONS[perm]}
+            </span>
+          </label>
+        ))}
+      </div>
+    </div>
+  );
+
   return (
     <div className="space-y-4">
-      {PERMISSION_GROUPS.map(group => (
-        <div key={group.label} className="bg-slate-50 p-4 rounded-lg border border-slate-100">
-          <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-3">{group.label}</p>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            {group.permissions.map(perm => (
-              <label key={perm} className="flex items-center gap-3 cursor-pointer group">
-                <div className="relative inline-flex items-center">
-                  <input type="checkbox" className="sr-only peer"
-                    checked={!!perms[perm]}
-                    onChange={e => onChange({ ...perms, [perm]: e.target.checked })}
-                  />
-                  <div className="w-9 h-5 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-slate-800" />
-                </div>
-                <span className="text-sm text-slate-600 group-hover:text-slate-900 transition-colors">
-                  {PERMISSIONS[perm]}
-                </span>
-              </label>
-            ))}
-          </div>
-        </div>
-      ))}
+      {gruposOrdenados.destacados.map(g => renderGrupo(g, true))}
+      {gruposOrdenados.resto.length > 0 && gruposOrdenados.destacados.length > 0 && (
+        <p className="text-[10px] font-bold text-slate-300 uppercase tracking-widest pt-1">Otros módulos</p>
+      )}
+      {gruposOrdenados.resto.map(g => renderGrupo(g, false))}
     </div>
   );
 }
@@ -623,7 +655,7 @@ export default function Accesos() {
                 {/* Permisos */}
                 <div className="space-y-3">
                   <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">Privilegios del sistema</p>
-                  <PermissionEditor perms={invitePerms} onChange={setInvitePerms} />
+                  <PermissionEditor perms={invitePerms} onChange={setInvitePerms} area={inviteArea} />
                 </div>
               </form>
             </div>
@@ -752,6 +784,7 @@ export default function Accesos() {
                 <PermissionEditor
                   perms={editingUser.perms}
                   onChange={perms => setEditingUser(prev => prev ? { ...prev, perms } : null)}
+                  area={editingUser.area}
                 />
               </div>
             </div>
