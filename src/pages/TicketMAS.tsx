@@ -6,6 +6,7 @@ import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { useAuth } from '@/lib/AuthContext';
 import { usePermissions } from '@/hooks/usePermissions';
+import { useScope } from '@/hooks/useScope';
 import { useEcoLookup } from '@/hooks/useEcoLookup';
 import { useDirectorio, type DirectorioColegio, getGerenteFMA, getDirectorNacional, findColegio } from '@/lib/directorio';
 import {
@@ -294,6 +295,7 @@ export default function TicketMAS() {
   const { user }  = useAuth();
   const { getEco } = useEcoLookup();
   const { can }   = usePermissions();
+  const { filtrarPorAlcance } = useScope();
   const isAdmin   = user?.user_metadata?.role === 'admin';
   const qc        = useQueryClient();
 
@@ -413,7 +415,7 @@ export default function TicketMAS() {
   };
 
   // ── Generar folio ─────────────────────────────────────────────────────────────
-  const { data: tickets = [], isLoading: loadingTickets } = useQuery({
+  const { data: rawTicketsMas = [], isLoading: loadingTickets } = useQuery({
     queryKey: ['tickets_mas'],
     queryFn: async () => {
       const { data, error } = await supabase
@@ -425,6 +427,11 @@ export default function TicketMAS() {
     },
     enabled: canVerLista && !soloFormulario,
   });
+
+  const tickets = useMemo(
+    () => filtrarPorAlcance(rawTicketsMas, t => t.territorio, t => t.colegio),
+    [rawTicketsMas, filtrarPorAlcance]
+  );
 
   const ticketsFiltrados = useMemo(() => {
     if (filterStatus === 'todos') return tickets;

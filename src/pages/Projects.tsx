@@ -14,6 +14,7 @@ import PriorityBadge from '@/components/shared/PriorityBadge';
 import ProjectForm from '@/components/projects/ProjectForm';
 import { COLEGIOS, TERRITORIOS } from '@/lib/colegios';
 import { usePermissions } from '@/hooks/usePermissions';
+import { useScope } from '@/hooks/useScope';
 import { logAudit } from '@/lib/audit';
 
 const PAGE_SIZE   = 20;
@@ -45,6 +46,7 @@ interface Project {
 
 export default function Projects() {
   const { isAdmin, can } = usePermissions();
+  const { filtrarPorAlcance } = useScope();
   const puedeCrear = isAdmin || can('crear_proyectos');
   const [showForm, setShowForm]                 = useState(false);
   const [filterStatuses, setFilterStatuses]         = useState<Set<string>>(new Set());
@@ -71,7 +73,11 @@ export default function Projects() {
     },
   });
 
-  const projects = rawProjects as unknown as Project[];
+  const projectsAlcance = rawProjects as unknown as Project[];
+  const projects = useMemo(
+    () => filtrarPorAlcance(projectsAlcance, p => p.territorio, p => p.colegio),
+    [projectsAlcance, filtrarPorAlcance]
+  );
   const tickets  = rawTickets  as unknown as Ticket[];
 
   // Mapa proyecto_id → ticket (para buscar rápido en cada tarjeta)

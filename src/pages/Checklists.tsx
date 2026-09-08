@@ -23,6 +23,7 @@ import ChecklistForm, { MATERIALES } from '@/components/checklists/ChecklistForm
 import { format, parseISO } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { usePermissions } from '@/hooks/usePermissions';
+import { useScope } from '@/hooks/useScope';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // TAB 1 — HELPERS (Checklists normales)
@@ -1109,6 +1110,7 @@ export default function Checklists() {
   const navigate     = useNavigate();
   const qc           = useQueryClient();
   const { isAdmin, can }  = usePermissions();
+  const { filtrarPorAlcance } = useScope();
   const puedeCrear    = isAdmin || can('crear_checklists');
   const puedeEliminar = isAdmin || can('eliminar_checklists');
 
@@ -1129,7 +1131,10 @@ export default function Checklists() {
     queryKey: ['checklists'],
     queryFn: () => db.Checklist.list('-created_at', 500),
   });
-  const checklists = useMemo(() => (data ?? []) as unknown as ChecklistRecord[], [data]);
+  const checklists = useMemo(
+    () => filtrarPorAlcance((data ?? []) as unknown as ChecklistRecord[], c => c.territorio, c => c.colegio),
+    [data, filtrarPorAlcance]
+  );
   const colegiosFiltrados = useMemo(() =>
     filterTerr ? COLEGIOS.filter(c => c.territorio === filterTerr) : COLEGIOS, [filterTerr]);
   const filtered = useMemo(() => {
@@ -1204,12 +1209,12 @@ export default function Checklists() {
   });
 
   const evaluaciones = useMemo(() => {
-    let list = minimosRaw;
+    let list = filtrarPorAlcance(minimosRaw, e => e.territorio, e => e.colegio);
     if (mSearch)     list = list.filter(e => e.colegio?.toLowerCase().includes(mSearch.toLowerCase()));
     if (mFilterTerr) list = list.filter(e => e.territorio === mFilterTerr);
     if (mFilterCol)  list = list.filter(e => e.colegio === mFilterCol);
     return list;
-  }, [minimosRaw, mSearch, mFilterTerr, mFilterCol]);
+  }, [minimosRaw, mSearch, mFilterTerr, mFilterCol, filtrarPorAlcance]);
 
   const visibleMin     = useMemo(() => evaluaciones.slice(0, minVisibleCount), [evaluaciones, minVisibleCount]);
   const hasMoreMin      = minVisibleCount < evaluaciones.length;

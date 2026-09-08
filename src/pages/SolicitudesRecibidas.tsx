@@ -7,6 +7,7 @@ import { es } from 'date-fns/locale';
 import { ChevronDown, CheckCircle, Eye, X, Building2, User, Mail, Calendar, DollarSign, Printer, Trash2, Ban, Send } from 'lucide-react';
 import { useSharePointUpload, renameCarpetaSharePoint } from '@/hooks/useSharePointUpload';
 import { logAudit } from '@/lib/audit';
+import { useScope } from '@/hooks/useScope';
 import PageHeader from '@/components/shared/PageHeader';
 import { useDirectorio } from '@/lib/directorio';
 
@@ -44,6 +45,7 @@ const fmx = (n?: number | null) =>
 export default function SolicitudesRecibidas() {
   // Fuente única de verdad: territorio de cada colegio en vivo desde Directorio.
   const { data: directorioRows = [] } = useDirectorio();
+  const { filtrarPorAlcance } = useScope();
   const colegioTerritorioMap = useMemo(() => {
     const map: Record<string, string> = {};
     directorioRows.forEach(r => { map[r.nombre] = r.territorio; });
@@ -164,7 +166,11 @@ export default function SolicitudesRecibidas() {
     },
   });
 
-  const solicitudes = raw as Solicitud[];
+  const solicitudesAlcance = raw as Solicitud[];
+  const solicitudes = useMemo(
+    () => filtrarPorAlcance(solicitudesAlcance, s => colegioTerritorioMap[s.nombre_centro ?? '']),
+    [solicitudesAlcance, colegioTerritorioMap, filtrarPorAlcance]
+  );
 
   const uploadCotMutation = useMutation({
     mutationFn: async (sol: any) => {

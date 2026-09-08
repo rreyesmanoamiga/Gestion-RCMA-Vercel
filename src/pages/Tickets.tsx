@@ -14,6 +14,7 @@ import ColegioSelector from '@/components/shared/ColegioSelector';
 import { COLEGIOS, TERRITORIOS } from '@/lib/colegios';
 import { useEcoLookup } from '@/hooks/useEcoLookup';
 import { usePermissions } from '@/hooks/usePermissions';
+import { useScope } from '@/hooks/useScope';
 import { logAudit } from '@/lib/audit';
 
 const PAGE_SIZE = 20;
@@ -360,6 +361,7 @@ function TicketForm({
 // ─── Página principal ─────────────────────────────────────────────────────────
 export default function Tickets() {
   const { isAdmin, can } = usePermissions();
+  const { filtrarPorAlcance } = useScope();
   const puedeCrear    = isAdmin || can('crear_tickets');
   const puedeEditar   = isAdmin || can('editar_tickets');
   const puedeEliminar = isAdmin || can('eliminar_tickets');
@@ -408,7 +410,11 @@ export default function Tickets() {
     queryFn: () => db.Project.list('-created_at', 500),
   });
 
-  const tickets  = rawTickets  as TicketRecord[];
+  const ticketsAlcance = rawTickets  as TicketRecord[];
+  const tickets = useMemo(
+    () => filtrarPorAlcance(ticketsAlcance, t => t.territorio, t => t.colegio),
+    [ticketsAlcance, filtrarPorAlcance]
+  );
   const projects = rawProjects as unknown as Project[];
 
   const projectMap = useMemo(

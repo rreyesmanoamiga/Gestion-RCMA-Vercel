@@ -14,6 +14,7 @@ import { COLEGIOS, TERRITORIOS } from '@/lib/colegios';
 import { useEcoLookup } from '@/hooks/useEcoLookup';
 import { logAudit } from '@/lib/audit';
 import { usePermissions } from '@/hooks/usePermissions';
+import { useScope } from '@/hooks/useScope';
 import { useAuth } from '@/lib/AuthContext';
 
 const PAGE_SIZE = 20;
@@ -343,6 +344,7 @@ function AnteproyectoForm({
 // ─── Página principal ─────────────────────────────────────────────────────────
 export default function Anteproyectos() {
   const { isAdmin, can } = usePermissions();
+  const { filtrarPorAlcance } = useScope();
   const { user } = useAuth();
   const userName = user?.user_metadata?.nombre || user?.email || 'Usuario';
   const puedeCrear    = isAdmin || can('crear_anteproyectos');
@@ -375,7 +377,11 @@ export default function Anteproyectos() {
     queryFn: () => db.Project.list('-created_at', 500),
   });
 
-  const anteproyectos = rawAnteproyectos as Anteproyecto[];
+  const anteproyectosAlcance = rawAnteproyectos as Anteproyecto[];
+  const anteproyectos = useMemo(
+    () => filtrarPorAlcance(anteproyectosAlcance, a => a.territorio, a => a.colegio),
+    [anteproyectosAlcance, filtrarPorAlcance]
+  );
   const projects      = rawProjects as unknown as Project[];
 
   const projectMap = useMemo(

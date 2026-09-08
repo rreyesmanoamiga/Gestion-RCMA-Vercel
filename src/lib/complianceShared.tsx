@@ -1,7 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { supabase } from '@/lib/supabaseClient';
+import { useScope } from '@/hooks/useScope';
 import { Loader2, AlertTriangle, RefreshCw, X } from 'lucide-react';
 
 export interface ComplianceDoc {
@@ -76,7 +77,8 @@ export function esRetraso(d: ComplianceDoc, hoy: Date): boolean {
 // ---------------------------------------------------------------------------
 
 export function useComplianceDocs() {
-  return useQuery({
+  const { filtrarPorAlcance } = useScope();
+  const query = useQuery({
     queryKey: ['compliance_documentos'],
     queryFn: async () => {
       const { data, error } = await supabase
@@ -88,6 +90,13 @@ export function useComplianceDocs() {
     },
     retry: 1,
   });
+
+  const data = useMemo(
+    () => filtrarPorAlcance(query.data ?? [], d => d.territorio, d => d.colegio),
+    [query.data, filtrarPorAlcance]
+  );
+
+  return { ...query, data };
 }
 
 export function useUpdateDoc() {
