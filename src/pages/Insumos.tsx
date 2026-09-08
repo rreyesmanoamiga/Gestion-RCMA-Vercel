@@ -447,8 +447,12 @@ export default function Insumos() {
         });
         if (result) { spUrl = result.webUrl; spNombre = result.fileName; }
       }
+      // No regresamos el estatus si ya iba más adelante (autorizado/surtido) — aquí
+      // solo se está rescatando/actualizando el archivo, no reabriendo el flujo.
+      const ESTATUS_AVANZADOS = ['autorizado', 'surtido'];
+      const nuevoEstatus = ESTATUS_AVANZADOS.includes(req.estatus) ? req.estatus : 'cotizacion_recibida';
       await supabase.from('insumos_requisiciones').update({
-        estatus: 'cotizacion_recibida',
+        estatus: nuevoEstatus,
         link_cotizacion: link || spUrl,
         total_cotizado:  subtotal,
         iva_porcentaje:  ivaPct,
@@ -796,11 +800,13 @@ export default function Insumos() {
                         + Cotización
                       </button>
                     )}
-                    {/* Editar cotización ya registrada */}
-                    {isAdmin && (req.estatus === 'cotizacion_recibida' || req.estatus === 'en_autorizacion') && (
+                    {/* Editar cotización ya registrada — incluye estatus posteriores, para
+                        poder rescatar el archivo en requisiciones viejas que ya avanzaron
+                        de estatus antes de que existiera esta carpeta en OneDrive. */}
+                    {isAdmin && ['cotizacion_recibida', 'en_autorizacion', 'autorizado', 'surtido'].includes(req.estatus) && (
                       <button type="button" onClick={() => openPricing(req)}
                         className="px-3 py-1.5 text-xs font-bold bg-slate-600 text-white rounded-lg hover:bg-slate-700 transition flex items-center gap-1">
-                        <Pencil className="w-3 h-3" /> Editar cotización
+                        <Pencil className="w-3 h-3" /> {req.cotizacion_sp_url ? 'Editar cotización' : 'Adjuntar cotización'}
                       </button>
                     )}
                     {/* Solicitar VoBo */}
