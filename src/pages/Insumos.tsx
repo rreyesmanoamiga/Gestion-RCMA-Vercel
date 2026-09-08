@@ -775,7 +775,7 @@ export default function Insumos() {
                           <FileArchive className="w-3 h-3"/> PDF Autorizado
                         </a>
                       )}
-                      {req.estatus === 'autorizado' && !req.pdf_sp_url && (
+                      {!!req.vobo_fecha && !req.pdf_sp_url && (
                         <button onClick={() => subirPdfAutorizado(req.id, req.folio)}
                           className="inline-flex items-center gap-1 text-xs font-bold text-amber-700 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-full hover:bg-amber-100 transition">
                           <FileArchive className="w-3 h-3"/> Reintentar subir PDF a OneDrive
