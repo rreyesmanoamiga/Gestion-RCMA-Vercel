@@ -15,6 +15,7 @@ export interface ComplianceDoc {
   estado: string;
   vigente: string | null;
   fecha_limite_recepcion: string | null;
+  fecha_presentacion: string | null;
   vigente_desde: string | null;
   vigente_hasta: string | null;
   responsable: string | null;
@@ -46,6 +47,32 @@ export function esRetraso(d: ComplianceDoc, hoy: Date): boolean {
   return new Date(d.fecha_limite_recepcion + 'T00:00:00') < hoy;
 }
 
+// Años que suma cada periodicidad. 'Único trámite' o una periodicidad
+// desconocida regresa null (nunca vuelve a tocar renovarlo).
+const AÑOS_POR_PERIODICIDAD: Record<string, number> = {
+  'Anual': 1, 'Cada 2 años': 2, 'Cada 3 años': 3, 'Cada 4 años': 4, 'Cada 5 años': 5,
+};
+
+// A partir de cuándo se presentó el documento + su periodicidad, calcula la
+// fecha en que toca volver a tramitarlo. Si no hay fecha de presentación o la
+// periodicidad es "Único trámite", regresa null (no aplica renovación).
+export function calcularProximaActualizacion(fechaPresentacion: string | null, periodicidad: string | null | undefined): Date | null {
+  if (!fechaPresentacion) return null;
+  const años = periodicidad ? AÑOS_POR_PERIODICIDAD[periodicidad] : undefined;
+  if (!años) return null;
+  const d = new Date(fechaPresentacion + 'T00:00:00');
+  d.setFullYear(d.getFullYear() + años);
+  return d;
+}
+
+// Compara la próxima actualización contra "hoy": true si ya se cumplió el
+// plazo (toca renovar ya) o si vence dentro de los próximos 60 días.
+export function tocaActualizar(proxima: Date | null, hoy: Date): boolean {
+  if (!proxima) return false;
+  const en60dias = new Date(hoy); en60dias.setDate(en60dias.getDate() + 60);
+  return proxima <= en60dias;
+}
+
 // ---------------------------------------------------------------------------
 // Data hooks
 // ---------------------------------------------------------------------------
@@ -57,7 +84,7 @@ export function useComplianceDocs() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('compliance_documentos')
-        .select('id, colegio, territorio, materia, tipo_documento, norma, estado, vigente, fecha_limite_recepcion, vigente_desde, vigente_hasta, responsable, año')
+        .select('id, colegio, territorio, materia, tipo_documento, norma, estado, vigente, fecha_limite_recepcion, fecha_presentacion, vigente_desde, vigente_hasta, responsable, año')
         .eq('activo', true);
       if (error) throw error;
       return (data ?? []) as unknown as ComplianceDoc[];
@@ -187,6 +214,31 @@ export function EstadoSelect({ doc, onSaved, className }: { doc: ComplianceDoc; 
   );
 }
 
+export function FechaPresentacionInput({ doc, onSaved }: { doc: ComplianceDoc; onSaved: () => void }) {
+  const [valor, setValor] = useState(doc.fecha_presentacion ?? '');
+  const updateDoc = useUpdateDoc();
+
+  useEffect(() => { setValor(doc.fecha_presentacion ?? ''); }, [doc.fecha_presentacion]);
+
+  const guardar = (nuevo: string) => {
+    if (nuevo === (doc.fecha_presentacion ?? '')) return;
+    updateDoc.mutate(
+      { id: doc.id, patch: { fecha_presentacion: nuevo || null } },
+      { onSuccess: () => { toast.success('Fecha de presentación actualizada'); onSaved(); } }
+    );
+  };
+
+  return (
+    <input
+      type="date"
+      value={valor}
+      onClick={e => e.stopPropagation()}
+      onChange={e => { setValor(e.target.value); guardar(e.target.value); }}
+      className="w-full px-2 py-1 text-xs border border-slate-200 rounded focus:outline-none focus:ring-1 focus:ring-[#00295A]/30"
+    />
+  );
+}
+
 export function ResponsableInput({ doc, onSaved }: { doc: ComplianceDoc; onSaved: () => void }) {
   const [valor, setValor] = useState(doc.responsable ?? '');
   const updateDoc = useUpdateDoc();
@@ -220,7 +272,7 @@ export function ResponsableInput({ doc, onSaved }: { doc: ComplianceDoc; onSaved
 // Modal de detalle — formulario completo, reusado por Documentos y Alertas
 // ---------------------------------------------------------------------------
 
-export function DetalleModal({ doc, onClose, onSaved }: { doc: ComplianceDoc; onClose: () => void; onSaved: () => void }) {
+export function DetalleModal({ doc, onClose, onSaved, periodicidad }: { doc: ComplianceDoc; onClose: () => void; onSaved: () => void; periodicidad?: string }) {
   const updateDoc = useUpdateDoc();
 
   const [form, setForm] = useState({
@@ -229,6 +281,7 @@ export function DetalleModal({ doc, onClose, onSaved }: { doc: ComplianceDoc; on
     materia: doc.materia ?? '',
     norma: doc.norma ?? '',
     fecha_limite_recepcion: doc.fecha_limite_recepcion ?? '',
+    fecha_presentacion: doc.fecha_presentacion ?? '',
     vigente_desde: doc.vigente_desde ?? '',
     vigente_hasta: doc.vigente_hasta ?? '',
     año: String(doc.año ?? ''),
@@ -238,6 +291,11 @@ export function DetalleModal({ doc, onClose, onSaved }: { doc: ComplianceDoc; on
   const set = (campo: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
     setForm(f => ({ ...f, [campo]: e.target.value }));
 
+  const proximaActualizacion = useMemo(
+    () => calcularProximaActualizacion(form.fecha_presentacion || null, periodicidad),
+    [form.fecha_presentacion, periodicidad]
+  );
+
   const guardarTodo = () => {
     const patch: Partial<ComplianceDoc> = {
       estado: form.estado,
@@ -245,6 +303,7 @@ export function DetalleModal({ doc, onClose, onSaved }: { doc: ComplianceDoc; on
       materia: form.materia || null,
       norma: form.norma.trim() || null,
       fecha_limite_recepcion: form.fecha_limite_recepcion || null,
+      fecha_presentacion: form.fecha_presentacion || null,
       vigente_desde: form.vigente_desde || null,
       vigente_hasta: form.vigente_hasta || null,
       año: form.año ? parseInt(form.año, 10) : doc.año,
@@ -317,6 +376,10 @@ export function DetalleModal({ doc, onClose, onSaved }: { doc: ComplianceDoc; on
               <input type="date" value={form.fecha_limite_recepcion} onChange={set('fecha_limite_recepcion')} disabled={updateDoc.isPending} className={inputCls} />
             </div>
             <div>
+              <label className={labelCls}>Fecha de presentación</label>
+              <input type="date" value={form.fecha_presentacion} onChange={set('fecha_presentacion')} disabled={updateDoc.isPending} className={inputCls} />
+            </div>
+            <div>
               <label className={labelCls}>Año</label>
               <input type="number" value={form.año} onChange={set('año')} disabled={updateDoc.isPending} className={inputCls} />
             </div>
@@ -329,6 +392,19 @@ export function DetalleModal({ doc, onClose, onSaved }: { doc: ComplianceDoc; on
               <input type="date" value={form.vigente_hasta} onChange={set('vigente_hasta')} disabled={updateDoc.isPending} className={inputCls} />
             </div>
           </div>
+
+          {periodicidad && (
+            <div className={`rounded-lg px-3 py-2.5 border ${proximaActualizacion ? 'bg-amber-50 border-amber-200' : 'bg-slate-50 border-slate-200'}`}>
+              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wide">Periodicidad: {periodicidad}</p>
+              <p className="text-xs mt-0.5">
+                {proximaActualizacion
+                  ? <>Próxima actualización: <strong>{proximaActualizacion.toLocaleDateString('es-MX', { year: 'numeric', month: 'long' })}</strong></>
+                  : form.fecha_presentacion
+                    ? 'Trámite único — no vuelve a renovarse'
+                    : 'Captura la fecha de presentación para calcular cuándo toca renovarlo'}
+              </p>
+            </div>
+          )}
         </div>
 
         <div className="flex items-center justify-end gap-2 px-5 py-4 border-t border-slate-100 bg-slate-50 rounded-b-xl sticky bottom-0">

@@ -9,6 +9,7 @@ import { AlertTriangle, Clock, CheckCircle2, Bell, X, Mail, UserPlus, Trash2 } f
 import {
   useComplianceDocs, esRetraso, diasDiferencia, formatFecha,
   LoadingBlock, ErrorBlock, DetalleModal,
+  calcularProximaActualizacion, tocaActualizar,
   type ComplianceDoc,
 } from '@/lib/complianceShared';
 
@@ -239,6 +240,37 @@ export default function CumplimientoAlertas() {
       .sort((a, b) => a.dias - b.dias);
   }, [docs, hoy]);
 
+  // Periodicidad de cada documento — igual que en Documentos.
+  const { data: conceptos = [] } = useQuery({
+    queryKey: ['compliance_conceptos'],
+    queryFn: async () => {
+      const { data, error } = await supabase.from('compliance_conceptos').select('id, nombre, periodicidad');
+      if (error) throw error;
+      return (data ?? []) as { id: string; nombre: string; periodicidad: string }[];
+    },
+  });
+  const { data: periodicidadesColegio = [] } = useQuery({
+    queryKey: ['compliance_periodicidad_colegio'],
+    queryFn: async () => {
+      const { data, error } = await supabase.from('compliance_periodicidad_colegio').select('colegio, concepto_id, periodicidad');
+      if (error) throw error;
+      return (data ?? []) as { colegio: string; concepto_id: string; periodicidad: string }[];
+    },
+  });
+  const getPeriodicidad = (colegio: string, tipoDocumento: string): string | undefined => {
+    const concepto = conceptos.find(c => c.nombre === tipoDocumento);
+    if (!concepto) return undefined;
+    const override = periodicidadesColegio.find(p => p.colegio === colegio && p.concepto_id === concepto.id);
+    return override?.periodicidad ?? concepto.periodicidad;
+  };
+
+  const tocaRenovar = useMemo(() => {
+    return docs
+      .map(d => ({ d, proxima: calcularProximaActualizacion(d.fecha_presentacion, getPeriodicidad(d.colegio, d.tipo_documento)) }))
+      .filter(({ proxima }) => proxima && tocaActualizar(proxima, hoy))
+      .sort((a, b) => (a.proxima!.getTime() - b.proxima!.getTime()));
+  }, [docs, conceptos, periodicidadesColegio, hoy]);
+
   if (!isAdmin && !can('ver_cumplimiento')) {
     return (
       <div className="p-6 lg:p-8 max-w-[1700px] mx-auto">
@@ -259,7 +291,7 @@ export default function CumplimientoAlertas() {
       </div>
 
       {isError ? <ErrorBlock onRetry={() => refetch()} /> : isLoading ? <LoadingBlock /> : (
-        vencidos.length === 0 && porExpirar.length === 0 ? (
+        vencidos.length === 0 && porExpirar.length === 0 && tocaRenovar.length === 0 ? (
           <div className="bg-white border border-slate-200 rounded-xl p-10 text-center">
             <div className="w-14 h-14 rounded-full bg-emerald-50 flex items-center justify-center mx-auto mb-4">
               <CheckCircle2 className="w-7 h-7 text-emerald-600" />
@@ -316,11 +348,36 @@ export default function CumplimientoAlertas() {
                 </div>
               </div>
             )}
+            {tocaRenovar.length > 0 && (
+              <div className="bg-white border border-purple-200 rounded-xl overflow-hidden">
+                <div className="px-4 py-3 border-b border-purple-100 bg-purple-50 flex items-center gap-2">
+                  <Clock className="w-4 h-4 text-purple-600" />
+                  <p className="text-xs font-bold text-purple-700 uppercase tracking-wide">
+                    Toca renovar por periodicidad — {tocaRenovar.length} documento{tocaRenovar.length !== 1 ? 's' : ''}
+                  </p>
+                </div>
+                <div className="divide-y divide-slate-100 max-h-[480px] overflow-y-auto">
+                  {tocaRenovar.map(({ d, proxima }) => (
+                    <div key={d.id} className="flex items-center justify-between px-4 py-2.5 cursor-pointer hover:bg-slate-50" onClick={() => setDetalle(d)}>
+                      <div className="min-w-0">
+                        <p className="text-sm text-slate-800 truncate">{d.tipo_documento}</p>
+                        <p className="text-[11px] text-slate-400">
+                          {d.colegio.replace('Mano Amiga ', '')} · {d.territorio} · última presentación {formatFecha(d.fecha_presentacion)}{d.responsable ? ` · ${d.responsable}` : ''}
+                        </p>
+                      </div>
+                      <span className="text-xs font-bold text-white bg-purple-600 px-2.5 py-1 rounded-full whitespace-nowrap ml-3">
+                        toca {proxima!.toLocaleDateString('es-MX', { month: 'short', year: 'numeric' })}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         )
       )}
 
-      {detalle && <DetalleModal doc={detalle} onClose={() => setDetalle(null)} onSaved={() => setDetalle(null)} />}
+      {detalle && <DetalleModal doc={detalle} onClose={() => setDetalle(null)} onSaved={() => setDetalle(null)} periodicidad={getPeriodicidad(detalle.colegio, detalle.tipo_documento)} />}
       {showNotif && <NotificacionesModal docs={docs} onClose={() => setShowNotif(false)} />}
     </div>
   );

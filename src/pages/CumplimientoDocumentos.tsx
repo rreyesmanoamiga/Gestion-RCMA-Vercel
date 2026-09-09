@@ -1,5 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { toast } from 'sonner';
+import { useQuery } from '@tanstack/react-query';
+import { supabase } from '@/lib/supabaseClient';
 import { useAuth } from '@/lib/AuthContext';
 import PageHeader from '@/components/shared/PageHeader';
 import {
@@ -9,7 +11,8 @@ import {
 import {
   useComplianceDocs, useUpdateDocsBulk, formatFecha,
   MATERIAS, ESTADOS_EDITABLES, PAGE_SIZE,
-  LoadingBlock, ErrorBlock, VigenteBadge, EstadoSelect, ResponsableInput, DetalleModal,
+  LoadingBlock, ErrorBlock, VigenteBadge, EstadoSelect, ResponsableInput, FechaPresentacionInput, DetalleModal,
+  calcularProximaActualizacion, tocaActualizar,
   type ComplianceDoc,
 } from '@/lib/complianceShared';
 import { usePermissions } from '@/hooks/usePermissions';
@@ -101,6 +104,31 @@ export default function CumplimientoDocumentos() {
   const colegios = useMemo(() => Array.from(new Set(docs.map(d => d.colegio))).sort(), [docs]);
   const estados = useMemo(() => Array.from(new Set(docs.map(d => d.estado))).sort(), [docs]);
   const años = useMemo(() => Array.from(new Set(docs.map(d => d.año))).sort((a, b) => b - a), [docs]);
+
+  // Periodicidad de cada documento: la excepción del colegio si existe, si no, el default del catálogo.
+  const { data: conceptos = [] } = useQuery({
+    queryKey: ['compliance_conceptos'],
+    queryFn: async () => {
+      const { data, error } = await supabase.from('compliance_conceptos').select('id, nombre, periodicidad');
+      if (error) throw error;
+      return (data ?? []) as { id: string; nombre: string; periodicidad: string }[];
+    },
+  });
+  const { data: periodicidadesColegio = [] } = useQuery({
+    queryKey: ['compliance_periodicidad_colegio'],
+    queryFn: async () => {
+      const { data, error } = await supabase.from('compliance_periodicidad_colegio').select('colegio, concepto_id, periodicidad');
+      if (error) throw error;
+      return (data ?? []) as { colegio: string; concepto_id: string; periodicidad: string }[];
+    },
+  });
+  const getPeriodicidad = (colegio: string, tipoDocumento: string): string | undefined => {
+    const concepto = conceptos.find(c => c.nombre === tipoDocumento);
+    if (!concepto) return undefined;
+    const override = periodicidadesColegio.find(p => p.colegio === colegio && p.concepto_id === concepto.id);
+    return override?.periodicidad ?? concepto.periodicidad;
+  };
+  const hoy = useMemo(() => { const d = new Date(); d.setHours(0, 0, 0, 0); return d; }, []);
 
   const filtrados = useMemo(() => {
     const q = busqueda.trim().toLowerCase();
@@ -272,6 +300,8 @@ export default function CumplimientoDocumentos() {
                     <th className="px-4 py-2.5 text-[10px] font-bold text-slate-400 uppercase tracking-wide">Vigente hasta</th>
                     <th className="px-4 py-2.5 text-[10px] font-bold text-slate-400 uppercase tracking-wide">Responsable</th>
                     <th className="px-4 py-2.5 text-[10px] font-bold text-slate-400 uppercase tracking-wide">Fecha límite</th>
+                    <th className="px-4 py-2.5 text-[10px] font-bold text-slate-400 uppercase tracking-wide">Presentación</th>
+                    <th className="px-4 py-2.5 text-[10px] font-bold text-slate-400 uppercase tracking-wide">Próxima actualización</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
@@ -291,10 +321,24 @@ export default function CumplimientoDocumentos() {
                       <td className="px-4 py-2.5 text-slate-500 whitespace-nowrap">{formatFecha(d.vigente_hasta)}</td>
                       <td className="px-4 py-2.5 min-w-[140px]" onClick={e => e.stopPropagation()}><ResponsableInput doc={d} onSaved={() => {}} /></td>
                       <td className="px-4 py-2.5 text-slate-500 whitespace-nowrap">{formatFecha(d.fecha_limite_recepcion)}</td>
+                      <td className="px-4 py-2.5 min-w-[130px]" onClick={e => e.stopPropagation()}><FechaPresentacionInput doc={d} onSaved={() => {}} /></td>
+                      <td className="px-4 py-2.5 whitespace-nowrap">
+                        {(() => {
+                          const periodicidad = getPeriodicidad(d.colegio, d.tipo_documento);
+                          const proxima = calcularProximaActualizacion(d.fecha_presentacion, periodicidad);
+                          if (!proxima) return <span className="text-slate-300 text-xs">—</span>;
+                          const urge = tocaActualizar(proxima, hoy);
+                          return (
+                            <span className={`text-xs font-bold px-2 py-1 rounded-full ${urge ? 'bg-red-50 text-red-700 border border-red-200' : 'bg-slate-50 text-slate-500 border border-slate-200'}`}>
+                              {proxima.toLocaleDateString('es-MX', { month: 'short', year: 'numeric' })}
+                            </span>
+                          );
+                        })()}
+                      </td>
                     </tr>
                   ))}
                   {pageItems.length === 0 && (
-                    <tr><td colSpan={11} className="text-center text-sm text-slate-400 py-8">Sin resultados para estos filtros.</td></tr>
+                    <tr><td colSpan={14} className="text-center text-sm text-slate-400 py-8">Sin resultados para estos filtros.</td></tr>
                   )}
                 </tbody>
               </table>
@@ -317,7 +361,7 @@ export default function CumplimientoDocumentos() {
             )}
           </div>
 
-          {detalle && <DetalleModal doc={detalle} onClose={() => setDetalle(null)} onSaved={() => setDetalle(null)} />}
+          {detalle && <DetalleModal doc={detalle} onClose={() => setDetalle(null)} onSaved={() => setDetalle(null)} periodicidad={getPeriodicidad(detalle.colegio, detalle.tipo_documento)} />}
         </div>
       )}
     </div>
