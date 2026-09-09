@@ -107,7 +107,7 @@ export default function CumplimientoDocumentos() {
 
   // Periodicidad de cada documento: la excepción del colegio si existe, si no, el default del catálogo.
   const { data: conceptos = [] } = useQuery({
-    queryKey: ['compliance_conceptos'],
+    queryKey: ['compliance_conceptos_periodicidad'],
     queryFn: async () => {
       const { data, error } = await supabase.from('compliance_conceptos').select('id, nombre, periodicidad');
       if (error) throw error;
@@ -115,7 +115,7 @@ export default function CumplimientoDocumentos() {
     },
   });
   const { data: periodicidadesColegio = [] } = useQuery({
-    queryKey: ['compliance_periodicidad_colegio'],
+    queryKey: ['compliance_periodicidad_colegio_lite'],
     queryFn: async () => {
       const { data, error } = await supabase.from('compliance_periodicidad_colegio').select('colegio, concepto_id, periodicidad');
       if (error) throw error;

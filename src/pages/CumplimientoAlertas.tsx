@@ -242,7 +242,7 @@ export default function CumplimientoAlertas() {
 
   // Periodicidad de cada documento — igual que en Documentos.
   const { data: conceptos = [] } = useQuery({
-    queryKey: ['compliance_conceptos'],
+    queryKey: ['compliance_conceptos_periodicidad'],
     queryFn: async () => {
       const { data, error } = await supabase.from('compliance_conceptos').select('id, nombre, periodicidad');
       if (error) throw error;
@@ -250,7 +250,7 @@ export default function CumplimientoAlertas() {
     },
   });
   const { data: periodicidadesColegio = [] } = useQuery({
-    queryKey: ['compliance_periodicidad_colegio'],
+    queryKey: ['compliance_periodicidad_colegio_lite'],
     queryFn: async () => {
       const { data, error } = await supabase.from('compliance_periodicidad_colegio').select('colegio, concepto_id, periodicidad');
       if (error) throw error;
