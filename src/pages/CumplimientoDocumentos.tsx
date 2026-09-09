@@ -137,8 +137,7 @@ export default function CumplimientoDocumentos() {
       if (territorioFiltro !== 'Todos' && d.territorio !== territorioFiltro) return false;
       if (colegioFiltro !== 'Todos' && d.colegio !== colegioFiltro) return false;
       if (estadoFiltro !== 'Todos' && d.estado !== estadoFiltro) return false;
-      if (materiaFiltro === 'Sin categoría' && d.materia) return false;
-      if (materiaFiltro !== 'Todas' && materiaFiltro !== 'Sin categoría' && d.materia !== materiaFiltro) return false;
+      if (materiaFiltro !== 'Todas' && d.materia !== materiaFiltro) return false;
       if (q && !(`${d.colegio} ${d.tipo_documento} ${d.norma ?? ''}`.toLowerCase().includes(q))) return false;
       return true;
     }).sort((a, b) => a.colegio.localeCompare(b.colegio) || a.tipo_documento.localeCompare(b.tipo_documento));

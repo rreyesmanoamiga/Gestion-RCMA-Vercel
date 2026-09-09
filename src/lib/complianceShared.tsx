@@ -22,7 +22,7 @@ export interface ComplianceDoc {
   año: number;
 }
 
-export const MATERIAS = ['Todas', 'Protección civil', 'Donatarias Autorizadas', 'Sin categoría'] as const;
+export const MATERIAS = ['Todas', 'Protección civil', 'Donatarias Autorizadas', 'Fiscal', 'Jurídico', 'Inmobiliaria', 'Gestión de Riesgos'] as const;
 export const ESTADOS_EDITABLES = ['Pendiente', 'Por revisar', 'Verificado', 'Observaciones'];
 export const PAGE_SIZE = 25;
 
@@ -362,9 +362,8 @@ export function DetalleModal({ doc, onClose, onSaved, periodicidad }: { doc: Com
             <div>
               <label className={labelCls}>Materia</label>
               <select value={form.materia} onChange={set('materia')} disabled={updateDoc.isPending} className={inputCls}>
-                <option value="">Sin categoría</option>
-                <option value="Protección civil">Protección civil</option>
-                <option value="Donatarias Autorizadas">Donatarias Autorizadas</option>
+                <option value="">Sin especificar</option>
+                {MATERIAS.filter(m => m !== 'Todas').map(m => <option key={m} value={m}>{m}</option>)}
               </select>
             </div>
             <div>

@@ -18,7 +18,6 @@ export default function CumplimientoPanelGeneral() {
     let list = docs;
     if (añoFiltro !== 'Todos') list = list.filter(d => d.año === añoFiltro);
     if (materiaFiltro === 'Todas') return list;
-    if (materiaFiltro === 'Sin categoría') return list.filter(d => !d.materia);
     return list.filter(d => d.materia === materiaFiltro);
   }, [docs, materiaFiltro, añoFiltro]);
 
