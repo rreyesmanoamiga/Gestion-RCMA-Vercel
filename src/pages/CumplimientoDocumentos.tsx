@@ -12,7 +12,6 @@ import {
   useComplianceDocs, useUpdateDocsBulk, formatFecha,
   MATERIAS, ESTADOS_EDITABLES, PAGE_SIZE,
   LoadingBlock, ErrorBlock, VigenteBadge, EstadoSelect, ResponsableInput, FechaPresentacionInput, DetalleModal,
-  calcularProximaActualizacion, tocaActualizar,
   type ComplianceDoc,
 } from '@/lib/complianceShared';
 import { usePermissions } from '@/hooks/usePermissions';
@@ -128,7 +127,6 @@ export default function CumplimientoDocumentos() {
     const override = periodicidadesColegio.find(p => p.colegio === colegio && p.concepto_id === concepto.id);
     return override?.periodicidad ?? concepto.periodicidad;
   };
-  const hoy = useMemo(() => { const d = new Date(); d.setHours(0, 0, 0, 0); return d; }, []);
 
   const filtrados = useMemo(() => {
     const q = busqueda.trim().toLowerCase();
@@ -300,7 +298,6 @@ export default function CumplimientoDocumentos() {
                     <th className="px-4 py-2.5 text-[10px] font-bold text-slate-400 uppercase tracking-wide">Responsable</th>
                     <th className="px-4 py-2.5 text-[10px] font-bold text-slate-400 uppercase tracking-wide">Fecha límite</th>
                     <th className="px-4 py-2.5 text-[10px] font-bold text-slate-400 uppercase tracking-wide">Presentación</th>
-                    <th className="px-4 py-2.5 text-[10px] font-bold text-slate-400 uppercase tracking-wide">Próxima actualización</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
@@ -321,23 +318,10 @@ export default function CumplimientoDocumentos() {
                       <td className="px-4 py-2.5 min-w-[140px]" onClick={e => e.stopPropagation()}><ResponsableInput doc={d} onSaved={() => {}} /></td>
                       <td className="px-4 py-2.5 text-slate-500 whitespace-nowrap">{formatFecha(d.fecha_limite_recepcion)}</td>
                       <td className="px-4 py-2.5 min-w-[130px]" onClick={e => e.stopPropagation()}><FechaPresentacionInput doc={d} onSaved={() => {}} /></td>
-                      <td className="px-4 py-2.5 whitespace-nowrap">
-                        {(() => {
-                          const periodicidad = getPeriodicidad(d.colegio, d.tipo_documento);
-                          const proxima = calcularProximaActualizacion(d.fecha_presentacion, periodicidad);
-                          if (!proxima) return <span className="text-slate-300 text-xs">—</span>;
-                          const urge = tocaActualizar(proxima, hoy);
-                          return (
-                            <span className={`text-xs font-bold px-2 py-1 rounded-full ${urge ? 'bg-red-50 text-red-700 border border-red-200' : 'bg-slate-50 text-slate-500 border border-slate-200'}`}>
-                              {proxima.toLocaleDateString('es-MX', { month: 'short', year: 'numeric' })}
-                            </span>
-                          );
-                        })()}
-                      </td>
                     </tr>
                   ))}
                   {pageItems.length === 0 && (
-                    <tr><td colSpan={14} className="text-center text-sm text-slate-400 py-8">Sin resultados para estos filtros.</td></tr>
+                    <tr><td colSpan={13} className="text-center text-sm text-slate-400 py-8">Sin resultados para estos filtros.</td></tr>
                   )}
                 </tbody>
               </table>

@@ -23,7 +23,7 @@ export interface ComplianceDoc {
 }
 
 export const MATERIAS = ['Todas', 'Protección civil', 'Donatarias Autorizadas', 'Fiscal', 'Jurídico', 'Inmobiliaria', 'Gestión de Riesgos'] as const;
-export const ESTADOS_EDITABLES = ['Pendiente', 'Por revisar', 'Verificado', 'Observaciones'];
+export const ESTADOS_EDITABLES = ['Pendiente', 'Solicitado', 'En Trámite', 'Verificado'];
 export const PAGE_SIZE = 25;
 
 // ---------------------------------------------------------------------------
@@ -48,29 +48,48 @@ export function esRetraso(d: ComplianceDoc, hoy: Date): boolean {
 }
 
 // Años que suma cada periodicidad. 'Único trámite' o una periodicidad
-// desconocida regresa null (nunca vuelve a tocar renovarlo).
+// desconocida regresa null (el documento nunca vence).
 const AÑOS_POR_PERIODICIDAD: Record<string, number> = {
   'Anual': 1, 'Cada 2 años': 2, 'Cada 3 años': 3, 'Cada 4 años': 4, 'Cada 5 años': 5,
 };
 
-// A partir de cuándo se presentó el documento + su periodicidad, calcula la
-// fecha en que toca volver a tramitarlo. Si no hay fecha de presentación o la
-// periodicidad es "Único trámite", regresa null (no aplica renovación).
-export function calcularProximaActualizacion(fechaPresentacion: string | null, periodicidad: string | null | undefined): Date | null {
-  if (!fechaPresentacion) return null;
-  const años = periodicidad ? AÑOS_POR_PERIODICIDAD[periodicidad] : undefined;
-  if (!años) return null;
-  const d = new Date(fechaPresentacion + 'T00:00:00');
-  d.setFullYear(d.getFullYear() + años);
-  return d;
+const DIAS_ANTICIPACION_FECHA_LIMITE = 21; // 3 semanas antes del vencimiento
+
+export interface VigenciaCalculada {
+  vigente_hasta: string | null;         // Vigente desde + periodicidad
+  fecha_limite_recepcion: string | null; // vigente_hasta − 3 semanas
+  vigente: 'Si' | 'No' | 'Por expirar' | null;
 }
 
-// Compara la próxima actualización contra "hoy": true si ya se cumplió el
-// plazo (toca renovar ya) o si vence dentro de los próximos 60 días.
-export function tocaActualizar(proxima: Date | null, hoy: Date): boolean {
-  if (!proxima) return false;
-  const en60dias = new Date(hoy); en60dias.setDate(en60dias.getDate() + 60);
-  return proxima <= en60dias;
+// A partir de "Vigente desde" (fecha de elaboración) + la periodicidad del
+// concepto (o su excepción por colegio), calcula solo:
+// - Vigente hasta (cuándo vence)
+// - Fecha límite (3 semanas antes de que venza, para dar margen de gestión)
+// - El semáforo Vigente: Sí / Por expirar (dentro de esas 3 semanas) / No (ya venció)
+// "Único trámite" no vuelve a vencer — regresa vigente_hasta null y vigente "Si" fijo.
+export function calcularVigencia(vigenteDesde: string | null, periodicidad: string | null | undefined, hoy: Date): VigenciaCalculada {
+  if (!vigenteDesde) return { vigente_hasta: null, fecha_limite_recepcion: null, vigente: null };
+
+  const años = periodicidad ? AÑOS_POR_PERIODICIDAD[periodicidad] : undefined;
+  if (!años) {
+    // "Único trámite": no vuelve a vencer, se queda vigente para siempre.
+    return { vigente_hasta: null, fecha_limite_recepcion: null, vigente: 'Si' };
+  }
+
+  const desde = new Date(vigenteDesde + 'T00:00:00');
+  const hasta = new Date(desde);
+  hasta.setFullYear(hasta.getFullYear() + años);
+
+  const limite = new Date(hasta);
+  limite.setDate(limite.getDate() - DIAS_ANTICIPACION_FECHA_LIMITE);
+
+  const toISO = (d: Date) => d.toISOString().slice(0, 10);
+
+  let vigente: 'Si' | 'No' | 'Por expirar' = 'Si';
+  if (hasta < hoy) vigente = 'No';
+  else if (limite <= hoy) vigente = 'Por expirar';
+
+  return { vigente_hasta: toISO(hasta), fecha_limite_recepcion: toISO(limite), vigente };
 }
 
 // ---------------------------------------------------------------------------
@@ -277,13 +296,10 @@ export function DetalleModal({ doc, onClose, onSaved, periodicidad }: { doc: Com
 
   const [form, setForm] = useState({
     estado: doc.estado,
-    vigente: doc.vigente ?? '',
     materia: doc.materia ?? '',
     norma: doc.norma ?? '',
-    fecha_limite_recepcion: doc.fecha_limite_recepcion ?? '',
     fecha_presentacion: doc.fecha_presentacion ?? '',
     vigente_desde: doc.vigente_desde ?? '',
-    vigente_hasta: doc.vigente_hasta ?? '',
     año: String(doc.año ?? ''),
     responsable: doc.responsable ?? '',
   });
@@ -291,21 +307,22 @@ export function DetalleModal({ doc, onClose, onSaved, periodicidad }: { doc: Com
   const set = (campo: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
     setForm(f => ({ ...f, [campo]: e.target.value }));
 
-  const proximaActualizacion = useMemo(
-    () => calcularProximaActualizacion(form.fecha_presentacion || null, periodicidad),
-    [form.fecha_presentacion, periodicidad]
+  const hoy = useMemo(() => { const d = new Date(); d.setHours(0, 0, 0, 0); return d; }, []);
+  const vigencia = useMemo(
+    () => calcularVigencia(form.vigente_desde || null, periodicidad, hoy),
+    [form.vigente_desde, periodicidad, hoy]
   );
 
   const guardarTodo = () => {
     const patch: Partial<ComplianceDoc> = {
       estado: form.estado,
-      vigente: form.vigente || null,
+      vigente: vigencia.vigente,
       materia: form.materia || null,
       norma: form.norma.trim() || null,
-      fecha_limite_recepcion: form.fecha_limite_recepcion || null,
+      fecha_limite_recepcion: vigencia.fecha_limite_recepcion,
       fecha_presentacion: form.fecha_presentacion || null,
       vigente_desde: form.vigente_desde || null,
-      vigente_hasta: form.vigente_hasta || null,
+      vigente_hasta: vigencia.vigente_hasta,
       año: form.año ? parseInt(form.año, 10) : doc.año,
       responsable: form.responsable.trim() || null,
     };
@@ -343,13 +360,12 @@ export function DetalleModal({ doc, onClose, onSaved, periodicidad }: { doc: Com
               </select>
             </div>
             <div>
-              <label className={labelCls}>Vigente</label>
-              <select value={form.vigente} onChange={set('vigente')} disabled={updateDoc.isPending} className={inputCls}>
-                <option value="">— Sin dato —</option>
-                <option value="Si">Sí</option>
-                <option value="No">No</option>
-                <option value="Por expirar">Por expirar</option>
-              </select>
+              <label className={labelCls}>Vigente (automático)</label>
+              <div className={`${inputCls} bg-slate-50 flex items-center font-bold ${
+                vigencia.vigente === 'No' ? 'text-red-600' : vigencia.vigente === 'Por expirar' ? 'text-amber-600' : vigencia.vigente === 'Si' ? 'text-emerald-600' : 'text-slate-400'
+              }`}>
+                {vigencia.vigente === 'Si' ? 'Sí' : vigencia.vigente ?? '— Captura Vigente desde —'}
+              </div>
             </div>
           </div>
 
@@ -371,11 +387,7 @@ export function DetalleModal({ doc, onClose, onSaved, periodicidad }: { doc: Com
               <input value={form.norma} onChange={set('norma')} disabled={updateDoc.isPending} placeholder="—" className={inputCls} />
             </div>
             <div>
-              <label className={labelCls}>Fecha límite recepción</label>
-              <input type="date" value={form.fecha_limite_recepcion} onChange={set('fecha_limite_recepcion')} disabled={updateDoc.isPending} className={inputCls} />
-            </div>
-            <div>
-              <label className={labelCls}>Fecha de presentación</label>
+              <label className={labelCls}>Fecha de presentación <span className="normal-case font-normal">(cuándo se sube al portal)</span></label>
               <input type="date" value={form.fecha_presentacion} onChange={set('fecha_presentacion')} disabled={updateDoc.isPending} className={inputCls} />
             </div>
             <div>
@@ -383,24 +395,26 @@ export function DetalleModal({ doc, onClose, onSaved, periodicidad }: { doc: Com
               <input type="number" value={form.año} onChange={set('año')} disabled={updateDoc.isPending} className={inputCls} />
             </div>
             <div>
-              <label className={labelCls}>Vigente desde</label>
+              <label className={labelCls}>Vigente desde <span className="normal-case font-normal">(fecha de elaboración)</span></label>
               <input type="date" value={form.vigente_desde} onChange={set('vigente_desde')} disabled={updateDoc.isPending} className={inputCls} />
             </div>
             <div>
-              <label className={labelCls}>Vigente hasta</label>
-              <input type="date" value={form.vigente_hasta} onChange={set('vigente_hasta')} disabled={updateDoc.isPending} className={inputCls} />
+              <label className={labelCls}>Vigente hasta (automático)</label>
+              <div className={`${inputCls} bg-slate-50 text-slate-500`}>
+                {vigencia.vigente_hasta ? formatFecha(vigencia.vigente_hasta) : (form.vigente_desde ? 'No vence (trámite único)' : '—')}
+              </div>
             </div>
           </div>
 
           {periodicidad && (
-            <div className={`rounded-lg px-3 py-2.5 border ${proximaActualizacion ? 'bg-amber-50 border-amber-200' : 'bg-slate-50 border-slate-200'}`}>
+            <div className={`rounded-lg px-3 py-2.5 border ${vigencia.vigente === 'No' || vigencia.vigente === 'Por expirar' ? 'bg-amber-50 border-amber-200' : 'bg-slate-50 border-slate-200'}`}>
               <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wide">Periodicidad: {periodicidad}</p>
               <p className="text-xs mt-0.5">
-                {proximaActualizacion
-                  ? <>Próxima actualización: <strong>{proximaActualizacion.toLocaleDateString('es-MX', { year: 'numeric', month: 'long' })}</strong></>
-                  : form.fecha_presentacion
-                    ? 'Trámite único — no vuelve a renovarse'
-                    : 'Captura la fecha de presentación para calcular cuándo toca renovarlo'}
+                {!form.vigente_desde
+                  ? 'Captura "Vigente desde" para calcular vencimiento y fecha límite automáticamente'
+                  : vigencia.fecha_limite_recepcion
+                    ? <>Fecha límite: <strong>{formatFecha(vigencia.fecha_limite_recepcion)}</strong> (3 semanas antes de vencer) · Vence: <strong>{formatFecha(vigencia.vigente_hasta)}</strong></>
+                    : 'Trámite único — no vuelve a vencer'}
               </p>
             </div>
           )}
