@@ -162,6 +162,7 @@ export default function Sidebar({ isOpen, onToggle }) {
   const cControlNormativo = [
     { to: '/cumplimiento/panel-general', icon: ShieldCheck, label: 'Panel General de Cumplimiento' },
     { to: '/cumplimiento/documentos',    icon: FileText,    label: 'Validación de Vigencias' },
+    ...(isAdmin || can('editar_cumplimiento') ? [{ to: '/cumplimiento/catalogo', icon: Layers, label: 'Catálogo de Cumplimiento' }] : []),
   ];
   const cGestionPC = [
     { to: '/cumplimiento/alertas', icon: ShieldAlert, label: 'Inspecciones y Alertas Críticas' },

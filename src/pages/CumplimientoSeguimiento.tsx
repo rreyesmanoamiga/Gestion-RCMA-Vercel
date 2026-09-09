@@ -10,7 +10,7 @@ import {
   Plus, Search, Pin, Pencil, Trash2, X, FileText, ListChecks, Users,
   ClipboardList, Clock, AlertCircle, CheckCircle2, MessageSquare, Loader2,
 } from 'lucide-react';
-import { useComplianceDocs, LoadingBlock, ErrorBlock, COLEGIO_A_CODIGO } from '@/lib/complianceShared';
+import { useComplianceDocs, LoadingBlock, ErrorBlock } from '@/lib/complianceShared';
 import { usePermissions } from '@/hooks/usePermissions';
 import AccesoRestringido from '@/components/shared/AccesoRestringido';
 
@@ -276,7 +276,7 @@ export default function CumplimientoSeguimiento() {
   });
 
   const usuariosPorGrupo = useMemo(() => {
-    const codigoColegio = COLEGIO_A_CODIGO[pendForm.colegio];
+    const codigoColegio = pendForm.colegio || undefined; // colegio ya es el código corto (ej. "MA CON")
     const colegioObj = docs.find(d => d.colegio === pendForm.colegio);
     const territorioSel = colegioObj?.territorio;
     const fmaUsers = allUsers.filter(u => u.territorio === 'FMA');

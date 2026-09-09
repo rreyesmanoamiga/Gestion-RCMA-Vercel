@@ -25,32 +25,6 @@ export const MATERIAS = ['Todas', 'Protección civil', 'Donatarias Autorizadas',
 export const ESTADOS_EDITABLES = ['Pendiente', 'Por revisar', 'Verificado', 'Observaciones'];
 export const PAGE_SIZE = 25;
 
-// Mapeo "Mano Amiga X" (usado en compliance_documentos) -> código corto
-// "MA XXX" (usado en user_permissions y en el resto del sistema, ver
-// src/lib/colegios.ts). Necesario para cruzar usuarios por colegio.
-export const COLEGIO_A_CODIGO: Record<string, string> = {
-  'Mano Amiga Acapulco': 'MA ACA',
-  'Mano Amiga Aguascalientes': 'MA AGS',
-  'Mano Amiga Cancún': 'MA CAN',
-  'Mano Amiga Chalco': 'MA CHA',
-  'Mano Amiga Conkal': 'MA CON',
-  'Mano Amiga Guadalajara': 'MA GDL',
-  'Mano Amiga La Cima': 'MA CIM',
-  'Mano Amiga León': 'MA LEO',
-  'Mano Amiga Lerma': 'MA LER',
-  'Mano Amiga Monterrey': 'MA MTY',
-  'Mano Amiga Morelia': 'MA MOR',
-  'Mano Amiga Piedras Negras': 'MA PIE',
-  'Mano Amiga Puebla': 'MA PUE',
-  'Mano Amiga Querétaro': 'MA QRO',
-  'Mano Amiga Santa Catarina': 'MA SCA',
-  'Mano Amiga Tapachula': 'MA TAP',
-  'Mano Amiga Tijuana': 'MA TIJ',
-  'Mano Amiga Torreón': 'MA TOR',
-  'Mano Amiga Villas de San Juan': 'MA VSJ',
-  'Mano Amiga Zomeyucán': 'MA ZOM',
-};
-
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
@@ -293,7 +267,7 @@ export function DetalleModal({ doc, onClose, onSaved }: { doc: ComplianceDoc; on
       >
         <div className="flex items-start justify-between px-5 py-4 border-b border-slate-100 bg-slate-50 rounded-t-xl sticky top-0 z-10">
           <div>
-            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wide">{doc.colegio.replace('Mano Amiga ', '')} · {doc.territorio}</p>
+            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wide">{doc.colegio} · {doc.territorio}</p>
             <h3 className="text-base font-bold text-[#00295A] mt-0.5">{doc.tipo_documento}</h3>
           </div>
           <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-slate-200 text-slate-400">

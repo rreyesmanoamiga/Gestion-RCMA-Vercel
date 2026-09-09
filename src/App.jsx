@@ -49,6 +49,7 @@ import Auditoria from '@/pages/Auditoria';
 import CumplimientoDashboard from '@/pages/CumplimientoDashboard';
 import CumplimientoPanelGeneral from '@/pages/CumplimientoPanelGeneral';
 import CumplimientoDocumentos from '@/pages/CumplimientoDocumentos';
+import CumplimientoCatalogo from '@/pages/CumplimientoCatalogo';
 import CumplimientoAlertas from '@/pages/CumplimientoAlertas';
 import CumplimientoSeguimiento from '@/pages/CumplimientoSeguimiento';
 import ReportarProblema from '@/pages/ReportarProblema';
@@ -437,6 +438,7 @@ function AuthenticatedApp() {
           <Route path="/cumplimiento"              element={<CumplimientoDashboard />} />
           <Route path="/cumplimiento/panel-general" element={<CumplimientoPanelGeneral />} />
           <Route path="/cumplimiento/documentos"    element={<CumplimientoDocumentos />} />
+          <Route path="/cumplimiento/catalogo"      element={<CumplimientoCatalogo />} />
           <Route path="/cumplimiento/alertas"       element={<CumplimientoAlertas />} />
           <Route path="/cumplimiento/seguimiento"   element={<CumplimientoSeguimiento />} />
           <Route path="/reportar-problema"  element={<ReportarProblema />} />
