@@ -8,7 +8,7 @@ import AccesoRestringido from '@/components/shared/AccesoRestringido';
 import { AlertTriangle, Clock, CheckCircle2, Bell, X, Mail, UserPlus, Trash2 } from 'lucide-react';
 import {
   useComplianceDocs, esRetraso, diasDiferencia, formatFecha,
-  LoadingBlock, ErrorBlock, DetalleModal, COLEGIO_A_CODIGO,
+  LoadingBlock, ErrorBlock, DetalleModal,
   type ComplianceDoc,
 } from '@/lib/complianceShared';
 
@@ -57,7 +57,7 @@ function NotificacionesModal({ docs, onClose }: { docs: ComplianceDoc[]; onClose
       .sort();
   }, [territorioSel, colegioTerritorioMap]);
 
-  const codigoColegioSel = colegioSel ? COLEGIO_A_CODIGO[colegioSel] : null;
+  const codigoColegioSel = colegioSel || null; // colegio ya es el código corto (ej. "MA CON")
   const usuariosDelColegio = useMemo(() => {
     if (!codigoColegioSel) return [];
     return allUsers.filter(u => u.colegio === codigoColegioSel);
