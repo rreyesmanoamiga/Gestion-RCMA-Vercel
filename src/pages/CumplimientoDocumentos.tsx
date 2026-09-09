@@ -92,6 +92,7 @@ export default function CumplimientoDocumentos() {
   const [materiaFiltro, setMateriaFiltro] = useState<typeof MATERIAS[number]>('Todas');
   const [estadoFiltro, setEstadoFiltro] = useState('Todos');
   const [colegioFiltro, setColegioFiltro] = useState('Todos');
+  const [añoFiltro, setAñoFiltro] = useState<number | 'Todos'>('Todos');
   const [pagina, setPagina] = useState(1);
   const [detalle, setDetalle] = useState<ComplianceDoc | null>(null);
   const [generando, setGenerando] = useState<'' | 'excel' | 'pdf_general' | 'pdf_colegio'>('');
@@ -99,10 +100,12 @@ export default function CumplimientoDocumentos() {
 
   const colegios = useMemo(() => Array.from(new Set(docs.map(d => d.colegio))).sort(), [docs]);
   const estados = useMemo(() => Array.from(new Set(docs.map(d => d.estado))).sort(), [docs]);
+  const años = useMemo(() => Array.from(new Set(docs.map(d => d.año))).sort((a, b) => b - a), [docs]);
 
   const filtrados = useMemo(() => {
     const q = busqueda.trim().toLowerCase();
     return docs.filter(d => {
+      if (añoFiltro !== 'Todos' && d.año !== añoFiltro) return false;
       if (territorioFiltro !== 'Todos' && d.territorio !== territorioFiltro) return false;
       if (colegioFiltro !== 'Todos' && d.colegio !== colegioFiltro) return false;
       if (estadoFiltro !== 'Todos' && d.estado !== estadoFiltro) return false;
@@ -111,7 +114,7 @@ export default function CumplimientoDocumentos() {
       if (q && !(`${d.colegio} ${d.tipo_documento} ${d.norma ?? ''}`.toLowerCase().includes(q))) return false;
       return true;
     }).sort((a, b) => a.colegio.localeCompare(b.colegio) || a.tipo_documento.localeCompare(b.tipo_documento));
-  }, [docs, busqueda, territorioFiltro, colegioFiltro, estadoFiltro, materiaFiltro]);
+  }, [docs, busqueda, territorioFiltro, colegioFiltro, estadoFiltro, materiaFiltro, añoFiltro]);
 
   const totalPaginas = Math.max(1, Math.ceil(filtrados.length / PAGE_SIZE));
   const paginaSegura = Math.min(pagina, totalPaginas);
@@ -216,6 +219,11 @@ export default function CumplimientoDocumentos() {
                 className="w-full pl-9 pr-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#00295A]/20"
               />
             </div>
+            <select value={añoFiltro} onChange={e => { setAñoFiltro(e.target.value === 'Todos' ? 'Todos' : Number(e.target.value)); resetPagina(); }}
+              className="px-3 py-2 text-sm border border-slate-200 rounded-lg bg-white">
+              <option value="Todos">Todos los años</option>
+              {años.map(a => <option key={a} value={a}>{a}</option>)}
+            </select>
             <select value={territorioFiltro} onChange={e => { setTerritorioFiltro(e.target.value); resetPagina(); }}
               className="px-3 py-2 text-sm border border-slate-200 rounded-lg bg-white">
               <option value="Todos">Todo territorio</option>
@@ -254,6 +262,7 @@ export default function CumplimientoDocumentos() {
                         title="Seleccionar todos los documentos que cumplen el filtro actual" className="cursor-pointer" />
                     </th>
                     <th className="px-4 py-2.5 text-[10px] font-bold text-slate-400 uppercase tracking-wide">Colegio</th>
+                    <th className="px-4 py-2.5 text-[10px] font-bold text-slate-400 uppercase tracking-wide">Año</th>
                     <th className="px-4 py-2.5 text-[10px] font-bold text-slate-400 uppercase tracking-wide">Territorio</th>
                     <th className="px-4 py-2.5 text-[10px] font-bold text-slate-400 uppercase tracking-wide">Documento</th>
                     <th className="px-4 py-2.5 text-[10px] font-bold text-slate-400 uppercase tracking-wide">Materia</th>
@@ -272,6 +281,7 @@ export default function CumplimientoDocumentos() {
                         <input type="checkbox" checked={seleccionados.has(d.id)} onChange={() => toggleSeleccion(d.id)} className="cursor-pointer" />
                       </td>
                       <td className="px-4 py-2.5 text-slate-800 whitespace-nowrap">{d.colegio.replace('Mano Amiga ', '')}</td>
+                      <td className="px-4 py-2.5 text-slate-500 whitespace-nowrap font-mono text-xs">{d.año}</td>
                       <td className="px-4 py-2.5 text-slate-500 whitespace-nowrap">{d.territorio}</td>
                       <td className="px-4 py-2.5 text-slate-700 font-medium">{d.tipo_documento}</td>
                       <td className="px-4 py-2.5 text-slate-500 whitespace-nowrap">{d.materia ?? '—'}</td>

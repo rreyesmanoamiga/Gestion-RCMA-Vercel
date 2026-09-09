@@ -16,6 +16,7 @@ interface Concepto {
   norma: string | null;
   orden: number;
   activo: boolean;
+  periodicidad: string;
 }
 
 interface Excepcion {
@@ -25,18 +26,30 @@ interface Excepcion {
   motivo: string | null;
 }
 
+interface PeriodicidadColegio {
+  id: string;
+  colegio: string;
+  concepto_id: string;
+  periodicidad: string;
+}
+
 const inputClass = 'w-full px-3 py-2 border border-slate-300 rounded-md text-sm focus:ring-2 focus:ring-slate-900 focus:outline-none';
 
 // Solo colegios reales (excluye oficinas FMA / GENERAL, que no llevan Protección Civil)
 const COLEGIOS_PC = COLEGIOS.filter(c => c.territorio !== 'FMA');
+
+export const PERIODICIDADES = ['Anual', 'Cada 2 años', 'Cada 3 años', 'Cada 4 años', 'Cada 5 años', 'Único trámite'];
+
+const AÑOS_DISPONIBLES = Array.from({ length: 6 }, (_, i) => new Date().getFullYear() - 1 + i); // año actual -1 .. +4
 
 export default function CumplimientoCatalogo() {
   const { isAdmin, can } = usePermissions();
   const qc = useQueryClient();
   const [editando, setEditando] = useState<Concepto | null>(null);
   const [showNuevo, setShowNuevo] = useState(false);
-  const [form, setForm] = useState({ nombre: '', materia: 'Protección civil', norma: '' });
+  const [form, setForm] = useState({ nombre: '', materia: 'Protección civil', norma: '', periodicidad: 'Anual' });
   const [colegioSel, setColegioSel] = useState(COLEGIOS_PC[0]?.colegio ?? '');
+  const [añoSincronizar, setAñoSincronizar] = useState(new Date().getFullYear());
   const [sincronizando, setSincronizando] = useState(false);
 
   const { data: conceptos = [], isLoading } = useQuery({
@@ -62,26 +75,41 @@ export default function CumplimientoCatalogo() {
     [excepciones, colegioSel]
   );
 
+  const { data: periodicidadesColegio = [] } = useQuery({
+    queryKey: ['compliance_periodicidad_colegio'],
+    queryFn: async () => {
+      const { data, error } = await supabase.from('compliance_periodicidad_colegio').select('*');
+      if (error) throw error;
+      return (data ?? []) as PeriodicidadColegio[];
+    },
+  });
+
+  const periodicidadPorConcepto = useMemo(() => {
+    const map = new Map<string, string>();
+    periodicidadesColegio.filter(p => p.colegio === colegioSel).forEach(p => map.set(p.concepto_id, p.periodicidad));
+    return map;
+  }, [periodicidadesColegio, colegioSel]);
+
   // ── Guardar concepto (nuevo o edición) ────────────────────────────────────
   const saveMutation = useMutation({
     mutationFn: async () => {
       if (!form.nombre.trim()) throw new Error('El nombre es obligatorio');
       if (editando) {
         const { error } = await supabase.from('compliance_conceptos')
-          .update({ nombre: form.nombre.trim(), materia: form.materia, norma: form.norma.trim() || null })
+          .update({ nombre: form.nombre.trim(), materia: form.materia, norma: form.norma.trim() || null, periodicidad: form.periodicidad })
           .eq('id', editando.id);
         if (error) throw error;
       } else {
         const maxOrden = conceptos.reduce((m, c) => Math.max(m, c.orden), 0);
         const { error } = await supabase.from('compliance_conceptos')
-          .insert({ nombre: form.nombre.trim(), materia: form.materia, norma: form.norma.trim() || null, orden: maxOrden + 1 });
+          .insert({ nombre: form.nombre.trim(), materia: form.materia, norma: form.norma.trim() || null, periodicidad: form.periodicidad, orden: maxOrden + 1 });
         if (error) throw error;
       }
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['compliance_conceptos'] });
       toast.success(editando ? 'Concepto actualizado' : 'Concepto agregado al catálogo');
-      setShowNuevo(false); setEditando(null); setForm({ nombre: '', materia: 'Protección civil', norma: '' });
+      setShowNuevo(false); setEditando(null); setForm({ nombre: '', materia: 'Protección civil', norma: '', periodicidad: 'Anual' });
     },
     onError: (e: any) => toast.error(e.message ?? 'Error al guardar'),
   });
@@ -112,20 +140,37 @@ export default function CumplimientoCatalogo() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ['compliance_excepciones'] }),
   });
 
+  // ── Cambiar la periodicidad SOLO para el colegio seleccionado ─────────────
+  const setPeriodicidadColegioMutation = useMutation({
+    mutationFn: async ({ concepto, periodicidad }: { concepto: Concepto; periodicidad: string }) => {
+      if (periodicidad === concepto.periodicidad) {
+        // Coincide con el default del catálogo — no hace falta guardar excepción
+        const { error } = await supabase.from('compliance_periodicidad_colegio')
+          .delete().eq('colegio', colegioSel).eq('concepto_id', concepto.id);
+        if (error) throw error;
+      } else {
+        const { error } = await supabase.from('compliance_periodicidad_colegio')
+          .upsert({ colegio: colegioSel, concepto_id: concepto.id, periodicidad }, { onConflict: 'colegio,concepto_id' });
+        if (error) throw error;
+      }
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['compliance_periodicidad_colegio'] }),
+    onError: (e: any) => toast.error(e.message ?? 'Error al guardar la periodicidad'),
+  });
+
   // ── Sincronizar checklist: crea en compliance_documentos lo que falte para
-  //    TODOS los colegios según catálogo activo menos excepciones. Nunca borra
-  //    ni pisa un documento que ya tenga estatus capturado — solo agrega lo que falta
-  //    y desactiva (activo=false) lo que ahora quedó marcado como excepción.
+  //    TODOS los colegios, PARA EL AÑO seleccionado, según catálogo activo menos
+  //    excepciones. Nunca borra ni pisa un documento que ya tenga estatus
+  //    capturado — solo agrega lo que falta ese año y desactiva lo excepcionado.
   const sincronizar = async () => {
     setSincronizando(true);
     try {
       const { data: docsActuales, error: e1 } = await supabase
-        .from('compliance_documentos').select('id, colegio, tipo_documento, activo');
+        .from('compliance_documentos').select('id, colegio, tipo_documento, activo, año').eq('año', añoSincronizar);
       if (e1) throw e1;
 
       const conceptosActivos = conceptos.filter(c => c.activo);
       const excepcionesPorColegio = new Set(excepciones.map(e => `${e.colegio}::${e.concepto_id}`));
-      const porNombre = Object.fromEntries(conceptosActivos.map(c => [c.nombre, c]));
 
       const aInsertar: any[] = [];
       const aDesactivar: string[] = [];
@@ -144,7 +189,7 @@ export default function CumplimientoCatalogo() {
             aInsertar.push({
               colegio: col.colegio, territorio: col.territorio, materia: concepto.materia,
               tipo_documento: concepto.nombre, norma: concepto.norma, estado: 'Pendiente',
-              vigente: 'No', activo: true, año: new Date().getFullYear(),
+              vigente: 'No', activo: true, año: añoSincronizar,
             });
           } else if (!existente.activo) {
             aReactivar.push(existente.id);
@@ -157,7 +202,7 @@ export default function CumplimientoCatalogo() {
       if (aReactivar.length) { const { error } = await supabase.from('compliance_documentos').update({ activo: true }).in('id', aReactivar); if (error) throw error; }
 
       qc.invalidateQueries({ queryKey: ['compliance_documentos'] });
-      toast.success(`Sincronizado: ${aInsertar.length} agregados, ${aDesactivar.length} desactivados, ${aReactivar.length} reactivados`);
+      toast.success(`${añoSincronizar}: ${aInsertar.length} agregados, ${aDesactivar.length} desactivados, ${aReactivar.length} reactivados`);
     } catch (e: any) {
       toast.error('Error al sincronizar: ' + (e.message ?? 'desconocido'));
     } finally {
@@ -178,12 +223,21 @@ export default function CumplimientoCatalogo() {
     <div className="p-6 lg:p-8 max-w-[1400px] mx-auto space-y-6">
       <div className="flex items-start justify-between gap-4 flex-wrap">
         <PageHeader title="Catálogo de Cumplimiento" subtitle="La receta base de documentos y las excepciones por colegio" />
-        <button onClick={sincronizar} disabled={sincronizando}
-          className="inline-flex items-center gap-2 px-4 py-2 bg-slate-900 text-white rounded-lg text-sm font-bold hover:bg-slate-800 disabled:opacity-50 transition-colors">
-          {sincronizando ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
-          Sincronizar checklist de todos los colegios
-        </button>
+        <div className="flex items-center gap-2">
+          <select value={añoSincronizar} onChange={e => setAñoSincronizar(Number(e.target.value))}
+            className="text-sm font-bold text-slate-700 border border-slate-300 rounded-lg px-3 py-2 bg-white">
+            {AÑOS_DISPONIBLES.map(a => <option key={a} value={a}>{a}</option>)}
+          </select>
+          <button onClick={sincronizar} disabled={sincronizando}
+            className="inline-flex items-center gap-2 px-4 py-2 bg-slate-900 text-white rounded-lg text-sm font-bold hover:bg-slate-800 disabled:opacity-50 transition-colors">
+            {sincronizando ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
+            Sincronizar checklist {añoSincronizar}
+          </button>
+        </div>
       </div>
+      <p className="text-xs text-slate-400 -mt-4">
+        Sincronizar genera el checklist del año elegido sin tocar los años anteriores — así cada año queda como historial aparte.
+      </p>
 
       {/* ─── Catálogo de conceptos (la receta) ─────────────────────────────── */}
       <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
@@ -191,7 +245,7 @@ export default function CumplimientoCatalogo() {
           <h2 className="text-sm font-bold text-slate-800 uppercase tracking-tight">
             Conceptos base ({conceptos.length})
           </h2>
-          <button onClick={() => { setEditando(null); setForm({ nombre: '', materia: 'Protección civil', norma: '' }); setShowNuevo(true); }}
+          <button onClick={() => { setEditando(null); setForm({ nombre: '', materia: 'Protección civil', norma: '', periodicidad: 'Anual' }); setShowNuevo(true); }}
             className="inline-flex items-center gap-1.5 text-xs font-bold text-blue-600 hover:underline">
             <Plus className="w-3.5 h-3.5" /> Agregar concepto
           </button>
@@ -207,7 +261,10 @@ export default function CumplimientoCatalogo() {
                   <p className="text-sm font-semibold text-slate-800 truncate">{c.nombre}</p>
                   <p className="text-[11px] text-slate-400">{c.materia}{c.norma ? ` · ${c.norma}` : ''}</p>
                 </div>
-                <button onClick={() => { setEditando(c); setForm({ nombre: c.nombre, materia: c.materia, norma: c.norma ?? '' }); setShowNuevo(true); }}
+                <span className="text-[10px] font-bold text-slate-500 bg-slate-100 px-2 py-1 rounded-full shrink-0 whitespace-nowrap">
+                  {c.periodicidad}
+                </span>
+                <button onClick={() => { setEditando(c); setForm({ nombre: c.nombre, materia: c.materia, norma: c.norma ?? '', periodicidad: c.periodicidad }); setShowNuevo(true); }}
                   className="p-1.5 text-slate-400 hover:text-slate-700 shrink-0"><Pencil className="w-3.5 h-3.5" /></button>
                 <button onClick={() => toggleActivoMutation.mutate(c)}
                   className={`text-[10px] font-bold px-2 py-1 rounded-full border shrink-0 ${c.activo ? 'text-red-600 border-red-200 hover:bg-red-50' : 'text-emerald-600 border-emerald-200 hover:bg-emerald-50'}`}>
@@ -231,19 +288,33 @@ export default function CumplimientoCatalogo() {
           </select>
         </div>
         <p className="px-5 pt-3 text-xs text-slate-400">
-          Por default, <strong>todos los conceptos aplican</strong> a todos los colegios. Desmarca solo los que NO le apliquen a <strong>{colegioSel}</strong>.
+          Por default, <strong>todos los conceptos aplican</strong> a todos los colegios con la periodicidad del catálogo.
+          Desmarca lo que NO le aplique a <strong>{colegioSel}</strong>, o cambia su periodicidad si aquí es distinta (ej. cada 2 años en vez de anual).
         </p>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 px-5 py-4">
+        <div className="divide-y divide-slate-50">
           {conceptos.filter(c => c.activo).map(c => {
             const excepcion = excepcionesColegio.has(c.id);
+            const periodicidadActual = periodicidadPorConcepto.get(c.id) ?? c.periodicidad;
+            const esDistinta = periodicidadActual !== c.periodicidad;
             return (
-              <label key={c.id} className="flex items-center gap-2.5 py-1.5 cursor-pointer group">
-                <input type="checkbox" checked={!excepcion} onChange={() => toggleExcepcionMutation.mutate(c)}
-                  className="w-4 h-4 rounded border-slate-300 text-slate-900 focus:ring-slate-800" />
-                <span className={`text-sm ${excepcion ? 'text-slate-300 line-through' : 'text-slate-700 group-hover:text-slate-900'}`}>
-                  {c.nombre}
-                </span>
-              </label>
+              <div key={c.id} className="flex items-center gap-3 px-5 py-2 flex-wrap">
+                <label className="flex items-center gap-2.5 cursor-pointer flex-1 min-w-[220px]">
+                  <input type="checkbox" checked={!excepcion} onChange={() => toggleExcepcionMutation.mutate(c)}
+                    className="w-4 h-4 rounded border-slate-300 text-slate-900 focus:ring-slate-800 shrink-0" />
+                  <span className={`text-sm ${excepcion ? 'text-slate-300 line-through' : 'text-slate-700'}`}>
+                    {c.nombre}
+                  </span>
+                </label>
+                {!excepcion && (
+                  <select
+                    value={periodicidadActual}
+                    onChange={e => setPeriodicidadColegioMutation.mutate({ concepto: c, periodicidad: e.target.value })}
+                    className={`text-xs font-semibold border rounded-lg px-2 py-1 bg-white shrink-0 ${esDistinta ? 'border-amber-300 text-amber-700 bg-amber-50' : 'border-slate-200 text-slate-500'}`}
+                  >
+                    {PERIODICIDADES.map(p => <option key={p} value={p}>{p}</option>)}
+                  </select>
+                )}
+              </div>
             );
           })}
         </div>
@@ -271,6 +342,15 @@ export default function CumplimientoCatalogo() {
               <div>
                 <label className="block text-xs font-bold text-slate-500 uppercase mb-1.5">Norma (opcional)</label>
                 <input className={inputClass} value={form.norma} onChange={e => setForm(p => ({ ...p, norma: e.target.value }))} />
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-slate-500 uppercase mb-1.5">Periodicidad</label>
+                <select className={inputClass + ' bg-white'} value={form.periodicidad} onChange={e => setForm(p => ({ ...p, periodicidad: e.target.value }))}>
+                  {PERIODICIDADES.map(p => <option key={p} value={p}>{p}</option>)}
+                </select>
+                <p className="text-[11px] text-slate-400 mt-1">
+                  Este es el valor por default para todos los colegios — puedes cambiarlo para uno en particular más abajo, en "Excepciones por colegio".
+                </p>
               </div>
             </div>
             <div className="p-4 border-t border-slate-100 bg-slate-50 flex justify-end gap-3">

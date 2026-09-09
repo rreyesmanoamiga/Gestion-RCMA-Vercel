@@ -1,4 +1,4 @@
-import React, { useMemo, type ReactNode } from 'react';
+import React, { useMemo, useState, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabaseClient';
@@ -72,32 +72,35 @@ export default function CumplimientoDashboard() {
   });
 
   const hoy = useMemo(() => { const d = new Date(); d.setHours(0, 0, 0, 0); return d; }, []);
+  const añosDisponibles = useMemo(() => Array.from(new Set(docs.map(d => d.año))).sort((a, b) => b - a), [docs]);
+  const [añoFiltro, setAñoFiltro] = useState<number | 'Todos'>('Todos');
+  const docsAño = useMemo(() => añoFiltro === 'Todos' ? docs : docs.filter(d => d.año === añoFiltro), [docs, añoFiltro]);
 
   const kpis = useMemo(() => {
-    const total = docs.length;
-    const retraso = docs.filter(d => esRetraso(d, hoy)).length;
-    const porExpirar = docs.filter(d => d.vigente === 'Por expirar').length;
-    const verificados = docs.filter(d => d.estado === 'Verificado').length;
+    const total = docsAño.length;
+    const retraso = docsAño.filter(d => esRetraso(d, hoy)).length;
+    const porExpirar = docsAño.filter(d => d.vigente === 'Por expirar').length;
+    const verificados = docsAño.filter(d => d.estado === 'Verificado').length;
     const pctCumplimiento = total > 0 ? Math.round((verificados / total) * 100) : 0;
     return { total, retraso, porExpirar, verificados, pctCumplimiento };
-  }, [docs, hoy]);
+  }, [docsAño, hoy]);
 
   const estadoPie = useMemo(() => {
     const conteo = new Map<string, number>();
-    docs.forEach(d => conteo.set(d.estado, (conteo.get(d.estado) ?? 0) + 1));
+    docsAño.forEach(d => conteo.set(d.estado, (conteo.get(d.estado) ?? 0) + 1));
     return Array.from(conteo.entries()).map(([name, value]) => ({ name, value }));
-  }, [docs]);
+  }, [docsAño]);
 
   const topRetraso = useMemo(() => {
     const mapa = new Map<string, number>();
-    docs.forEach(d => {
+    docsAño.forEach(d => {
       if (esRetraso(d, hoy)) mapa.set(d.colegio.replace('Mano Amiga ', ''), (mapa.get(d.colegio.replace('Mano Amiga ', '')) ?? 0) + 1);
     });
     return Array.from(mapa.entries())
       .map(([colegio, retraso]) => ({ colegio, retraso }))
       .sort((a, b) => b.retraso - a.retraso)
       .slice(0, 8);
-  }, [docs, hoy]);
+  }, [docsAño, hoy]);
 
   if (!isAdmin && !can('ver_cumplimiento')) {
     return (
@@ -110,7 +113,14 @@ export default function CumplimientoDashboard() {
 
   return (
     <div className="p-6 lg:p-8 max-w-[1700px] mx-auto">
-      <PageHeader title="Dashboard" subtitle="Vista general de Cumplimiento Normativo — Protección Civil y Donatarias Autorizadas" />
+      <div className="flex items-start justify-between gap-4 flex-wrap mb-1">
+        <PageHeader title="Dashboard" subtitle="Vista general de Cumplimiento Normativo — Protección Civil y Donatarias Autorizadas" />
+        <select value={añoFiltro} onChange={e => setAñoFiltro(e.target.value === 'Todos' ? 'Todos' : Number(e.target.value))}
+          className="text-sm font-bold text-slate-700 border border-slate-300 rounded-lg px-3 py-2 bg-white mt-1">
+          <option value="Todos">Todos los años</option>
+          {añosDisponibles.map(a => <option key={a} value={a}>{a}</option>)}
+        </select>
+      </div>
 
       {isError ? <ErrorBlock onRetry={() => refetch()} /> : isLoading ? <LoadingBlock /> : (
         <div className="space-y-6">

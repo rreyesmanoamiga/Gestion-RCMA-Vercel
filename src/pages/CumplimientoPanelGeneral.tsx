@@ -10,13 +10,17 @@ export default function CumplimientoPanelGeneral() {
   const { isAdmin, can } = usePermissions();
   const { data: docs = [], isLoading, isError, refetch } = useComplianceDocs();
   const [materiaFiltro, setMateriaFiltro] = useState<typeof MATERIAS[number]>('Todas');
+  const añosDisponibles = useMemo(() => Array.from(new Set(docs.map(d => d.año))).sort((a, b) => b - a), [docs]);
+  const [añoFiltro, setAñoFiltro] = useState<number | 'Todos'>('Todos');
   const hoy = useMemo(() => { const d = new Date(); d.setHours(0, 0, 0, 0); return d; }, []);
 
   const docsFiltrados = useMemo(() => {
-    if (materiaFiltro === 'Todas') return docs;
-    if (materiaFiltro === 'Sin categoría') return docs.filter(d => !d.materia);
-    return docs.filter(d => d.materia === materiaFiltro);
-  }, [docs, materiaFiltro]);
+    let list = docs;
+    if (añoFiltro !== 'Todos') list = list.filter(d => d.año === añoFiltro);
+    if (materiaFiltro === 'Todas') return list;
+    if (materiaFiltro === 'Sin categoría') return list.filter(d => !d.materia);
+    return list.filter(d => d.materia === materiaFiltro);
+  }, [docs, materiaFiltro, añoFiltro]);
 
   const kpis = useMemo(() => {
     const total = docsFiltrados.length;
@@ -53,7 +57,12 @@ export default function CumplimientoPanelGeneral() {
 
       {isError ? <ErrorBlock onRetry={() => refetch()} /> : isLoading ? <LoadingBlock /> : (
         <div>
-          <div className="flex gap-2 mb-5 flex-wrap">
+          <div className="flex gap-2 mb-5 flex-wrap items-center">
+            <select value={añoFiltro} onChange={e => setAñoFiltro(e.target.value === 'Todos' ? 'Todos' : Number(e.target.value))}
+              className="text-xs font-bold border border-slate-200 rounded-full px-3 py-1.5 bg-white text-slate-600">
+              <option value="Todos">Todos los años</option>
+              {añosDisponibles.map(a => <option key={a} value={a}>{a}</option>)}
+            </select>
             {MATERIAS.map(m => (
               <button key={m} onClick={() => setMateriaFiltro(m)}
                 className={`px-3 py-1.5 rounded-full text-xs font-bold transition-colors ${
