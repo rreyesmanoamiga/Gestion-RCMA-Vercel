@@ -28,7 +28,7 @@ const formatMXN = (s: string | number | null) => {
 export default function CostosLista() {
   const { isAdmin, can } = usePermissions();
   const qc = useQueryClient();
-  const puedeEditar = isAdmin || can('editar_costos');
+  const puedeEditar = isAdmin; // exclusivo del administrador, no otorgable desde Accesos
 
   const [colegioSel, setColegioSel] = useState(COLEGIOS_PC[0]?.colegio ?? '');
   const [expandido, setExpandido] = useState<Set<string>>(new Set());
@@ -129,7 +129,7 @@ export default function CostosLista() {
     return next;
   });
 
-  if (!isAdmin && !can('ver_costos')) {
+  if (!isAdmin) {
     return (
       <div className="p-6 lg:p-8 max-w-[1400px] mx-auto">
         <PageHeader title="Lista de Costos" subtitle="Costo aproximado de cada concepto de Cumplimiento, por colegio" />

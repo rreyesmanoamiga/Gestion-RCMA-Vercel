@@ -83,7 +83,7 @@ export default function Sidebar({ isOpen, onToggle }) {
   // Antes esto estaba fijo al correo de Ricardo; ahora cualquiera con el
   // permiso "Ver Cumplimiento y Protección Civil" (o admin) puede entrar.
   const puedeVerCumplimiento = isAdmin || can('ver_cumplimiento');
-  const puedeVerCostos = isAdmin || can('ver_costos'); // ítem dentro de Cumplimiento
+  const puedeVerCostos = isAdmin; // exclusivo del administrador, no otorgable desde Accesos
   const navigate = useNavigate();
   const modoCompliance = puedeVerCumplimiento && location.pathname.startsWith('/cumplimiento');
 
