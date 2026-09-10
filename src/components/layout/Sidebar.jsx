@@ -168,9 +168,6 @@ export default function Sidebar({ isOpen, onToggle }) {
   const cGestionPC = [
     { to: '/cumplimiento/alertas', icon: ShieldAlert, label: 'Inspecciones y Alertas Críticas' },
   ];
-  const cGestionPCPending = [
-    { icon: Clock3, label: 'Jornada Presupuestal' },
-  ];
   const cMonitoreo = [
     { to: '/cumplimiento/seguimiento', icon: ListTodo, label: 'Seguimiento de Trámites' },
   ];
@@ -282,7 +279,6 @@ export default function Sidebar({ isOpen, onToggle }) {
                 defaultOpen={cGestionPC.some(i => isActive(i.to))}
               >
                 {cGestionPC.map(renderLink)}
-                {cGestionPCPending.map((i) => <PendingItem key={i.label} {...i} />)}
               </SidebarAccordionGroup>
 
               {puedeVerCostos && (
