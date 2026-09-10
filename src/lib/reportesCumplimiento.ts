@@ -70,27 +70,34 @@ export async function generarExcelCumplimiento(docs: ComplianceDocReport[]) {
   };
 
   const encabezado = (ws: ExcelJS.Worksheet, titulo: string, subtitulo: string, ultimaCol: number) => {
+    // Las celdas combinadas NO se desbordan hacia la derecha como una celda
+    // normal — si el título es largo pero la tabla de datos es angosta (ej.
+    // Resumen con solo 6 columnas), el texto se corta. Por eso el banner del
+    // encabezado usa un mínimo de 10 columnas de ancho, aunque la tabla de
+    // datos de abajo tenga menos.
+    const colsHeader = Math.max(ultimaCol, 10);
+
     ws.getRow(1).height = 34;
     ws.getRow(2).height = 20;
     ws.getRow(3).height = 6;
     if (logoId !== null) ws.addImage(logoId, { tl: { col: 0, row: 0 }, ext: { width: 70, height: 42 } });
 
-    ws.mergeCells(1, 4, 1, ultimaCol);
+    ws.mergeCells(1, 4, 1, colsHeader);
     const t1 = ws.getCell(1, 4);
     t1.value = 'COLEGIOS MANO AMIGA — CUMPLIMIENTO NORMATIVO';
     t1.font = { bold: true, size: 13, color: { argb: NAVY }, name: 'Calibri' };
     t1.alignment = { vertical: 'middle' };
 
-    ws.mergeCells(2, 4, 2, ultimaCol);
+    ws.mergeCells(2, 4, 2, colsHeader);
     const t2 = ws.getCell(2, 4);
     t2.value = titulo;
     t2.font = { bold: true, size: 10, color: { argb: ORANGE }, name: 'Calibri' };
     t2.alignment = { vertical: 'middle' };
 
-    ws.mergeCells(3, 1, 3, ultimaCol);
-    for (let c = 1; c <= ultimaCol; c++) ws.getCell(3, c).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: ORANGE } };
+    ws.mergeCells(3, 1, 3, colsHeader);
+    for (let c = 1; c <= colsHeader; c++) ws.getCell(3, c).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: ORANGE } };
 
-    ws.mergeCells(4, 1, 4, ultimaCol);
+    ws.mergeCells(4, 1, 4, colsHeader);
     const sub = ws.getCell(4, 1);
     sub.value = subtitulo;
     sub.font = { italic: true, size: 10, color: { argb: SKY }, name: 'Calibri' };
@@ -259,7 +266,7 @@ async function pdfHeader(doc: Doc, W: number, subtitle: string) {
       img.onload = () => { const c = document.createElement('canvas'); c.width = img.width; c.height = img.height; c.getContext('2d')!.drawImage(img, 0, 0); res(c.toDataURL('image/png')); };
       img.onerror = rej; img.src = '/logo.png';
     });
-    doc.addImage(logoImg, 'PNG', 6, 3, 22, 22);
+    doc.addImage(logoImg, 'PNG', 6, 6, 26.7, 16);
   } catch { /* sin logo */ }
 }
 

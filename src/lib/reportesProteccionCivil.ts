@@ -295,7 +295,7 @@ async function pdfHeaderPC(doc: Doc, W: number, subtitle: string) {
       img.onload = () => { const c = document.createElement('canvas'); c.width = img.width; c.height = img.height; c.getContext('2d')!.drawImage(img, 0, 0); res(c.toDataURL('image/png')); };
       img.onerror = rej; img.src = '/logo.png';
     });
-    doc.addImage(logoImg, 'PNG', 6, 3, 22, 22);
+    doc.addImage(logoImg, 'PNG', 6, 6, 26.7, 16);
   } catch { /* sin logo */ }
 }
 
@@ -342,7 +342,7 @@ async function pdfHeaderPCIndividual(doc: Doc, W: number, opts: {
       img.onload = () => { const c = document.createElement('canvas'); c.width = img.width; c.height = img.height; c.getContext('2d')!.drawImage(img, 0, 0); res(c.toDataURL('image/png')); };
       img.onerror = rej; img.src = '/logo.png';
     });
-    doc.addImage(logoImg, 'PNG', 6, 3, 22, 22);
+    doc.addImage(logoImg, 'PNG', 6, 6, 26.7, 16);
   } catch { /* sin logo */ }
   return ALTO;
 }
