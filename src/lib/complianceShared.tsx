@@ -101,12 +101,24 @@ export function useComplianceDocs() {
   const query = useQuery({
     queryKey: ['compliance_documentos'],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('compliance_documentos')
-        .select('id, colegio, territorio, materia, tipo_documento, norma, estado, vigente, fecha_limite_recepcion, fecha_presentacion, vigente_desde, vigente_hasta, responsable, año')
-        .eq('activo', true);
-      if (error) throw error;
-      return (data ?? []) as unknown as ComplianceDoc[];
+      // Traer TODAS las filas por bloques — sin esto, Supabase corta en 1000
+      // filas por default y los documentos más nuevos podrían desaparecer
+      // en silencio, sin ningún error, conforme crece el catálogo.
+      const bloque = 1000;
+      let desde = 0;
+      let todas: unknown[] = [];
+      while (true) {
+        const { data, error } = await supabase
+          .from('compliance_documentos')
+          .select('id, colegio, territorio, materia, tipo_documento, norma, estado, vigente, fecha_limite_recepcion, fecha_presentacion, vigente_desde, vigente_hasta, responsable, año')
+          .eq('activo', true)
+          .range(desde, desde + bloque - 1);
+        if (error) throw error;
+        todas = todas.concat(data ?? []);
+        if (!data || data.length < bloque) break;
+        desde += bloque;
+      }
+      return todas as unknown as ComplianceDoc[];
     },
     retry: 1,
   });

@@ -165,9 +165,20 @@ export default function CumplimientoCatalogo() {
   const sincronizar = async () => {
     setSincronizando(true);
     try {
-      const { data: docsActuales, error: e1 } = await supabase
-        .from('compliance_documentos').select('id, colegio, tipo_documento, activo, año').eq('año', añoSincronizar);
-      if (e1) throw e1;
+      // Misma protección que useComplianceDocs: traer todo por bloques, sin
+      // depender del tope de 1000 filas por default de Supabase.
+      const bloque = 1000;
+      let desde = 0;
+      let docsActuales: { id: string; colegio: string; tipo_documento: string; activo: boolean; año: number }[] = [];
+      while (true) {
+        const { data, error: e1 } = await supabase
+          .from('compliance_documentos').select('id, colegio, tipo_documento, activo, año')
+          .eq('año', añoSincronizar).range(desde, desde + bloque - 1);
+        if (e1) throw e1;
+        docsActuales = docsActuales.concat(data ?? []);
+        if (!data || data.length < bloque) break;
+        desde += bloque;
+      }
 
       const conceptosActivos = conceptos.filter(c => c.activo);
       const excepcionesPorColegio = new Set(excepciones.map(e => `${e.colegio}::${e.concepto_id}`));
