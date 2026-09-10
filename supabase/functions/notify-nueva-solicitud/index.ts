@@ -91,7 +91,7 @@ serve(async (req) => {
   }
 
   try {
-    const { nombre, proyecto, centro, correoSolicitante, puesto, territorio: territorioRecibido, correoCAR, tipoIniciativa } = await req.json();
+    const { nombre, proyecto, centro, correoSolicitante, puesto, territorio: territorioRecibido, correoCAR } = await req.json();
 
     // ── Respaldo server-side: si el frontend no pudo mandar territorio/CAR,
     //    se consulta en vivo a Directorio (fuente única) en vez de un mapa fijo. ──
@@ -169,12 +169,8 @@ serve(async (req) => {
                     <td style="padding:12px 16px;font-size:14px;font-weight:600;color:#00295A;border-bottom:1px solid #e2e8f0;">${proyecto ?? '—'}</td>
                   </tr>
                   <tr>
-                    <td style="padding:12px 16px;font-size:12px;font-weight:700;color:#64748b;text-transform:uppercase;border-bottom:1px solid #e2e8f0;">Correo solicitante</td>
-                    <td style="padding:12px 16px;font-size:14px;color:#0f172a;border-bottom:1px solid #e2e8f0;">${correoSolicitante ?? '—'}</td>
-                  </tr>
-                  <tr>
-                    <td style="padding:12px 16px;font-size:12px;font-weight:700;color:#64748b;text-transform:uppercase;">Tipo de Iniciativa</td>
-                    <td style="padding:12px 16px;font-size:14px;color:#0f172a;">${tipoIniciativa ?? '—'}</td>
+                    <td style="padding:12px 16px;font-size:12px;font-weight:700;color:#64748b;text-transform:uppercase;">Correo solicitante</td>
+                    <td style="padding:12px 16px;font-size:14px;color:#0f172a;">${correoSolicitante ?? '—'}</td>
                   </tr>
                 </table>
                 <table cellpadding="0" cellspacing="0" style="margin:0 auto 24px;">
@@ -209,13 +205,7 @@ serve(async (req) => {
     // consultado en vivo a Directorio como respaldo).
     const carCorreo = carCorreoDirectorio;
 
-    // Deyna (Activo Fijo) solo cuando el tipo de iniciativa implica dar de alta un activo.
-    const TIPOS_REQUIEREN_ACTIVO = ['CONSTRUCCIÓN NUEVA', 'REMODELACIÓN', 'MEJORA'];
-    const requiereActivo = TIPOS_REQUIEREN_ACTIVO.includes((tipoIniciativa ?? '').toUpperCase());
-
-    const ccList = [carCorreo, requiereActivo ? 'dbalderas@admmx.org' : '']
-      .filter(Boolean)
-      .filter(c => c !== adminEmail);
+    const ccList = [carCorreo].filter(Boolean).filter(c => c !== adminEmail);
 
     await sendEmail(adminEmail, ccList, subject, html);
 

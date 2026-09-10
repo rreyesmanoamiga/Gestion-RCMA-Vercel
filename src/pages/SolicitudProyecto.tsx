@@ -10,9 +10,6 @@ const readOnlyClass = "w-full px-2 py-1.5 border border-slate-300 text-sm bg-sla
 const labelClass = "text-[11px] font-bold text-slate-600 uppercase tracking-wide";
 
 const TIPOS_PROYECTO = ['CONSTRUCCIÓN NUEVA','MEJORA','PORTAFOLIO','REMODELACIÓN','ADECUACIÓN DE ESPACIO','GARANTÍAS','AMPLIACIÓN','MANTENIMIENTO EXTRAORDINARIO','REVISIÓN'];
-// Estos tipos son los que Deyna (Activo Fijo) da seguimiento — se le pone copia
-// al admin y se le avisa al solicitante que deberá pedirle el Número de Activo.
-const TIPOS_REQUIEREN_ACTIVO = ['CONSTRUCCIÓN NUEVA', 'REMODELACIÓN', 'MEJORA'];
 
 // Territorios por colegio (nombre completo → territorio)
 const COLEGIO_TERRITORIO: Record<string, string> = {
@@ -239,7 +236,6 @@ export default function SolicitudProyecto() {
           correoSolicitante: form.correo_solicitante,
           territorio:        territorioSolicitud,
           correoCAR,
-          tipoIniciativa:    form.tipo_iniciativa,
         },
       });
 
@@ -261,15 +257,6 @@ export default function SolicitudProyecto() {
         <p className="text-slate-500 text-center max-w-md">
           Tu solicitud de proyecto fue recibida correctamente. Recibirás una confirmación a <strong>{form.correo_solicitante}</strong> cuando sea revisada.
         </p>
-        {TIPOS_REQUIEREN_ACTIVO.includes(form.tipo_iniciativa) && (
-          <div className="bg-amber-50 border border-amber-200 rounded-lg px-5 py-4 max-w-md text-center">
-            <p className="text-sm font-bold text-amber-800">Solicitar Número de Activo</p>
-            <p className="text-xs text-amber-700 mt-1">
-              Este tipo de proyecto requiere dar de alta un activo fijo. En algún momento del proceso deberás
-              ponerte en contacto con Deyna Balderas (Activo Fijo) para solicitar el número correspondiente.
-            </p>
-          </div>
-        )}
         <button onClick={() => { setEnviado(false); setForm({ nombre_centro:'',razon_social:'',sociedad:'',centro_gestor:'',ciclo_año_fiscal:añoActual,nombre_solicitante:'',puesto_solicitante:'',correo_solicitante:'',nombre_proyecto:'',tipo_iniciativa:'',resumen_proyecto:'',fecha_inicio_propuesta:'',fecha_fin_propuesta:'',costo_aproximado:'',monto_operacion:'',monto_fbc:'',monto_donativos:'',monto_otras:'',monto_otras_detalle:'',en_nombre_de:''}); setTieneCotizaciones(false); setCotizacionFiles([]); }}
           className="px-6 py-2 bg-slate-900 text-white rounded-md text-sm font-medium hover:bg-slate-800 transition-colors">
           Nueva Solicitud
