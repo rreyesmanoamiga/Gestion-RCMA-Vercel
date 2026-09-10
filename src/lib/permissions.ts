@@ -58,6 +58,8 @@ const PERMISSION_DEFS: PermissionDef[] = [
   { key: 'ver_cumplimiento',          label: 'Ver Cumplimiento y Protección Civil', group: 'Cumplimiento',        default: false },
   { key: 'descargar_cumplimiento',    label: 'Descargar Reportes',                group: 'Cumplimiento',          default: false },
   { key: 'editar_cumplimiento',       label: 'Editar Documentos/Estatus',         group: 'Cumplimiento',          default: false },
+  { key: 'ver_costos',                label: 'Ver Costos y Presupuestos',         group: 'Costos y Presupuestos', default: false },
+  { key: 'editar_costos',             label: 'Editar Costos y Presupuestos',      group: 'Costos y Presupuestos', default: false },
 ];
 
 export const PERMISSIONS: Record<string, string> = Object.fromEntries(

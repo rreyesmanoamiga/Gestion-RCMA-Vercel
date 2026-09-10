@@ -83,6 +83,7 @@ export default function Sidebar({ isOpen, onToggle }) {
   // Antes esto estaba fijo al correo de Ricardo; ahora cualquiera con el
   // permiso "Ver Cumplimiento y Protección Civil" (o admin) puede entrar.
   const puedeVerCumplimiento = isAdmin || can('ver_cumplimiento');
+  const puedeVerCostos = isAdmin || can('ver_costos'); // ítem dentro de Cumplimiento
   const navigate = useNavigate();
   const modoCompliance = puedeVerCumplimiento && location.pathname.startsWith('/cumplimiento');
 
@@ -175,6 +176,16 @@ export default function Sidebar({ isOpen, onToggle }) {
   ];
   const cMonitoreoPending = [
     { icon: BarChart3, label: 'Generador de Reportes Ejecutivos' },
+  ];
+
+  // ---------------------------------------------------------------------
+  // MÓDULO: COSTOS Y PRESUPUESTOS (Finanzas / Coordinación)
+  // ---------------------------------------------------------------------
+  const costosLista = [
+    { to: '/cumplimiento/costos', icon: BarChart3, label: 'Lista de Costos' },
+  ];
+  const costosPending = [
+    { icon: Clock3, label: 'Jornada Presupuestal' },
   ];
 
   return (
@@ -273,6 +284,17 @@ export default function Sidebar({ isOpen, onToggle }) {
                 {cGestionPC.map(renderLink)}
                 {cGestionPCPending.map((i) => <PendingItem key={i.label} {...i} />)}
               </SidebarAccordionGroup>
+
+              {puedeVerCostos && (
+                <SidebarAccordionGroup
+                  label="Costos y Presupuestos"
+                  icon={BarChart3}
+                  defaultOpen={costosLista.some(i => isActive(i.to))}
+                >
+                  {costosLista.map(renderLink)}
+                  {costosPending.map((i) => <PendingItem key={i.label} {...i} />)}
+                </SidebarAccordionGroup>
+              )}
 
               <SidebarAccordionGroup
                 label="Monitoreo y Reportes"
