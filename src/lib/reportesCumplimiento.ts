@@ -242,8 +242,8 @@ function estadoColor(estado: string, retrasado: boolean): [number, number, numbe
 // PDF GENERAL — cumplimiento de todos los colegios con KPIs, ordenado de
 // mayor a menor retraso.
 // ============================================================================
-export async function generarPDFGeneralCumplimiento(opts: { docs: ComplianceDocReport[]; elaboradoPor: string }) {
-  const { docs, elaboradoPor } = opts;
+export async function generarPDFGeneralCumplimiento(opts: { docs: ComplianceDocReport[]; elaboradoPor: string; alcanceLabel?: string }) {
+  const { docs, elaboradoPor, alcanceLabel } = opts;
   const jsPDFctor = await loadJsPDF();
   const doc = new jsPDFctor({ unit: 'mm', format: 'letter' }) as Doc;
   const W = (doc as any).internal.pageSize.getWidth();
@@ -260,7 +260,8 @@ export async function generarPDFGeneralCumplimiento(opts: { docs: ComplianceDocR
 
   let y = 40;
   doc.setFontSize(9); doc.setFont('helvetica', 'normal'); doc.setTextColor(30, 41, 59);
-  doc.text(`Alcance: ${new Set(docs.map(d => d.colegio)).size} colegios a nivel nacional`, 20, y);
+  const numColegios = new Set(docs.map(d => d.colegio)).size;
+  doc.text(`Alcance: ${numColegios} colegio${numColegios !== 1 ? 's' : ''} · ${alcanceLabel ?? 'nivel nacional'}`, 20, y);
   doc.text(`Elaborado por: ${elaboradoPor}`, 20, y + 5);
   doc.text(`Dirigido a: Lic. Ángel Eduardo Rodríguez Martínez`, 20, y + 10);
   doc.text(`Fecha de generación: ${hoyStr}`, W - 20, y, { align: 'right' });
@@ -281,21 +282,27 @@ export async function generarPDFGeneralCumplimiento(opts: { docs: ComplianceDocR
   const totalDocs = docs.length;
   const totalRetraso = docs.filter(esRetraso).length;
   const totalPorExpirar = docs.filter(d => d.vigente === 'Por expirar').length;
+  const totalSinInfo = docs.filter(d => !d.vigente).length;
   const promedio = ordenados.length > 0 ? Math.round(ordenados.reduce((s, d) => s + d.pct, 0) / ordenados.length) : 0;
 
   const kpis: [string, string][] = [
     [String(totalDocs), 'Documentos totales'],
     [String(totalRetraso), 'En retraso'],
     [String(totalPorExpirar), 'Por expirar'],
+    [String(totalSinInfo), 'Sin información'],
     [`${promedio}%`, 'Cumplimiento promedio'],
   ];
-  const kpiW = (W - 40 - 3 * 4) / 4;
+  const kpiW = (W - 40 - 4 * 4) / 5;
   kpis.forEach(([num, label], i) => {
     const x = 20 + i * (kpiW + 4);
     doc.setDrawColor(215, 220, 225); doc.setLineWidth(0.3);
     doc.roundedRect(x, y, kpiW, 20, 2, 2, 'S');
-    doc.setFontSize(16); doc.setFont('helvetica', 'bold');
-    doc.setTextColor(i === 1 ? 220 : 0, i === 1 ? 38 : 41, i === 1 ? 38 : 90);
+    doc.setFontSize(14); doc.setFont('helvetica', 'bold');
+    doc.setTextColor(
+      i === 1 ? 220 : i === 2 ? 237 : i === 3 ? 100 : 0,
+      i === 1 ? 38  : i === 2 ? 113 : i === 3 ? 116 : 41,
+      i === 1 ? 38  : i === 2 ? 2   : i === 3 ? 139 : 90
+    );
     doc.text(num, x + kpiW / 2, y + 10, { align: 'center' });
     doc.setFontSize(6.5); doc.setFont('helvetica', 'normal'); doc.setTextColor(107, 114, 128);
     doc.text(label.toUpperCase(), x + kpiW / 2, y + 16, { align: 'center' });

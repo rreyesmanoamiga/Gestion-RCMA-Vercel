@@ -170,9 +170,7 @@ export default function Sidebar({ isOpen, onToggle }) {
   ];
   const cMonitoreo = [
     { to: '/cumplimiento/seguimiento', icon: ListTodo, label: 'Seguimiento de Trámites' },
-  ];
-  const cMonitoreoPending = [
-    { icon: BarChart3, label: 'Generador de Reportes Ejecutivos' },
+    { to: '/cumplimiento/reportes-ejecutivos', icon: BarChart3, label: 'Generador de Reportes Ejecutivos' },
   ];
 
   // ---------------------------------------------------------------------
@@ -295,7 +293,6 @@ export default function Sidebar({ isOpen, onToggle }) {
                 defaultOpen={cMonitoreo.some(i => isActive(i.to))}
               >
                 {cMonitoreo.map(renderLink)}
-                {cMonitoreoPending.map((i) => <PendingItem key={i.label} {...i} />)}
               </SidebarAccordionGroup>
             </>
           ) : (
