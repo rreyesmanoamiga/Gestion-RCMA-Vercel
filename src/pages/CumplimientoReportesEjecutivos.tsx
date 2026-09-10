@@ -15,9 +15,10 @@ export default function CumplimientoReportesEjecutivos() {
   const { user } = useAuth();
   const { data: docs = [], isLoading, isError, refetch } = useComplianceDocs();
 
+  const añoActual = new Date().getFullYear();
   const [territorioFiltro, setTerritorioFiltro] = useState('Todos');
   const [colegioFiltro, setColegioFiltro] = useState('Todos');
-  const [añoFiltro, setAñoFiltro] = useState<number | 'Todos'>('Todos');
+  const [añoFiltro, setAñoFiltro] = useState<number | 'Todos'>(añoActual);
   const [generando, setGenerando] = useState<'' | 'pdf' | 'excel'>('');
 
   const años = useMemo(() => Array.from(new Set(docs.map(d => d.año))).sort((a, b) => b - a), [docs]);
@@ -43,13 +44,33 @@ export default function CumplimientoReportesEjecutivos() {
     return 'nivel nacional';
   }, [territorioFiltro, colegioFiltro]);
 
-  const elaboradoPor = user?.user_metadata?.nombre || user?.email || 'Usuario';
+  // Historial por año (mismo territorio/colegio, todos los años) — va SIEMPRE en
+  // una página/hoja aparte, para no mezclar años distintos en el mismo total.
+  const historialPorAño = useMemo(() => {
+    const docsAlcance = docs.filter(d => {
+      if (territorioFiltro !== 'Todos' && d.territorio !== territorioFiltro) return false;
+      if (colegioFiltro !== 'Todos' && d.colegio !== colegioFiltro) return false;
+      return true;
+    });
+    const mapa = new Map<number, { total: number; verificados: number }>();
+    docsAlcance.forEach(d => {
+      const cur = mapa.get(d.año) ?? { total: 0, verificados: 0 };
+      cur.total++;
+      if (d.estado === 'Verificado') cur.verificados++;
+      mapa.set(d.año, cur);
+    });
+    return Array.from(mapa.entries())
+      .map(([año, s]) => ({ año, ...s }))
+      .sort((a, b) => a.año - b.año);
+  }, [docs, territorioFiltro, colegioFiltro]);
+
+  const elaboradoPor = user?.user_metadata?.nombre || (isAdmin ? 'Ing. Ricardo Joanathan Reyes Medina' : user?.email) || 'Usuario';
 
   const generarPDF = async () => {
     if (docsFiltrados.length === 0) { toast.error('No hay documentos para este filtro'); return; }
     setGenerando('pdf');
     try {
-      await generarPDFGeneralCumplimiento({ docs: docsFiltrados as ComplianceDocReport[], elaboradoPor, alcanceLabel });
+      await generarPDFGeneralCumplimiento({ docs: docsFiltrados as ComplianceDocReport[], elaboradoPor, alcanceLabel, historialPorAño });
       toast.success('PDF ejecutivo generado');
     } catch (err: any) {
       toast.error(`No se pudo generar el PDF: ${err?.message ?? 'error desconocido'}`);
@@ -106,6 +127,9 @@ export default function CumplimientoReportesEjecutivos() {
             <p className="text-xs text-slate-400 mt-3">
               {docsFiltrados.length} documento{docsFiltrados.length !== 1 ? 's' : ''} dentro de este alcance ·
               <ShieldCheck className="w-3 h-3 inline mx-1 -mt-0.5" />{alcanceLabel}
+            </p>
+            <p className="text-[11px] text-slate-400 mt-1 italic">
+              Por default se muestra el año en curso ({añoActual}) — el historial de años anteriores siempre se incluye aparte, en una página/hoja separada del PDF y el Excel.
             </p>
           </div>
 

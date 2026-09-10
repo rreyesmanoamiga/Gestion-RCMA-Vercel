@@ -242,8 +242,11 @@ function estadoColor(estado: string, retrasado: boolean): [number, number, numbe
 // PDF GENERAL — cumplimiento de todos los colegios con KPIs, ordenado de
 // mayor a menor retraso.
 // ============================================================================
-export async function generarPDFGeneralCumplimiento(opts: { docs: ComplianceDocReport[]; elaboradoPor: string; alcanceLabel?: string }) {
-  const { docs, elaboradoPor, alcanceLabel } = opts;
+export async function generarPDFGeneralCumplimiento(opts: {
+  docs: ComplianceDocReport[]; elaboradoPor: string; alcanceLabel?: string;
+  historialPorAño?: { año: number; total: number; verificados: number }[];
+}) {
+  const { docs, elaboradoPor, alcanceLabel, historialPorAño } = opts;
   const jsPDFctor = await loadJsPDF();
   const doc = new jsPDFctor({ unit: 'mm', format: 'letter' }) as Doc;
   const W = (doc as any).internal.pageSize.getWidth();
@@ -342,6 +345,47 @@ export async function generarPDFGeneralCumplimiento(opts: { docs: ComplianceDocR
     doc.text(`${d.pct}%`, colX.pct, y + 5, { align: 'right' });
     y += 7;
   });
+
+  // ─── Página de historial (años anteriores, mismo alcance) ────────────────
+  if (historialPorAño && historialPorAño.length > 1) {
+    doc.addPage();
+    await pdfHeader(doc, W, `Historial por año · ${hoyStr}`);
+    let hy = 40;
+    doc.setFontSize(9); doc.setFont('helvetica', 'normal'); doc.setTextColor(30, 41, 59);
+    doc.text(`Alcance: ${alcanceLabel ?? 'nivel nacional'}`, 20, hy);
+    hy += 12;
+
+    doc.setFillColor(0, 41, 90); doc.rect(20, hy, W - 40, 7, 'F');
+    doc.setFontSize(9); doc.setFont('helvetica', 'bold'); doc.setTextColor(255, 255, 255);
+    doc.text('HISTORIAL DE CUMPLIMIENTO POR AÑO', 23, hy + 5);
+    hy += 7;
+
+    const hCol = { año: 25, total: 80, verificados: 130, pct: W - 25 };
+    doc.setFillColor(238, 243, 250); doc.rect(20, hy, W - 40, 7, 'F');
+    doc.setFontSize(7.5); doc.setTextColor(0, 41, 90); doc.setFont('helvetica', 'bold');
+    doc.text('AÑO', hCol.año, hy + 5);
+    doc.text('DOCUMENTOS', hCol.total, hy + 5);
+    doc.text('VERIFICADOS', hCol.verificados, hy + 5);
+    doc.text('% CUMPLIMIENTO', hCol.pct, hy + 5, { align: 'right' });
+    hy += 7;
+
+    historialPorAño.forEach((h, i) => {
+      const pct = h.total > 0 ? Math.round((h.verificados / h.total) * 100) : 0;
+      if (i % 2 === 0) { doc.setFillColor(250, 251, 252); doc.rect(20, hy, W - 40, 8, 'F'); }
+      doc.setFontSize(9); doc.setFont('helvetica', 'bold'); doc.setTextColor(30, 41, 59);
+      doc.text(String(h.año), hCol.año, hy + 5.5);
+      doc.setFont('helvetica', 'normal');
+      doc.text(String(h.total), hCol.total, hy + 5.5);
+      doc.text(String(h.verificados), hCol.verificados, hy + 5.5);
+      const color = pct < 40 ? [220, 38, 38] : pct < 80 ? [237, 113, 2] : [5, 150, 105];
+      doc.setFont('helvetica', 'bold'); doc.setTextColor(color[0], color[1], color[2]);
+      doc.text(`${pct}%`, hCol.pct, hy + 5.5, { align: 'right' });
+      hy += 8;
+    });
+
+    doc.setFontSize(7.5); doc.setFont('helvetica', 'italic'); doc.setTextColor(148, 163, 184);
+    doc.text('El detalle documento por documento de años anteriores está disponible en Validación de Vigencias, filtrando por año.', 20, hy + 8, { maxWidth: W - 40 });
+  }
 
   pdfFooter(doc);
   doc.save(`Reporte_General_Cumplimiento_${new Date().toISOString().slice(0, 10)}.pdf`);
