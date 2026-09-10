@@ -92,12 +92,18 @@ export default function JornadaPresupuestal() {
         <PageHeader title="Jornada Presupuestal" subtitle="Vencimientos y costos por colegio para el año que se está presupuestando" />
         <div className="flex items-center gap-3">
           <span className="text-xs font-bold text-slate-400 uppercase tracking-wide">Estamos en {añoActual}</span>
-          <select value={añoJornada} onChange={e => setAñoJornada(Number(e.target.value))}
-            className="text-sm font-bold text-slate-700 border border-slate-300 rounded-lg px-3 py-2 bg-white">
-            {Array.from({ length: 6 }, (_, i) => añoActual + i).map(a => (
-              <option key={a} value={a}>Jornada {a}</option>
-            ))}
-          </select>
+          <div className="flex items-center gap-1.5">
+            <span className="text-sm font-bold text-slate-500">Jornada</span>
+            <input
+              type="number"
+              value={añoJornada}
+              onChange={e => {
+                const v = parseInt(e.target.value, 10);
+                if (!isNaN(v)) setAñoJornada(v);
+              }}
+              className="w-24 text-sm font-bold text-slate-700 border border-slate-300 rounded-lg px-3 py-2 bg-white focus:ring-2 focus:ring-slate-900 focus:outline-none"
+            />
+          </div>
         </div>
       </div>
 

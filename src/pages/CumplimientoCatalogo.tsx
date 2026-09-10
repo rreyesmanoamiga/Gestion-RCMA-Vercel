@@ -40,8 +40,6 @@ const COLEGIOS_PC = COLEGIOS.filter(c => c.territorio !== 'FMA' && !c.colegio.st
 
 export const PERIODICIDADES = ['Anual', 'Cada 2 años', 'Cada 3 años', 'Cada 4 años', 'Cada 5 años', 'Único trámite'];
 
-const AÑOS_DISPONIBLES = Array.from({ length: 6 }, (_, i) => new Date().getFullYear() - 1 + i); // año actual -1 .. +4
-
 export default function CumplimientoCatalogo() {
   const { isAdmin, can } = usePermissions();
   const qc = useQueryClient();
@@ -235,10 +233,15 @@ export default function CumplimientoCatalogo() {
       <div className="flex items-start justify-between gap-4 flex-wrap">
         <PageHeader title="Catálogo de Cumplimiento" subtitle="La receta base de documentos y las excepciones por colegio" />
         <div className="flex items-center gap-2">
-          <select value={añoSincronizar} onChange={e => setAñoSincronizar(Number(e.target.value))}
-            className="text-sm font-bold text-slate-700 border border-slate-300 rounded-lg px-3 py-2 bg-white">
-            {AÑOS_DISPONIBLES.map(a => <option key={a} value={a}>{a}</option>)}
-          </select>
+          <input
+            type="number"
+            value={añoSincronizar}
+            onChange={e => {
+              const v = parseInt(e.target.value, 10);
+              if (!isNaN(v)) setAñoSincronizar(v);
+            }}
+            className="w-24 text-sm font-bold text-slate-700 border border-slate-300 rounded-lg px-3 py-2 bg-white focus:ring-2 focus:ring-slate-900 focus:outline-none"
+          />
           <button onClick={sincronizar} disabled={sincronizando}
             className="inline-flex items-center gap-2 px-4 py-2 bg-slate-900 text-white rounded-lg text-sm font-bold hover:bg-slate-800 disabled:opacity-50 transition-colors">
             {sincronizando ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
