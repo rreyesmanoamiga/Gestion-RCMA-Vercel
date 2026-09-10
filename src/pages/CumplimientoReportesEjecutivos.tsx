@@ -44,14 +44,19 @@ export default function CumplimientoReportesEjecutivos() {
     return 'nivel nacional';
   }, [territorioFiltro, colegioFiltro]);
 
-  // Historial por año (mismo territorio/colegio, todos los años) — va SIEMPRE en
-  // una página/hoja aparte, para no mezclar años distintos en el mismo total.
-  const historialPorAño = useMemo(() => {
-    const docsAlcance = docs.filter(d => {
+  // Mismo territorio/colegio elegido, pero TODOS los años — es el alcance real
+  // que usa tanto la página de historial del PDF como el Excel de respaldo.
+  const docsAlcance = useMemo(() => {
+    return docs.filter(d => {
       if (territorioFiltro !== 'Todos' && d.territorio !== territorioFiltro) return false;
       if (colegioFiltro !== 'Todos' && d.colegio !== colegioFiltro) return false;
       return true;
     });
+  }, [docs, territorioFiltro, colegioFiltro]);
+
+  // Historial por año (mismo territorio/colegio, todos los años) — va SIEMPRE en
+  // una página/hoja aparte, para no mezclar años distintos en el mismo total.
+  const historialPorAño = useMemo(() => {
     const mapa = new Map<number, { total: number; verificados: number }>();
     docsAlcance.forEach(d => {
       const cur = mapa.get(d.año) ?? { total: 0, verificados: 0 };
@@ -62,7 +67,7 @@ export default function CumplimientoReportesEjecutivos() {
     return Array.from(mapa.entries())
       .map(([año, s]) => ({ año, ...s }))
       .sort((a, b) => a.año - b.año);
-  }, [docs, territorioFiltro, colegioFiltro]);
+  }, [docsAlcance]);
 
   const elaboradoPor = user?.user_metadata?.nombre || (isAdmin ? 'Ing. Ricardo Joanathan Reyes Medina' : user?.email) || 'Usuario';
 
@@ -78,11 +83,11 @@ export default function CumplimientoReportesEjecutivos() {
   };
 
   const generarExcel = async () => {
-    if (docsFiltrados.length === 0) { toast.error('No hay documentos para este filtro'); return; }
+    if (docsAlcance.length === 0) { toast.error('No hay documentos para este alcance'); return; }
     setGenerando('excel');
     try {
-      await generarExcelCumplimiento(docsFiltrados as ComplianceDocReport[]);
-      toast.success('Excel de respaldo generado');
+      await generarExcelCumplimiento(docsAlcance as ComplianceDocReport[]);
+      toast.success('Excel de respaldo generado (incluye todo el historial)');
     } catch (err: any) {
       toast.error(`No se pudo generar el Excel: ${err?.message ?? 'error desconocido'}`);
     } finally { setGenerando(''); }
@@ -157,7 +162,7 @@ export default function CumplimientoReportesEjecutivos() {
                 <p className="font-bold text-emerald-700">Excel de Respaldo</p>
               </div>
               <p className="text-xs text-slate-500">
-                Detalle completo, documento por documento — para quien necesite revisar a fondo lo que sustenta el resumen.
+                Detalle completo, documento por documento, con TODO el historial de años — para quien necesite revisar a fondo lo que sustenta el resumen.
               </p>
             </button>
           </div>

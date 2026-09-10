@@ -38,9 +38,17 @@ async function cargarLogoBuffer(): Promise<ArrayBuffer | null> {
   } catch { return null; }
 }
 
+// Calcula un ancho de columna razonable según el contenido más largo, para
+// que nunca se vean las letras cortadas — con un mínimo y un máximo sensatos.
+function anchoColumna(header: string, valores: string[]): number {
+  const masLargo = Math.max(header.length, ...valores.map(v => v.length), 0);
+  return Math.min(Math.max(masLargo + 3, 10), 45);
+}
+
 // ============================================================================
-// EXCEL GLOBAL — un libro con hoja resumen + una hoja por colegio, formato
-// institucional (mismo patrón que reportesProteccionCivil.ts).
+// EXCEL GLOBAL — hoja Resumen (por colegio y año) + hoja Detalle (historial
+// completo, todos los años registrados), ambas como TABLAS reales de Excel
+// (con flechitas de filtro/orden nativas), formato institucional.
 // ============================================================================
 export async function generarExcelCumplimiento(docs: ComplianceDocReport[]) {
   const wb = new ExcelJS.Workbook();
@@ -50,9 +58,10 @@ export async function generarExcelCumplimiento(docs: ComplianceDocReport[]) {
   const logoBuffer = await cargarLogoBuffer();
   const logoId = logoBuffer ? wb.addImage({ buffer: logoBuffer as any, extension: 'png' }) : null;
 
-  const thinBorder = { style: 'thin' as const, color: { argb: 'FFD7DCE1' } };
-  const borderAll = { top: thinBorder, bottom: thinBorder, left: thinBorder, right: thinBorder };
   const hoy = new Date(); hoy.setHours(0, 0, 0, 0);
+  const generadoStr = new Date().toLocaleDateString('es-MX', { day: 'numeric', month: 'long', year: 'numeric' });
+  const años = Array.from(new Set(docs.map(d => d.año))).sort();
+  const rangoAños = años.length > 1 ? `${años[0]}–${años[años.length - 1]}` : String(años[0] ?? '—');
 
   const esRetraso = (d: ComplianceDocReport) => {
     if (d.estado === 'Verificado') return false;
@@ -90,82 +99,118 @@ export async function generarExcelCumplimiento(docs: ComplianceDocReport[]) {
     ws.getRow(4).height = 20;
   };
 
-  // ── Hoja Resumen ──
+  const FILA_TABLA = 6; // fila 5 queda como respiro antes de la tabla
+
+  // ── Hoja Resumen — por colegio Y por año, para no mezclar años distintos ──
   const wsR = wb.addWorksheet('Resumen');
   wsR.views = [{ showGridLines: false }];
-  [1, 2, 3, 4, 5].forEach((c, i) => wsR.getColumn(c).width = [26, 12, 12, 12, 12][i]);
-  encabezado(wsR, 'RESUMEN GLOBAL POR COLEGIO', `Generado: ${new Date().toLocaleDateString('es-MX', { day: 'numeric', month: 'long', year: 'numeric' })}   |   Total documentos: ${docs.length}`, 5);
 
-  const filaHdr = 6;
-  ['Colegio', 'Territorio', 'Total', 'Verificados', 'En retraso'].forEach((h, i) => {
-    const c = wsR.getCell(filaHdr, i + 1);
-    c.value = h;
-    c.font = { bold: true, size: 10, color: { argb: WHITE }, name: 'Calibri' };
-    c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: NAVY } };
-    c.alignment = { horizontal: i === 0 ? 'left' : 'center', vertical: 'middle', indent: i === 0 ? 1 : 0 };
-    c.border = borderAll;
-  });
-
-  const porColegio = new Map<string, { territorio: string; total: number; verificados: number; retraso: number }>();
+  const porColegioAño = new Map<string, { colegio: string; territorio: string; año: number; total: number; verificados: number; retraso: number }>();
   docs.forEach(d => {
-    const cur = porColegio.get(d.colegio) ?? { territorio: d.territorio, total: 0, verificados: 0, retraso: 0 };
+    const key = `${d.colegio}::${d.año}`;
+    const cur = porColegioAño.get(key) ?? { colegio: d.colegio, territorio: d.territorio, año: d.año, total: 0, verificados: 0, retraso: 0 };
     cur.total++;
     if (d.estado === 'Verificado') cur.verificados++;
     if (esRetraso(d)) cur.retraso++;
-    porColegio.set(d.colegio, cur);
+    porColegioAño.set(key, cur);
+  });
+  const filasResumen = Array.from(porColegioAño.values()).sort((a, b) => b.año - a.año || b.retraso - a.retraso);
+
+  const anchoColegioR = anchoColumna('Colegio', filasResumen.map(f => f.colegio));
+  encabezado(wsR, 'RESUMEN GLOBAL POR COLEGIO Y AÑO', `Generado: ${generadoStr}   |   Historial: ${rangoAños}   |   ${filasResumen.length} filas`, 6);
+
+  wsR.addTable({
+    name: 'ResumenCumplimiento',
+    ref: `A${FILA_TABLA}`,
+    headerRow: true,
+    style: { theme: 'TableStyleMedium2', showRowStripes: true },
+    columns: [
+      { name: 'Colegio', filterButton: true },
+      { name: 'Territorio', filterButton: true },
+      { name: 'Año', filterButton: true },
+      { name: 'Total', filterButton: true },
+      { name: 'Verificados', filterButton: true },
+      { name: 'En retraso', filterButton: true },
+    ],
+    rows: filasResumen.map(f => [f.colegio, f.territorio, f.año, f.total, f.verificados, f.retraso]),
   });
 
-  let fr = filaHdr + 1;
-  Array.from(porColegio.entries()).sort((a, b) => b[1].retraso - a[1].retraso).forEach(([colegio, s], i) => {
-    if (i % 2 === 1) for (let c = 1; c <= 5; c++) wsR.getCell(fr, c).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF8FAFC' } };
-    wsR.getCell(fr, 1).value = colegio;
-    wsR.getCell(fr, 2).value = s.territorio;
-    wsR.getCell(fr, 3).value = s.total;
-    wsR.getCell(fr, 4).value = s.verificados;
-    wsR.getCell(fr, 5).value = s.retraso;
-    for (let c = 1; c <= 5; c++) {
+  // El ancho se aplica DESPUÉS de crear la tabla — addTable() reescribe las
+  // columnas que toca, así que ponerlo antes se pierde en varias de ellas.
+  [anchoColegioR, 12, 8, 10, 13, 12].forEach((w, i) => { wsR.getColumn(i + 1).width = w; });
+
+  // Encabezado de la tabla con el mismo estilo institucional (navy/blanco)
+  for (let c = 1; c <= 6; c++) {
+    const cell = wsR.getCell(FILA_TABLA, c);
+    cell.font = { bold: true, size: 10, color: { argb: WHITE }, name: 'Calibri' };
+    cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: NAVY } };
+    cell.alignment = { horizontal: c === 1 ? 'left' : 'center', vertical: 'middle', indent: c === 1 ? 1 : 0 };
+  }
+  filasResumen.forEach((f, i) => {
+    const fr = FILA_TABLA + 1 + i;
+    for (let c = 1; c <= 6; c++) {
       const cell = wsR.getCell(fr, c);
-      cell.font = { size: 10, name: 'Calibri', color: { argb: c === 5 && s.retraso > 0 ? RED : 'FF1E293B' }, bold: c === 5 && s.retraso > 0 };
+      cell.font = { size: 10, name: 'Calibri', color: { argb: c === 6 && f.retraso > 0 ? RED : 'FF1E293B' }, bold: c === 6 && f.retraso > 0 };
       cell.alignment = { horizontal: c === 1 ? 'left' : 'center', vertical: 'middle', indent: c === 1 ? 1 : 0 };
-      cell.border = borderAll;
     }
-    fr++;
   });
 
-  // ── Hoja Detalle (todos los documentos) ──
+  // ── Hoja Detalle — TODO el historial (todos los años registrados) ─────────
   const wsD = wb.addWorksheet('Detalle');
-  wsD.views = [{ showGridLines: false, state: 'frozen', ySplit: 6 }];
-  const anchos = [24, 10, 18, 30, 14, 12, 14, 14, 18];
-  anchos.forEach((w, i) => wsD.getColumn(i + 1).width = w);
-  encabezado(wsD, 'DETALLE COMPLETO DE DOCUMENTOS', `Generado: ${new Date().toLocaleDateString('es-MX', { day: 'numeric', month: 'long', year: 'numeric' })}   |   ${docs.length} registros`, 9);
+  wsD.views = [{ showGridLines: false, state: 'frozen', ySplit: FILA_TABLA }];
 
-  const headersD = ['Colegio', 'Territorio', 'Materia', 'Documento', 'Estado', 'Vigente', 'Fecha límite', 'Vigente hasta', 'Responsable'];
-  headersD.forEach((h, i) => {
-    const c = wsD.getCell(filaHdr, i + 1);
-    c.value = h;
-    c.font = { bold: true, size: 9, color: { argb: WHITE }, name: 'Calibri' };
-    c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: NAVY } };
-    c.alignment = { horizontal: 'left', vertical: 'middle', indent: 1 };
-    c.border = borderAll;
+  const docsOrdenados = [...docs].sort((a, b) => b.año - a.año || a.colegio.localeCompare(b.colegio) || a.tipo_documento.localeCompare(b.tipo_documento));
+
+  const headersD = ['Colegio', 'Territorio', 'Año', 'Materia', 'Documento', 'Estado', 'Vigente', 'Fecha límite', 'Vigente hasta', 'Responsable'];
+  const colValores: Record<string, string[]> = {
+    Colegio: docsOrdenados.map(d => d.colegio),
+    Territorio: docsOrdenados.map(d => d.territorio),
+    Materia: docsOrdenados.map(d => d.materia ?? 'Sin categoría'),
+    Documento: docsOrdenados.map(d => d.tipo_documento),
+    Estado: docsOrdenados.map(d => d.estado),
+    Vigente: docsOrdenados.map(d => d.vigente ?? '—'),
+    'Fecha límite': docsOrdenados.map(d => fmtFecha(d.fecha_limite_recepcion)),
+    'Vigente hasta': docsOrdenados.map(d => fmtFecha(d.vigente_hasta)),
+    Responsable: docsOrdenados.map(d => d.responsable ?? 'Sin asignar'),
+  };
+  const anchosD = headersD.map(h => (h === 'Año' ? 8 : anchoColumna(h, colValores[h] ?? [])));
+
+  encabezado(wsD, 'DETALLE COMPLETO — TODO EL HISTORIAL', `Generado: ${generadoStr}   |   Historial: ${rangoAños}   |   ${docsOrdenados.length} registros`, headersD.length);
+
+  wsD.addTable({
+    name: 'DetalleCumplimiento',
+    ref: `A${FILA_TABLA}`,
+    headerRow: true,
+    style: { theme: 'TableStyleMedium2', showRowStripes: true },
+    columns: headersD.map(h => ({ name: h, filterButton: true })),
+    rows: docsOrdenados.map(d => [
+      d.colegio, d.territorio, d.año, d.materia ?? 'Sin categoría', d.tipo_documento,
+      d.estado, d.vigente ?? '—', fmtFecha(d.fecha_limite_recepcion), fmtFecha(d.vigente_hasta), d.responsable ?? 'Sin asignar',
+    ]),
   });
 
-  let fd = filaHdr + 1;
-  [...docs].sort((a, b) => a.colegio.localeCompare(b.colegio) || a.tipo_documento.localeCompare(b.tipo_documento)).forEach((d, i) => {
+  // El ancho se aplica DESPUÉS de crear la tabla — addTable() reescribe las
+  // columnas que toca, así que ponerlo antes se pierde en varias de ellas.
+  anchosD.forEach((w, i) => { wsD.getColumn(i + 1).width = w; });
+
+  for (let c = 1; c <= headersD.length; c++) {
+    const cell = wsD.getCell(FILA_TABLA, c);
+    cell.font = { bold: true, size: 9, color: { argb: WHITE }, name: 'Calibri' };
+    cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: NAVY } };
+    cell.alignment = { horizontal: 'left', vertical: 'middle', indent: 1 };
+  }
+  docsOrdenados.forEach((d, i) => {
+    const fr = FILA_TABLA + 1 + i;
     const retrasado = esRetraso(d);
-    if (i % 2 === 1) for (let c = 1; c <= 9; c++) wsD.getCell(fd, c).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF8FAFC' } };
-    const vals = [d.colegio, d.territorio, d.materia ?? 'Sin categoría', d.tipo_documento, d.estado, d.vigente ?? '—', fmtFecha(d.fecha_limite_recepcion), fmtFecha(d.vigente_hasta), d.responsable ?? 'Sin asignar'];
-    vals.forEach((v, ci) => {
-      const cell = wsD.getCell(fd, ci + 1);
-      cell.value = v;
+    for (let c = 1; c <= headersD.length; c++) {
+      const cell = wsD.getCell(fr, c);
       cell.font = {
         size: 9, name: 'Calibri',
-        color: { argb: ci === 4 ? (d.estado === 'Verificado' ? GREEN : retrasado ? RED : AMBER) : 'FF1E293B' },
-        bold: ci === 4,
+        color: { argb: c === 6 ? (d.estado === 'Verificado' ? GREEN : retrasado ? RED : AMBER) : 'FF1E293B' },
+        bold: c === 6,
       };
-      cell.alignment = { horizontal: 'left', vertical: 'middle', indent: 1 };
-      cell.border = borderAll;
-    });
-    fd++;
+      cell.alignment = { horizontal: c === 3 ? 'center' : 'left', vertical: 'middle', indent: c === 3 ? 0 : 1 };
+    }
   });
 
   const buffer = await wb.xlsx.writeBuffer();
