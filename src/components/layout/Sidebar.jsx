@@ -180,9 +180,7 @@ export default function Sidebar({ isOpen, onToggle }) {
   // ---------------------------------------------------------------------
   const costosLista = [
     { to: '/cumplimiento/costos', icon: BarChart3, label: 'Lista de Costos' },
-  ];
-  const costosPending = [
-    { icon: Clock3, label: 'Jornada Presupuestal' },
+    { to: '/cumplimiento/jornada-presupuestal', icon: Clock3, label: 'Jornada Presupuestal' },
   ];
 
   return (
@@ -288,7 +286,6 @@ export default function Sidebar({ isOpen, onToggle }) {
                   defaultOpen={costosLista.some(i => isActive(i.to))}
                 >
                   {costosLista.map(renderLink)}
-                  {costosPending.map((i) => <PendingItem key={i.label} {...i} />)}
                 </SidebarAccordionGroup>
               )}
 
