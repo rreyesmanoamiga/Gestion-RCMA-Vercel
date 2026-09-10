@@ -100,7 +100,12 @@ export default function CumplimientoDocumentos() {
   const [generando, setGenerando] = useState<'' | 'excel' | 'pdf_general' | 'pdf_colegio'>('');
   const [seleccionados, setSeleccionados] = useState<Set<string>>(new Set());
 
-  const colegios = useMemo(() => Array.from(new Set(docs.map(d => d.colegio))).sort(), [docs]);
+  const colegios = useMemo(
+    () => Array.from(new Set(
+      docs.filter(d => territorioFiltro === 'Todos' || d.territorio === territorioFiltro).map(d => d.colegio)
+    )).sort(),
+    [docs, territorioFiltro]
+  );
   const estados = useMemo(() => Array.from(new Set(docs.map(d => d.estado))).sort(), [docs]);
   const años = useMemo(() => Array.from(new Set(docs.map(d => d.año))).sort((a, b) => b - a), [docs]);
 
@@ -249,7 +254,7 @@ export default function CumplimientoDocumentos() {
               <option value="Todos">Todos los años</option>
               {años.map(a => <option key={a} value={a}>{a}</option>)}
             </select>
-            <select value={territorioFiltro} onChange={e => { setTerritorioFiltro(e.target.value); resetPagina(); }}
+            <select value={territorioFiltro} onChange={e => { setTerritorioFiltro(e.target.value); setColegioFiltro('Todos'); resetPagina(); }}
               className="px-3 py-2 text-sm border border-slate-200 rounded-lg bg-white">
               <option value="Todos">Todo territorio</option>
               <option value="MEXICO">México</option>
