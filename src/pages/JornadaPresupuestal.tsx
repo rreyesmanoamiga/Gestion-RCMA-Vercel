@@ -7,7 +7,7 @@ import AccesoRestringido from '@/components/shared/AccesoRestringido';
 import { useComplianceDocs, formatFecha, LoadingBlock, ErrorBlock, type ComplianceDoc } from '@/lib/complianceShared';
 import { AlertTriangle, DollarSign, FileWarning } from 'lucide-react';
 
-interface Concepto { id: string; nombre: string; }
+interface Concepto { id: string; nombre: string; partida_hoja: string | null; partida_seccion: string | null; partida_linea: string | null; }
 interface CostoConcepto { colegio: string; concepto_id: string; costo_total: number | null; }
 
 const fmtMXN = (n: number) => `$${n.toLocaleString('es-MX', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
@@ -22,7 +22,7 @@ export default function JornadaPresupuestal() {
   const { data: conceptos = [] } = useQuery({
     queryKey: ['compliance_conceptos_periodicidad'],
     queryFn: async () => {
-      const { data, error } = await supabase.from('compliance_conceptos').select('id, nombre');
+      const { data, error } = await supabase.from('compliance_conceptos').select('id, nombre, partida_hoja, partida_seccion, partida_linea');
       if (error) throw error;
       return (data ?? []) as Concepto[];
     },
@@ -44,6 +44,13 @@ export default function JornadaPresupuestal() {
     return costo?.costo_total ?? null;
   };
 
+  const getPartida = (tipoDocumento: string): string | null => {
+    const concepto = conceptos.find(c => c.nombre === tipoDocumento);
+    if (!concepto?.partida_hoja) return null;
+    const partes = [concepto.partida_hoja, concepto.partida_seccion].filter(Boolean);
+    return partes.join(' → ') + (concepto.partida_linea ? ` (${concepto.partida_linea})` : '');
+  };
+
   // Solo lo que vence JUSTO en el año elegido — ni antes ni después.
   const docsDelAño = useMemo(() => {
     return docs.filter(d => {
@@ -53,11 +60,12 @@ export default function JornadaPresupuestal() {
   }, [docs, añoJornada]);
 
   const porColegio = useMemo(() => {
-    const mapa = new Map<string, { colegio: string; territorio: string; docs: (ComplianceDoc & { costo: number | null })[] }>();
+    const mapa = new Map<string, { colegio: string; territorio: string; docs: (ComplianceDoc & { costo: number | null; partida: string | null })[] }>();
     docsDelAño.forEach(d => {
       const costo = getCosto(d.colegio, d.tipo_documento);
+      const partida = getPartida(d.tipo_documento);
       const cur = mapa.get(d.colegio) ?? { colegio: d.colegio, territorio: d.territorio, docs: [] };
-      cur.docs.push({ ...d, costo });
+      cur.docs.push({ ...d, costo, partida });
       mapa.set(d.colegio, cur);
     });
     return Array.from(mapa.values())
@@ -160,6 +168,13 @@ export default function JornadaPresupuestal() {
                         <div className="min-w-0">
                           <p className="text-sm text-slate-700 truncate">{d.tipo_documento}</p>
                           <p className="text-[11px] text-slate-400">Vence {formatFecha(d.vigente_hasta)}</p>
+                          {d.partida ? (
+                            <p className="text-[10px] text-sky-700 bg-sky-50 border border-sky-200 rounded px-1.5 py-0.5 inline-block mt-1">
+                              💰 Partida: {d.partida}
+                            </p>
+                          ) : (
+                            <p className="text-[10px] text-slate-300 italic mt-1">Sin partida asignada — captúrala en Catálogo</p>
+                          )}
                         </div>
                         {d.costo !== null ? (
                           <span className="text-sm font-bold text-slate-700 shrink-0 ml-3">{fmtMXN(d.costo)}</span>

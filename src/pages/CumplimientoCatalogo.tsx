@@ -17,6 +17,10 @@ interface Concepto {
   orden: number;
   activo: boolean;
   periodicidad: string;
+  partida_hoja: string | null;
+  partida_seccion: string | null;
+  partida_linea: string | null;
+  partida_notas: string | null;
 }
 
 interface Excepcion {
@@ -39,13 +43,17 @@ const inputClass = 'w-full px-3 py-2 border border-slate-300 rounded-md text-sm 
 const COLEGIOS_PC = COLEGIOS.filter(c => c.territorio !== 'FMA' && !c.colegio.startsWith('CLIN'));
 
 export const PERIODICIDADES = ['Anual', 'Cada 2 años', 'Cada 3 años', 'Cada 4 años', 'Cada 5 años', 'Único trámite'];
+export const HOJAS_PRESUPUESTO = ['No aplica', 'Directos', 'Indirectos', 'Mantenimiento'];
 
 export default function CumplimientoCatalogo() {
   const { isAdmin, can } = usePermissions();
   const qc = useQueryClient();
   const [editando, setEditando] = useState<Concepto | null>(null);
   const [showNuevo, setShowNuevo] = useState(false);
-  const [form, setForm] = useState({ nombre: '', materia: 'Protección civil', norma: '', periodicidad: 'Anual' });
+  const [form, setForm] = useState({
+    nombre: '', materia: 'Protección civil', norma: '', periodicidad: 'Anual',
+    partida_hoja: 'No aplica', partida_seccion: '', partida_linea: '', partida_notas: '',
+  });
   const [colegioSel, setColegioSel] = useState(COLEGIOS_PC[0]?.colegio ?? '');
   const [añoSincronizar, setAñoSincronizar] = useState(new Date().getFullYear());
   const [sincronizando, setSincronizando] = useState(false);
@@ -92,22 +100,29 @@ export default function CumplimientoCatalogo() {
   const saveMutation = useMutation({
     mutationFn: async () => {
       if (!form.nombre.trim()) throw new Error('El nombre es obligatorio');
+      const partida = {
+        partida_hoja: form.partida_hoja === 'No aplica' ? null : form.partida_hoja,
+        partida_seccion: form.partida_seccion.trim() || null,
+        partida_linea: form.partida_linea.trim() || null,
+        partida_notas: form.partida_notas.trim() || null,
+      };
       if (editando) {
         const { error } = await supabase.from('compliance_conceptos')
-          .update({ nombre: form.nombre.trim(), materia: form.materia, norma: form.norma.trim() || null, periodicidad: form.periodicidad })
+          .update({ nombre: form.nombre.trim(), materia: form.materia, norma: form.norma.trim() || null, periodicidad: form.periodicidad, ...partida })
           .eq('id', editando.id);
         if (error) throw error;
       } else {
         const maxOrden = conceptos.reduce((m, c) => Math.max(m, c.orden), 0);
         const { error } = await supabase.from('compliance_conceptos')
-          .insert({ nombre: form.nombre.trim(), materia: form.materia, norma: form.norma.trim() || null, periodicidad: form.periodicidad, orden: maxOrden + 1 });
+          .insert({ nombre: form.nombre.trim(), materia: form.materia, norma: form.norma.trim() || null, periodicidad: form.periodicidad, orden: maxOrden + 1, ...partida });
         if (error) throw error;
       }
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['compliance_conceptos'] });
       toast.success(editando ? 'Concepto actualizado' : 'Concepto agregado al catálogo');
-      setShowNuevo(false); setEditando(null); setForm({ nombre: '', materia: 'Protección civil', norma: '', periodicidad: 'Anual' });
+      setShowNuevo(false); setEditando(null);
+      setForm({ nombre: '', materia: 'Protección civil', norma: '', periodicidad: 'Anual', partida_hoja: 'No aplica', partida_seccion: '', partida_linea: '', partida_notas: '' });
     },
     onError: (e: any) => toast.error(e.message ?? 'Error al guardar'),
   });
@@ -259,7 +274,7 @@ export default function CumplimientoCatalogo() {
           <h2 className="text-sm font-bold text-slate-800 uppercase tracking-tight">
             Conceptos base ({conceptos.length})
           </h2>
-          <button onClick={() => { setEditando(null); setForm({ nombre: '', materia: 'Protección civil', norma: '', periodicidad: 'Anual' }); setShowNuevo(true); }}
+          <button onClick={() => { setEditando(null); setForm({ nombre: '', materia: 'Protección civil', norma: '', periodicidad: 'Anual', partida_hoja: 'No aplica', partida_seccion: '', partida_linea: '', partida_notas: '' }); setShowNuevo(true); }}
             className="inline-flex items-center gap-1.5 text-xs font-bold text-blue-600 hover:underline">
             <Plus className="w-3.5 h-3.5" /> Agregar concepto
           </button>
@@ -274,11 +289,20 @@ export default function CumplimientoCatalogo() {
                 <div className="min-w-0 flex-1">
                   <p className="text-sm font-semibold text-slate-800 truncate">{c.nombre}</p>
                   <p className="text-[11px] text-slate-400">{c.materia}{c.norma ? ` · ${c.norma}` : ''}</p>
+                  {c.partida_hoja && (
+                    <p className="text-[10px] text-slate-300 mt-0.5">
+                      💰 {c.partida_hoja}{c.partida_seccion ? ` → ${c.partida_seccion}` : ''}
+                    </p>
+                  )}
                 </div>
                 <span className="text-[10px] font-bold text-slate-500 bg-slate-100 px-2 py-1 rounded-full shrink-0 whitespace-nowrap">
                   {c.periodicidad}
                 </span>
-                <button onClick={() => { setEditando(c); setForm({ nombre: c.nombre, materia: c.materia, norma: c.norma ?? '', periodicidad: c.periodicidad }); setShowNuevo(true); }}
+                <button onClick={() => { setEditando(c); setForm({
+                  nombre: c.nombre, materia: c.materia, norma: c.norma ?? '', periodicidad: c.periodicidad,
+                  partida_hoja: c.partida_hoja ?? 'No aplica', partida_seccion: c.partida_seccion ?? '',
+                  partida_linea: c.partida_linea ?? '', partida_notas: c.partida_notas ?? '',
+                }); setShowNuevo(true); }}
                   className="p-1.5 text-slate-400 hover:text-slate-700 shrink-0"><Pencil className="w-3.5 h-3.5" /></button>
                 <button onClick={() => toggleActivoMutation.mutate(c)}
                   className={`text-[10px] font-bold px-2 py-1 rounded-full border shrink-0 ${c.activo ? 'text-red-600 border-red-200 hover:bg-red-50' : 'text-emerald-600 border-emerald-200 hover:bg-emerald-50'}`}>
@@ -365,6 +389,35 @@ export default function CumplimientoCatalogo() {
                 <p className="text-[11px] text-slate-400 mt-1">
                   Este es el valor por default para todos los colegios — puedes cambiarlo para uno en particular más abajo, en "Excepciones por colegio".
                 </p>
+              </div>
+
+              <div className="pt-3 border-t border-slate-100 space-y-3">
+                <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">
+                  Partida presupuestal — dónde va este concepto en el presupuesto de Dirección Nacional
+                </p>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-bold text-slate-500 uppercase mb-1.5">Hoja</label>
+                    <select className={inputClass + ' bg-white'} value={form.partida_hoja} onChange={e => setForm(p => ({ ...p, partida_hoja: e.target.value }))}>
+                      {HOJAS_PRESUPUESTO.map(h => <option key={h} value={h}>{h}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-slate-500 uppercase mb-1.5">Sección</label>
+                    <input className={inputClass} placeholder="Ej. Servicios profesionales externos"
+                      value={form.partida_seccion} onChange={e => setForm(p => ({ ...p, partida_seccion: e.target.value }))} />
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-500 uppercase mb-1.5">Línea existente / sugerida</label>
+                  <input className={inputClass} placeholder="Ej. Dictamen Eléctrico"
+                    value={form.partida_linea} onChange={e => setForm(p => ({ ...p, partida_linea: e.target.value }))} />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-500 uppercase mb-1.5">Notas</label>
+                  <textarea className={inputClass + ' resize-none'} rows={2} placeholder="Aclaraciones sobre esta partida..."
+                    value={form.partida_notas} onChange={e => setForm(p => ({ ...p, partida_notas: e.target.value }))} />
+                </div>
               </div>
             </div>
             <div className="p-4 border-t border-slate-100 bg-slate-50 flex justify-end gap-3">
