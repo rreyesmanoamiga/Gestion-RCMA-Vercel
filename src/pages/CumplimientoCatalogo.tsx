@@ -45,6 +45,30 @@ const COLEGIOS_PC = COLEGIOS.filter(c => c.territorio !== 'FMA' && !c.colegio.st
 export const PERIODICIDADES = ['Anual', 'Cada 2 años', 'Cada 3 años', 'Cada 4 años', 'Cada 5 años', 'Único trámite'];
 export const HOJAS_PRESUPUESTO = ['No aplica', 'Directos', 'Indirectos', 'Mantenimiento'];
 
+// Secciones reales de cada hoja, tal como aparecen en los archivos de
+// Presupuestos 2027 (misma estructura confirmada en los 20 colegios).
+export const SECCIONES_POR_HOJA: Record<string, string[]> = {
+  'Directos': [
+    'Gastos por Honorarios Directos', 'Capacitación directa', 'Transportes y viáticos directos',
+    'Transportes y viáticos no docentes', 'Mantenimiento equipo laboratorios y talleres',
+    'Material didáctico y papelería', 'Libros y revistas', 'Seguros', 'Eventos y recreación',
+    'Servicios deportivos', 'Servicios educacionales', 'Liquidaciones directas',
+  ],
+  'Indirectos': [
+    'Energéticos y agua', 'Comunicaciones', 'Fletes y transporte', 'Servicios profesionales externos',
+    'Capacitación indirecta', 'Transportes y viáticos indirectos', 'Seguros indirectos',
+    'Eventos y recreación indirectos', 'Rentas pagadas', 'Servicios a alumnos', 'Material de oficina',
+    'Libros y revistas indirectos', 'Material para capilla', 'Publicidad y promoción indirecta',
+    'Servicios administrativos', 'Becas otorgadas', 'Donativos otorgados',
+    'Impuestos regionales y otros impuestos', 'IVA gastos', 'Multas y recargos', 'Licencias y derechos',
+    'Gastos no fiscales', 'Liquidaciones indirectas', 'Comisiones e intereses',
+  ],
+  'Mantenimiento': [
+    'Mantenimiento ordinario', 'Mantenimiento de equipo', 'Gastos de preservación planta física',
+    'Mantenimiento extraordinario',
+  ],
+};
+
 export default function CumplimientoCatalogo() {
   const { isAdmin, can } = usePermissions();
   const qc = useQueryClient();
@@ -398,14 +422,18 @@ export default function CumplimientoCatalogo() {
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <label className="block text-xs font-bold text-slate-500 uppercase mb-1.5">Hoja</label>
-                    <select className={inputClass + ' bg-white'} value={form.partida_hoja} onChange={e => setForm(p => ({ ...p, partida_hoja: e.target.value }))}>
+                    <select className={inputClass + ' bg-white'} value={form.partida_hoja}
+                      onChange={e => setForm(p => ({ ...p, partida_hoja: e.target.value, partida_seccion: '' }))}>
                       {HOJAS_PRESUPUESTO.map(h => <option key={h} value={h}>{h}</option>)}
                     </select>
                   </div>
                   <div>
                     <label className="block text-xs font-bold text-slate-500 uppercase mb-1.5">Sección</label>
-                    <input className={inputClass} placeholder="Ej. Servicios profesionales externos"
-                      value={form.partida_seccion} onChange={e => setForm(p => ({ ...p, partida_seccion: e.target.value }))} />
+                    <select className={inputClass + ' bg-white'} disabled={form.partida_hoja === 'No aplica'}
+                      value={form.partida_seccion} onChange={e => setForm(p => ({ ...p, partida_seccion: e.target.value }))}>
+                      <option value="">{form.partida_hoja === 'No aplica' ? 'No aplica' : 'Seleccionar...'}</option>
+                      {(SECCIONES_POR_HOJA[form.partida_hoja] ?? []).map(s => <option key={s} value={s}>{s}</option>)}
+                    </select>
                   </div>
                 </div>
                 <div>
