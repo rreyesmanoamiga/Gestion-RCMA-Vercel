@@ -5,7 +5,7 @@ import { supabase } from '@/lib/supabaseClient';
 import PageHeader from '@/components/shared/PageHeader';
 import {
   ShieldCheck, ShieldAlert, Clock, FileText, ChevronRight,
-  type LucideIcon, ListTodo, CheckCircle2,
+  type LucideIcon, ListTodo, CheckCircle2, Layers, BarChart3, Clock3,
 } from 'lucide-react';
 import {
   PieChart, Pie, Cell, Tooltip, ResponsiveContainer, Legend,
@@ -17,9 +17,9 @@ import AccesoRestringido from '@/components/shared/AccesoRestringido';
 
 const ESTADO_COLORS: Record<string, string> = {
   Verificado: '#10b981',
-  Pendiente: '#f97316',
-  'Por revisar': '#f59e0b',
-  Observaciones: '#ef4444',
+  'En Trámite': '#3b82f6',
+  Solicitado: '#f59e0b',
+  Pendiente: '#94a3b8',
 };
 
 interface KPICardProps {
@@ -81,8 +81,9 @@ export default function CumplimientoDashboard() {
     const retraso = docsAño.filter(d => esRetraso(d, hoy)).length;
     const porExpirar = docsAño.filter(d => d.vigente === 'Por expirar').length;
     const verificados = docsAño.filter(d => d.estado === 'Verificado').length;
+    const sinInfo = docsAño.filter(d => !d.vigente).length;
     const pctCumplimiento = total > 0 ? Math.round((verificados / total) * 100) : 0;
-    return { total, retraso, porExpirar, verificados, pctCumplimiento };
+    return { total, retraso, porExpirar, verificados, sinInfo, pctCumplimiento };
   }, [docsAño, hoy]);
 
   const estadoPie = useMemo(() => {
@@ -94,7 +95,7 @@ export default function CumplimientoDashboard() {
   const topRetraso = useMemo(() => {
     const mapa = new Map<string, number>();
     docsAño.forEach(d => {
-      if (esRetraso(d, hoy)) mapa.set(d.colegio.replace('Mano Amiga ', ''), (mapa.get(d.colegio.replace('Mano Amiga ', '')) ?? 0) + 1);
+      if (esRetraso(d, hoy)) mapa.set(d.colegio, (mapa.get(d.colegio) ?? 0) + 1);
     });
     return Array.from(mapa.entries())
       .map(([colegio, retraso]) => ({ colegio, retraso }))
@@ -125,10 +126,11 @@ export default function CumplimientoDashboard() {
       {isError ? <ErrorBlock onRetry={() => refetch()} /> : isLoading ? <LoadingBlock /> : (
         <div className="space-y-6">
           {/* KPIs */}
-          <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
+          <div className="grid grid-cols-2 lg:grid-cols-6 gap-4">
             <KPICard title="Documentos" value={kpis.total} icon={FileText} accent="#4F82C2" to="/cumplimiento/documentos" />
             <KPICard title="En retraso" value={kpis.retraso} icon={ShieldAlert} accent="#ef4444" to="/cumplimiento/alertas" />
             <KPICard title="Por expirar" value={kpis.porExpirar} icon={Clock} accent="#ED7102" to="/cumplimiento/alertas" />
+            <KPICard title="Sin información" value={kpis.sinInfo} icon={ShieldAlert} accent="#94a3b8" subtitle="Falta capturar Vigente desde" to="/cumplimiento/documentos" />
             <KPICard title="Verificados" value={kpis.verificados} icon={ShieldCheck} accent="#10b981" subtitle={`${kpis.pctCumplimiento}% del total`} to="/cumplimiento/documentos" />
             <KPICard title="Pendientes activos" value={pendientesActivos} icon={ListTodo} accent="#8b5cf6" to="/cumplimiento/seguimiento" />
           </div>
@@ -183,7 +185,15 @@ export default function CumplimientoDashboard() {
                 { label: 'Panel General', path: '/cumplimiento/panel-general', icon: ShieldCheck, color: 'bg-blue-50 text-blue-600 border-blue-100' },
                 { label: 'Documentos',    path: '/cumplimiento/documentos',    icon: FileText,     color: 'bg-indigo-50 text-indigo-600 border-indigo-100' },
                 { label: 'Alertas',       path: '/cumplimiento/alertas',       icon: ShieldAlert,  color: 'bg-red-50 text-red-600 border-red-100' },
+                ...(isAdmin || can('editar_cumplimiento') ? [
+                  { label: 'Catálogo', path: '/cumplimiento/catalogo', icon: Layers, color: 'bg-teal-50 text-teal-600 border-teal-100' },
+                ] : []),
                 { label: 'Seguimiento',   path: '/cumplimiento/seguimiento',   icon: ListTodo,     color: 'bg-purple-50 text-purple-600 border-purple-100' },
+                { label: 'Reportes Ejecutivos', path: '/cumplimiento/reportes-ejecutivos', icon: BarChart3, color: 'bg-sky-50 text-sky-600 border-sky-100' },
+                ...(isAdmin ? [
+                  { label: 'Costos y Presupuestos', path: '/cumplimiento/costos', icon: BarChart3, color: 'bg-emerald-50 text-emerald-600 border-emerald-100' },
+                  { label: 'Jornada Presupuestal', path: '/cumplimiento/jornada-presupuestal', icon: Clock3, color: 'bg-amber-50 text-amber-600 border-amber-100' },
+                ] : []),
               ] as { label: string; path: string; icon: LucideIcon; color: string }[]).map(({ label, path, icon: Icon, color }) => (
                 <Link key={path} to={path}
                   className={`flex flex-col items-center gap-2 p-4 rounded-xl border ${color} hover:shadow-md transition-all duration-200 group`}>

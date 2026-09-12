@@ -8,6 +8,8 @@ import {FolderKanban, ClipboardCheck, Wrench, AlertTriangle,
 import { formatDistanceToNow } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { supabase } from '@/lib/supabaseClient';
+import { useAuth } from '@/lib/AuthContext';
+import { useScope } from '@/hooks/useScope';
 import StatusBadge from '@/components/shared/StatusBadge';
 import { COLEGIOS, type Colegio } from '@/lib/colegios';
 import {
@@ -30,7 +32,7 @@ interface Pendiente {
 }
 interface TicketRecord {
   id: string; folio?: string; estatus?: string; titulo?: string;
-  colegio?: string; created_at?: string;
+  colegio?: string; territorio?: string; created_at?: string;
 }
 interface ActivityItem {
   id: string; label: string; sub: string; type: string; date: string; to?: string;
@@ -106,6 +108,20 @@ const CustomTooltip = ({ active, payload }: { active?: boolean; payload?: { name
 
 // ─── Componente principal ─────────────────────────────────────────────────────
 export default function Dashboard() {
+  const { user } = useAuth();
+  const { territorio: miTerritorio, colegioEspecifico: miColegio, esGeneral, filtrarPorAlcance } = useScope();
+  const nombreUsuario = user?.user_metadata?.nombre || user?.email || 'Usuario';
+
+  // Aplica el alcance del usuario directo en la consulta a Supabase — usado en
+  // los conteos/listas que traen pocos registros (limit) para no perder resultados
+  // relevantes por filtrar después de recortar.
+  const aplicarAlcanceQuery = (q: any) => {
+    if (esGeneral) return q;
+    if (miColegio) return q.eq('colegio', miColegio);
+    if (miTerritorio) return q.eq('territorio', miTerritorio);
+    return q;
+  };
+
   const projectsQuery    = useQuery({ queryKey: ['projects'],    queryFn: () => db.Project.list('-created_at', 500), refetchInterval: 60000 });
   const checklistsQuery  = useQuery({ queryKey: ['checklists'],  queryFn: () => db.Checklist.list('-created_at', 500), refetchInterval: 60000 });
   const ticketsQuery     = useQuery({
@@ -117,9 +133,18 @@ export default function Dashboard() {
     refetchInterval: 60000,
   });
 
-  const projects    = useMemo(() => (projectsQuery.data    ?? []) as unknown as Project[],           [projectsQuery.data]);
-  const checklists  = useMemo(() => (checklistsQuery.data  ?? []) as unknown as Checklist[],         [checklistsQuery.data]);
-  const tickets     = useMemo(() => (ticketsQuery.data     ?? []) as unknown as TicketRecord[],      [ticketsQuery.data]);
+  const projects    = useMemo(
+    () => filtrarPorAlcance((projectsQuery.data ?? []) as unknown as Project[], p => p.territorio, p => p.colegio),
+    [projectsQuery.data, filtrarPorAlcance]
+  );
+  const checklists  = useMemo(
+    () => filtrarPorAlcance((checklistsQuery.data ?? []) as unknown as Checklist[], c => c.territorio, c => c.colegio),
+    [checklistsQuery.data, filtrarPorAlcance]
+  );
+  const tickets     = useMemo(
+    () => filtrarPorAlcance((ticketsQuery.data ?? []) as unknown as TicketRecord[], t => t.territorio, t => t.colegio),
+    [ticketsQuery.data, filtrarPorAlcance]
+  );
 
   const isLoading = projectsQuery.isLoading || checklistsQuery.isLoading;
 
@@ -137,22 +162,29 @@ export default function Dashboard() {
     },
     refetchInterval: 60000,
   });
-  const totalColegiosRed = COLEGIOS.filter((c: Colegio) => c.territorio === 'NORTE' || c.territorio === 'MEXICO').length;
+  const totalColegiosRed = COLEGIOS.filter((c: Colegio) =>
+    (c.territorio === 'NORTE' || c.territorio === 'MEXICO') &&
+    (esGeneral || (miColegio ? c.colegio === miColegio : c.territorio === miTerritorio))
+  ).length;
   const colegiosSinMtto = useMemo(() =>
-    COLEGIOS.filter((c: Colegio) => (c.territorio === 'NORTE' || c.territorio === 'MEXICO') && !colegiosConMtto.includes(c.colegio)).map(c => c.colegio),
-    [colegiosConMtto]
+    COLEGIOS.filter((c: Colegio) =>
+      (c.territorio === 'NORTE' || c.territorio === 'MEXICO') &&
+      (esGeneral || (miColegio ? c.colegio === miColegio : c.territorio === miTerritorio)) &&
+      !colegiosConMtto.includes(c.colegio)
+    ).map(c => c.colegio),
+    [colegiosConMtto, esGeneral, miColegio, miTerritorio]
   );
 
   // ─── Cumplimiento Normativo (Protección Civil / Donatarias) ───────────────
   const { data: cumplimientoStats = { vencidos: 0, porExpirar: 0 } } = useQuery({
-    queryKey: ['cumplimiento_dashboard_resumen'],
+    queryKey: ['cumplimiento_dashboard_resumen', miTerritorio, miColegio, esGeneral],
     queryFn: async () => {
       const hoyISO = new Date().toISOString().slice(0, 10);
       const [{ count: vencidos }, { count: porExpirar }] = await Promise.all([
-        supabase.from('compliance_documentos').select('*', { count: 'exact', head: true })
-          .eq('activo', true).neq('estado', 'Verificado').not('fecha_limite_recepcion', 'is', null).lt('fecha_limite_recepcion', hoyISO),
-        supabase.from('compliance_documentos').select('*', { count: 'exact', head: true })
-          .eq('activo', true).eq('vigente', 'Por expirar'),
+        aplicarAlcanceQuery(supabase.from('compliance_documentos').select('*', { count: 'exact', head: true })
+          .eq('activo', true).neq('estado', 'Verificado').not('fecha_limite_recepcion', 'is', null).lt('fecha_limite_recepcion', hoyISO)),
+        aplicarAlcanceQuery(supabase.from('compliance_documentos').select('*', { count: 'exact', head: true })
+          .eq('activo', true).eq('vigente', 'Por expirar')),
       ]);
       return { vencidos: vencidos ?? 0, porExpirar: porExpirar ?? 0 };
     },
@@ -161,26 +193,25 @@ export default function Dashboard() {
 
   // ─── NEXUS pendientes activos ─────────────────────────────────────────────
   const { data: nexusPendientesActivos = 0 } = useQuery({
-    queryKey: ['nexus_activos_dashboard'],
+    queryKey: ['nexus_activos_dashboard', miTerritorio, miColegio, esGeneral],
     queryFn: async () => {
-      const { count } = await supabase
-        .from('nexus_pendientes')
-        .select('*', { count: 'exact', head: true })
-        .neq('estatus', 'completado');
+      const { count } = await aplicarAlcanceQuery(
+        supabase.from('nexus_pendientes').select('*', { count: 'exact', head: true }).neq('estatus', 'completado')
+      );
       return count ?? 0;
     },
     refetchInterval: 60000,
   });
 
   const { data: nexusPendientes = [] } = useQuery({
-    queryKey: ['nexus_pendientes_dashboard'],
+    queryKey: ['nexus_pendientes_dashboard', miTerritorio, miColegio, esGeneral],
     queryFn: async () => {
-      const { data } = await supabase
-        .from('nexus_pendientes')
-        .select('id, titulo, prioridad, estatus, tipo, asignado_nombre, fecha_limite, colegio, territorio')
-        .neq('estatus', 'completado')
-        .order('created_at', { ascending: false })
-        .limit(5);
+      const { data } = await aplicarAlcanceQuery(
+        supabase.from('nexus_pendientes')
+          .select('id, titulo, prioridad, estatus, tipo, asignado_nombre, fecha_limite, colegio, territorio')
+          .neq('estatus', 'completado')
+          .order('created_at', { ascending: false })
+      ).limit(5);
       return data ?? [];
     },
     refetchInterval: 60000,
@@ -188,16 +219,16 @@ export default function Dashboard() {
 
   // ─── Alertas: Tickets MAS vencidos (+12h sin atender) ─────────────────────
   const { data: tmasVencidos = [] } = useQuery({
-    queryKey: ['tmas_vencidos_dashboard'],
+    queryKey: ['tmas_vencidos_dashboard', miTerritorio, miColegio, esGeneral],
     queryFn: async () => {
       const hace12h = new Date(Date.now() - 12 * 60 * 60 * 1000).toISOString();
-      const { data } = await supabase
-        .from('tickets_mas')
-        .select('id, folio, colegio, territorio, nombre_proyecto, created_at')
-        .eq('estatus', 'pendiente')
-        .lt('created_at', hace12h)
-        .order('created_at', { ascending: true })
-        .limit(10);
+      const { data } = await aplicarAlcanceQuery(
+        supabase.from('tickets_mas')
+          .select('id, folio, colegio, territorio, nombre_proyecto, created_at')
+          .eq('estatus', 'pendiente')
+          .lt('created_at', hace12h)
+          .order('created_at', { ascending: true })
+      ).limit(10);
       return data ?? [];
     },
     refetchInterval: 60000,
@@ -380,7 +411,7 @@ export default function Dashboard() {
         <div>
           {/* Saludo dinámico */}
           <p className="text-sm font-semibold text-teal-600 mb-1">
-            {(() => { const h = new Date().getHours(); return h < 12 ? '☀️ Buenos días' : h < 19 ? '🌤️ Buenas tardes' : '🌙 Buenas noches'; })()}, Ing. Ricardo J.
+            {(() => { const h = new Date().getHours(); return h < 12 ? '☀️ Buenos días' : h < 19 ? '🌤️ Buenas tardes' : '🌙 Buenas noches'; })()}, {nombreUsuario}
           </p>
           <div className="flex items-center gap-3 mb-1">
             <div className="w-8 h-8 rounded-lg bg-slate-900 flex items-center justify-center">
