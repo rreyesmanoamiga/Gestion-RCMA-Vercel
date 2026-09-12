@@ -498,8 +498,8 @@ export default function Dashboard() {
           )}
         </div>
 
-        <div className="bg-white rounded-xl border border-slate-200 p-5 relative overflow-hidden">
-          <h2 className="text-sm font-bold text-slate-800 uppercase tracking-tight mb-4">Cronograma — Proyectos Recientes</h2>
+        <div className="bg-white rounded-xl border border-slate-200 p-5 relative overflow-hidden flex flex-col">
+          <h2 className="text-sm font-bold text-slate-800 uppercase tracking-tight mb-4 shrink-0">Cronograma — Proyectos Recientes</h2>
 
           {/* Alerta flotante de Protección Civil — usa cumplimientoStats ya calculado */}
           {cumplimientoStats.porExpirar > 0 && (
@@ -516,18 +516,20 @@ export default function Dashboard() {
           )}
 
           {ganttData.length === 0 ? (
-            <div className="flex items-center justify-center h-48 text-sm text-slate-400">Sin proyectos recientes con fecha</div>
+            <div className="flex-1 flex items-center justify-center min-h-[180px] text-sm text-slate-400">Sin proyectos recientes con fecha</div>
           ) : (
-            <ResponsiveContainer width="100%" height={Math.max(180, ganttData.length * 44)}>
-              <BarChart data={ganttData} layout="vertical" margin={{ top: 5, right: 10, left: 0, bottom: 5 }}>
-                <XAxis type="number" tick={{ fontSize: 10 }} tickFormatter={(v) => `${v}d`} />
-                <YAxis type="category" dataKey="name" tick={{ fontSize: 11 }} width={140} />
-                <Bar dataKey="offset" stackId="a" fill="transparent" />
-                <Bar dataKey="duration" stackId="a" radius={[0, 4, 4, 0]}>
-                  {ganttData.map((entry, i) => <Cell key={i} fill={entry.color} />)}
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
+            <div className="flex-1 min-h-[220px]">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={ganttData} layout="vertical" margin={{ top: 5, right: 10, left: 0, bottom: 5 }}>
+                  <XAxis type="number" tick={{ fontSize: 10 }} tickFormatter={(v) => `${v}d`} />
+                  <YAxis type="category" dataKey="name" tick={{ fontSize: 11 }} width={140} />
+                  <Bar dataKey="offset" stackId="a" fill="transparent" />
+                  <Bar dataKey="duration" stackId="a" radius={[0, 4, 4, 0]} barSize={28}>
+                    {ganttData.map((entry, i) => <Cell key={i} fill={entry.color} />)}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
           )}
         </div>
       </div>
