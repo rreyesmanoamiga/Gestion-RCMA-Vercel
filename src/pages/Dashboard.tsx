@@ -373,19 +373,45 @@ export default function Dashboard() {
       .map(p => ({
         id: p.id,
         name: (p.name ?? 'Sin nombre').length > 22 ? `${(p.name ?? '').slice(0, 22)}…` : (p.name ?? 'Sin nombre'),
+        nombreCompleto: p.name ?? 'Sin nombre',
         start: new Date(p.created_at as string),
         end: p.completado_at ? new Date(p.completado_at) : hoy,
+        enCurso: !p.completado_at,
+        status: p.status ?? '',
         color: STATUS_COLORS[p.status ?? ''] ?? '#8F9DAE',
       }));
     if (conFechas.length === 0) return [];
     const minStart = new Date(Math.min(...conFechas.map(p => p.start.getTime())));
+    const fmt = (d: Date) => d.toLocaleDateString('es-MX', { day: 'numeric', month: 'short', year: 'numeric' });
     return conFechas.map(p => ({
       name: p.name,
+      nombreCompleto: p.nombreCompleto,
+      inicio: fmt(p.start),
+      fin: p.enCurso ? 'En curso' : fmt(p.end),
+      statusLabel: STATUS_LABELS[p.status] ?? p.status ?? 'Sin estado',
       offset: Math.max(0, Math.round((p.start.getTime() - minStart.getTime()) / 86400000)),
       duration: Math.max(1, Math.round((p.end.getTime() - p.start.getTime()) / 86400000)),
       color: p.color,
     }));
   }, [recentProjects]);
+
+  const GanttTooltip = ({ active, payload }: { active?: boolean; payload?: any[] }) => {
+    if (!active || !payload?.length) return null;
+    const d = payload.find(p => p.dataKey === 'duration')?.payload;
+    if (!d) return null;
+    return (
+      <div className="bg-white border border-slate-200 rounded-lg shadow-lg px-3 py-2 max-w-[220px]">
+        <p className="text-xs font-bold text-slate-800 mb-1">{d.nombreCompleto}</p>
+        <div className="flex items-center gap-1.5 mb-1">
+          <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: d.color }} />
+          <span className="text-[11px] font-semibold text-slate-600">{d.statusLabel}</span>
+        </div>
+        <p className="text-[11px] text-slate-500">Inicio: {d.inicio}</p>
+        <p className="text-[11px] text-slate-500">Fin: {d.fin}</p>
+        <p className="text-[11px] font-bold text-slate-700 mt-1">{d.duration} día{d.duration !== 1 ? 's' : ''} de duración</p>
+      </div>
+    );
+  };
 
   if (isLoading) {
     return (
@@ -523,6 +549,7 @@ export default function Dashboard() {
                 <BarChart data={ganttData} layout="vertical" margin={{ top: 5, right: 10, left: 0, bottom: 5 }}>
                   <XAxis type="number" tick={{ fontSize: 10 }} tickFormatter={(v) => `${v}d`} />
                   <YAxis type="category" dataKey="name" tick={{ fontSize: 11 }} width={140} />
+                  <Tooltip content={<GanttTooltip />} cursor={{ fill: 'rgba(148, 163, 184, 0.08)' }} />
                   <Bar dataKey="offset" stackId="a" fill="transparent" />
                   <Bar dataKey="duration" stackId="a" radius={[0, 4, 4, 0]} barSize={28}>
                     {ganttData.map((entry, i) => <Cell key={i} fill={entry.color} />)}
