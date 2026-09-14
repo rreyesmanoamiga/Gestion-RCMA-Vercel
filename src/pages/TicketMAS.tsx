@@ -295,6 +295,21 @@ export default function TicketMAS() {
   const { user }  = useAuth();
   const { getEco } = useEcoLookup();
   const { can }   = usePermissions();
+
+  // Datos de quien está elaborando el ticket — se autocompletan y quedan de
+  // solo lectura, así siempre coinciden con quien realmente está logueado.
+  const { data: miPerfil } = useQuery({
+    queryKey: ['mi_perfil_ticket_mas', user?.email],
+    queryFn: async () => {
+      if (!user?.email) return null;
+      const { data } = await supabase.from('user_permissions').select('nombre, puesto').eq('user_email', user.email).maybeSingle();
+      return data;
+    },
+    enabled: !!user?.email,
+  });
+  const miNombre = miPerfil?.nombre || user?.user_metadata?.nombre || '';
+  const miPuesto = miPerfil?.puesto || '';
+  const miCorreo = user?.email || '';
   const { filtrarPorAlcance } = useScope();
   const isAdmin   = user?.user_metadata?.role === 'admin';
   const qc        = useQueryClient();
@@ -328,7 +343,7 @@ export default function TicketMAS() {
   const FORM_INIT = {
     territorio:'', colegio:'', razon_social:'', sociedad:'', centro_gestor:'',
     director:'', admin_colegio:'', contador:'',
-    nombre_solicitante:'', puesto_solicitante:'', correo_solicitante:'',
+    nombre_solicitante: miNombre, puesto_solicitante: miPuesto, correo_solicitante: miCorreo,
     fecha_elaboracion: format(new Date(), 'yyyy-MM-dd'),
     clasificacion:'', periodicidad:'NORMAL', tipo_mantenimiento:'N/A',
     numero_activo:'', orden_interna:'NO', numero_orden_interna:'N/A',
@@ -341,6 +356,12 @@ export default function TicketMAS() {
     nombre_proyecto:'',
   };
   const [form, setForm] = useState({ ...FORM_INIT });
+
+  // Autocompletar Nombre/Puesto/Correo del solicitante con los datos reales
+  // de quien está logueado — el usuario ya no los captura a mano.
+  useEffect(() => {
+    setForm(p => ({ ...p, nombre_solicitante: miNombre, puesto_solicitante: miPuesto, correo_solicitante: miCorreo }));
+  }, [miNombre, miPuesto, miCorreo]);
 
   const DRAFT_KEY = 'tmas_draft_rescate';
 
@@ -445,7 +466,11 @@ export default function TicketMAS() {
   // ── Enviar ticket ─────────────────────────────────────────────────────────────
   const handleSubmit = async () => {
     if (!puedeCrear) { toast.error('No tienes permiso para crear Ticket MAS.'); return; }
-    if (!form.colegio || !form.nombre_solicitante || !form.correo_solicitante || !form.descripcion || !form.clasificacion || !form.nombre_proyecto) {
+    if (!form.nombre_solicitante || !form.puesto_solicitante || !form.correo_solicitante) {
+      toast.error('Tu perfil no tiene nombre y/o puesto capturados — pide al administrador que los agregue en Accesos antes de continuar.');
+      return;
+    }
+    if (!form.colegio || !form.descripcion || !form.clasificacion || !form.nombre_proyecto) {
       toast.error('Completa los campos obligatorios marcados con *');
       return;
     }
@@ -1060,18 +1085,21 @@ export default function TicketMAS() {
           </div>
           <div className="p-4 grid grid-cols-1 md:grid-cols-3 gap-4">
             <div>
-              <label className={labelClass}>Nombre completo *</label>
-              <input className={inputClass} value={form.nombre_solicitante} onChange={e => set('nombre_solicitante', e.target.value)} placeholder="Nombre del solicitante" />
+              <label className={labelClass}>Nombre completo</label>
+              <input className={readOnlyClass} value={form.nombre_solicitante} readOnly placeholder="Sin nombre en tu perfil — pide que lo capturen en Accesos" />
             </div>
             <div>
-              <label className={labelClass}>Puesto *</label>
-              <input className={inputClass} value={form.puesto_solicitante} onChange={e => set('puesto_solicitante', e.target.value)} placeholder="Director / Administrador" />
+              <label className={labelClass}>Puesto</label>
+              <input className={readOnlyClass} value={form.puesto_solicitante} readOnly placeholder="Sin puesto en tu perfil — pide que lo capturen en Accesos" />
             </div>
             <div>
-              <label className={labelClass}>Correo electrónico *</label>
-              <input className={inputClass} type="email" value={form.correo_solicitante} onChange={e => set('correo_solicitante', e.target.value)} placeholder="correo@ejemplo.com" />
+              <label className={labelClass}>Correo electrónico</label>
+              <input className={readOnlyClass} value={form.correo_solicitante} readOnly />
             </div>
           </div>
+          <p className="px-4 pb-3 text-[11px] text-slate-400 -mt-2">
+            Estos datos se toman automáticamente de tu sesión — si algo está mal o vacío, pide que lo corrijan en Accesos.
+          </p>
         </section>
 
         {/* ── Datos generales ── */}
