@@ -1,5 +1,7 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabaseClient';
+import { useAuth } from '@/lib/AuthContext';
 import { logAudit } from '@/lib/audit';
 import { useSharePointUpload } from '@/hooks/useSharePointUpload';
 import { toast } from 'sonner';
@@ -87,6 +89,20 @@ const tdNum   = "border border-slate-400 px-2 py-1.5 text-sm text-right font-mon
 export default function SolicitudProyecto() {
   const añoActual = new Date().getFullYear().toString();
   const [enviado, setEnviado]   = useState(false);
+  const { user } = useAuth();
+  const { data: miPerfil } = useQuery({
+    queryKey: ['mi_perfil_solicitud', user?.email],
+    queryFn: async () => {
+      if (!user?.email) return null;
+      const { data } = await supabase.from('user_permissions').select('nombre, puesto').eq('user_email', user.email).maybeSingle();
+      return data;
+    },
+    enabled: !!user?.email,
+  });
+  const miNombre = miPerfil?.nombre || user?.user_metadata?.nombre || '';
+  const miPuesto = miPerfil?.puesto || '';
+  const miCorreo = user?.email || '';
+
   const [loading, setLoading]   = useState(false);
   const [showConfirmSend, setShowConfirmSend] = useState(false);
   const [tieneCotizaciones, setTieneCotizaciones] = useState(false);
@@ -100,9 +116,9 @@ export default function SolicitudProyecto() {
     sociedad:               '',
     centro_gestor:          '',
     ciclo_año_fiscal:       añoActual,
-    nombre_solicitante:     '',
-    puesto_solicitante:     '',
-    correo_solicitante:     '',
+    nombre_solicitante:     miNombre,
+    puesto_solicitante:     miPuesto,
+    correo_solicitante:     miCorreo,
     nombre_proyecto:        '',
     tipo_iniciativa:        '',
     resumen_proyecto:       '',
@@ -116,6 +132,11 @@ export default function SolicitudProyecto() {
     monto_otras_detalle:    '',
     en_nombre_de:           '',
   });
+
+  // Por si el perfil (nombre/puesto) resuelve después del primer render.
+  useEffect(() => {
+    setForm(p => ({ ...p, nombre_solicitante: miNombre, puesto_solicitante: miPuesto, correo_solicitante: miCorreo }));
+  }, [miNombre, miPuesto, miCorreo]);
 
   const set = (k: string, v: string) => setForm(p => ({ ...p, [k]: v }));
 
@@ -141,7 +162,10 @@ export default function SolicitudProyecto() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!form.nombre_centro)       { toast.error('Selecciona el nombre del centro'); return; }
-    if (!form.correo_solicitante)  { toast.error('El correo es requerido'); return; }
+    if (!form.nombre_solicitante || !form.puesto_solicitante || !form.correo_solicitante) {
+      toast.error('Tu perfil no tiene nombre y/o puesto capturados — pide al administrador que los agregue en Accesos antes de continuar.');
+      return;
+    }
     if (!form.nombre_proyecto)     { toast.error('El nombre del proyecto es requerido'); return; }
     if (!form.tipo_iniciativa)     { toast.error('Selecciona el tipo de iniciativa'); return; }
     if (form.tipo_iniciativa !== 'GARANTÍAS' && (!costo || costo <= 0)) {
@@ -257,7 +281,7 @@ export default function SolicitudProyecto() {
         <p className="text-slate-500 text-center max-w-md">
           Tu solicitud de proyecto fue recibida correctamente. Recibirás una confirmación a <strong>{form.correo_solicitante}</strong> cuando sea revisada.
         </p>
-        <button onClick={() => { setEnviado(false); setForm({ nombre_centro:'',razon_social:'',sociedad:'',centro_gestor:'',ciclo_año_fiscal:añoActual,nombre_solicitante:'',puesto_solicitante:'',correo_solicitante:'',nombre_proyecto:'',tipo_iniciativa:'',resumen_proyecto:'',fecha_inicio_propuesta:'',fecha_fin_propuesta:'',costo_aproximado:'',monto_operacion:'',monto_fbc:'',monto_donativos:'',monto_otras:'',monto_otras_detalle:'',en_nombre_de:''}); setTieneCotizaciones(false); setCotizacionFiles([]); }}
+        <button onClick={() => { setEnviado(false); setForm({ nombre_centro:'',razon_social:'',sociedad:'',centro_gestor:'',ciclo_año_fiscal:añoActual,nombre_solicitante:miNombre,puesto_solicitante:miPuesto,correo_solicitante:miCorreo,nombre_proyecto:'',tipo_iniciativa:'',resumen_proyecto:'',fecha_inicio_propuesta:'',fecha_fin_propuesta:'',costo_aproximado:'',monto_operacion:'',monto_fbc:'',monto_donativos:'',monto_otras:'',monto_otras_detalle:'',en_nombre_de:''}); setTieneCotizaciones(false); setCotizacionFiles([]); }}
           className="px-6 py-2 bg-slate-900 text-white rounded-md text-sm font-medium hover:bg-slate-800 transition-colors">
           Nueva Solicitud
         </button>
@@ -342,25 +366,22 @@ export default function SolicitudProyecto() {
                 </tr>
                 {/* Fila 6: Solicitante */}
                 <tr>
-                  <td className={tdLabel}>Nombre del Solicitante *</td>
+                  <td className={tdLabel}>Nombre del Solicitante</td>
                   <td className={tdInput} colSpan={2}>
-                    <input required className={inputClass} value={form.nombre_solicitante}
-                      onChange={e => set('nombre_solicitante', e.target.value)}
-                      placeholder="Nombre completo" />
+                    <input readOnly className={readOnlyClass} value={form.nombre_solicitante}
+                      placeholder="Sin nombre en tu perfil — pide que lo capturen en Accesos" />
                   </td>
                   <td className={tdLabel}>Puesto del Solicitante</td>
                   <td className={tdInput}>
-                    <input className={inputClass} value={form.puesto_solicitante}
-                      onChange={e => set('puesto_solicitante', e.target.value)}
-                      placeholder="Ej. Administrador" />
+                    <input readOnly className={readOnlyClass} value={form.puesto_solicitante}
+                      placeholder="Sin puesto en tu perfil — pide que lo capturen en Accesos" />
                   </td>
                 </tr>
                 {/* Fila 7: Correo */}
                 <tr>
-                  <td className={tdLabel}>Correo de Notificación *</td>
+                  <td className={tdLabel}>Correo de Notificación</td>
                   <td className={tdInput} colSpan={4}>
-                    <input required type="email" className={inputClass} value={form.correo_solicitante}
-                      onChange={e => set('correo_solicitante', e.target.value)}
+                    <input readOnly className={readOnlyClass} value={form.correo_solicitante}
                       placeholder="correo@ejemplo.com — recibirás confirmación aquí" />
                   </td>
                 </tr>
