@@ -2,19 +2,22 @@ import React, { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { db } from '@/lib/db';
 import { supabase } from '@/lib/supabaseClient';
+import { useAuth } from '@/lib/AuthContext';
+import { toast } from 'sonner';
 import { Link } from 'react-router-dom';
 import {
   DollarSign, TrendingUp, TrendingDown, Minus,
-  ChevronRight, Filter, BarChart3, ChevronDown
+  ChevronRight, Filter, BarChart3, ChevronDown, FileBarChart, FileSpreadsheet, Loader2,
 } from 'lucide-react';
 import PageHeader from '@/components/shared/PageHeader';
+import { generarPDFPresupuesto, generarExcelPresupuesto, type ProyectoReporte } from '@/lib/reportesPresupuesto';
 
 const PAGE_SIZE = 20;
 
 interface Project {
   id: string; name?: string; status?: string; budget?: number;
   costo_real?: number | null; colegio?: string; territorio?: string;
-  folio?: string; tipo_proyecto?: string;
+  folio?: string; tipo_proyecto?: string; created_at?: string;
 }
 
 const fmtMXN = (n: number) =>
@@ -23,9 +26,15 @@ const fmtMXN = (n: number) =>
 const selectClass = "h-10 px-3 py-2 bg-white border border-slate-300 rounded-md text-sm focus:ring-2 focus:ring-slate-400 focus:outline-none text-slate-700";
 
 export default function Presupuestos() {
+  const { user } = useAuth();
   const [filtroTerritorio, setFiltroTerritorio] = useState('all');
+  const [filtroColegio, setFiltroColegio]       = useState('all');
+  const [filtroAño, setFiltroAño]               = useState('all');
   const [filtroEstado, setFiltroEstado]         = useState('all');
   const [visibleCount, setVisibleCount]         = useState(PAGE_SIZE);
+  const [alcanceReporte, setAlcanceReporte]     = useState<'global' | 'colegio'>('global');
+  const [periodoReporte, setPeriodoReporte]     = useState<'todos' | 'año'>('todos');
+  const [generando, setGenerando]               = useState<'' | 'pdf' | 'excel'>('');
 
   const { data: raw = [], isLoading } = useQuery({
     queryKey: ['projects'],
@@ -48,29 +57,85 @@ export default function Presupuestos() {
     return map;
   }, [rawTickets]);
 
-  const filtered = useMemo(() => projects.filter(p => {
+  const getAño = (p: Project) => p.created_at ? new Date(p.created_at).getFullYear() : null;
+
+  // Alcance para los KPIs: territorio + colegio + año (sin filtro de estado,
+  // para que el resumen siempre refleje el universo completo de ese alcance).
+  const projectsEnAlcance = useMemo(() => projects.filter(p => {
     if (filtroTerritorio !== 'all' && p.territorio !== filtroTerritorio) return false;
+    if (filtroColegio !== 'all' && p.colegio !== filtroColegio) return false;
+    if (filtroAño !== 'all' && String(getAño(p)) !== filtroAño) return false;
+    return true;
+  }), [projects, filtroTerritorio, filtroColegio, filtroAño]);
+
+  const filtered = useMemo(() => projectsEnAlcance.filter(p => {
     if (filtroEstado === 'con_real'  && !p.costo_real)  return false;
     if (filtroEstado === 'sin_real'  && p.costo_real)   return false;
     if (filtroEstado === 'sobrecosto' && (p.costo_real == null || p.costo_real <= (p.budget ?? 0))) return false;
     if (filtroEstado === 'ahorro'    && (p.costo_real == null || p.costo_real >= (p.budget ?? 0))) return false;
     return true;
-  }), [projects, filtroTerritorio, filtroEstado]);
+  }), [projectsEnAlcance, filtroEstado]);
 
   const visible   = useMemo(() => filtered.slice(0, visibleCount), [filtered, visibleCount]);
   const hasMore   = visibleCount < filtered.length;
   const remaining = filtered.length - visibleCount;
 
   const territorios = [...new Set(projects.map(p => p.territorio).filter(Boolean))] as string[];
+  const colegios = [...new Set(projects.map(p => p.colegio).filter(Boolean))].sort() as string[];
+  const años = [...new Set(projects.map(getAño).filter((a): a is number => a !== null))].sort((a, b) => b - a);
 
   const resumen = useMemo(() => {
-    const conReal = projects.filter(p => p.costo_real != null && p.costo_real > 0);
-    const totalPresupuesto = projects.reduce((s, p) => s + (p.budget ?? 0), 0);
+    const conReal = projectsEnAlcance.filter(p => p.costo_real != null && p.costo_real > 0);
+    const totalPresupuesto = projectsEnAlcance.reduce((s, p) => s + (p.budget ?? 0), 0);
     const totalReal        = conReal.reduce((s, p) => s + (p.costo_real ?? 0), 0);
     const sobrecostos      = conReal.filter(p => (p.costo_real ?? 0) > (p.budget ?? 0));
     const ahorros          = conReal.filter(p => (p.costo_real ?? 0) < (p.budget ?? 0));
     return { totalPresupuesto, totalReal, conReal: conReal.length, sobrecostos: sobrecostos.length, ahorros: ahorros.length };
-  }, [projects]);
+  }, [projectsEnAlcance]);
+
+  const alcanceLabel = useMemo(() => {
+    const parte1 = alcanceReporte === 'colegio' && filtroColegio !== 'all' ? filtroColegio : 'Todos los colegios';
+    const parte2 = periodoReporte === 'año' && filtroAño !== 'all' ? `año ${filtroAño}` : 'todos los años';
+    return `${parte1} — ${parte2}`;
+  }, [alcanceReporte, periodoReporte, filtroColegio, filtroAño]);
+
+  const proyectosParaReporte = useMemo(() => {
+    return projects.filter(p => {
+      if (alcanceReporte === 'colegio' && filtroColegio !== 'all' && p.colegio !== filtroColegio) return false;
+      if (periodoReporte === 'año' && filtroAño !== 'all' && String(getAño(p)) !== filtroAño) return false;
+      return true;
+    });
+  }, [projects, alcanceReporte, periodoReporte, filtroColegio, filtroAño]);
+
+  const elaboradoPor = user?.user_metadata?.nombre || user?.email || 'Usuario';
+
+  const generarReportePDF = async () => {
+    if (proyectosParaReporte.length === 0) { toast.error('No hay proyectos para este alcance'); return; }
+    setGenerando('pdf');
+    try {
+      await generarPDFPresupuesto({
+        proyectos: proyectosParaReporte.map(p => ({ ...p, año: getAño(p) ?? 0 })) as ProyectoReporte[],
+        elaboradoPor, alcanceLabel,
+      });
+      toast.success('PDF generado');
+    } catch (err: any) {
+      toast.error(`No se pudo generar el PDF: ${err?.message ?? 'error desconocido'}`);
+    } finally { setGenerando(''); }
+  };
+
+  const generarReporteExcel = async () => {
+    if (proyectosParaReporte.length === 0) { toast.error('No hay proyectos para este alcance'); return; }
+    setGenerando('excel');
+    try {
+      await generarExcelPresupuesto({
+        proyectos: proyectosParaReporte.map(p => ({ ...p, año: getAño(p) ?? 0 })) as ProyectoReporte[],
+        alcanceLabel,
+      });
+      toast.success('Excel generado');
+    } catch (err: any) {
+      toast.error(`No se pudo generar el Excel: ${err?.message ?? 'error desconocido'}`);
+    } finally { setGenerando(''); }
+  };
 
   if (isLoading) {
     return (
@@ -90,11 +155,11 @@ export default function Presupuestos() {
       {/* KPIs */}
       <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
         {[
-          { label: 'Proyectos con presupuesto', value: projects.length,             color: 'bg-slate-900 text-white',                                  icon: <BarChart3 className="w-4 h-4" /> },
+          { label: 'Proyectos con presupuesto', value: projectsEnAlcance.length,             color: 'bg-slate-900 text-white',                                  icon: <BarChart3 className="w-4 h-4" /> },
           { label: 'Con costo real',            value: resumen.conReal,             color: 'bg-blue-50 text-blue-700 border border-blue-200',           icon: <DollarSign className="w-4 h-4" /> },
           { label: 'Sobrecostos',               value: resumen.sobrecostos,         color: 'bg-red-50 text-red-700 border border-red-200',              icon: <TrendingUp className="w-4 h-4" /> },
           { label: 'Ahorros',                   value: resumen.ahorros,             color: 'bg-emerald-50 text-emerald-700 border border-emerald-200',  icon: <TrendingDown className="w-4 h-4" /> },
-          { label: 'Sin costo real',            value: projects.length - resumen.conReal, color: 'bg-amber-50 text-amber-700 border border-amber-200', icon: <Minus className="w-4 h-4" /> },
+          { label: 'Sin costo real',            value: projectsEnAlcance.length - resumen.conReal, color: 'bg-amber-50 text-amber-700 border border-amber-200', icon: <Minus className="w-4 h-4" /> },
         ].map(k => (
           <div key={k.label} className={`rounded-xl p-4 ${k.color}`}>
             <div className="flex items-center gap-2 mb-1 opacity-70">{k.icon}
@@ -111,7 +176,7 @@ export default function Presupuestos() {
           <div className="bg-blue-50 border border-blue-200 rounded-xl p-5 text-center">
             <p className="text-xs font-bold text-blue-500 uppercase mb-1">Total Presupuestado</p>
             <p className="text-2xl font-black text-blue-700">{fmtMXN(resumen.totalPresupuesto)}</p>
-            <p className="text-xs text-blue-400 mt-1">{projects.length} proyectos</p>
+            <p className="text-xs text-blue-400 mt-1">{projectsEnAlcance.length} proyectos</p>
           </div>
           <div className="bg-slate-50 border border-slate-200 rounded-xl p-5 text-center">
             <p className="text-xs font-bold text-slate-500 uppercase mb-1">Total Costo Real</p>
@@ -137,9 +202,17 @@ export default function Presupuestos() {
       {/* Filtros */}
       <div className="flex gap-3 flex-wrap items-center">
         <Filter className="w-4 h-4 text-slate-400" />
-        <select className={selectClass} value={filtroTerritorio} onChange={e => { setFiltroTerritorio(e.target.value); setVisibleCount(PAGE_SIZE); }}>
+        <select className={selectClass} value={filtroTerritorio} onChange={e => { setFiltroTerritorio(e.target.value); setFiltroColegio('all'); setVisibleCount(PAGE_SIZE); }}>
           <option value="all">Todos los territorios</option>
           {territorios.map(t => <option key={t} value={t}>{t}</option>)}
+        </select>
+        <select className={selectClass} value={filtroColegio} onChange={e => { setFiltroColegio(e.target.value); setVisibleCount(PAGE_SIZE); if (e.target.value === 'all') setAlcanceReporte('global'); }}>
+          <option value="all">Todos los colegios</option>
+          {colegios.filter(c => filtroTerritorio === 'all' || projects.find(p => p.colegio === c)?.territorio === filtroTerritorio).map(c => <option key={c} value={c}>{c}</option>)}
+        </select>
+        <select className={selectClass} value={filtroAño} onChange={e => { setFiltroAño(e.target.value); setVisibleCount(PAGE_SIZE); if (e.target.value === 'all') setPeriodoReporte('todos'); }}>
+          <option value="all">Todos los años</option>
+          {años.map(a => <option key={a} value={a}>{a}</option>)}
         </select>
         <select className={selectClass} value={filtroEstado} onChange={e => { setFiltroEstado(e.target.value); setVisibleCount(PAGE_SIZE); }}>
           <option value="all">Todos</option>
@@ -149,6 +222,42 @@ export default function Presupuestos() {
           <option value="ahorro">Ahorro</option>
         </select>
         <span className="text-sm text-slate-500">{filtered.length} proyecto{filtered.length !== 1 ? 's' : ''}</span>
+      </div>
+
+      {/* Generador de reportes */}
+      <div className="bg-white rounded-xl border border-slate-200 p-5">
+        <p className="text-xs font-bold text-slate-400 uppercase tracking-wide mb-3">Generar reporte</p>
+        <div className="flex flex-wrap gap-4 items-center">
+          <div className="flex items-center gap-2">
+            <span className="text-xs font-semibold text-slate-500">Alcance:</span>
+            <select className={selectClass} value={alcanceReporte} onChange={e => setAlcanceReporte(e.target.value as 'global' | 'colegio')}>
+              <option value="global">Global (todos los colegios)</option>
+              <option value="colegio" disabled={filtroColegio === 'all'}>
+                Solo {filtroColegio !== 'all' ? filtroColegio : 'el colegio filtrado arriba'}
+              </option>
+            </select>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="text-xs font-semibold text-slate-500">Periodo:</span>
+            <select className={selectClass} value={periodoReporte} onChange={e => setPeriodoReporte(e.target.value as 'todos' | 'año')}>
+              <option value="todos">Todos los años</option>
+              <option value="año" disabled={filtroAño === 'all'}>
+                Solo {filtroAño !== 'all' ? filtroAño : 'el año filtrado arriba'}
+              </option>
+            </select>
+          </div>
+          <div className="flex items-center gap-2 ml-auto">
+            <button onClick={generarReportePDF} disabled={generando !== ''}
+              className="inline-flex items-center gap-2 px-4 py-2 bg-[#00295A] text-white rounded-lg text-sm font-bold hover:bg-[#00295A]/90 disabled:opacity-50 transition-colors">
+              {generando === 'pdf' ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileBarChart className="w-4 h-4" />} PDF
+            </button>
+            <button onClick={generarReporteExcel} disabled={generando !== ''}
+              className="inline-flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white rounded-lg text-sm font-bold hover:bg-emerald-700 disabled:opacity-50 transition-colors">
+              {generando === 'excel' ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileSpreadsheet className="w-4 h-4" />} Excel
+            </button>
+          </div>
+        </div>
+        <p className="text-[11px] text-slate-400 mt-2">{alcanceLabel} · {proyectosParaReporte.length} proyecto{proyectosParaReporte.length !== 1 ? 's' : ''}</p>
       </div>
 
       {/* Tabla */}
