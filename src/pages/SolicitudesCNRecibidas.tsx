@@ -4,7 +4,7 @@ import { supabase } from '@/lib/supabaseClient';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
-import { ChevronDown, CheckCircle, Eye, X, Building2, User, Mail, ShieldCheck, Ban, Trash2 } from 'lucide-react';
+import { ChevronDown, CheckCircle, Eye, X, Building2, User, Mail, ShieldCheck, Ban, Trash2, FileSignature } from 'lucide-react';
 import { logAudit } from '@/lib/audit';
 import { useScope } from '@/hooks/useScope';
 import PageHeader from '@/components/shared/PageHeader';
@@ -33,6 +33,7 @@ interface SolicitudCN {
   recibida_at?: string;
   motivo_rechazo?: string;
   tramite_id?: string | null;
+  ticket_mas_cn_habilitado_at?: string | null;
   created_at?: string;
 }
 
@@ -66,52 +67,63 @@ export default function SolicitudesCNRecibidas() {
     [rawSolicitudes, filtrarPorAlcance]
   );
 
-  // Aprobar: pasa a "recibida" y genera el Trámite CN correspondiente,
-  // dejando la trazabilidad solicitud → trámite.
-  const aprobarMutation = useMutation({
+  // Paso 1: marcar como recibida — igual que Solicitud de Proyecto en Obras.
+  // El Trámite CN todavía NO existe aquí: se genera hasta que se AUTORICE
+  // el Ticket MAS CN (igual que Obras genera el Proyecto al autorizar el Ticket MAS).
+  const recibirMutation = useMutation({
     mutationFn: async (s: SolicitudCN) => {
-      const currentYear = new Date().getFullYear();
-      const { data: existentes } = await supabase.from('compliance_tramites_cn')
-        .select('folio').like('folio', `TRCN-${currentYear}-%`);
-      let num = 1;
-      (existentes ?? []).forEach((row: any) => {
-        const m = row.folio?.match(/TRCN-\d{4}-(\d+)$/);
-        if (m) num = Math.max(num, parseInt(m[1], 10) + 1);
-      });
-      const folio = `TRCN-${currentYear}-${String(num).padStart(3, '0')}`;
-
-      const { data: tramite, error: errTram } = await supabase.from('compliance_tramites_cn').insert({
-        folio, solicitud_id: s.id, colegio: s.colegio, territorio: s.territorio,
-        concepto_id: (s as any).concepto_id ?? null, concepto_nombre: s.concepto_nombre,
-        especificacion: s.especificacion,
-        nombre_tramite: `${s.concepto_nombre ?? 'Trámite CN'} — ${s.especificacion ?? ''}`.trim(),
-        descripcion: s.descripcion ?? null,
-        presupuesto: s.costo_estimado ?? null,
-        responsable: s.nombre_solicitante ?? null,
-        fecha_compromiso: s.fecha_requerida ?? null,
-      }).select('id').single();
-      if (errTram) throw errTram;
-
-      const { error: errSol } = await supabase.from('compliance_solicitudes_cn')
-        .update({ estatus: 'recibida', recibida_at: new Date().toISOString(), tramite_id: tramite.id })
+      const { error } = await supabase.from('compliance_solicitudes_cn')
+        .update({ estatus: 'recibida', recibida_at: new Date().toISOString() })
         .eq('id', s.id);
-      if (errSol) throw errSol;
+      if (error) throw error;
 
-      logAudit({ accion: 'autorizar', modulo: 'solicitudes_cn', registro_id: s.id, registro_ref: s.folio ?? folio,
-        detalle: { estatus_nuevo: 'recibida', tramite_folio: folio } });
+      logAudit({ accion: 'editar', modulo: 'solicitudes_cn', registro_id: s.id, registro_ref: s.folio ?? s.especificacion ?? '',
+        detalle: { estatus_nuevo: 'recibida' } });
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['compliance_solicitudes_cn'] });
+      toast.success('Solicitud marcada como recibida');
+      setViewing(null);
+    },
+    onError: () => toast.error('Error al procesar la solicitud'),
+  });
+
+  // Paso 2: habilitar Ticket MAS CN — activa SOLO el permiso de enviar (no
+  // "ver") en user_permissions, así el solicitante cae en modo "solo
+  // formulario" y nunca ve el listado completo de tickets de otros colegios.
+  const habilitarTicketMutation = useMutation({
+    mutationFn: async (s: SolicitudCN) => {
+      if (!s.correo_solicitante) throw new Error('Esta solicitud no tiene correo de solicitante');
+
+      const { data: actualizado, error: permErr } = await supabase
+        .from('user_permissions')
+        .update({ enviar_ticket_mas_cn: true })
+        .eq('user_email', s.correo_solicitante)
+        .select('user_email');
+      if (permErr) throw permErr;
+      if (!actualizado || actualizado.length === 0) {
+        throw new Error(`${s.correo_solicitante} no tiene cuenta en Accesos — créala ahí primero`);
+      }
+
+      const { error: upErr } = await supabase.from('compliance_solicitudes_cn')
+        .update({ ticket_mas_cn_habilitado_at: new Date().toISOString() })
+        .eq('id', s.id);
+      if (upErr) throw upErr;
+
+      logAudit({ accion: 'editar', modulo: 'solicitudes_cn', registro_id: s.id, registro_ref: s.folio ?? s.especificacion ?? '',
+        detalle: { accion_especial: 'ticket_mas_cn_habilitado', correo: s.correo_solicitante } });
 
       await supabase.functions.invoke('notify-nueva-solicitud-cn', {
-        body: { aprobada: true, folio, concepto: s.concepto_nombre, especificacion: s.especificacion,
+        body: { aprobada: true, concepto: s.concepto_nombre, especificacion: s.especificacion,
           colegio: s.colegio, correoSolicitante: s.correo_solicitante },
       }).catch(() => {});
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['compliance_solicitudes_cn'] });
-      qc.invalidateQueries({ queryKey: ['compliance_tramites_cn'] });
-      toast.success('Solicitud aprobada — se generó el Trámite CN');
+      toast.success('Ticket MAS CN habilitado y correo enviado');
       setViewing(null);
     },
-    onError: () => toast.error('Error al aprobar la solicitud'),
+    onError: (err: unknown) => toast.error(err instanceof Error ? err.message : 'No se pudo habilitar el Ticket MAS CN'),
   });
 
   const rechazarMutation = useMutation({
@@ -198,6 +210,9 @@ export default function SolicitudesCNRecibidas() {
                     }`}>
                       {s.estatus === 'pendiente' ? 'Pendiente' : s.estatus === 'rechazada' ? 'Rechazada' : 'Recibida'}
                     </span>
+                    {s.estatus === 'recibida' && s.ticket_mas_cn_habilitado_at && (
+                      <span className="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase border bg-blue-50 text-blue-700 border-blue-200">Ticket MAS CN Habilitado</span>
+                    )}
                     <h3 className="font-bold text-slate-800 text-sm">{s.concepto_nombre} — {s.especificacion}</h3>
                   </div>
                   <div className="flex items-center gap-4 mt-2 text-xs text-slate-500 flex-wrap">
@@ -211,11 +226,18 @@ export default function SolicitudesCNRecibidas() {
                   <button onClick={() => setViewing(s)} title="Ver detalle" className="p-1.5 rounded hover:bg-blue-50 text-blue-600 transition"><Eye className="w-4 h-4" /></button>
                   {s.estatus === 'pendiente' && (
                     <>
-                      <button onClick={() => aprobarMutation.mutate(s)} title="Aprobar y generar Trámite CN"
+                      <button onClick={() => recibirMutation.mutate(s)} title="Marcar como Recibida"
                         className="p-1.5 rounded hover:bg-emerald-50 text-emerald-600 transition"><CheckCircle className="w-4 h-4" /></button>
                       <button onClick={() => { setRechazarModal(s); setMotivoRechazo(''); }} title="Rechazar"
                         className="p-1.5 rounded hover:bg-red-50 text-red-500 transition"><Ban className="w-4 h-4" /></button>
                     </>
+                  )}
+                  {s.estatus === 'recibida' && !s.ticket_mas_cn_habilitado_at && (
+                    <button onClick={() => habilitarTicketMutation.mutate(s)} title="Habilitar Ticket MAS CN"
+                      className="p-1.5 rounded hover:bg-blue-50 text-blue-600 transition"><FileSignature className="w-4 h-4" /></button>
+                  )}
+                  {s.estatus === 'recibida' && s.ticket_mas_cn_habilitado_at && (
+                    <span title="Ticket MAS CN ya habilitado" className="p-1.5 text-emerald-500"><FileSignature className="w-4 h-4" /></span>
                   )}
                   <button onClick={() => { if (window.confirm('¿Eliminar esta solicitud?')) eliminarMutation.mutate(s.id); }} title="Eliminar"
                     className="p-1.5 rounded hover:bg-red-50 text-red-600 transition"><Trash2 className="w-4 h-4" /></button>
@@ -257,9 +279,18 @@ export default function SolicitudesCNRecibidas() {
               <div className="flex justify-end gap-2 p-4 border-t border-slate-100">
                 <button onClick={() => { setRechazarModal(viewing); setMotivoRechazo(''); }}
                   className="px-4 py-2 text-sm font-bold text-red-600 border border-red-200 rounded-lg hover:bg-red-50">Rechazar</button>
-                <button onClick={() => aprobarMutation.mutate(viewing)}
-                  className="px-4 py-2 text-sm font-bold bg-emerald-600 text-white rounded-lg hover:bg-emerald-700">Aprobar y Generar Trámite CN</button>
+                <button onClick={() => recibirMutation.mutate(viewing)}
+                  className="px-4 py-2 text-sm font-bold bg-emerald-600 text-white rounded-lg hover:bg-emerald-700">Marcar como Recibida</button>
               </div>
+            )}
+            {viewing.estatus === 'recibida' && !viewing.ticket_mas_cn_habilitado_at && (
+              <div className="flex justify-end gap-2 p-4 border-t border-slate-100">
+                <button onClick={() => habilitarTicketMutation.mutate(viewing)}
+                  className="px-4 py-2 text-sm font-bold bg-blue-600 text-white rounded-lg hover:bg-blue-700">Habilitar Ticket MAS CN</button>
+              </div>
+            )}
+            {viewing.estatus === 'recibida' && viewing.ticket_mas_cn_habilitado_at && (
+              <div className="p-4 border-t border-slate-100 text-xs text-slate-400 italic">Ticket MAS CN ya habilitado — el solicitante puede continuar el trámite.</div>
             )}
           </div>
         </div>

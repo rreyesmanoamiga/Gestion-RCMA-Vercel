@@ -1,6 +1,5 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { useSearchParams } from 'react-router-dom';
 import { supabase } from '@/lib/supabaseClient';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
@@ -11,11 +10,16 @@ import { useScope } from '@/hooks/useScope';
 import { useDirectorio, type DirectorioColegio, findColegio, getGerenteFMA, getDirectorNacional } from '@/lib/directorio';
 import {
   Send, CheckCircle, Eye, X, Printer, ClipboardList,
-  ChevronDown, Clock, Trash2, Ban, AlertCircle, AlertTriangle, ShieldCheck,
+  ChevronDown, Clock, Trash2, Ban, AlertCircle, AlertTriangle, ShieldCheck, FolderPlus,
 } from 'lucide-react';
 import PageHeader from '@/components/shared/PageHeader';
 import { logAudit } from '@/lib/audit';
 import { notifyByEmail } from '@/lib/notifications';
+
+// Limpia un segmento de nombre de carpeta/archivo para OneDrive — mismo criterio que Ticket MAS de Obras.
+const limpiarSegmento = (s: string, maxLen = 60) => s
+  .normalize('NFC').slice(0, maxLen).replace(/[/\\:*?"<>|]/g, '_').trim()
+  .replace(/[. ]+$/, '').replace(/^[. ]+/, '');
 
 const TMASCN_PAGE_SIZE = 20;
 
@@ -58,7 +62,7 @@ function buildColegiosTicketCN(directorioRows: DirectorioColegio[]) {
 const TERRITORIOS = ['NORTE', 'MEXICO', 'FMA'];
 
 interface TicketMASCN {
-  id: string; folio?: string; tramite_id?: string | null;
+  id: string; folio?: string; tramite_id?: string | null; solicitud_id?: string | null;
   colegio?: string; razon_social?: string; sociedad?: string; centro_gestor?: string;
   territorio?: string; director?: string; admin_colegio?: string; contador?: string;
   nombre_solicitante?: string; puesto_solicitante?: string; correo_solicitante?: string;
@@ -72,6 +76,7 @@ interface TicketMASCN {
   estatus?: string;
   fecha_recepcion?: string; fecha_autorizacion?: string;
   motivo_cancelacion?: string; fecha_cancelacion?: string;
+  expediente_url?: string;
   created_at?: string;
 }
 
@@ -176,8 +181,6 @@ export default function TicketMASCN() {
   const { can, isAdmin } = usePermissions();
   const { filtrarPorAlcance } = useScope();
   const qc = useQueryClient();
-  const [searchParams] = useSearchParams();
-  const tramiteIdParam = searchParams.get('tramite_id');
 
   const { data: directorioRows = [] } = useDirectorio();
   const colegiosCN = useMemo(() => buildColegiosTicketCN(directorioRows), [directorioRows]);
@@ -191,10 +194,10 @@ export default function TicketMASCN() {
     },
   });
 
-  const canVerLista    = isAdmin || can('ver_ticket_mas_cn');
-  const puedeCrear      = isAdmin || can('enviar_ticket_mas_cn');
-  const puedeAutorizar  = isAdmin || can('autorizar_ticket_mas_cn');
-  const puedeCancelar   = isAdmin || can('cancelar_ticket_mas_cn');
+  const canVerLista     = isAdmin || can('ver_ticket_mas_cn');
+  const puedeCrear       = isAdmin || can('enviar_ticket_mas_cn');
+  const puedeAutorizar   = isAdmin || can('autorizar_ticket_mas_cn');
+  const puedeCancelar    = isAdmin || can('cancelar_ticket_mas_cn');
 
   const [vista, setVista] = useState<'form'|'lista'|'detalle'>('form');
   const [enviado, setEnviado]   = useState(false);
@@ -204,10 +207,10 @@ export default function TicketMASCN() {
   const [filterStatus, setFilter] = useState('todos');
   const [visibleCount, setVisibleCount] = useState(TMASCN_PAGE_SIZE);
 
-  useEffect(() => { if (canVerLista && !tramiteIdParam) setVista('lista'); }, [canVerLista, tramiteIdParam]);
+  useEffect(() => { if (canVerLista) setVista('lista'); }, [canVerLista]);
 
   const FORM_INIT = {
-    tramite_id: '', territorio:'', colegio:'', razon_social:'', sociedad:'', centro_gestor:'',
+    solicitud_id: '', territorio:'', colegio:'', razon_social:'', sociedad:'', centro_gestor:'',
     director:'', admin_colegio:'', contador:'',
     nombre_solicitante:'', puesto_solicitante:'', correo_solicitante:'',
     fecha_elaboracion: format(new Date(), 'yyyy-MM-dd'),
@@ -238,35 +241,41 @@ export default function TicketMASCN() {
     }));
   }, [miPerfil, user?.email]);
 
-  // Prellenado desde un Trámite CN (?tramite_id=...)
-  const { data: tramiteOrigen } = useQuery({
-    queryKey: ['tramite_cn_origen', tramiteIdParam],
+  // Solicitudes CN propias ya recibidas y con Ticket MAS CN habilitado, para
+  // vincular (opcional) el ticket con la solicitud de origen y prellenar datos —
+  // el Trámite CN todavía no existe en este punto: se genera al autorizar el ticket.
+  const { data: misSolicitudes = [] } = useQuery({
+    queryKey: ['mis_solicitudes_cn_habilitadas', user?.email],
     queryFn: async () => {
-      const { data, error } = await supabase.from('compliance_tramites_cn').select('*').eq('id', tramiteIdParam!).single();
+      if (!user?.email) return [];
+      const { data, error } = await supabase.from('compliance_solicitudes_cn')
+        .select('*').eq('correo_solicitante', user.email).eq('estatus', 'recibida')
+        .not('ticket_mas_cn_habilitado_at', 'is', null).order('created_at', { ascending: false });
       if (error) throw error;
-      return data;
+      return data ?? [];
     },
-    enabled: !!tramiteIdParam,
+    enabled: !!user?.email && !isAdmin,
   });
-  useEffect(() => {
-    if (tramiteOrigen) {
-      const c = colegiosCN.find(x => x.nombre === tramiteOrigen.colegio);
-      setForm(p => ({
-        ...p, tramite_id: tramiteOrigen.id,
-        territorio: tramiteOrigen.territorio ?? c?.territorio ?? '',
-        colegio: tramiteOrigen.colegio ?? '',
-        razon_social: c?.razon ?? '', sociedad: c?.sociedad ?? '', centro_gestor: c?.centro_gestor ?? '',
-        director: c?.director ?? '', admin_colegio: c?.admin ?? '', contador: c?.contador ?? '',
-        concepto_id: tramiteOrigen.concepto_id ?? '', concepto_nombre: tramiteOrigen.concepto_nombre ?? '',
-        especificacion: tramiteOrigen.especificacion ?? '',
-        descripcion: tramiteOrigen.descripcion ?? '',
-      }));
-      setVista('form');
-    }
-  }, [tramiteOrigen, colegiosCN]);
+
+  const onSolicitudOrigen = (id: string) => {
+    const s = misSolicitudes.find((x: any) => x.id === id);
+    if (!s) { set('solicitud_id', ''); return; }
+    const c = colegiosCN.find(x => x.nombre === s.colegio);
+    setForm(p => ({
+      ...p, solicitud_id: s.id,
+      territorio: s.territorio ?? c?.territorio ?? '', colegio: s.colegio ?? '',
+      razon_social: c?.razon ?? '', sociedad: c?.sociedad ?? '', centro_gestor: c?.centro_gestor ?? '',
+      director: c?.director ?? '', admin_colegio: c?.admin ?? '', contador: c?.contador ?? '',
+      concepto_id: s.concepto_id ?? '', concepto_nombre: s.concepto_nombre ?? '',
+      especificacion: s.especificacion ?? '', descripcion: s.descripcion ?? p.descripcion,
+    }));
+  };
 
   const [cancelModal, setCancelModal] = useState<TicketMASCN | null>(null);
   const [motivoCancel, setMotivoCancel] = useState('');
+  const [expedienteModal, setExpedienteModal] = useState<TicketMASCN | null>(null);
+  const [creandoExpediente, setCreandoExpediente] = useState(false);
+  const [expForm, setExpForm] = useState({ solicitud_pdf: null as File | null, ticket_pdf: null as File | null, autorizacion_msg: null as File | null });
   const [cancelLoading, setCancelLoading] = useState(false);
   const [adminForm, setAdminForm] = useState({ fecha_recepcion: '', fecha_inicio_estimada: '', fecha_fin_estimada: '' });
   const setA = (k: string, v: string) => setAdminForm(p => ({ ...p, [k]: v }));
@@ -318,7 +327,7 @@ export default function TicketMASCN() {
       const folio = `TMASCN-${currentYear}-${String(maxNum + 1).padStart(3, '0')}`;
 
       const { error } = await supabase.from('compliance_tickets_mas_cn').insert([{
-        folio, tramite_id: form.tramite_id || null,
+        folio, solicitud_id: form.solicitud_id || null,
         colegio: form.colegio, razon_social: form.razon_social, sociedad: form.sociedad, centro_gestor: form.centro_gestor,
         territorio: form.territorio, director: form.director, admin_colegio: form.admin_colegio, contador: form.contador,
         nombre_solicitante: form.nombre_solicitante, puesto_solicitante: form.puesto_solicitante, correo_solicitante: form.correo_solicitante,
@@ -335,13 +344,22 @@ export default function TicketMASCN() {
 
       logAudit({ accion: 'crear', modulo: 'tickets_mas_cn', registro_ref: folio, detalle: { colegio: form.colegio, solicitante: form.nombre_solicitante } });
 
+      // Igual que Ticket MAS de Obras: se retira el permiso de enviar tras
+      // usarlo — hasta que la Coordinación vuelva a habilitarlo para el
+      // siguiente trámite aprobado. No aplica al administrador.
+      if (!isAdmin && user?.email) {
+        try {
+          await supabase.from('user_permissions').update({ enviar_ticket_mas_cn: false }).eq('user_email', user.email);
+          qc.invalidateQueries({ queryKey: ['userPermissions', user.email] });
+        } catch { /* no bloqueante */ }
+      }
+
       notifyByEmail(FIRMA_ADMIN_EMAIL, { tipo: 'info', titulo: `Nuevo Ticket MAS CN: ${folio}`, mensaje: `${form.colegio} — ${form.descripcion?.slice(0, 80) ?? ''}`, link: '/cumplimiento/ticket-mas-cn', modulo: 'tickets_mas_cn' });
 
       await supabase.functions.invoke('notify-ticket-mas-cn-autorizado', {
         body: { evento: 'creado', folio, colegio: form.colegio, solicitante: form.nombre_solicitante, correo_solicitante: form.correo_solicitante, descripcion: form.descripcion, concepto: form.concepto_nombre },
       }).catch(() => {});
 
-      qc.invalidateQueries({ queryKey: ['tickets_mas_cn_por_tramite', form.tramite_id] });
       setEnviado(true);
     } catch (e: any) {
       toast.error(e.message ?? 'Error al enviar el ticket, intenta de nuevo');
@@ -364,12 +382,31 @@ export default function TicketMASCN() {
 
       logAudit({ accion: 'autorizar', modulo: 'tickets_mas_cn', registro_id: updated.id, registro_ref: updated.folio, detalle: { colegio: updated.colegio, monto: updated.cot1_importe } });
 
-      // Reflejar el costo real en el Trámite CN vinculado — sin tocar Validación de Vigencias.
-      if (updated.tramite_id) {
-        await supabase.from('compliance_tramites_cn').update({ costo_real: updated.cot1_importe ?? null, updated_at: now }).eq('id', updated.tramite_id);
-        qc.invalidateQueries({ queryKey: ['compliance_tramites_cn', updated.tramite_id] });
-        qc.invalidateQueries({ queryKey: ['tickets_mas_cn_por_tramite', updated.tramite_id] });
+      // Al autorizar es cuando nace el Trámite CN — igual que Obras genera el
+      // Proyecto al autorizar el Ticket MAS. Vive independiente de Validación
+      // de Vigencias (esa se sigue capturando a mano, aparte).
+      const currentYearTr = new Date().getFullYear();
+      const { data: foliosTr } = await supabase.from('compliance_tramites_cn').select('folio').like('folio', `TRCN-${currentYearTr}-%`);
+      let maxNumTr = 0;
+      (foliosTr ?? []).forEach((row: any) => { const m = row.folio?.match(/TRCN-\d{4}-(\d+)$/); if (m) maxNumTr = Math.max(maxNumTr, parseInt(m[1], 10)); });
+      const folioTramite = `TRCN-${currentYearTr}-${String(maxNumTr + 1).padStart(3, '0')}`;
+
+      const { data: nuevoTramite, error: errTram } = await supabase.from('compliance_tramites_cn').insert({
+        folio: folioTramite, ticket_id: updated.id, solicitud_id: updated.solicitud_id ?? null,
+        colegio: updated.colegio, territorio: updated.territorio,
+        concepto_id: updated.concepto_id ?? null, concepto_nombre: updated.concepto_nombre, especificacion: updated.especificacion,
+        nombre_tramite: `${updated.concepto_nombre ?? 'Trámite CN'} — ${updated.especificacion ?? ''}`.trim(),
+        descripcion: updated.descripcion ?? null,
+        costo_real: updated.cot1_importe ?? null,
+        responsable: updated.nombre_solicitante ?? null,
+      }).select('id').single();
+      if (errTram) throw errTram;
+
+      await supabase.from('compliance_tickets_mas_cn').update({ tramite_id: nuevoTramite.id }).eq('id', updated.id);
+      if (updated.solicitud_id) {
+        await supabase.from('compliance_solicitudes_cn').update({ tramite_id: nuevoTramite.id }).eq('id', updated.solicitud_id);
       }
+      qc.invalidateQueries({ queryKey: ['compliance_tramites_cn'] });
 
       const colegioTk = colegiosCN.find(c => c.nombre === viewing.colegio);
       const correoCAR = colegioTk?.car_correo ?? '';
@@ -435,6 +472,57 @@ export default function TicketMASCN() {
     setTimeout(() => w.print(), 400);
   };
 
+  // ── Crear expediente en OneDrive: Cumplimiento Normativo/{año}/{colegio}/{folio} - {nombre}/RCMA ──
+  const crearExpedienteCN = async (t: TicketMASCN) => {
+    setCreandoExpediente(true);
+    try {
+      const anio = t.created_at ? new Date(t.created_at).getFullYear() : new Date().getFullYear();
+      const colegioCarpeta = limpiarSegmento(t.colegio ?? 'SIN_COLEGIO', 80);
+      const folioCarpeta   = t.folio ?? 'SIN_FOLIO';
+      const nombreCarpeta  = limpiarSegmento(t.especificacion ?? t.descripcion ?? 'Sin nombre');
+      const raiz = `Cumplimiento Normativo/${anio}/${colegioCarpeta}/${folioCarpeta} - ${nombreCarpeta}/RCMA`;
+
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token    = sessionData?.session?.access_token ?? '';
+      const SUPA_URL = import.meta.env.VITE_SUPABASE_URL as string;
+      const ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY as string;
+
+      const spUp = async (file: File, fileName: string) => {
+        const fd = new FormData();
+        fd.append('file', file); fd.append('carpeta', raiz); fd.append('fileName', fileName);
+        const res = await fetch(`${SUPA_URL}/functions/v1/sharepoint-upload`, {
+          method: 'POST', headers: { 'Authorization': `Bearer ${token}`, 'apikey': ANON_KEY }, body: fd,
+        });
+        return res.json();
+      };
+
+      // Crear la carpeta RCMA (placeholder) aunque no se suba ningún archivo todavía
+      const placeholder = new File([''], '.keep', { type: 'text/plain' });
+      const rPlaceholder = await spUp(placeholder, '.keep');
+      if (rPlaceholder?.error) throw new Error(`No se pudo crear "${raiz}": ${rPlaceholder.error}`);
+
+      let expedienteUrl = '';
+      if (expForm.solicitud_pdf) await spUp(expForm.solicitud_pdf, expForm.solicitud_pdf.name);
+      if (expForm.ticket_pdf) {
+        const r = await spUp(expForm.ticket_pdf, expForm.ticket_pdf.name);
+        expedienteUrl = r?.webUrl ?? '';
+      }
+      if (expForm.autorizacion_msg) await spUp(expForm.autorizacion_msg, expForm.autorizacion_msg.name);
+
+      const urlBase = expedienteUrl ? expedienteUrl.split('/RCMA/')[0] + '/RCMA' : null;
+      await supabase.from('compliance_tickets_mas_cn').update({ expediente_url: urlBase }).eq('id', t.id);
+      await qc.refetchQueries({ queryKey: ['compliance_tickets_mas_cn'] });
+
+      toast.success('Expediente creado en OneDrive ✓');
+      setExpedienteModal(null);
+      setExpForm({ solicitud_pdf: null, ticket_pdf: null, autorizacion_msg: null });
+    } catch (e: any) {
+      toast.error('Error creando expediente: ' + e.message);
+    } finally {
+      setCreandoExpediente(false);
+    }
+  };
+
   // ═════════════════════════ RENDER: FORM ═════════════════════════
   if (vista === 'form') {
     if (enviado) {
@@ -467,18 +555,32 @@ export default function TicketMASCN() {
           </div>
         </section>
 
+        {!isAdmin && misSolicitudes.length > 0 && (
+          <section className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+            <div className="bg-slate-800 text-white px-4 py-2.5 text-xs font-bold uppercase tracking-wider">Solicitud CN de Origen (opcional)</div>
+            <div className="p-4">
+              <label className={labelClass}>Vincular con una Solicitud CN ya recibida</label>
+              <select className={selectClass} value={form.solicitud_id} onChange={e => onSolicitudOrigen(e.target.value)}>
+                <option value="">— Llenar en blanco —</option>
+                {misSolicitudes.map((s: any) => <option key={s.id} value={s.id}>{s.concepto_nombre} — {s.especificacion} ({s.colegio})</option>)}
+              </select>
+              <p className="text-[10px] text-slate-400 mt-1">Al elegirla se prellenan colegio, concepto y descripción — puedes ajustarlos libremente.</p>
+            </div>
+          </section>
+        )}
+
         <section className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
           <div className="bg-slate-800 text-white px-4 py-2.5 text-xs font-bold uppercase tracking-wider">1. Datos Generales</div>
           <div className="p-4 space-y-4">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div><label className={labelClass}>Territorio *</label>
-                <select className={selectClass} value={form.territorio} onChange={e => onTerritorioChange(e.target.value)} disabled={!!form.tramite_id}>
+                <select className={selectClass} value={form.territorio} onChange={e => onTerritorioChange(e.target.value)}>
                   <option value="">— Seleccionar territorio —</option>
                   {TERRITORIOS.map(t => <option key={t} value={t}>{t}</option>)}
                 </select>
               </div>
               <div><label className={labelClass}>Colegio *</label>
-                <select className={selectClass} value={form.colegio} onChange={e => onColegioChange(e.target.value)} disabled={!form.territorio || !!form.tramite_id}>
+                <select className={selectClass} value={form.colegio} onChange={e => onColegioChange(e.target.value)} disabled={!form.territorio}>
                   <option value="">— Seleccionar colegio —</option>
                   {colegiosFiltrados.map(c => <option key={c.nombre} value={c.nombre}>{c.nombre}</option>)}
                 </select>
@@ -496,13 +598,13 @@ export default function TicketMASCN() {
           <div className="bg-slate-800 text-white px-4 py-2.5 text-xs font-bold uppercase tracking-wider flex items-center gap-2"><ShieldCheck className="w-3.5 h-3.5" /> 2. Concepto del Trámite</div>
           <div className="p-4 grid grid-cols-1 md:grid-cols-2 gap-4">
             <div><label className={labelClass}>Concepto Base *</label>
-              <select className={selectClass} value={form.concepto_id} onChange={e => onConcepto(e.target.value)} disabled={!!form.tramite_id}>
+              <select className={selectClass} value={form.concepto_id} onChange={e => onConcepto(e.target.value)}>
                 <option value="">Seleccionar concepto...</option>
                 {conceptos.map(c => <option key={c.id} value={c.id}>{c.nombre} — {c.materia}</option>)}
               </select>
             </div>
             <div><label className={labelClass}>Especificación</label>
-              <input className={form.tramite_id ? readOnlyClass : inputClass} value={form.especificacion} onChange={e => set('especificacion', e.target.value)} readOnly={!!form.tramite_id} />
+              <input className={inputClass} value={form.especificacion} onChange={e => set('especificacion', e.target.value)} />
             </div>
           </div>
         </section>
@@ -611,6 +713,12 @@ export default function TicketMASCN() {
                         <div className="flex items-center justify-center gap-1">
                           <button onClick={() => { setViewing(t); setVista('detalle'); }} title="Revisar" className="p-1.5 rounded hover:bg-blue-50 text-blue-600 transition"><Eye className="w-4 h-4" /></button>
                           <button onClick={() => handlePrint(t)} title="Imprimir" className="p-1.5 rounded hover:bg-slate-100 text-slate-500 transition"><Printer className="w-4 h-4" /></button>
+                          {isAdmin && t.estatus === 'autorizado' && !t.expediente_url && (
+                            <button onClick={() => { setExpedienteModal(t); setExpForm({ solicitud_pdf: null, ticket_pdf: null, autorizacion_msg: null }); }} title="Crear Expediente en OneDrive" className="p-1.5 rounded hover:bg-emerald-50 text-emerald-600 transition"><FolderPlus className="w-4 h-4" /></button>
+                          )}
+                          {t.expediente_url && (
+                            <a href={t.expediente_url} target="_blank" rel="noreferrer" title="Ver Expediente en OneDrive" className="p-1.5 rounded hover:bg-blue-50 text-[#00295A] transition"><FolderPlus className="w-4 h-4" /></a>
+                          )}
                           {puedeCancelar && t.estatus !== 'cancelado' && <button onClick={() => { setCancelModal(t); setMotivoCancel(''); }} title="Cancelar" className="p-1.5 rounded hover:bg-red-50 text-red-500 transition"><Ban className="w-4 h-4" /></button>}
                           {isAdmin && <button onClick={() => handleEliminar(t)} title="Eliminar" className="p-1.5 rounded hover:bg-red-50 text-red-600 transition"><Trash2 className="w-4 h-4" /></button>}
                         </div>
@@ -638,6 +746,30 @@ export default function TicketMASCN() {
               <div className="flex justify-end gap-3 mt-4">
                 <button onClick={() => setCancelModal(null)} className="px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100 rounded-lg">Volver</button>
                 <button onClick={handleCancelar} disabled={cancelLoading} className="px-4 py-2 text-sm font-bold bg-red-600 text-white hover:bg-red-700 rounded-lg disabled:opacity-50">{cancelLoading ? 'Cancelando...' : 'Confirmar Cancelación'}</button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {expedienteModal && (
+          <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+            <div className="bg-white rounded-lg shadow-xl max-w-md w-full p-6">
+              <h2 className="text-lg font-bold text-slate-900 mb-1 flex items-center gap-2"><FolderPlus className="w-4 h-4 text-emerald-600"/> Crear Expediente en OneDrive</h2>
+              <p className="text-xs text-slate-500 mt-0.5">{expedienteModal.folio} — {expedienteModal.colegio}</p>
+              <p className="text-[11px] text-slate-500 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 mt-3">
+                📁 Se creará en: <strong>Cumplimiento Normativo/{expedienteModal.created_at ? new Date(expedienteModal.created_at).getFullYear() : new Date().getFullYear()}/{expedienteModal.colegio}/{expedienteModal.folio} - {(expedienteModal.especificacion ?? expedienteModal.descripcion ?? '').slice(0, 40)}/RCMA</strong>
+              </p>
+              <div className="space-y-3 mt-4">
+                <div><label className={labelClass}>Solicitud CN (PDF, opcional)</label>
+                  <input type="file" accept=".pdf" onChange={e => setExpForm(p => ({ ...p, solicitud_pdf: e.target.files?.[0] ?? null }))} className="w-full text-xs" /></div>
+                <div><label className={labelClass}>Ticket MAS CN (PDF, opcional)</label>
+                  <input type="file" accept=".pdf" onChange={e => setExpForm(p => ({ ...p, ticket_pdf: e.target.files?.[0] ?? null }))} className="w-full text-xs" /></div>
+                <div><label className={labelClass}>Mensaje de Autorización (opcional)</label>
+                  <input type="file" onChange={e => setExpForm(p => ({ ...p, autorizacion_msg: e.target.files?.[0] ?? null }))} className="w-full text-xs" /></div>
+              </div>
+              <div className="flex justify-end gap-3 mt-6">
+                <button onClick={() => setExpedienteModal(null)} className="px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100 rounded-lg">Cancelar</button>
+                <button onClick={() => crearExpedienteCN(expedienteModal)} disabled={creandoExpediente} className="px-4 py-2 text-sm font-bold bg-emerald-600 text-white hover:bg-emerald-700 rounded-lg disabled:opacity-50">{creandoExpediente ? 'Creando...' : 'Crear Expediente'}</button>
               </div>
             </div>
           </div>

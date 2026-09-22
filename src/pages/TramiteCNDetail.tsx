@@ -6,7 +6,7 @@ import { toast } from 'sonner';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import {
-  ArrowLeft, Building2, FileSignature, Save, Trash2, ShieldCheck, ClipboardList,
+  ArrowLeft, Building2, Save, Trash2, ShieldCheck, ClipboardList,
 } from 'lucide-react';
 import StatusBadge from '@/components/shared/StatusBadge';
 import { usePermissions } from '@/hooks/usePermissions';
@@ -26,7 +26,7 @@ interface TramiteCN {
   descripcion?: string; estatus?: string; avance?: number;
   presupuesto?: number | null; costo_real?: number | null;
   responsable?: string; fecha_inicio?: string; fecha_compromiso?: string; fecha_completado?: string;
-  notas?: string; solicitud_id?: string;
+  notas?: string; solicitud_id?: string; ticket_id?: string;
 }
 
 interface TicketMASCN { id: string; folio?: string; estatus?: string; fecha_elaboracion?: string; }
@@ -37,7 +37,6 @@ export default function TramiteCNDetail() {
   const qc = useQueryClient();
   const { isAdmin, can } = usePermissions();
   const puedeEditar = isAdmin || can('editar_tramites_cn');
-  const puedeGenerarTicket = isAdmin || can('enviar_ticket_mas_cn');
 
   const { data: tramite, isLoading } = useQuery({
     queryKey: ['compliance_tramites_cn', id],
@@ -49,15 +48,18 @@ export default function TramiteCNDetail() {
     enabled: !!id,
   });
 
-  const { data: ticketsVinculados = [] } = useQuery({
-    queryKey: ['tickets_mas_cn_por_tramite', id],
+  // El Trámite CN se crea automáticamente al autorizar un Ticket MAS CN, así que
+  // solo puede existir un ticket de origen (compliance_tramites_cn.ticket_id).
+  const { data: ticketOrigen } = useQuery({
+    queryKey: ['ticket_mas_cn_origen', tramite?.ticket_id ?? id],
     queryFn: async () => {
+      if (!tramite?.ticket_id) return null;
       const { data, error } = await supabase.from('compliance_tickets_mas_cn')
-        .select('id, folio, estatus, fecha_elaboracion').eq('tramite_id', id!).order('created_at', { ascending: false });
+        .select('id, folio, estatus, fecha_elaboracion').eq('id', tramite.ticket_id).maybeSingle();
       if (error) throw error;
-      return (data ?? []) as TicketMASCN[];
+      return data as TicketMASCN | null;
     },
-    enabled: !!id,
+    enabled: !!tramite?.ticket_id,
   });
 
   const [form, setForm] = useState({ estatus: '', avance: 0, presupuesto: '', costo_real: '', notas: '', fecha_compromiso: '' });
@@ -132,11 +134,6 @@ export default function TramiteCNDetail() {
             <h1 className="text-lg font-black text-slate-900 mt-1">{tramite.nombre_tramite}</h1>
             <p className="text-sm text-slate-500 flex items-center gap-1 mt-0.5"><Building2 className="w-3.5 h-3.5" />{tramite.colegio} — {tramite.territorio}</p>
           </div>
-          {puedeGenerarTicket && (
-            <button onClick={() => navigate(`/cumplimiento/ticket-mas-cn?tramite_id=${tramite.id}`)} className={btnPrimary}>
-              <FileSignature className="w-4 h-4" /> Generar Ticket MAS CN
-            </button>
-          )}
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4 text-sm">
@@ -197,18 +194,20 @@ export default function TramiteCNDetail() {
         )}
       </div>
 
-      {ticketsVinculados.length > 0 && (
+      {ticketOrigen && (
         <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-5">
-          <h2 className="text-xs font-black uppercase tracking-widest text-slate-500 flex items-center gap-2 mb-3"><ClipboardList className="w-4 h-4" /> Tickets MAS CN Generados</h2>
-          <div className="space-y-2">
-            {ticketsVinculados.map(t => (
-              <div key={t.id} className="flex items-center justify-between text-sm border border-slate-100 rounded-lg px-3 py-2">
-                <span className="font-mono text-xs font-bold text-slate-700">{t.folio}</span>
-                <span className="text-xs text-slate-500">{t.fecha_elaboracion ? format(new Date(t.fecha_elaboracion), 'dd/MM/yyyy', { locale: es }) : '—'}</span>
-                <StatusBadge status={t.estatus} />
-              </div>
-            ))}
-          </div>
+          <h2 className="text-xs font-black uppercase tracking-widest text-slate-500 flex items-center gap-2 mb-3"><ClipboardList className="w-4 h-4" /> Ticket MAS CN de Origen</h2>
+          <button
+            onClick={() => navigate(`/cumplimiento/ticket-mas-cn`)}
+            className="w-full flex items-center justify-between text-sm border border-slate-100 rounded-lg px-3 py-2 hover:bg-slate-50 transition-colors text-left"
+          >
+            <span className="font-mono text-xs font-bold text-slate-700">{ticketOrigen.folio}</span>
+            <span className="text-xs text-slate-500">{ticketOrigen.fecha_elaboracion ? format(new Date(ticketOrigen.fecha_elaboracion), 'dd/MM/yyyy', { locale: es }) : '—'}</span>
+            <StatusBadge status={ticketOrigen.estatus} />
+          </button>
+          <p className="text-[10px] text-slate-400 italic mt-2">
+            Este Trámite CN se generó automáticamente al autorizar este Ticket MAS CN.
+          </p>
         </div>
       )}
     </div>
