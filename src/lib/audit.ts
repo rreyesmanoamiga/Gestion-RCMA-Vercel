@@ -28,7 +28,10 @@ export type AuditModulo =
   | 'levantamiento'
   | 'calendario'
   | 'minutas'
-  | 'reportes_problema';
+  | 'reportes_problema'
+  | 'solicitudes_cn'
+  | 'tramites_cn'
+  | 'tickets_mas_cn';
 
 interface LogAuditParams {
   accion:       AuditAccion;

@@ -58,6 +58,14 @@ const PERMISSION_DEFS: PermissionDef[] = [
   { key: 'ver_cumplimiento',          label: 'Ver Cumplimiento y Protección Civil', group: 'Cumplimiento',        default: false },
   { key: 'descargar_cumplimiento',    label: 'Descargar Reportes',                group: 'Cumplimiento',          default: false },
   { key: 'editar_cumplimiento',       label: 'Editar Documentos/Estatus',         group: 'Cumplimiento',          default: false },
+  { key: 'ver_solicitud_cn',          label: 'Ver Solicitud CN',                  group: 'Trámites CN',           default: false },
+  { key: 'enviar_solicitud_cn',       label: 'Enviar Solicitud CN',               group: 'Trámites CN',           default: false },
+  { key: 'ver_tramites_cn',           label: 'Ver Trámites CN',                   group: 'Trámites CN',           default: false },
+  { key: 'editar_tramites_cn',        label: 'Editar Trámites CN',                group: 'Trámites CN',           default: false },
+  { key: 'ver_ticket_mas_cn',         label: 'Ver Ticket MAS CN',                 group: 'Trámites CN',           default: false },
+  { key: 'enviar_ticket_mas_cn',      label: 'Enviar Ticket MAS CN',              group: 'Trámites CN',           default: false },
+  { key: 'autorizar_ticket_mas_cn',   label: 'Autorizar Ticket MAS CN',           group: 'Trámites CN',           default: false },
+  { key: 'cancelar_ticket_mas_cn',    label: 'Cancelar Ticket MAS CN',            group: 'Trámites CN',           default: false },
 ];
 
 export const PERMISSIONS: Record<string, string> = Object.fromEntries(

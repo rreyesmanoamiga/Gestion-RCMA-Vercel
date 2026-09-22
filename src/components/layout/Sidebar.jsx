@@ -174,6 +174,18 @@ export default function Sidebar({ isOpen, onToggle }) {
   ];
 
   // ---------------------------------------------------------------------
+  // MÓDULO: TRÁMITES CN (Solicitud CN / Trámites CN / Ticket MAS CN) —
+  // separado de Obras: solicitudes, seguimiento y autorización de trámites
+  // de Cumplimiento Normativo / Protección Civil.
+  // ---------------------------------------------------------------------
+  const cTramitesCN = [
+    { to: '/cumplimiento/solicitud-cn',   icon: ClipboardEdit, label: 'Solicitud CN',           visible: isAdmin || can('enviar_solicitud_cn') || can('ver_solicitud_cn') },
+    { to: '/cumplimiento/solicitudes-cn', icon: Inbox,         label: 'Solicitudes CN Recibidas', visible: isAdmin },
+    { to: '/cumplimiento/tramites',       icon: ListTodo,      label: 'Trámites CN',             visible: isAdmin || can('ver_tramites_cn') },
+    { to: '/cumplimiento/ticket-mas-cn',  icon: FileSignature, label: 'Ticket MAS CN',           visible: isAdmin || can('ver_ticket_mas_cn') || can('enviar_ticket_mas_cn') },
+  ].filter(i => i.visible);
+
+  // ---------------------------------------------------------------------
   // MÓDULO: COSTOS Y PRESUPUESTOS (Finanzas / Coordinación)
   // ---------------------------------------------------------------------
   const costosLista = [
@@ -267,6 +279,15 @@ export default function Sidebar({ isOpen, onToggle }) {
                 defaultOpen={cControlNormativo.some(i => isActive(i.to))}
               >
                 {cControlNormativo.map(renderLink)}
+              </SidebarAccordionGroup>
+
+              <SidebarAccordionGroup
+                label="Gestión de Trámites CN"
+                icon={ClipboardEdit}
+                hidden={cTramitesCN.length === 0}
+                defaultOpen={cTramitesCN.some(i => isActive(i.to))}
+              >
+                {cTramitesCN.map(renderLink)}
               </SidebarAccordionGroup>
 
               <SidebarAccordionGroup

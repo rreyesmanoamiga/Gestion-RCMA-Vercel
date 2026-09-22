@@ -55,6 +55,11 @@ import JornadaPresupuestal from '@/pages/JornadaPresupuestal';
 import CumplimientoReportesEjecutivos from '@/pages/CumplimientoReportesEjecutivos';
 import CumplimientoAlertas from '@/pages/CumplimientoAlertas';
 import CumplimientoSeguimiento from '@/pages/CumplimientoSeguimiento';
+import SolicitudCN from '@/pages/SolicitudCN';
+import SolicitudesCNRecibidas from '@/pages/SolicitudesCNRecibidas';
+import TramitesCN from '@/pages/TramitesCN';
+import TramiteCNDetail from '@/pages/TramiteCNDetail';
+import TicketMASCN from '@/pages/TicketMASCN';
 import ReportarProblema from '@/pages/ReportarProblema';
 import Minutas from '@/pages/Minutas';
 import CalendarioMantenimiento from '@/pages/CalendarioMantenimiento';
@@ -447,6 +452,11 @@ function AuthenticatedApp() {
           <Route path="/cumplimiento/reportes-ejecutivos" element={<CumplimientoReportesEjecutivos />} />
           <Route path="/cumplimiento/alertas"       element={<CumplimientoAlertas />} />
           <Route path="/cumplimiento/seguimiento"   element={<CumplimientoSeguimiento />} />
+          <Route path="/cumplimiento/solicitud-cn"    element={<SolicitudCN />} />
+          <Route path="/cumplimiento/solicitudes-cn"  element={<SolicitudesCNRecibidas />} />
+          <Route path="/cumplimiento/tramites"        element={<TramitesCN />} />
+          <Route path="/cumplimiento/tramites/:id"    element={<TramiteCNDetail />} />
+          <Route path="/cumplimiento/ticket-mas-cn"    element={<TicketMASCN />} />
           <Route path="/reportar-problema"  element={<ReportarProblema />} />
           <Route path="/minutas"            element={<Minutas />} />
           <Route path="/calendario"         element={<CalendarioMantenimiento />} />
