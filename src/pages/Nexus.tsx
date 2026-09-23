@@ -13,7 +13,7 @@ import {
   Plus, X, Pencil, Trash2, CheckCircle2, Clock, AlertCircle,
   MessageSquare, Send, FileText, Pin, Search, Download,
   BookOpen, ListChecks, Users, MapPin, Building2, Link2,
-  ClipboardList, BarChart3,
+  ClipboardList, BarChart3, Ban,
 } from 'lucide-react';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -21,7 +21,7 @@ interface Nota      { id: string; titulo: string; contenido: string; categoria: 
 interface Pendiente { id: string; titulo: string; descripcion: string; tipo: string; asignado_a: string; asignado_nombre: string; asignado_cc: string; asignado_cc_nombre: string; prioridad: string; fecha_limite: string | null; estatus: string; completado_at: string | null; created_by: string; created_at: string;
   proyecto_id?: string; proyecto_nombre?: string; ticket_id?: string; ticket_folio?: string; colegio?: string; territorio?: string; }
 interface Comentario { id: string; pendiente_id: string; autor_email: string; autor_nombre: string; contenido: string; leido: boolean; created_at: string; }
-interface Seguimiento { id: string; proyecto_id: string; proyecto_nombre: string; territorio: string; colegio: string; estatus: 'activo'|'completado'; completado_at: string | null; created_at: string; presentado_semana: boolean; }
+interface Seguimiento { id: string; proyecto_id: string; proyecto_nombre: string; territorio: string; colegio: string; estatus: 'activo'|'completado'|'cancelado'; completado_at: string | null; cancelado_at: string | null; created_at: string; presentado_semana: boolean; }
 interface SeguimientoAnteproyecto { id: string; anteproyecto_id: string; anteproyecto_nombre: string; territorio: string; colegio: string; estatus: 'activo'|'completado'; completado_at: string | null; created_at: string; }
 interface SysUser   { user_email: string; nombre: string; territorio: string; colegio: string; puesto: string; }
 
@@ -272,6 +272,10 @@ function SeguimientoModal({ seguimiento, userEmail, userName, onClose }: { segui
         {seguimiento.estatus === 'completado' ? (
           <div className="px-5 py-3 border-t border-slate-100 bg-emerald-50 text-center">
             <p className="text-xs font-semibold text-emerald-700">✓ Proyecto completado — este seguimiento queda como evidencia histórica</p>
+          </div>
+        ) : seguimiento.estatus === 'cancelado' ? (
+          <div className="px-5 py-3 border-t border-slate-100 bg-rose-50 text-center">
+            <p className="text-xs font-semibold text-rose-700">✕ Proyecto cancelado — este seguimiento queda como evidencia histórica</p>
           </div>
         ) : (
           <>
@@ -537,6 +541,7 @@ export default function Nexus() {
   const [viewSeguimiento, setViewSeguimiento] = useState<Seguimiento | null>(null);
   const seguimientosActivos    = useMemo(() => seguimientos.filter(s => s.estatus === 'activo'), [seguimientos]);
   const seguimientosCompletados = useMemo(() => seguimientos.filter(s => s.estatus === 'completado'), [seguimientos]);
+  const seguimientosCancelados = useMemo(() => seguimientos.filter(s => s.estatus === 'cancelado'), [seguimientos]);
   const presentadosCount = useMemo(() => seguimientosActivos.filter(s => s.presentado_semana).length, [seguimientosActivos]);
 
   const togglePresentadoMutation = useMutation({
@@ -1029,6 +1034,32 @@ export default function Nexus() {
                           {s.colegio && <span className="text-[10px] font-semibold text-slate-400 bg-slate-100 px-2 py-0.5 rounded-full">{s.colegio}</span>}
                           <span className="text-[10px] text-slate-400"><MessageSquare className="w-2.5 h-2.5 inline mr-0.5"/>{coment?.count ?? 0} notas</span>
                           {s.completado_at && <span className="text-[10px] text-slate-400">Completado: {fmtDate(s.completado_at)}</span>}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* Cancelados — igual que Completados, con marca visual distinta */}
+          {seguimientosCancelados.length>0&&(
+            <div>
+              <p className="text-xs font-bold text-rose-400 uppercase tracking-widest mb-3 flex items-center gap-2"><Ban className="w-3.5 h-3.5"/>Proyectos Cancelados</p>
+              <div className="bg-rose-50/40 rounded-xl border border-rose-200 divide-y divide-rose-100 overflow-hidden">
+                {seguimientosCancelados.map(s=>{
+                  const coment = seguComentMap[s.id];
+                  return (
+                    <div key={s.id} onClick={()=>setViewSeguimiento(s)}
+                      className="flex items-center gap-3 px-4 py-3 cursor-pointer hover:bg-rose-50 transition">
+                      <Ban className="w-4 h-4 text-rose-500 shrink-0"/>
+                      <div className="flex-1 min-w-0">
+                        <p className="font-bold text-sm text-slate-500 truncate line-through decoration-rose-300">{s.proyecto_nombre}</p>
+                        <div className="flex items-center gap-2 flex-wrap mt-0.5">
+                          {s.colegio && <span className="text-[10px] font-semibold text-slate-400 bg-slate-100 px-2 py-0.5 rounded-full">{s.colegio}</span>}
+                          <span className="text-[10px] text-slate-400"><MessageSquare className="w-2.5 h-2.5 inline mr-0.5"/>{coment?.count ?? 0} notas</span>
+                          {s.cancelado_at && <span className="text-[10px] font-semibold text-rose-500">Cancelado: {fmtDate(s.cancelado_at)}</span>}
                         </div>
                       </div>
                     </div>

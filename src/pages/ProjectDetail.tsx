@@ -137,6 +137,15 @@ export default function ProjectDetail() {
         },
       });
 
+      // Si el status cambia a cancelado, sincronizar el Seguimiento NEXUS
+      // (si el proyecto tiene uno activo) para que deje de aparecer como
+      // "activo" y se muestre en la sección de Cancelados.
+      if (statusNuevo === 'cancelado' && statusAnterior !== 'cancelado') {
+        await supabase.from('nexus_seguimientos')
+          .update({ estatus: 'cancelado', cancelado_at: new Date().toISOString() })
+          .eq('proyecto_id', id!);
+      }
+
       // Si el status cambia a completado, notificar por correo
       if (formData.status === 'completado' && project?.status !== 'completado') {
         const territorio = (formData.territorio ?? project?.territorio) as string ?? '';
@@ -181,6 +190,8 @@ export default function ProjectDetail() {
       queryClient.invalidateQueries({ queryKey: ['projects', id] });
       queryClient.invalidateQueries({ queryKey: ['projects'] });
       queryClient.invalidateQueries({ queryKey: ['proyectos_nexus'] });
+      queryClient.invalidateQueries({ queryKey: ['nexus_seguimientos'] });
+      queryClient.invalidateQueries({ queryKey: ['seguimiento-existente', id] });
       setShowEdit(false);
       setShowCostoReal(false);
       toast.success('Proyecto actualizado correctamente');
