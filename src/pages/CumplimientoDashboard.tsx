@@ -6,6 +6,7 @@ import PageHeader from '@/components/shared/PageHeader';
 import {
   ShieldCheck, ShieldAlert, Clock, FileText, ChevronRight,
   type LucideIcon, ListTodo, CheckCircle2, Layers, BarChart3, Clock3,
+  ClipboardEdit, FileSignature,
 } from 'lucide-react';
 import {
   PieChart, Pie, Cell, Tooltip, ResponsiveContainer, Legend,
@@ -67,6 +68,25 @@ export default function CumplimientoDashboard() {
         .select('*', { count: 'exact', head: true })
         .not('estatus', 'in', '(completado,cancelado)');
       return count ?? 0;
+    },
+    refetchInterval: 60000,
+  });
+
+  // Trámites CN (Solicitud CN → Ticket MAS CN → Trámite CN) — mismo panel,
+  // para que la Coordinación vea de un vistazo lo que trae este flujo aparte.
+  const { data: cnCounts = { solicitudesPendientes: 0, ticketsPendientes: 0, tramitesEnProceso: 0 } } = useQuery({
+    queryKey: ['cn_counts_dashboard'],
+    queryFn: async () => {
+      const [{ count: solicitudesPendientes }, { count: ticketsPendientes }, { count: tramitesEnProceso }] = await Promise.all([
+        supabase.from('compliance_solicitudes_cn').select('*', { count: 'exact', head: true }).eq('estatus', 'pendiente'),
+        supabase.from('compliance_tickets_mas_cn').select('*', { count: 'exact', head: true }).in('estatus', ['pendiente', 'en_revision']),
+        supabase.from('compliance_tramites_cn').select('*', { count: 'exact', head: true }).eq('estatus', 'en_proceso'),
+      ]);
+      return {
+        solicitudesPendientes: solicitudesPendientes ?? 0,
+        ticketsPendientes: ticketsPendientes ?? 0,
+        tramitesEnProceso: tramitesEnProceso ?? 0,
+      };
     },
     refetchInterval: 60000,
   });
@@ -135,6 +155,18 @@ export default function CumplimientoDashboard() {
             <KPICard title="Pendientes activos" value={pendientesActivos} icon={ListTodo} accent="#8b5cf6" to="/cumplimiento/seguimiento" />
           </div>
 
+          {/* Trámites CN (Solicitud CN → Ticket MAS CN → Trámite CN) */}
+          {(isAdmin || can('ver_solicitud_cn') || can('ver_tramites_cn') || can('ver_ticket_mas_cn')) && (
+            <div>
+              <h2 className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-3">Trámites CN</h2>
+              <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
+                <KPICard title="Solicitudes CN pendientes" value={cnCounts.solicitudesPendientes} icon={ClipboardEdit} accent="#f59e0b" to="/cumplimiento/solicitudes-cn" />
+                <KPICard title="Tickets MAS CN por revisar" value={cnCounts.ticketsPendientes} icon={FileSignature} accent="#3b82f6" to="/cumplimiento/ticket-mas-cn" />
+                <KPICard title="Trámites CN en proceso" value={cnCounts.tramitesEnProceso} icon={ListTodo} accent="#8b5cf6" to="/cumplimiento/tramites" />
+              </div>
+            </div>
+          )}
+
           {/* Gráficas */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
             <div className="bg-white rounded-xl border border-slate-200 p-5">
@@ -193,6 +225,18 @@ export default function CumplimientoDashboard() {
                 ...(isAdmin ? [
                   { label: 'Costos y Presupuestos', path: '/cumplimiento/costos', icon: BarChart3, color: 'bg-emerald-50 text-emerald-600 border-emerald-100' },
                   { label: 'Jornada Presupuestal', path: '/cumplimiento/jornada-presupuestal', icon: Clock3, color: 'bg-amber-50 text-amber-600 border-amber-100' },
+                ] : []),
+                ...(isAdmin || can('ver_solicitud_cn') || can('enviar_solicitud_cn') ? [
+                  { label: 'Solicitud CN', path: '/cumplimiento/solicitud-cn', icon: ClipboardEdit, color: 'bg-orange-50 text-orange-600 border-orange-100' },
+                ] : []),
+                ...(isAdmin ? [
+                  { label: 'Solicitudes CN Recibidas', path: '/cumplimiento/solicitudes-cn', icon: FileText, color: 'bg-orange-50 text-orange-600 border-orange-100' },
+                ] : []),
+                ...(isAdmin || can('ver_tramites_cn') ? [
+                  { label: 'Trámites CN', path: '/cumplimiento/tramites', icon: ListTodo, color: 'bg-violet-50 text-violet-600 border-violet-100' },
+                ] : []),
+                ...(isAdmin || can('ver_ticket_mas_cn') || can('enviar_ticket_mas_cn') ? [
+                  { label: 'Ticket MAS CN', path: '/cumplimiento/ticket-mas-cn', icon: FileSignature, color: 'bg-blue-50 text-blue-600 border-blue-100' },
                 ] : []),
               ] as { label: string; path: string; icon: LucideIcon; color: string }[]).map(({ label, path, icon: Icon, color }) => (
                 <Link key={path} to={path}
