@@ -12,6 +12,16 @@ const inputClass    = "w-full px-2 py-1.5 border border-slate-400 text-sm focus:
 const readOnlyClass = "w-full px-2 py-1.5 border border-slate-300 text-sm bg-slate-100 text-slate-700 cursor-default";
 const labelClass    = "text-[11px] font-bold text-slate-600 uppercase tracking-wide";
 
+const formatMXN = (v: string) => {
+  const clean = v.replace(/[^0-9.]/g, '');
+  const parts = clean.split('.');
+  const int = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+  const dec = parts[1] !== undefined ? '.' + parts[1].slice(0, 2) : '';
+  return clean ? '$' + int + dec : '';
+};
+const parseMXN = (v: string) => v.replace(/[^0-9.]/g, '');
+const toNum = (v: string) => parseFloat(v) || 0;
+
 const thStyle = "bg-slate-800 text-white text-[11px] font-bold uppercase tracking-wider px-3 py-2 text-center";
 const tdLabel = "border border-slate-400 px-2 py-1.5 bg-slate-100 text-[11px] font-bold text-slate-700 uppercase w-48";
 const tdInput = "border border-slate-400 px-0 py-0";
@@ -82,8 +92,17 @@ export default function SolicitudCN() {
     nombre_solicitante: '', puesto_solicitante: '', correo_solicitante: user?.email ?? '',
     concepto_id: '', concepto_nombre: '', especificacion: '',
     descripcion: '', fecha_requerida: '', costo_estimado: '',
+    monto_operacion: '', monto_fbc: '', monto_donativos: '', monto_otras: '', monto_otras_detalle: '',
     en_nombre_de: '',
   });
+
+  const costo      = toNum(form.costo_estimado);
+  const opMonto    = toNum(form.monto_operacion);
+  const fbcMonto   = toNum(form.monto_fbc);
+  const donMonto   = toNum(form.monto_donativos);
+  const otrasMonto = toNum(form.monto_otras);
+  const totalMonto = opMonto + fbcMonto + donMonto + otrasMonto;
+  const pct = (m: number) => costo > 0 ? ((m / costo) * 100).toFixed(0) + '%' : '0%';
 
   useEffect(() => {
     if (miPerfil) {
@@ -122,6 +141,9 @@ export default function SolicitudCN() {
     if (!form.concepto_id)         { toast.error('Selecciona el concepto base del catálogo'); return; }
     if (!form.especificacion.trim()) { toast.error('Especifica el trámite (ej. "Señaléticas y puntos de reunión")'); return; }
     if (!form.nombre_solicitante)  { toast.error('El nombre del solicitante es requerido'); return; }
+    if (otrasMonto > 0 && !form.monto_otras_detalle.trim()) {
+      toast.error('Especifica a qué se refiere el monto de "Otras Fuentes"'); return;
+    }
     setShowConfirmSend(true);
   };
 
@@ -144,6 +166,11 @@ export default function SolicitudCN() {
         descripcion:         form.descripcion.trim() || null,
         fecha_requerida:     form.fecha_requerida || null,
         costo_estimado:      form.costo_estimado ? Number(form.costo_estimado) : null,
+        monto_operacion:     form.monto_operacion ? Number(form.monto_operacion) : null,
+        monto_fbc:           form.monto_fbc ? Number(form.monto_fbc) : null,
+        monto_donativos:     form.monto_donativos ? Number(form.monto_donativos) : null,
+        monto_otras:         form.monto_otras ? Number(form.monto_otras) : null,
+        monto_otras_detalle: form.monto_otras_detalle.trim() || null,
       }).select('id').single();
       if (error) throw error;
 
@@ -198,7 +225,7 @@ export default function SolicitudCN() {
         <p className="text-slate-500 text-center max-w-md">
           Tu solicitud de trámite de Cumplimiento Normativo / Protección Civil fue recibida. Recibirás una confirmación a <strong>{form.correo_solicitante}</strong> cuando sea revisada.
         </p>
-        <button onClick={() => { setEnviado(false); setForm(p => ({ ...p, colegio:'', razon_social:'', sociedad:'', centro_gestor:'', territorio:'', concepto_id:'', concepto_nombre:'', especificacion:'', descripcion:'', fecha_requerida:'', costo_estimado:'', en_nombre_de:'' })); setTieneCotizaciones(false); setCotizacionFiles([]); }}
+        <button onClick={() => { setEnviado(false); setForm(p => ({ ...p, colegio:'', razon_social:'', sociedad:'', centro_gestor:'', territorio:'', concepto_id:'', concepto_nombre:'', especificacion:'', descripcion:'', fecha_requerida:'', costo_estimado:'', monto_operacion:'', monto_fbc:'', monto_donativos:'', monto_otras:'', monto_otras_detalle:'', en_nombre_de:'' })); setTieneCotizaciones(false); setCotizacionFiles([]); }}
           className="px-6 py-2 bg-slate-900 text-white rounded-md text-sm font-medium hover:bg-slate-800 transition-colors">
           Nueva Solicitud CN
         </button>
@@ -310,10 +337,10 @@ export default function SolicitudCN() {
             </div>
           </div>
 
-          {/* ── III. DESCRIPCIÓN Y COSTO ── */}
+          {/* ── III. DESCRIPCIÓN ── */}
           <div className="border-b border-slate-400">
             <div className="bg-slate-200 px-3 py-1.5 border-b border-slate-400">
-              <span className="text-[11px] font-black uppercase tracking-widest text-slate-700">III. Descripción y Costo Estimado</span>
+              <span className="text-[11px] font-black uppercase tracking-widest text-slate-700">III. Descripción</span>
             </div>
             <div className="p-3 space-y-3">
               <div>
@@ -322,18 +349,113 @@ export default function SolicitudCN() {
                   onChange={e => set('descripcion', e.target.value)}
                   placeholder="Contexto del trámite: motivo, área involucrada, urgencia, observación de inspección, etc." />
               </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <label className={labelClass + " block mb-1"}>Fecha en que se Requiere Resuelto</label>
-                  <input type="date" className={inputClass} value={form.fecha_requerida}
-                    onChange={e => set('fecha_requerida', e.target.value)} />
-                </div>
-                <div>
-                  <label className={labelClass + " block mb-1"}>Costo Estimado (opcional)</label>
-                  <input type="number" step="0.01" className={inputClass} value={form.costo_estimado}
-                    onChange={e => set('costo_estimado', e.target.value)} placeholder="$0.00" />
-                </div>
+              <div>
+                <label className={labelClass + " block mb-1"}>Fecha en que se Requiere Resuelto</label>
+                <input type="date" className={inputClass} value={form.fecha_requerida}
+                  onChange={e => set('fecha_requerida', e.target.value)} />
               </div>
+            </div>
+          </div>
+
+          {/* ── IV. PLAN DE FINANCIAMIENTO ── */}
+          <div className="border-b border-slate-400">
+            <div className="bg-slate-200 px-3 py-1.5 border-b border-slate-400">
+              <span className="text-[11px] font-black uppercase tracking-widest text-slate-700">IV. Plan de Financiamiento</span>
+            </div>
+            <div className="overflow-x-auto">
+            <table className="w-full border-collapse min-w-[400px]">
+              <thead>
+                <tr>
+                  <th className={thStyle + " w-48"}>Fuente</th>
+                  <th className={thStyle}>Monto (MXN)</th>
+                  <th className={thStyle + " w-24"}>% del Total</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr className="bg-slate-50">
+                  <td className="border border-slate-400 px-3 py-1.5 text-[11px] font-black text-slate-800 uppercase">Costo Aproximado Total</td>
+                  <td className={tdInput}>
+                    <input type="text" className={inputClass + " text-right font-mono"}
+                      value={formatMXN(form.costo_estimado)}
+                      onChange={e => set('costo_estimado', parseMXN(e.target.value))}
+                      placeholder="$0.00" />
+                  </td>
+                  <td className="border border-slate-400 px-2 py-1.5 text-right font-mono text-[11px] bg-slate-100 font-bold">100%</td>
+                </tr>
+                <tr>
+                  <td className="border border-slate-400 px-3 py-1.5 text-[11px] font-bold text-slate-700 uppercase">Operación</td>
+                  <td className={tdInput}>
+                    <input type="text" className={inputClass + " text-right font-mono"}
+                      value={formatMXN(form.monto_operacion)}
+                      onChange={e => set('monto_operacion', parseMXN(e.target.value))}
+                      placeholder="$0.00" />
+                  </td>
+                  <td className="border border-slate-400 px-2 py-1.5 text-right font-mono text-[11px]">{pct(opMonto)}</td>
+                </tr>
+                <tr>
+                  <td className="border border-slate-400 px-3 py-1.5 text-[11px] font-bold text-slate-700 uppercase">FBC (Fondo Bajo Custodia)</td>
+                  <td className={tdInput}>
+                    <input type="text" className={inputClass + " text-right font-mono"}
+                      value={formatMXN(form.monto_fbc)}
+                      onChange={e => set('monto_fbc', parseMXN(e.target.value))}
+                      placeholder="$0.00" />
+                  </td>
+                  <td className="border border-slate-400 px-2 py-1.5 text-right font-mono text-[11px]">{pct(fbcMonto)}</td>
+                </tr>
+                <tr>
+                  <td className="border border-slate-400 px-3 py-1.5 text-[11px] font-bold text-slate-700 uppercase">Donativos</td>
+                  <td className={tdInput}>
+                    <input type="text" className={inputClass + " text-right font-mono"}
+                      value={formatMXN(form.monto_donativos)}
+                      onChange={e => set('monto_donativos', parseMXN(e.target.value))}
+                      placeholder="$0.00" />
+                  </td>
+                  <td className="border border-slate-400 px-2 py-1.5 text-right font-mono text-[11px]">{pct(donMonto)}</td>
+                </tr>
+                <tr>
+                  <td className="border border-slate-400 px-3 py-1.5 text-[11px] font-bold text-slate-700 uppercase">Otras Fuentes</td>
+                  <td className={tdInput}>
+                    <input type="text" className={inputClass + " text-right font-mono"}
+                      value={formatMXN(form.monto_otras)}
+                      onChange={e => set('monto_otras', parseMXN(e.target.value))}
+                      placeholder="$0.00" />
+                  </td>
+                  <td className="border border-slate-400 px-2 py-1.5 text-right font-mono text-[11px]">{pct(otrasMonto)}</td>
+                </tr>
+                {otrasMonto > 0 && (
+                  <tr>
+                    <td className="border border-slate-400 px-3 py-1.5 text-[11px] font-bold text-slate-700 uppercase">
+                      ¿A qué se refiere? *
+                    </td>
+                    <td className="border border-slate-400 px-0 py-0" colSpan={2}>
+                      <input type="text" className={inputClass}
+                        required
+                        value={form.monto_otras_detalle}
+                        onChange={e => set('monto_otras_detalle', e.target.value)}
+                        placeholder="Especifica de dónde proviene este monto (ej. aportación de municipio, venta de activo, etc.)" />
+                    </td>
+                  </tr>
+                )}
+                <tr className="bg-slate-100">
+                  <td className="border border-slate-400 px-3 py-1.5 text-[11px] font-black text-slate-800 uppercase">Total Financiamiento</td>
+                  <td className="border border-slate-400 px-2 py-1.5 text-right font-mono text-[11px] font-black text-slate-900">
+                    {totalMonto.toLocaleString('es-MX', { style: 'currency', currency: 'MXN' })}
+                  </td>
+                  <td className={`border border-slate-400 px-2 py-1.5 text-right font-mono text-[11px] font-black ${
+                    costo > 0 && Math.abs(totalMonto - costo) < 1 ? 'text-emerald-700' : totalMonto > costo && costo > 0 ? 'text-red-600' : 'text-slate-700'
+                  }`}>
+                    {costo > 0 ? ((totalMonto / costo) * 100).toFixed(0) + '%' : '0%'}
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+            {costo > 0 && Math.abs(totalMonto - costo) > 1 && (
+              <div className="px-3 py-2 bg-amber-50 border-t border-amber-200">
+                <p className="text-xs text-amber-700 font-bold">
+                  ⚠ El total del financiamiento debe ser igual al costo aproximado. Diferencia: {(totalMonto - costo).toLocaleString('es-MX', { style: 'currency', currency: 'MXN' })}
+                </p>
+              </div>
+            )}
             </div>
           </div>
 
