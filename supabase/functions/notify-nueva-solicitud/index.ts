@@ -200,14 +200,25 @@ serve(async (req) => {
 
     const subject = `📋 Nueva Solicitud: ${proyecto ?? 'Sin nombre'} — ${centro ?? ''}`;
 
-    // Enviar al administrador
     // El correo del CAR ya se resolvió arriba (recibido del frontend, o
     // consultado en vivo a Directorio como respaldo).
     const carCorreo = carCorreoDirectorio;
 
-    const ccList = [carCorreo].filter(Boolean).filter(c => c !== adminEmail);
+    // ── Caso especial: FMA (Federación Mano Amiga) ─────────────────────────
+    // FMA no tiene un CAR de colegio — es la Coordinación misma la que solicita.
+    // En ese caso la solicitud no la revisa el Coordinador (el mismo que la
+    // envía), sino su jefe directo, quien da el visto bueno, con copia a quien
+    // fondea el recurso una vez autorizado.
+    const esFMA = centro === 'FMA';
+    const JEFE_EMAIL  = 'arodriguez@manoamiga.edu.mx';
+    const FONDEO_EMAIL = 'fguerra@manoamiga.edu.mx';
 
-    await sendEmail(adminEmail, ccList, subject, html);
+    const destinatario = esFMA ? JEFE_EMAIL : adminEmail;
+    const ccList = esFMA
+      ? [FONDEO_EMAIL, adminEmail].filter(Boolean).filter(c => c !== destinatario)
+      : [carCorreo].filter(Boolean).filter(c => c !== adminEmail);
+
+    await sendEmail(destinatario, ccList, subject, html);
 
     return new Response(
       JSON.stringify({ success: true }),

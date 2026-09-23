@@ -135,6 +135,7 @@ interface TicketMAS {
   fecha_fin_estimada?:    string;
   areas_participantes?:   string;
   fecha_autorizacion?:    string;
+  autorizado_por?:        string;
   motivo_cancelacion?:    string;
   fecha_cancelacion?:     string;
   expediente_url?:        string;
@@ -277,10 +278,18 @@ function generarHTMLTicket(t: TicketMAS, firma: string): string {
       </div>
       <div class="firma-name">${t.puesto_solicitante ?? 'Director / Administrador'}<br/><span class="firma-title">${t.colegio ?? ''}</span></div>
     </div>
+    ${t.territorio === 'FMA' && t.autorizado_por ? `
+    <div class="firma-box">
+      <div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:4px 0;gap:4px;">
+        <span style="font-size:10px;font-weight:600;color:#3A4450;">${t.autorizado_por}</span>
+        <span style="font-size:8.5px;color:#77889C;">Autorizado: ${fechaAuth}</span>
+      </div>
+      <div class="firma-name">Vo. Bo. Dirección Nacional<br/><span class="firma-title">Federación Mano Amiga</span></div>
+    </div>` : `
     <div class="firma-box">
       <img src="data:image/png;base64,${firma}" alt="Firma RCMA" style="max-height:60px;max-width:180px;object-fit:contain;"/>
       <div class="firma-name">Ricardo Joanathan Reyes Medina<br/><span class="firma-title">Coordinador de Obras y Mantenimiento RCMA</span></div>
-    </div>
+    </div>`}
   </div>
 
   <div class="footer">
@@ -388,7 +397,7 @@ export default function TicketMAS() {
   const set = (k: string, v: string) => setForm(p => ({ ...p, [k]: v }));
 
   // ── Admin form state (llenado por Ricardo) ───────────────────────────────────
-  const ADMIN_INIT = { fecha_recepcion:'', fecha_inicio_estimada:'', fecha_fin_estimada:'', areas_participantes:'' };
+  const ADMIN_INIT = { fecha_recepcion:'', fecha_inicio_estimada:'', fecha_fin_estimada:'', areas_participantes:'', autorizado_por:'' };
   const [adminForm, setAdminForm] = useState({ ...ADMIN_INIT });
   const setA = (k: string, v: string) => setAdminForm(p => ({ ...p, [k]: v }));
 
@@ -677,7 +686,8 @@ export default function TicketMAS() {
   };
 
   // ── Autorizar ticket ──────────────────────────────────────────────────────────
-  const adminFieldsComplete = adminForm.fecha_recepcion && adminForm.fecha_inicio_estimada && adminForm.fecha_fin_estimada;
+  const adminFieldsComplete = !!(adminForm.fecha_recepcion && adminForm.fecha_inicio_estimada && adminForm.fecha_fin_estimada
+    && (viewing?.territorio !== 'FMA' || adminForm.autorizado_por.trim()));
 
   // Genera el PDF del ticket como Blob para subir a OneDrive
   const generarPDFBlob = (t: TicketMAS): Blob => {
@@ -700,6 +710,7 @@ export default function TicketMAS() {
           fecha_fin_estimada:     adminForm.fecha_fin_estimada,
           areas_participantes:    adminForm.areas_participantes,
           fecha_autorizacion:     now,
+          autorizado_por:         viewing.territorio === 'FMA' ? adminForm.autorizado_por.trim() : null,
         })
         .eq('id', viewing.id)
         .select()
@@ -905,6 +916,7 @@ export default function TicketMAS() {
       fecha_inicio_estimada: t.fecha_inicio_estimada ?? '',
       fecha_fin_estimada:    t.fecha_fin_estimada ?? '',
       areas_participantes:   t.areas_participantes ?? '',
+      autorizado_por:        t.autorizado_por ?? '',
     });
     setVista('detalle');
   };
@@ -1642,6 +1654,15 @@ export default function TicketMAS() {
                 <label className={labelClass}>Áreas Participantes</label>
                 <textarea className={inputClass + ' min-h-[60px] resize-none'} value={adminForm.areas_participantes} onChange={e => setA('areas_participantes', e.target.value)} placeholder="Ej: Gerente Administrativo MAS, Coord. Obras RCMA..." />
               </div>
+              {viewing.territorio === 'FMA' && (
+                <div className="md:col-span-2">
+                  <label className={labelClass}>Autorizado por (nombre) *</label>
+                  <input className={inputClass} value={adminForm.autorizado_por} onChange={e => setA('autorizado_por', e.target.value)} placeholder="Ej: Ángel Rodríguez" />
+                  <p className="text-[10px] text-slate-400 italic mt-1">
+                    Este ticket es de Federación Mano Amiga (FMA) — el PDF mostrará este nombre y la fecha en lugar de la firma del Coordinador, ya que la autorización corresponde a otra jerarquía.
+                  </p>
+                </div>
+              )}
             </div>
 
             <div className="px-4 pb-4">
