@@ -20,6 +20,7 @@ import {
   BarChart3,
   BookUser, Package, Layers, ShieldAlert, ShieldCheck, ListTodo,
   Network, Clock3,
+  Gauge, Flag, Users, Star, Award, ListChecks, ClipboardList, Settings2,
 } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import SidebarAccordionGroup from './SidebarAccordionGroup';
@@ -86,6 +87,13 @@ export default function Sidebar({ isOpen, onToggle }) {
   const puedeVerCostos = isAdmin; // exclusivo del administrador, no otorgable desde Accesos
   const navigate = useNavigate();
   const modoCompliance = puedeVerCumplimiento && location.pathname.startsWith('/cumplimiento');
+  // Programa SOL: el administrador ve todo; quien tenga "ver_sol" (administradores
+  // de campus) solo ve el Tablero SOL con el ranking nacional.
+  const puedeVerSOL = isAdmin || can('ver_sol');
+  // Ojo: '/solicitud' y '/solicitudes' también empiezan con '/sol' — se compara exacto.
+  const modoSOL = puedeVerSOL && (location.pathname === '/sol' || location.pathname.startsWith('/sol/'));
+  const esAdminSOL = isAdmin && (user?.email ?? '').toLowerCase() === 'rreyes@manoamiga.edu.mx';
+  const hayOtrosModulos = puedeVerCumplimiento || puedeVerSOL;
 
   const handleNavClick = () => { if (isMobile) onToggle(); };
   const handleLogout   = async () => { await signOut(); };
@@ -193,6 +201,25 @@ export default function Sidebar({ isOpen, onToggle }) {
     { to: '/cumplimiento/jornada-presupuestal', icon: Clock3, label: 'Jornada Presupuestal' },
   ];
 
+  // ---------------------------------------------------------------------
+  // MÓDULO: PROGRAMA SOL (Seguridad · Orden · Limpieza)
+  // ---------------------------------------------------------------------
+  const solInspeccion = [
+    { to: '/sol/inspecciones',   icon: ClipboardList, label: 'Inspecciones (SOL-F01)' },
+  ];
+  const solSeguimiento = [
+    { to: '/sol/hallazgos',      icon: ListChecks,    label: 'Hallazgos' },
+    { to: '/sol/tarjetas-rojas', icon: Flag,          label: 'Tarjetas Rojas' },
+  ];
+  const solOrganizacion = [
+    { to: '/sol/comites',        icon: Users,         label: 'Comités SOL' },
+    { to: '/sol/guardianes',     icon: Star,          label: 'Guardianes SOL' },
+  ];
+  const solResultados = [
+    { to: '/sol/reconocimientos', icon: Award,        label: 'Reconocimientos y Reportes' },
+    { to: '/sol/catalogo',        icon: Settings2,    label: 'Catálogo de Criterios' },
+  ];
+
   return (
     <>
       {isOpen && (
@@ -232,26 +259,39 @@ export default function Sidebar({ isOpen, onToggle }) {
               <h1 className="text-base font-display font-semibold text-sidebar-foreground leading-tight tracking-tight">
                 Sistema RCMA
               </h1>
-              {puedeVerCumplimiento ? (
+              {hayOtrosModulos ? (
                 <div className="flex bg-white/[0.07] rounded-md p-[2px] mt-1.5">
                   <button
                     onClick={() => navigate('/')}
                     className={cn(
-                      'flex-1 text-center py-[5px] rounded text-[9.5px] font-bold transition-colors duration-200',
-                      !modoCompliance ? 'bg-[#ED7102] text-white' : 'text-sidebar-foreground/50 hover:text-sidebar-foreground/80'
+                      'flex-auto text-center px-1 py-[5px] rounded text-[9.5px] font-bold whitespace-nowrap transition-colors duration-200',
+                      !modoCompliance && !modoSOL ? 'bg-[#ED7102] text-white' : 'text-sidebar-foreground/50 hover:text-sidebar-foreground/80'
                     )}
                   >
                     Obras
                   </button>
-                  <button
-                    onClick={() => navigate('/cumplimiento')}
-                    className={cn(
-                      'flex-1 text-center py-[5px] rounded text-[9.5px] font-bold transition-colors duration-200',
-                      modoCompliance ? 'bg-[#ED7102] text-white' : 'text-sidebar-foreground/50 hover:text-sidebar-foreground/80'
-                    )}
-                  >
-                    Cumplimiento
-                  </button>
+                  {puedeVerCumplimiento && (
+                    <button
+                      onClick={() => navigate('/cumplimiento')}
+                      className={cn(
+                        'flex-auto text-center px-1 py-[5px] rounded text-[9.5px] font-bold whitespace-nowrap transition-colors duration-200',
+                        modoCompliance ? 'bg-[#ED7102] text-white' : 'text-sidebar-foreground/50 hover:text-sidebar-foreground/80'
+                      )}
+                    >
+                      Cumplimiento
+                    </button>
+                  )}
+                  {puedeVerSOL && (
+                    <button
+                      onClick={() => navigate('/sol')}
+                      className={cn(
+                        'flex-auto text-center px-1 py-[5px] rounded text-[9.5px] font-bold whitespace-nowrap transition-colors duration-200',
+                        modoSOL ? 'bg-[#ED7102] text-white' : 'text-sidebar-foreground/50 hover:text-sidebar-foreground/80'
+                      )}
+                    >
+                      SOL
+                    </button>
+                  )}
                 </div>
               ) : (
                 <p className="text-[10px] font-bold text-sidebar-foreground/60 uppercase tracking-widest">
@@ -264,7 +304,32 @@ export default function Sidebar({ isOpen, onToggle }) {
 
         {/* Navegación */}
         <nav className="flex-1 p-3 space-y-0.5 overflow-y-auto scrollbar-sidebar" aria-label="Menú principal">
-          {modoCompliance ? (
+          {modoSOL ? (
+            <>
+              <Link to="/sol" onClick={handleNavClick} className={navLinkClassExacta('/sol')}>
+                <Gauge className="w-[18px] h-[18px]" />
+                Tablero SOL
+              </Link>
+
+              {esAdminSOL && (
+                <>
+                  <div className="pt-2" />
+                  <SidebarAccordionGroup label="Inspección" icon={ClipboardList} defaultOpen={true}>
+                    {solInspeccion.map(renderLink)}
+                  </SidebarAccordionGroup>
+                  <SidebarAccordionGroup label="Seguimiento" icon={ListChecks} defaultOpen={true}>
+                    {solSeguimiento.map(renderLink)}
+                  </SidebarAccordionGroup>
+                  <SidebarAccordionGroup label="Organización" icon={Users} defaultOpen={solOrganizacion.some(i => isActive(i.to))}>
+                    {solOrganizacion.map(renderLink)}
+                  </SidebarAccordionGroup>
+                  <SidebarAccordionGroup label="Resultados" icon={Award} defaultOpen={solResultados.some(i => isActive(i.to))}>
+                    {solResultados.map(renderLink)}
+                  </SidebarAccordionGroup>
+                </>
+              )}
+            </>
+          ) : modoCompliance ? (
             <>
               <Link to="/cumplimiento" onClick={handleNavClick} className={navLinkClassExacta('/cumplimiento')}>
                 <LayoutDashboard className="w-[18px] h-[18px]" />

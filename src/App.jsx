@@ -17,6 +17,7 @@ const PERM_ROUTES = [
   { perm: 'ver_solicitud_proyecto', route: '/solicitud'     },
   { perm: 'ver_solicitud_proyecto', route: '/protocolo'     },
   { perm: 'ver_reportes',           route: '/reportes'      },
+  { perm: 'ver_sol',                route: '/sol'           },
 ];
 
 function getFirstRoute(permissions, isAdmin) {
@@ -70,6 +71,15 @@ import Directorio from '@/pages/Directorio';
 import Insumos from '@/pages/Insumos';
 import Nexus from '@/pages/Nexus';
 import LevantamientoNacional from '@/pages/LevantamientoNacional';
+import SolDashboard from '@/pages/SolDashboard';
+import SolInspecciones from '@/pages/SolInspecciones';
+import SolInspeccionDetail from '@/pages/SolInspeccionDetail';
+import SolHallazgos from '@/pages/SolHallazgos';
+import SolTarjetasRojas from '@/pages/SolTarjetasRojas';
+import SolComites from '@/pages/SolComites';
+import SolGuardianes from '@/pages/SolGuardianes';
+import SolReconocimientos from '@/pages/SolReconocimientos';
+import SolCatalogo from '@/pages/SolCatalogo';
 import PWAUpdatePrompt from '@/components/PWAUpdatePrompt';
 
 const inputClass = "w-full px-3 py-2 border border-slate-300 rounded-md text-sm focus:ring-2 focus:ring-slate-900 focus:outline-none bg-white";
@@ -467,6 +477,15 @@ function AuthenticatedApp() {
           <Route path="/insumos"             element={<Insumos />} />
           <Route path="/nexus"               element={<Nexus />} />
           <Route path="/levantamiento"       element={<LevantamientoNacional />} />
+          <Route path="/sol"                      element={<SolDashboard />} />
+          <Route path="/sol/inspecciones"         element={<SolInspecciones />} />
+          <Route path="/sol/inspecciones/:id"     element={<SolInspeccionDetail />} />
+          <Route path="/sol/hallazgos"            element={<SolHallazgos />} />
+          <Route path="/sol/tarjetas-rojas"       element={<SolTarjetasRojas />} />
+          <Route path="/sol/comites"              element={<SolComites />} />
+          <Route path="/sol/guardianes"           element={<SolGuardianes />} />
+          <Route path="/sol/reconocimientos"      element={<SolReconocimientos />} />
+          <Route path="/sol/catalogo"             element={<SolCatalogo />} />
 
           <Route path="/login"               element={<Navigate to="/" replace />} />
           <Route path="*"                   element={<PageNotFound />} />

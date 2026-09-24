@@ -157,6 +157,7 @@ const MODULO_LABEL: Record<string, string> = {
   calendario:    'Calendario de Mantenimiento',
   minutas:       'Minutas y Notas Técnicas',
   reportes_problema: 'Reportar Problema',
+  sol:           'Programa SOL',
 };
 
 // ─── Export PDF: Reporte de Auditoría ─────────────────────────────────────────

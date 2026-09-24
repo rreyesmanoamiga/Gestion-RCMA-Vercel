@@ -31,7 +31,8 @@ export type AuditModulo =
   | 'reportes_problema'
   | 'solicitudes_cn'
   | 'tramites_cn'
-  | 'tickets_mas_cn';
+  | 'tickets_mas_cn'
+  | 'sol';
 
 interface LogAuditParams {
   accion:       AuditAccion;
