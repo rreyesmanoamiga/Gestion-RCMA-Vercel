@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import { Award, Star, Trophy, FileBarChart, History, Check, X as XIcon, Printer, Loader2, Minus } from 'lucide-react';
+import { Award, Star, Trophy, FileBarChart, History, Check, X as XIcon, Printer, Loader2, Minus, Trash2 } from 'lucide-react';
 import { supabase } from '@/lib/supabaseClient';
 import { useDirectorio, getDirectorNacional, type DirectorioColegio } from '@/lib/directorio';
 import { logAudit } from '@/lib/audit';
@@ -60,6 +60,14 @@ export default function SolReconocimientos() {
     return true;
   };
 
+  const quitar = async (r: SolReconocimiento) => {
+    const { error } = await supabase.from('sol_reconocimientos').delete().eq('id', r.id);
+    if (error) { toast.error(error.message); return; }
+    logAudit({ accion: 'eliminar', modulo: 'sol', registro_id: r.id, registro_ref: `Reconocimiento ${r.tipo} ${r.colegio} ${r.ciclo}` });
+    qc.invalidateQueries({ queryKey: ['sol_reconocimientos_data'] });
+    toast.success('Reconocimiento eliminado');
+  };
+
   if (!isAdmin) return <AccesoRestringido />;
 
   return (
@@ -79,11 +87,11 @@ export default function SolReconocimientos() {
 
       {isLoading || !data ? <p className="text-slate-500 flex items-center gap-2"><Loader2 className="w-4 h-4 animate-spin" />Cargando…</p> : (
         <>
-          {tab === 'campus' && <TabCampus ciclo={ciclo} campus={campus} data={data} dirNacional={dirNacional} registrar={registrar} />}
+          {tab === 'campus' && <TabCampus ciclo={ciclo} campus={campus} data={data} dirNacional={dirNacional} registrar={registrar} quitar={quitar} />}
           {tab === 'guardian' && <TabGuardian ciclo={ciclo} campus={campus} data={data} registrar={registrar} />}
           {tab === 'grupo' && <TabGrupo ciclo={ciclo} campus={campus} data={data} dirNacional={dirNacional} registrar={registrar} />}
           {tab === 'reporte' && <TabReporte ciclo={ciclo} campus={campus} data={data} />}
-          {tab === 'historial' && <TabHistorial data={data} directorio={directorio} />}
+          {tab === 'historial' && <TabHistorial data={data} directorio={directorio} quitar={quitar} />}
         </>
       )}
     </div>
@@ -92,6 +100,7 @@ export default function SolReconocimientos() {
 
 type Data = { insp: SolInspeccion[]; hall: SolHallazgo[]; tarj: SolTarjetaRoja[]; comites: SolComite[]; guard: SolGuardianGrupo[]; recon: SolReconocimiento[] };
 type Registrar = (f: Partial<SolReconocimiento>) => Promise<boolean>;
+type Quitar = (r: SolReconocimiento) => Promise<void>;
 type Campus = ReturnType<typeof campusSOL>;
 
 const Marca = ({ ok, na }: { ok: boolean; na?: boolean }) => na
@@ -109,13 +118,13 @@ function firmantes(data: Data, colegio: string) {
 }
 
 // ── Campus SOL ───────────────────────────────────────────────────────────────
-function TabCampus({ ciclo, campus, data, dirNacional, registrar }: { ciclo: string; campus: Campus; data: Data; dirNacional: string; registrar: Registrar }) {
+function TabCampus({ ciclo, campus, data, dirNacional, registrar, quitar }: { ciclo: string; campus: Campus; data: Data; dirNacional: string; registrar: Registrar; quitar: Quitar }) {
   const [ciudad, setCiudad] = useState('');
   const [fecha, setFecha] = useState(hoyISO());
   const filas = campus.map(c => ({
     c,
     d: dictaminarCampus(data.insp.filter(i => i.colegio === c.codigo), data.hall.filter(h => h.colegio === c.codigo), comiteDe(data, c.codigo)),
-    otorgado: data.recon.some(r => r.tipo === 'campus' && r.colegio === c.codigo && r.ciclo === ciclo),
+    otorgado: data.recon.find(r => r.tipo === 'campus' && r.colegio === c.codigo && r.ciclo === ciclo) ?? null,
   })).sort((a, b) => (b.d.promedioCiclo ?? -1) - (a.d.promedioCiclo ?? -1));
 
   const otorgar = async (f: typeof filas[number]) => {
@@ -156,7 +165,9 @@ function TabCampus({ ciclo, campus, data, dirNacional, registrar }: { ciclo: str
                 <td className="px-3 py-3">{f.otorgado ? <span className="inline-flex items-center gap-1 text-xs font-bold text-[#ED7102]"><Award className="w-4 h-4" />Otorgado</span>
                   : f.d.cumple ? <span className="text-xs font-bold text-emerald-700">Candidato</span> : <span className="text-xs text-slate-400">No cumple</span>}</td>
                 <td className="px-4 py-3 text-right whitespace-nowrap">
-                  {!f.otorgado && <button className={btnSecondary + ' !px-3 !py-1.5 text-xs'} onClick={() => otorgar(f)}><Award className="w-3.5 h-3.5" />Otorgar</button>}
+                  {!f.otorgado
+                    ? <button className={btnSecondary + ' !px-3 !py-1.5 text-xs'} onClick={() => otorgar(f)}><Award className="w-3.5 h-3.5" />Otorgar</button>
+                    : <button className={btnSecondary + ' !px-3 !py-1.5 text-xs text-red-600'} onClick={() => { if (confirm(`¿Quitar el distintivo Campus SOL ${cicloLabel(ciclo)} a ${f.c.nombre}?`)) quitar(f.otorgado!); }}><Trash2 className="w-3.5 h-3.5" />Quitar</button>}
                   <button className={btnSecondary + ' !px-3 !py-1.5 text-xs ml-1'} onClick={() => diploma(f)}><Printer className="w-3.5 h-3.5" />Diploma</button>
                 </td>
               </tr>
@@ -325,17 +336,17 @@ function TabReporte({ ciclo, campus, data }: { ciclo: string; campus: Campus; da
   );
 }
 
-function TabHistorial({ data, directorio }: { data: Data; directorio: DirectorioColegio[] }) {
+function TabHistorial({ data, directorio, quitar }: { data: Data; directorio: DirectorioColegio[]; quitar: Quitar }) {
   const etiqueta: Record<string, string> = { campus: 'Campus SOL', guardian: 'Guardián SOL', grupo: 'Grupo Guardián SOL' };
   return (
     <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-x-auto">
       <table className="w-full text-sm">
         <thead className="bg-slate-50 text-[11px] uppercase tracking-wider text-slate-500"><tr>
           <th className="text-left px-4 py-3">Fecha</th><th className="text-left px-4 py-3">Reconocimiento</th><th className="text-left px-4 py-3">Campus</th>
-          <th className="text-left px-4 py-3">Ciclo</th><th className="text-left px-4 py-3">Beneficiario(s)</th>
+          <th className="text-left px-4 py-3">Ciclo</th><th className="text-left px-4 py-3">Beneficiario(s)</th><th className="px-4 py-3" />
         </tr></thead>
         <tbody className="divide-y divide-slate-100">
-          {data.recon.length === 0 && <tr><td colSpan={5} className="px-4 py-8 text-center text-slate-500">Aún no se han emitido reconocimientos.</td></tr>}
+          {data.recon.length === 0 && <tr><td colSpan={6} className="px-4 py-8 text-center text-slate-500">Aún no se han emitido reconocimientos.</td></tr>}
           {data.recon.map(r => (
             <tr key={r.id} className="align-top">
               <td className="px-4 py-3 whitespace-nowrap">{fechaCorta(r.fecha_emision)}</td>
@@ -343,6 +354,12 @@ function TabHistorial({ data, directorio }: { data: Data; directorio: Directorio
               <td className="px-4 py-3">{nombreCampus(directorio, r.colegio)}</td>
               <td className="px-4 py-3 whitespace-nowrap">{cicloLabel(r.ciclo)}</td>
               <td className="px-4 py-3 text-slate-600 whitespace-pre-line">{r.tipo === 'campus' ? `Índice ${fmtIndice((r.detalle as { promedioCiclo?: number }).promedioCiclo ?? null)}` : r.beneficiarios}</td>
+              <td className="px-4 py-3 text-right">
+                <button className="p-2 rounded-md hover:bg-red-50 text-slate-400 hover:text-red-600" title="Eliminar registro"
+                  onClick={() => { if (confirm(`¿Eliminar este registro de ${etiqueta[r.tipo]} de ${nombreCampus(directorio, r.colegio)}?`)) quitar(r); }}>
+                  <Trash2 className="w-4 h-4" />
+                </button>
+              </td>
             </tr>
           ))}
         </tbody>
