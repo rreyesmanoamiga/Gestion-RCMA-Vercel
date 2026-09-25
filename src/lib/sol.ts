@@ -309,10 +309,14 @@ export const normalizar = (s: unknown) =>
 /** "MA MTY" → "MTY" (prefijo de folios). */
 export const codigoCorto = (colegio: string) => colegio.replace(/^MA\s+/i, '').replace(/[^A-Za-z0-9]/g, '').toUpperCase();
 
+/** Solo colegios Mano Amiga (código "MA …"): quedan fuera clínicas y oficinas. */
+export const esColegioMA = (r: Pick<DirectorioColegio, 'codigo' | 'territorio'>) =>
+  (r.territorio === 'NORTE' || r.territorio === 'MEXICO') && /^MA\s/i.test(r.codigo ?? '');
+
 /** Los 20 campus de la red, en vivo desde Directorio. */
 export function campusSOL(rows: DirectorioColegio[]): DirectorioColegio[] {
   return rows
-    .filter(r => r.territorio === 'NORTE' || r.territorio === 'MEXICO')
+    .filter(esColegioMA)
     .sort((a, b) => a.nombre.localeCompare(b.nombre, 'es'));
 }
 
@@ -482,8 +486,8 @@ export async function parseSolExcel(file: File | ArrayBuffer, directorio: Direct
   if (!out.campusTexto) out.errores.push('No se capturó el Campus en la hoja Inspección.');
   else {
     const n = normalizar(out.campusTexto);
-    const red = directorio.filter(d => d.territorio === 'NORTE' || d.territorio === 'MEXICO');
-    const fila = directorio.find(d => normalizar(d.nombre) === n || normalizar(d.codigo) === n)
+    const red = directorio.filter(esColegioMA);
+    const fila = red.find(d => normalizar(d.nombre) === n || normalizar(d.codigo) === n)
       ?? red.find(d => n.includes(normalizar(d.nombre.replace(/^Mano Amiga\s+/i, ''))));
     if (fila) { out.colegio = fila.codigo; out.territorio = fila.territorio; }
     else out.errores.push(`El campus "${out.campusTexto}" no coincide con ningún colegio del Directorio.`);
