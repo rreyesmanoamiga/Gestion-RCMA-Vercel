@@ -722,11 +722,22 @@ export interface DatosDiploma {
   directorNacional?: string;
 }
 
+// Diseño institucional (Reconocimientos_SOL.docx): el marco, el logotipo, la marca
+// de agua "SOL" y el sello de cada reconocimiento vienen en una imagen de fondo
+// (public/sol/diploma-*.jpg); aquí solo se escribe el texto encima, con las mismas
+// tipografías, tamaños y colores del documento de Word.
+const DIPLOMA = {
+  campus:   { titulo: 'CAMPUS SOL',         clave: 'SOL-F03', color: '#C95F14', tam: 38, fondo: 'diploma-campus.jpg' },
+  guardian: { titulo: 'GUARDIÁN SOL',       clave: 'SOL-F04', color: '#2F6DB5', tam: 38, fondo: 'diploma-guardian.jpg' },
+  grupo:    { titulo: 'GRUPO GUARDIÁN SOL', clave: 'SOL-F06', color: '#A67C00', tam: 34, fondo: 'diploma-grupo.jpg' },
+} as const;
+
 export function htmlDiplomas(d: DatosDiploma): string {
-  const titulo = d.tipo === 'campus' ? 'CAMPUS SOL' : d.tipo === 'guardian' ? 'GUARDIÁN SOL' : 'GRUPO GUARDIÁN SOL';
-  const clave = d.tipo === 'campus' ? 'SOL-F03' : d.tipo === 'guardian' ? 'SOL-F04' : 'SOL-F06';
-  const lugar = `${esc(d.ciudad || '__________')}, a ${fechaLarga(d.fecha)}`;
-  const firma = (n: string | undefined, p: string) => `<div class="f"><div class="ln"></div><b>${esc(n || '')}</b><span>${p}</span></div>`;
+  const cfg = DIPLOMA[d.tipo];
+  const fondo = `${window.location.origin}/sol/${cfg.fondo}`;
+  const lugar = `${esc(d.ciudad || '[Ciudad]')}, a ${fechaLarga(d.fecha)}`;
+  const firma = (n: string | undefined, p: string) =>
+    `<div class="f"><div class="ln"></div><b>${esc(n || '')}</b><span>${p}</span></div>`;
   const firmas = d.tipo === 'campus'
     ? firma(d.directorNacional, 'Director Nacional') + firma('Ing. Ricardo Reyes Medina', 'Coordinador de Obras y Mantenimiento (RCMA)')
     : d.tipo === 'guardian'
@@ -734,46 +745,48 @@ export function htmlDiplomas(d: DatosDiploma): string {
       : firma(d.directorCampus, 'Director(a) del campus') + firma(d.coordinadorComite, 'Coordinador(a) del Comité SOL')
         + firma(d.directorNacional, 'Director Nacional') + firma('Ing. Ricardo Reyes Medina', 'Coordinador RCMA');
   const pagina = (nombre: string) => {
+    const quien = nombre ? esc(nombre) : '&nbsp;';
     const cuerpo = d.tipo === 'campus'
       ? `<p class="a">a</p><p class="nom">${esc(d.campusNombre)}</p>
          <p class="txt">por sostener durante el ciclo escolar ${cicloLabel(d.ciclo)} un Índice SOL de excelencia en Seguridad, Orden y Limpieza,<br/>cuidando a cada persona que forma parte de nuestra comunidad.</p>`
       : d.tipo === 'guardian'
-        ? `<p class="a">a la alumna / al alumno</p><p class="nom">${esc(nombre)}</p>
+        ? `<p class="a">a la alumna / al alumno</p><p class="nom${nombre ? '' : ' vacio'}">${quien}</p>
            <p class="txt">de ${esc(d.grupo || '______')}, campus ${esc(d.campusNombre)}, por cuidar su aula y ser ejemplo de Seguridad, Orden y Limpieza,<br/>durante el ciclo escolar ${cicloLabel(d.ciclo)}.</p>`
-        : `<p class="a">a la alumna / al alumno</p><p class="nom">${esc(nombre)}</p>
+        : `<p class="a">a la alumna / al alumno</p><p class="nom${nombre ? '' : ' vacio'}">${quien}</p>
            <p class="txt">integrante del grupo ${esc(d.grupo || '______')} de ${esc(d.nivel || '______')}, campus ${esc(d.campusNombre)}, ganador del reconocimiento al grupo<br/>que mejor cuidó la Seguridad, el Orden y la Limpieza de su aula durante el ciclo escolar ${cicloLabel(d.ciclo)}.</p>`;
-    return `<section class="pg"><div class="marco"><div class="barra"><span style="background:#C95F14"></span><span style="background:#1F4E79"></span><span style="background:#2F6DB5"></span></div>
-      <img class="logo" src="${logo()}"/>
-      <div class="centro"><p class="otorga">La Red de Colegios Mano Amiga otorga el reconocimiento</p>
-      <h1>${titulo}</h1>${cuerpo}
-      <p class="lugar">${lugar}</p></div>
-      <div class="firmas ${d.tipo === 'grupo' ? 'cuatro' : ''}">${firmas}</div>
-      <p class="clave">${clave} · Programa SOL · Seguridad · Orden · Limpieza</p></div></section>`;
+    return `<section class="pg"><img class="bg" src="${fondo}" alt=""/>
+      <div class="cont">
+        <p class="otorga">La Red de Colegios Mano Amiga otorga el reconocimiento</p>
+        <h1>${cfg.titulo}</h1>${cuerpo}
+        <p class="lugar">${lugar}</p>
+        <div class="firmas ${d.tipo === 'grupo' ? 'cuatro' : ''}">${firmas}</div>
+      </div></section>`;
   };
   const nombres = d.tipo === 'campus' ? [''] : (d.beneficiarios.length ? d.beneficiarios : ['']);
-  return `<!doctype html><html><head><meta charset="utf-8"><title>${titulo} · ${esc(d.campusNombre)}</title>
+  return `<!doctype html><html><head><meta charset="utf-8"><title>${cfg.titulo} · ${esc(d.campusNombre)}</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com"><link href="https://fonts.googleapis.com/css2?family=Carlito:ital,wght@0,400;0,700;1,400&display=swap" rel="stylesheet">
   <style>
    @page { size: letter landscape; margin: 0; }
-   * { box-sizing:border-box; -webkit-print-color-adjust:exact; print-color-adjust:exact; }
-   body { margin:0; font-family: Georgia, 'Times New Roman', serif; color:${INK}; }
-   .pg { width:279.4mm; height:215.9mm; padding:10mm; page-break-after:always; }
+   * { box-sizing:border-box; margin:0; -webkit-print-color-adjust:exact; print-color-adjust:exact; }
+   body { font-family: Calibri, Carlito, 'Segoe UI', Arial, sans-serif; color:#262626; }
+   .pg { position:relative; width:11in; height:8.5in; overflow:hidden; page-break-after:always; }
    .pg:last-child { page-break-after:auto; }
-   .marco { position:relative; height:100%; border:3px solid ${NAVY}; outline:1.5px solid ${ORANGE}; outline-offset:-9px; padding:14mm 18mm 10mm; text-align:center; display:flex; flex-direction:column; align-items:center; }
-   .barra { position:absolute; top:0; left:0; right:0; height:7px; display:flex; } .barra span { flex:1; }
-   .logo { height:92px; margin-bottom:4px; }
-   .centro { flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; width:100%; }
-   .otorga { font-size:17px; font-style:italic; color:${MUTED}; margin:4px 0; }
-   h1 { font-family:'Segoe UI', Arial, sans-serif; font-size:54px; letter-spacing:6px; color:${NAVY}; margin:6px 0 4px; font-weight:800; }
-   .a { font-size:14px; font-style:italic; margin:4px 0; color:${MUTED}; }
-   .nom { font-size:38px; color:${ORANGE}; font-weight:700; margin:4px 0 8px; border-bottom:1px solid ${LINE}; padding:0 30px 4px; min-width:55%; min-height:44px; }
-   .txt { font-size:16.5px; line-height:1.55; margin:6px 0; }
-   .lugar { font-size:13px; margin:10px 0 0; color:${MUTED}; }
-   .firmas { display:flex; gap:26px; width:100%; justify-content:center; margin-bottom:6mm; }
-   .firmas .f { flex:0 1 250px; display:flex; flex-direction:column; align-items:center; font-family:'Segoe UI', Arial, sans-serif; font-size:11px; }
-   .firmas.cuatro .f { flex:0 1 200px; font-size:10px; }
-   .firmas .ln { width:100%; border-top:1px solid ${INK}; margin-bottom:4px; height:34px; border-top-width:0; border-bottom:1px solid ${INK}; }
-   .firmas span { color:${MUTED}; }
-   .clave { position:absolute; bottom:6px; right:14px; font-family:'Segoe UI', Arial, sans-serif; font-size:8.5px; color:${MUTED}; }
+   .bg { position:absolute; inset:0; width:100%; height:100%; }
+   .cont { position:absolute; left:0.9in; right:0.9in; top:2.45in; text-align:center; }
+   p, h1 { line-height:1.18; }
+   .otorga { font-size:15pt; font-style:italic; color:#595959; margin-bottom:3pt; }
+   h1 { font-size:${cfg.tam}pt; font-weight:700; color:${cfg.color}; margin-bottom:3pt; letter-spacing:.3pt; }
+   .a { font-size:14pt; font-style:italic; color:#595959; margin-bottom:5pt; }
+   .nom { font-size:26pt; font-weight:700; color:#1F4E79; margin-bottom:6pt; }
+   .nom.vacio { display:inline-block; min-width:4.5in; border-bottom:1px solid #8C8C8C; }
+   .txt { font-size:13pt; color:#262626; margin-bottom:3pt; }
+   .lugar { font-size:11pt; font-style:italic; color:#595959; margin-bottom:0.49in; }
+   .firmas { display:flex; justify-content:center; gap:0.28in; }
+   .firmas .f { width:2.25in; display:flex; flex-direction:column; align-items:center; }
+   .firmas.cuatro { gap:0.2in; } .firmas.cuatro .f { width:2.1in; }
+   .firmas .ln { width:100%; border-top:1px solid #404040; margin-bottom:4pt; }
+   .firmas b { font-size:11pt; color:#1F4E79; }
+   .firmas span { font-size:10pt; color:#595959; line-height:1.15; }
   </style></head><body>${nombres.map(pagina).join('')}</body></html>`;
 }
 
