@@ -6,7 +6,7 @@ import PageHeader from '@/components/shared/PageHeader';
 import { usePermissions } from '@/hooks/usePermissions';
 import AccesoRestringido from '@/components/shared/AccesoRestringido';
 import { COLEGIOS } from '@/lib/colegios';
-import { MATERIAS } from '@/lib/complianceShared';
+import { MATERIAS, PERIODICIDADES } from '@/lib/complianceShared';
 import { Plus, Pencil, Trash2, X, Save, RefreshCw, ChevronDown, Loader2 } from 'lucide-react';
 
 interface Concepto {
@@ -42,7 +42,7 @@ const inputClass = 'w-full px-3 py-2 border border-slate-300 rounded-md text-sm 
 // Solo colegios reales (excluye oficinas FMA / GENERAL, que no llevan Protección Civil)
 const COLEGIOS_PC = COLEGIOS.filter(c => c.territorio !== 'FMA' && !c.colegio.startsWith('CLIN'));
 
-export const PERIODICIDADES = ['Anual', 'Cada 2 años', 'Cada 3 años', 'Cada 4 años', 'Cada 5 años', 'Único trámite'];
+export { PERIODICIDADES };
 export const HOJAS_PRESUPUESTO = ['No aplica', 'Directos', 'Indirectos', 'Mantenimiento'];
 
 // Secciones reales de cada hoja, tal como aparecen en los archivos de
@@ -75,12 +75,13 @@ export default function CumplimientoCatalogo() {
   const [editando, setEditando] = useState<Concepto | null>(null);
   const [showNuevo, setShowNuevo] = useState(false);
   const [form, setForm] = useState({
-    nombre: '', materia: 'Protección civil', norma: '', periodicidad: 'Anual',
+    nombre: '', materia: 'Protección Civil', norma: '', periodicidad: 'Anual',
     partida_hoja: 'No aplica', partida_seccion: '', partida_linea: '', partida_notas: '',
   });
   const [colegioSel, setColegioSel] = useState(COLEGIOS_PC[0]?.colegio ?? '');
   const [añoSincronizar, setAñoSincronizar] = useState(new Date().getFullYear());
   const [sincronizando, setSincronizando] = useState(false);
+  const [verDesactivados, setVerDesactivados] = useState(false);
 
   const { data: conceptos = [], isLoading } = useQuery({
     queryKey: ['compliance_conceptos'],
@@ -146,7 +147,7 @@ export default function CumplimientoCatalogo() {
       qc.invalidateQueries({ queryKey: ['compliance_conceptos'] });
       toast.success(editando ? 'Concepto actualizado' : 'Concepto agregado al catálogo');
       setShowNuevo(false); setEditando(null);
-      setForm({ nombre: '', materia: 'Protección civil', norma: '', periodicidad: 'Anual', partida_hoja: 'No aplica', partida_seccion: '', partida_linea: '', partida_notas: '' });
+      setForm({ nombre: '', materia: 'Protección Civil', norma: '', periodicidad: 'Anual', partida_hoja: 'No aplica', partida_seccion: '', partida_linea: '', partida_notas: '' });
     },
     onError: (e: any) => toast.error(e.message ?? 'Error al guardar'),
   });
@@ -296,9 +297,15 @@ export default function CumplimientoCatalogo() {
       <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
         <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100">
           <h2 className="text-sm font-bold text-slate-800 uppercase tracking-tight">
-            Conceptos base ({conceptos.length})
+            Conceptos base ({conceptos.filter(c => c.activo).length})
           </h2>
-          <button onClick={() => { setEditando(null); setForm({ nombre: '', materia: 'Protección civil', norma: '', periodicidad: 'Anual', partida_hoja: 'No aplica', partida_seccion: '', partida_linea: '', partida_notas: '' }); setShowNuevo(true); }}
+          {conceptos.some(c => !c.activo) && (
+            <label className="ml-auto mr-4 flex items-center gap-1.5 text-[11px] font-semibold text-slate-400 cursor-pointer">
+              <input type="checkbox" checked={verDesactivados} onChange={e => setVerDesactivados(e.target.checked)} className="w-3.5 h-3.5 rounded border-slate-300" />
+              Ver desactivados ({conceptos.filter(c => !c.activo).length})
+            </label>
+          )}
+          <button onClick={() => { setEditando(null); setForm({ nombre: '', materia: 'Protección Civil', norma: '', periodicidad: 'Anual', partida_hoja: 'No aplica', partida_seccion: '', partida_linea: '', partida_notas: '' }); setShowNuevo(true); }}
             className="inline-flex items-center gap-1.5 text-xs font-bold text-blue-600 hover:underline">
             <Plus className="w-3.5 h-3.5" /> Agregar concepto
           </button>
@@ -307,7 +314,7 @@ export default function CumplimientoCatalogo() {
           <p className="p-5 text-sm text-slate-400 text-center">Cargando...</p>
         ) : (
           <div className="divide-y divide-slate-50 max-h-[420px] overflow-y-auto">
-            {conceptos.map(c => (
+            {conceptos.filter(c => c.activo || verDesactivados).map(c => (
               <div key={c.id} className={`flex items-center gap-3 px-5 py-2.5 ${!c.activo ? 'opacity-40' : ''}`}>
                 <span className="text-[10px] font-bold text-slate-300 w-6 shrink-0">{c.orden}</span>
                 <div className="min-w-0 flex-1">

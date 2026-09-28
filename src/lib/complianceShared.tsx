@@ -22,7 +22,8 @@ export interface ComplianceDoc {
   año: number;
 }
 
-export const MATERIAS = ['Todas', 'Protección civil', 'Donatarias Autorizadas', 'Fiscal', 'Jurídico', 'Inmobiliaria', 'Gestión de Riesgos'] as const;
+// Materias del catálogo (mismas categorías que "Presupuesto Normativo de Apertura")
+export const MATERIAS = ['Todas', 'Donatarias / RVOE', 'Fiscal', 'Fiscal / Comercial', 'Gestión de Riesgos', 'Inmobiliaria', 'Jurídico', 'Construcción', 'Protección Civil', 'Salud y Sanidad'] as const;
 export const ESTADOS_EDITABLES = ['Pendiente', 'Solicitado', 'En Trámite', 'Verificado'];
 export const PAGE_SIZE = 25;
 
@@ -47,13 +48,18 @@ export function esRetraso(d: ComplianceDoc, hoy: Date): boolean {
   return new Date(d.fecha_limite_recepcion + 'T00:00:00') < hoy;
 }
 
-// Años que suma cada periodicidad. 'Único trámite' o una periodicidad
+// Meses que suma cada periodicidad. 'Único trámite' o una periodicidad
 // desconocida regresa null (el documento nunca vence).
-const AÑOS_POR_PERIODICIDAD: Record<string, number> = {
-  'Anual': 1, 'Cada 2 años': 2, 'Cada 3 años': 3, 'Cada 4 años': 4, 'Cada 5 años': 5,
+export const PERIODICIDADES = ['Mensual', 'Trimestral', 'Semestral', 'Anual', 'Cada 2 años', 'Cada 3 años', 'Cada 4 años', 'Cada 5 años', 'Cada 10 años', 'Único trámite'];
+const MESES_POR_PERIODICIDAD: Record<string, number> = {
+  'Mensual': 1, 'Trimestral': 3, 'Semestral': 6,
+  'Anual': 12, 'Cada 2 años': 24, 'Cada 3 años': 36, 'Cada 4 años': 48, 'Cada 5 años': 60, 'Cada 10 años': 120,
 };
 
-const DIAS_ANTICIPACION_FECHA_LIMITE = 21; // 3 semanas antes del vencimiento
+// Aviso 3 semanas antes del vencimiento; en periodos cortos (mensual,
+// trimestral) se usa una cuarta parte del periodo para que no quede
+// "Por expirar" desde el primer día.
+const DIAS_ANTICIPACION_FECHA_LIMITE = 21;
 
 export interface VigenciaCalculada {
   vigente_hasta: string | null;         // Vigente desde + periodicidad
@@ -70,18 +76,19 @@ export interface VigenciaCalculada {
 export function calcularVigencia(vigenteDesde: string | null, periodicidad: string | null | undefined, hoy: Date): VigenciaCalculada {
   if (!vigenteDesde) return { vigente_hasta: null, fecha_limite_recepcion: null, vigente: null };
 
-  const años = periodicidad ? AÑOS_POR_PERIODICIDAD[periodicidad] : undefined;
-  if (!años) {
+  const meses = periodicidad ? MESES_POR_PERIODICIDAD[periodicidad] : undefined;
+  if (!meses) {
     // "Único trámite": no vuelve a vencer, se queda vigente para siempre.
     return { vigente_hasta: null, fecha_limite_recepcion: null, vigente: 'Si' };
   }
 
   const desde = new Date(vigenteDesde + 'T00:00:00');
   const hasta = new Date(desde);
-  hasta.setFullYear(hasta.getFullYear() + años);
+  hasta.setMonth(hasta.getMonth() + meses);
 
+  const diasPeriodo = Math.round((hasta.getTime() - desde.getTime()) / 86400000);
   const limite = new Date(hasta);
-  limite.setDate(limite.getDate() - DIAS_ANTICIPACION_FECHA_LIMITE);
+  limite.setDate(limite.getDate() - Math.min(DIAS_ANTICIPACION_FECHA_LIMITE, Math.round(diasPeriodo / 4)));
 
   const toISO = (d: Date) => d.toISOString().slice(0, 10);
 
