@@ -376,8 +376,7 @@ export function DetalleModal({ doc, onClose, onSaved, periodicidad }: { doc: Com
     [form.vigente_desde, periodicidad, hoy]
   );
 
-  const guardarTodo = () => {
-    const patch: Partial<ComplianceDoc> = {
+  const construirPatch = (): Partial<ComplianceDoc> => ({
       estado: form.estado,
       vigente: vigencia.vigente,
       materia: form.materia || null,
@@ -388,7 +387,27 @@ export function DetalleModal({ doc, onClose, onSaved, periodicidad }: { doc: Com
       vigente_hasta: vigencia.vigente_hasta,
       año: form.año ? parseInt(form.año, 10) : doc.año,
       responsable: form.responsable.trim() || null,
-    };
+  });
+
+  // Antes de Verificar: la fecha del documento es obligatoria si el concepto
+  // vence (así el sistema calcula el vencimiento y los recordatorios).
+  const guardarAntesDeVerificar = async (): Promise<boolean> => {
+    const vence = !!periodicidad && periodicidad !== 'Único trámite';
+    if (vence && !form.vigente_desde) {
+      toast.error('Captura "Vigente desde" (fecha del documento) antes de verificar', {
+        description: `Con la periodicidad (${periodicidad}) el sistema calcula cuándo vence y manda los recordatorios.`,
+      });
+      return false;
+    }
+    try {
+      const { estado: _omitido, ...resto } = construirPatch();
+      await updateDoc.mutateAsync({ id: doc.id, patch: resto });
+      return true;
+    } catch { return false; }
+  };
+
+  const guardarTodo = () => {
+    const patch = construirPatch();
     updateDoc.mutate(
       { id: doc.id, patch },
       { onSuccess: () => {
@@ -469,7 +488,7 @@ export function DetalleModal({ doc, onClose, onSaved, periodicidad }: { doc: Com
               <input type="number" value={form.año} onChange={set('año')} disabled={updateDoc.isPending} className={inputCls} />
             </div>
             <div>
-              <label className={labelCls}>Vigente desde <span className="normal-case font-normal">(fecha de elaboración)</span></label>
+              <label className={labelCls}>Vigente desde <span className="normal-case font-normal">(fecha del documento)</span></label>
               <input type="date" value={form.vigente_desde} onChange={set('vigente_desde')} disabled={updateDoc.isPending} className={inputCls} />
             </div>
             <div>
@@ -486,6 +505,7 @@ export function DetalleModal({ doc, onClose, onSaved, periodicidad }: { doc: Com
             revisionMotivo={revisionMotivo}
             esAdmin={isAdmin}
             puedeSubir={isAdmin}
+            antesDeVerificar={guardarAntesDeVerificar}
             onCambio={alCambiarExpediente}
           />
 

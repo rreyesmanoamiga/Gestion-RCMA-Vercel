@@ -2,14 +2,14 @@
 // colegio: solo ve los documentos de su colegio y sube los archivos que le
 // faltan. La Coordinación RCMA los revisa y los verifica o rechaza.
 import React, { useMemo, useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabaseClient';
 import PageHeader from '@/components/shared/PageHeader';
 import { usePermissions } from '@/hooks/usePermissions';
 import AccesoRestringido from '@/components/shared/AccesoRestringido';
 import ArchivosDocumento from '@/components/cumplimiento/ArchivosDocumento';
 import { useConteoArchivos } from '@/lib/cumplimientoArchivos';
-import { formatFecha, LoadingBlock } from '@/lib/complianceShared';
+import { formatFecha, LoadingBlock, DetalleModal, type ComplianceDoc } from '@/lib/complianceShared';
 import { COLEGIOS } from '@/lib/colegios';
 
 const COLEGIOS_PC = COLEGIOS.filter(c => c.territorio !== 'FMA' && !c.colegio.startsWith('CLIN'));
@@ -48,7 +48,7 @@ export default function CumplimientoMisDocumentos() {
     queryFn: async () => {
       if (isAdmin) {
         const { data, error } = await supabase.from('compliance_documentos')
-          .select('id, colegio, materia, tipo_documento, norma, estado, vigente, vigente_desde, vigente_hasta, año, revision, revision_motivo')
+          .select('id, colegio, territorio, materia, tipo_documento, norma, estado, vigente, fecha_limite_recepcion, fecha_presentacion, vigente_desde, vigente_hasta, responsable, año, revision, revision_motivo')
           .eq('colegio', colegio!).eq('activo', true).eq('año', anio)
           .order('materia').order('tipo_documento');
         if (error) throw error;
@@ -60,6 +60,27 @@ export default function CumplimientoMisDocumentos() {
     },
   });
   const { data: conteo = {} } = useConteoArchivos(puede);
+  const qc = useQueryClient();
+
+  // Periodicidad de cada concepto (y excepción del colegio) — para que el
+  // formulario calcule el vencimiento a partir de la fecha del documento.
+  const { data: periodicidades } = useQuery({
+    queryKey: ['expediente_periodicidades'],
+    enabled: isAdmin,
+    queryFn: async () => {
+      const [{ data: c }, { data: p }] = await Promise.all([
+        supabase.from('compliance_conceptos').select('id, nombre, periodicidad'),
+        supabase.from('compliance_periodicidad_colegio').select('colegio, concepto_id, periodicidad'),
+      ]);
+      return { conceptos: (c ?? []) as any[], porColegio: (p ?? []) as any[] };
+    },
+  });
+  const periodicidadDe = (col: string, nombre: string) => {
+    const c = periodicidades?.conceptos.find(x => x.nombre === nombre);
+    if (!c) return undefined;
+    return periodicidades?.porColegio.find(x => x.colegio === col && x.concepto_id === c.id)?.periodicidad ?? c.periodicidad;
+  };
+  const refrescarLista = () => { qc.invalidateQueries({ queryKey: ['cumplimiento_mis_documentos'] }); qc.invalidateQueries({ queryKey: ['compliance_archivos_conteo'] }); };
 
   // Días para que venza, calculado hoy (no depende del campo guardado)
   const diasParaVencer = (d: MiDoc) => d.vigente_hasta
@@ -183,7 +204,16 @@ export default function CumplimientoMisDocumentos() {
         </div>
       ))}
 
-      {abierto && (
+      {abierto && isAdmin && (
+        <DetalleModal
+          doc={abierto as unknown as ComplianceDoc}
+          periodicidad={periodicidadDe(abierto.colegio, abierto.tipo_documento)}
+          onClose={() => { setAbierto(null); refrescarLista(); }}
+          onSaved={() => { setAbierto(null); refrescarLista(); }}
+        />
+      )}
+
+      {abierto && !isAdmin && (
         <div className="fixed inset-0 bg-slate-900/50 z-50 flex items-center justify-center p-4" onClick={() => setAbierto(null)}>
           <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
             <div className="flex items-start justify-between px-5 py-4 border-b border-slate-100 bg-slate-50 rounded-t-xl sticky top-0 z-10">

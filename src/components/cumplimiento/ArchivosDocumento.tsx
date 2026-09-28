@@ -18,7 +18,7 @@ export function RevisionBadge({ revision }: { revision: Revision | string | null
 }
 
 export default function ArchivosDocumento({
-  documentoId, revision, revisionMotivo, esAdmin, puedeSubir = true, bloqueado, onCambio,
+  documentoId, revision, revisionMotivo, esAdmin, puedeSubir = true, bloqueado, antesDeVerificar, onCambio,
 }: {
   documentoId: string;
   revision: Revision | string | null | undefined;
@@ -26,6 +26,7 @@ export default function ArchivosDocumento({
   esAdmin: boolean;
   puedeSubir?: boolean;
   bloqueado?: boolean;           // colegio: documento verificado y en vigor
+  antesDeVerificar?: () => Promise<boolean>; // guarda la vigencia antes de verificar
   onCambio?: (tipo?: 'verificado' | 'rechazado') => void;
 }) {
   const { data: archivos = [], isLoading } = useArchivosDocumento(documentoId);
@@ -70,6 +71,7 @@ export default function ArchivosDocumento({
   const verificar = async () => {
     setTrabajando('verificar');
     try {
+      if (antesDeVerificar && !(await antesDeVerificar())) return;
       const r = await accionCumplimiento<{ correo: boolean; destinatario: string | null }>('verificar', { documento_id: documentoId });
       toast.success('Documento verificado', { description: r.correo ? `Se avisó a ${r.destinatario}` : 'Sin correo de administrador en el Directorio; no se envió aviso.' });
       listo('verificado');
