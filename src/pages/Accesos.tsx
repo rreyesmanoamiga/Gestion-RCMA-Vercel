@@ -32,8 +32,8 @@ const getAreaInfo = (value?: string) => AREAS.find(a => a.value === value) ?? nu
 // para RESALTARLOS primero en el formulario; el resto sigue disponible abajo
 // por si hace falta una excepción puntual. No oculta ni bloquea nada.
 const AREA_GRUPOS_RELEVANTES: Record<string, string[]> = {
-  colegio:            ['Dashboard', 'Solicitud de Proyecto', 'Trámites CN', 'Calendario', 'Checklists', 'Minutas', 'NEXUS', 'Programa SOL'],
-  director_colegio:   ['Dashboard', 'Solicitud de Proyecto', 'Trámites CN', 'Calendario', 'Checklists', 'Minutas', 'Reportes', 'NEXUS', 'Programa SOL'],
+  colegio:            ['Dashboard', 'Solicitud de Proyecto', 'Trámites CN', 'Calendario', 'Checklists', 'Minutas', 'NEXUS', 'Programa SOL', 'Expediente de Cumplimiento (colegio)'],
+  director_colegio:   ['Dashboard', 'Solicitud de Proyecto', 'Trámites CN', 'Calendario', 'Checklists', 'Minutas', 'Reportes', 'NEXUS', 'Programa SOL', 'Expediente de Cumplimiento (colegio)'],
   coordinacion_rcma:  ['Dashboard', 'Proyectos', 'Tickets', 'Ticket MAS', 'Trámites CN', 'Reportes', 'Calendario', 'Checklists', 'Cumplimiento'],
   orser_finanzas:     ['Reportes', 'Insumos', 'Proyectos', 'Dashboard'],
   orser_juridico:     ['Reportes', 'Ticket MAS', 'Anteproyectos', 'Minutas', 'Cumplimiento'],

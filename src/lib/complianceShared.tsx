@@ -3,6 +3,9 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { supabase } from '@/lib/supabaseClient';
 import { useScope } from '@/hooks/useScope';
+import { usePermissions } from '@/hooks/usePermissions';
+import ArchivosDocumento from '@/components/cumplimiento/ArchivosDocumento';
+import { accionCumplimiento } from '@/lib/cumplimientoArchivos';
 import { Loader2, AlertTriangle, RefreshCw, X } from 'lucide-react';
 
 export interface ComplianceDoc {
@@ -20,6 +23,8 @@ export interface ComplianceDoc {
   vigente_hasta: string | null;
   responsable: string | null;
   año: number;
+  revision?: string | null;          // por_revisar | verificado | rechazado (expediente digital)
+  revision_motivo?: string | null;
 }
 
 // Materias del catálogo (mismas categorías que "Presupuesto Normativo de Apertura")
@@ -129,7 +134,7 @@ export function useComplianceDocs() {
       while (true) {
         const { data, error } = await supabase
           .from('compliance_documentos')
-          .select('id, colegio, territorio, materia, tipo_documento, norma, estado, vigente, fecha_limite_recepcion, fecha_presentacion, vigente_desde, vigente_hasta, responsable, año')
+          .select('id, colegio, territorio, materia, tipo_documento, norma, estado, vigente, fecha_limite_recepcion, fecha_presentacion, vigente_desde, vigente_hasta, responsable, año, revision, revision_motivo')
           .eq('activo', true)
           .range(desde, desde + bloque - 1);
         if (error) throw error;
@@ -148,6 +153,26 @@ export function useComplianceDocs() {
   );
 
   return { ...query, data };
+}
+
+// Si el estatus pasa a "Verificado" desde las tablas o el formulario, se le
+// avisa al administrador del colegio (igual que con el botón Verificar).
+export function avisarVerificado(docId: string) {
+  accionCumplimiento<{ correo: boolean; destinatario: string | null }>('notificar_verificado', { documento_id: docId })
+    .then(r => { if (r?.correo) toast.success(`Se avisó al colegio (${r.destinatario})`); })
+    .catch(() => { /* sin permiso o sin correo: el cambio de estatus ya quedó guardado */ });
+}
+
+// Varios a la vez (cambio de estado en lote): uno por uno para no saturar el correo
+export async function avisarVerificadoLote(ids: string[]) {
+  let avisados = 0;
+  for (const id of ids) {
+    try {
+      const r = await accionCumplimiento<{ correo: boolean }>('notificar_verificado', { documento_id: id });
+      if (r?.correo) avisados++;
+    } catch { /* sin permiso o sin correo */ }
+  }
+  if (avisados) toast.success(`Se avisó a los colegios de ${avisados} documento(s) verificado(s)`);
 }
 
 export function useUpdateDoc() {
@@ -254,7 +279,11 @@ export function EstadoSelect({ doc, onSaved, className }: { doc: ComplianceDoc; 
         const nuevoEstado = e.target.value;
         updateDoc.mutate(
           { id: doc.id, patch: { estado: nuevoEstado } },
-          { onSuccess: () => { toast.success('Estado actualizado'); onSaved(); } }
+          { onSuccess: () => {
+            toast.success('Estado actualizado');
+            if (nuevoEstado === 'Verificado' && doc.estado !== 'Verificado') avisarVerificado(doc.id);
+            onSaved();
+          } }
         );
       }}
       className={`text-xs font-semibold border rounded-full px-2 py-1 bg-white cursor-pointer disabled:opacity-50 ${className ?? ''}`}
@@ -324,6 +353,9 @@ export function ResponsableInput({ doc, onSaved }: { doc: ComplianceDoc; onSaved
 
 export function DetalleModal({ doc, onClose, onSaved, periodicidad }: { doc: ComplianceDoc; onClose: () => void; onSaved: () => void; periodicidad?: string }) {
   const updateDoc = useUpdateDoc();
+  const { isAdmin } = usePermissions();
+  const [revision, setRevision] = useState<string | null>(doc.revision ?? null);
+  const [revisionMotivo, setRevisionMotivo] = useState<string | null>(doc.revision_motivo ?? null);
 
   const [form, setForm] = useState({
     estado: doc.estado,
@@ -359,8 +391,19 @@ export function DetalleModal({ doc, onClose, onSaved, periodicidad }: { doc: Com
     };
     updateDoc.mutate(
       { id: doc.id, patch },
-      { onSuccess: () => { toast.success('Documento actualizado'); onSaved(); } }
+      { onSuccess: () => {
+        toast.success('Documento actualizado');
+        if (form.estado === 'Verificado' && doc.estado !== 'Verificado' && revision !== 'verificado') avisarVerificado(doc.id);
+        onSaved();
+      } }
     );
+  };
+
+  // Después de Verificar / Rechazar desde el panel de archivos, el formulario
+  // refleja el nuevo estatus para que "Guardar cambios" no lo regrese.
+  const alCambiarExpediente = (tipo?: 'verificado' | 'rechazado') => {
+    if (tipo === 'verificado') { setForm(f => ({ ...f, estado: 'Verificado' })); setRevision('verificado'); setRevisionMotivo(null); }
+    if (tipo === 'rechazado')  { setForm(f => ({ ...f, estado: 'Pendiente' }));  setRevision('rechazado'); }
   };
 
   const inputCls = "w-full text-sm border border-slate-200 rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-[#00295A]/20 disabled:opacity-50";
@@ -436,6 +479,15 @@ export function DetalleModal({ doc, onClose, onSaved, periodicidad }: { doc: Com
               </div>
             </div>
           </div>
+
+          <ArchivosDocumento
+            documentoId={doc.id}
+            revision={revision}
+            revisionMotivo={revisionMotivo}
+            esAdmin={isAdmin}
+            puedeSubir={isAdmin}
+            onCambio={alCambiarExpediente}
+          />
 
           {periodicidad && (
             <div className={`rounded-lg px-3 py-2.5 border ${vigencia.vigente === 'No' || vigencia.vigente === 'Por expirar' ? 'bg-amber-50 border-amber-200' : 'bg-slate-50 border-slate-200'}`}>

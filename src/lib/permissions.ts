@@ -66,6 +66,7 @@ const PERMISSION_DEFS: PermissionDef[] = [
   { key: 'enviar_ticket_mas_cn',      label: 'Enviar Ticket MAS CN',              group: 'Trámites CN',           default: false },
   { key: 'autorizar_ticket_mas_cn',   label: 'Autorizar Ticket MAS CN',           group: 'Trámites CN',           default: false },
   { key: 'cancelar_ticket_mas_cn',    label: 'Cancelar Ticket MAS CN',            group: 'Trámites CN',           default: false },
+  { key: 'subir_cumplimiento',        label: 'Subir documentos de su colegio (solo ve su colegio)', group: 'Expediente de Cumplimiento (colegio)', default: false },
   { key: 'ver_sol',                   label: 'Ver Tablero SOL (ranking nacional)', group: 'Programa SOL',     default: false },
 ];
 

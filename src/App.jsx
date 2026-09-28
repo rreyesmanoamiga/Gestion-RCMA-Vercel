@@ -51,6 +51,7 @@ import CumplimientoDashboard from '@/pages/CumplimientoDashboard';
 import CumplimientoPanelGeneral from '@/pages/CumplimientoPanelGeneral';
 import CumplimientoDocumentos from '@/pages/CumplimientoDocumentos';
 import CumplimientoCatalogo from '@/pages/CumplimientoCatalogo';
+import CumplimientoMisDocumentos from '@/pages/CumplimientoMisDocumentos';
 import CostosLista from '@/pages/CostosLista';
 import JornadaPresupuestal from '@/pages/JornadaPresupuestal';
 import CumplimientoReportesEjecutivos from '@/pages/CumplimientoReportesEjecutivos';
@@ -457,6 +458,7 @@ function AuthenticatedApp() {
           <Route path="/cumplimiento/panel-general" element={<CumplimientoPanelGeneral />} />
           <Route path="/cumplimiento/documentos"    element={<CumplimientoDocumentos />} />
           <Route path="/cumplimiento/catalogo"      element={<CumplimientoCatalogo />} />
+          <Route path="/cumplimiento/mis-documentos" element={<CumplimientoMisDocumentos />} />
           <Route path="/cumplimiento/costos"        element={<CostosLista />} />
           <Route path="/cumplimiento/jornada-presupuestal" element={<JornadaPresupuestal />} />
           <Route path="/cumplimiento/reportes-ejecutivos" element={<CumplimientoReportesEjecutivos />} />

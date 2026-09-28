@@ -94,6 +94,8 @@ export default function Sidebar({ isOpen, onToggle }) {
   const modoSOL = puedeVerSOL && (location.pathname === '/sol' || location.pathname.startsWith('/sol/'));
   const esAdminSOL = isAdmin && (user?.email ?? '').toLowerCase() === 'rreyes@manoamiga.edu.mx';
   const hayOtrosModulos = puedeVerCumplimiento || puedeVerSOL;
+  // Administrador de colegio: sube los documentos de Cumplimiento de SU colegio
+  const puedeSubirCumplimiento = !isAdmin && can('subir_cumplimiento');
 
   const handleNavClick = () => { if (isMobile) onToggle(); };
   const handleLogout   = async () => { await signOut(); };
@@ -172,6 +174,7 @@ export default function Sidebar({ isOpen, onToggle }) {
     { to: '/cumplimiento/panel-general', icon: ShieldCheck, label: 'Panel General de Cumplimiento' },
     { to: '/cumplimiento/documentos',    icon: FileText,    label: 'Validación de Vigencias' },
     ...(isAdmin || can('editar_cumplimiento') ? [{ to: '/cumplimiento/catalogo', icon: Layers, label: 'Catálogo de Cumplimiento' }] : []),
+    ...(puedeSubirCumplimiento ? [{ to: '/cumplimiento/mis-documentos', icon: FolderOpen, label: 'Mis Documentos' }] : []),
   ];
   const cGestionPC = [
     { to: '/cumplimiento/alertas', icon: ShieldAlert, label: 'Inspecciones y Alertas Críticas' },
@@ -387,6 +390,12 @@ export default function Sidebar({ isOpen, onToggle }) {
                 <Link to="/" onClick={handleNavClick} className={navLinkClass('/')}>
                   <LayoutDashboard className="w-[18px] h-[18px]" />
                   Dashboard
+                </Link>
+              )}
+              {puedeSubirCumplimiento && !puedeVerCumplimiento && (
+                <Link to="/cumplimiento/mis-documentos" onClick={handleNavClick} className={navLinkClass('/cumplimiento/mis-documentos')}>
+                  <FolderOpen className="w-[18px] h-[18px]" />
+                  Documentos de Cumplimiento
                 </Link>
               )}
 

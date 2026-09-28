@@ -1,4 +1,5 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { toast } from 'sonner';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabaseClient';
@@ -6,13 +7,15 @@ import { useAuth } from '@/lib/AuthContext';
 import PageHeader from '@/components/shared/PageHeader';
 import {
   Search, ChevronLeft, ChevronRight, Loader2, X, Download,
-  FileSpreadsheet, FileBarChart,
+  FileSpreadsheet, FileBarChart, Paperclip, Send,
 } from 'lucide-react';
+import { RevisionBadge } from '@/components/cumplimiento/ArchivosDocumento';
+import { useConteoArchivos, accionCumplimiento } from '@/lib/cumplimientoArchivos';
 import {
   useComplianceDocs, useUpdateDocsBulk, formatFecha,
   MATERIAS, ESTADOS_EDITABLES, PAGE_SIZE,
   LoadingBlock, ErrorBlock, VigenteBadge, EstadoSelect, ResponsableInput, FechaPresentacionInput, DetalleModal,
-  type ComplianceDoc,
+  avisarVerificadoLote, type ComplianceDoc,
 } from '@/lib/complianceShared';
 import { usePermissions } from '@/hooks/usePermissions';
 import AccesoRestringido from '@/components/shared/AccesoRestringido';
@@ -44,7 +47,12 @@ function BulkToolbar({
     if (!nuevoEstado) { toast.error('Elige un estado antes de aplicar'); return; }
     updateBulk.mutate(
       { ids, patch: { estado: nuevoEstado } },
-      { onSuccess: () => { toast.success(`Estado actualizado en ${ids.length} documento${ids.length !== 1 ? 's' : ''}`); setNuevoEstado(''); onAplicado(); } }
+      { onSuccess: () => {
+        toast.success(`Estado actualizado en ${ids.length} documento${ids.length !== 1 ? 's' : ''}`);
+        // Aviso de "verificado" al colegio, solo para los que no lo estaban
+        if (nuevoEstado === 'Verificado') avisarVerificadoLote(seleccionados.filter(d => d.estado !== 'Verificado').map(d => d.id));
+        setNuevoEstado(''); onAplicado();
+      } }
     );
   };
 
@@ -99,6 +107,18 @@ export default function CumplimientoDocumentos() {
   const [detalle, setDetalle] = useState<ComplianceDoc | null>(null);
   const [generando, setGenerando] = useState<'' | 'excel' | 'pdf_general' | 'pdf_colegio'>('');
   const [seleccionados, setSeleccionados] = useState<Set<string>>(new Set());
+  const [expedienteFiltro, setExpedienteFiltro] = useState<'Todos' | 'por_revisar' | 'con' | 'sin' | 'rechazado'>('Todos');
+  const [solicitando, setSolicitando] = useState(false);
+  const { data: conteoArchivos = {} } = useConteoArchivos();
+
+  // ?doc=<id> (link del correo "requiere verificación") abre ese documento
+  const [params, setParams] = useSearchParams();
+  useEffect(() => {
+    const id = params.get('doc');
+    if (!id || docs.length === 0) return;
+    const d = docs.find(x => x.id === id);
+    if (d) { setDetalle(d); params.delete('doc'); setParams(params, { replace: true }); }
+  }, [params, docs]);
 
   const colegios = useMemo(
     () => Array.from(new Set(
@@ -141,10 +161,29 @@ export default function CumplimientoDocumentos() {
       if (colegioFiltro !== 'Todos' && d.colegio !== colegioFiltro) return false;
       if (estadoFiltro !== 'Todos' && d.estado !== estadoFiltro) return false;
       if (materiaFiltro !== 'Todas' && d.materia !== materiaFiltro) return false;
+      if (expedienteFiltro === 'por_revisar' && d.revision !== 'por_revisar') return false;
+      if (expedienteFiltro === 'rechazado' && d.revision !== 'rechazado') return false;
+      if (expedienteFiltro === 'con' && !conteoArchivos[d.id]) return false;
+      if (expedienteFiltro === 'sin' && conteoArchivos[d.id]) return false;
       if (q && !(`${d.colegio} ${d.tipo_documento} ${d.norma ?? ''}`.toLowerCase().includes(q))) return false;
       return true;
     }).sort((a, b) => a.colegio.localeCompare(b.colegio) || a.tipo_documento.localeCompare(b.tipo_documento));
-  }, [docs, busqueda, territorioFiltro, colegioFiltro, estadoFiltro, materiaFiltro, añoFiltro]);
+  }, [docs, busqueda, territorioFiltro, colegioFiltro, estadoFiltro, materiaFiltro, añoFiltro, expedienteFiltro, conteoArchivos]);
+
+  const porRevisar = useMemo(() => docs.filter(d => d.revision === 'por_revisar').length, [docs]);
+
+  const solicitarFaltantes = async () => {
+    if (colegioFiltro === 'Todos') return;
+    const anio = añoFiltro === 'Todos' ? new Date().getFullYear() : añoFiltro;
+    if (!window.confirm(`¿Enviar al administrador de ${colegioFiltro} la lista de documentos ${anio} que le faltan?`)) return;
+    setSolicitando(true);
+    try {
+      const r = await accionCumplimiento<{ faltantes: number; destinatario?: string; mensaje?: string }>('solicitar_faltantes', { colegio: colegioFiltro, anio });
+      if (r.faltantes === 0) toast.info(r.mensaje ?? 'Este colegio no tiene documentos pendientes');
+      else toast.success(`Solicitud enviada a ${r.destinatario}`, { description: `${r.faltantes} documento(s) pendientes` });
+    } catch (e: any) { toast.error(e.message); }
+    finally { setSolicitando(false); }
+  };
 
   const totalPaginas = Math.max(1, Math.ceil(filtrados.length / PAGE_SIZE));
   const paginaSegura = Math.min(pagina, totalPaginas);
@@ -230,6 +269,19 @@ export default function CumplimientoDocumentos() {
               {generando === 'pdf_general' ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <FileBarChart className="w-3.5 h-3.5" />}
               PDF general
             </button>
+            {isAdmin && colegioFiltro !== 'Todos' && (
+              <button onClick={solicitarFaltantes} disabled={solicitando}
+                className="inline-flex items-center gap-2 px-3 py-1.5 text-xs font-bold rounded-lg border border-orange-300 bg-orange-500 text-white hover:bg-orange-600 disabled:opacity-50">
+                {solicitando ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />}
+                Solicitar faltantes a {colegioFiltro}
+              </button>
+            )}
+            {porRevisar > 0 && (
+              <button onClick={() => { setExpedienteFiltro('por_revisar'); resetPagina(); }}
+                className="inline-flex items-center gap-2 px-3 py-1.5 text-xs font-bold rounded-lg border border-sky-300 bg-sky-50 text-sky-700 hover:bg-sky-100">
+                <Paperclip className="w-3.5 h-3.5" /> {porRevisar} por revisar
+              </button>
+            )}
             {colegioFiltro !== 'Todos' && (
               <button onClick={descargarPDFColegio} disabled={generando !== ''}
                 className="inline-flex items-center gap-2 px-3 py-1.5 text-xs font-bold rounded-lg border border-[#ED7102]/30 bg-[#ED7102]/5 text-[#ED7102] hover:bg-[#ED7102]/10 disabled:opacity-50">
@@ -274,6 +326,14 @@ export default function CumplimientoDocumentos() {
               <option value="Todos">Todos los estados</option>
               {estados.map(s => <option key={s} value={s}>{s}</option>)}
             </select>
+            <select value={expedienteFiltro} onChange={e => { setExpedienteFiltro(e.target.value as any); resetPagina(); }}
+              className="px-3 py-2 text-sm border border-slate-200 rounded-lg bg-white">
+              <option value="Todos">Expediente: todos</option>
+              <option value="por_revisar">Por revisar</option>
+              <option value="con">Con archivos</option>
+              <option value="sin">Sin archivos</option>
+              <option value="rechazado">Rechazados</option>
+            </select>
           </div>
 
           <p className="text-xs text-slate-400 mb-2">{filtrados.length} documentos encontrados</p>
@@ -314,7 +374,15 @@ export default function CumplimientoDocumentos() {
                       <td className="px-4 py-2.5 text-slate-800 whitespace-nowrap">{d.colegio.replace('Mano Amiga ', '')}</td>
                       <td className="px-4 py-2.5 text-slate-500 whitespace-nowrap font-mono text-xs">{d.año}</td>
                       <td className="px-4 py-2.5 text-slate-500 whitespace-nowrap">{d.territorio}</td>
-                      <td className="px-4 py-2.5 text-slate-700 font-medium">{d.tipo_documento}</td>
+                      <td className="px-4 py-2.5 text-slate-700 font-medium">
+                        <span>{d.tipo_documento}</span>
+                        {(conteoArchivos[d.id] || d.revision) && (
+                          <span className="flex items-center gap-1.5 mt-0.5">
+                            {conteoArchivos[d.id] ? <span className="inline-flex items-center gap-0.5 text-[10px] font-bold text-slate-500"><Paperclip className="w-3 h-3" />{conteoArchivos[d.id]}</span> : null}
+                            <RevisionBadge revision={d.revision} />
+                          </span>
+                        )}
+                      </td>
                       <td className="px-4 py-2.5 text-slate-500 whitespace-nowrap">{d.materia ?? '—'}</td>
                       <td className="px-4 py-2.5"><EstadoSelect doc={d} onSaved={() => {}} /></td>
                       <td className="px-4 py-2.5"><VigenteBadge vigente={d.vigente} /></td>
