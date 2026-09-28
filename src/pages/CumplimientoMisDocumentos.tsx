@@ -11,6 +11,7 @@ import ArchivosDocumento from '@/components/cumplimiento/ArchivosDocumento';
 import { useConteoArchivos } from '@/lib/cumplimientoArchivos';
 import { formatFecha, LoadingBlock, DetalleModal, type ComplianceDoc } from '@/lib/complianceShared';
 import { COLEGIOS } from '@/lib/colegios';
+import AvisosColegiosModal, { EstadoAvisos, useAvisosColegios } from '@/components/cumplimiento/AvisosColegios';
 
 const COLEGIOS_PC = COLEGIOS.filter(c => c.territorio !== 'FMA' && !c.colegio.startsWith('CLIN'));
 import { FolderOpen, CheckCircle2, Clock, XCircle, Upload, ChevronRight, X, Search, AlertTriangle } from 'lucide-react';
@@ -41,6 +42,8 @@ export default function CumplimientoMisDocumentos() {
   const [abierto, setAbierto] = useState<MiDoc | null>(null);
   const [filtro, setFiltro] = useState<'todos' | Situacion>('todos');
   const [busqueda, setBusqueda] = useState('');
+  const [verAvisos, setVerAvisos] = useState(false);
+  const { data: avisos = {} } = useAvisosColegios(isAdmin);
 
   const { data: docs = [], isLoading, error } = useQuery({
     queryKey: ['cumplimiento_mis_documentos', anio, isAdmin ? colegio : 'propio'],
@@ -126,7 +129,8 @@ export default function CumplimientoMisDocumentos() {
       {isAdmin ? (
         <div className="flex items-start justify-between gap-4 flex-wrap">
           <PageHeader title="Expediente por Colegio" subtitle={`Documentos de Cumplimiento ${anio} · ${colegio}`} />
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
+            <EstadoAvisos aviso={avisos[colegioAdmin]} onClick={() => setVerAvisos(true)} />
             <select value={colegioAdmin} onChange={e => { setColegioAdmin(e.target.value); setAbierto(null); }}
               className="text-sm font-bold text-slate-700 border border-slate-300 rounded-lg px-3 py-2 bg-white">
               {COLEGIOS_PC.map(c => <option key={c.colegio} value={c.colegio}>{c.colegio} — {c.territorio}</option>)}
@@ -203,6 +207,8 @@ export default function CumplimientoMisDocumentos() {
           </div>
         </div>
       ))}
+
+      {verAvisos && <AvisosColegiosModal onClose={() => setVerAvisos(false)} resaltar={colegioAdmin} />}
 
       {abierto && isAdmin && (
         <DetalleModal

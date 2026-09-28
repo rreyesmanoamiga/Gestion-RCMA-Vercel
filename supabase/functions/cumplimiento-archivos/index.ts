@@ -292,6 +292,11 @@ serve(async (req) => {
       const correos = String(data?.adm_correo ?? '').split(/[;,\s]+/).map(c => c.trim()).filter(c => c.includes('@'));
       return { nombreColegio: data?.nombre || colegio, admNombre: data?.adm_nombre || '', admCorreo: correos.join(', '), admCorreos: correos };
     };
+    // ¿Está encendido este aviso para el colegio? (Expediente por Colegio → Avisos a colegios)
+    const avisoActivo = async (colegio: string, campo: 'avisar_verificado' | 'avisar_rechazado') => {
+      const { data } = await db.from('compliance_avisos_colegio').select(campo).eq('colegio', colegio).maybeSingle();
+      return (data as any)?.[campo] === true;
+    };
     const notificarAdmin = async (titulo: string, mensaje: string, link: string, tipo = 'info') => {
       const { data: p } = await db.from('user_permissions').select('user_id').ilike('user_email', patronCorreo(ADMIN_EMAIL)).limit(1).maybeSingle();
       if (p?.user_id) await db.from('notificaciones').insert({ usuario_id: p.user_id, tipo, titulo, mensaje, link, modulo: 'cumplimiento' });
@@ -430,6 +435,8 @@ serve(async (req) => {
       }
       const { nombreColegio, admNombre, admCorreo } = await contactoColegio(d.colegio);
       let correo = false;
+      const activoV = await avisoActivo(d.colegio, 'avisar_verificado');
+      if (!activoV) return json({ ok: true, correo: false, aviso_desactivado: true, destinatario: null });
       if (admCorreo) {
         try {
           await sendEmail(admCorreo, `✅ [RCMA] Documento verificado: ${d.tipo_documento}`, plantilla({
@@ -466,6 +473,8 @@ serve(async (req) => {
 
       const { nombreColegio, admNombre, admCorreo } = await contactoColegio(d.colegio);
       let correo = false;
+      const activoR = await avisoActivo(d.colegio, 'avisar_rechazado');
+      if (!activoR) return json({ ok: true, correo: false, aviso_desactivado: true, destinatario: null, archivos_borrados: (archivos ?? []).length });
       if (admCorreo) {
         try {
           await sendEmail(admCorreo, `❌ [RCMA] Documento rechazado: ${d.tipo_documento}`, plantilla({

@@ -72,8 +72,8 @@ export default function ArchivosDocumento({
     setTrabajando('verificar');
     try {
       if (antesDeVerificar && !(await antesDeVerificar())) return;
-      const r = await accionCumplimiento<{ correo: boolean; destinatario: string | null }>('verificar', { documento_id: documentoId });
-      toast.success('Documento verificado', { description: r.correo ? `Se avisó a ${r.destinatario}` : 'Sin correo de administrador en el Directorio; no se envió aviso.' });
+      const r = await accionCumplimiento<{ correo: boolean; destinatario: string | null; aviso_desactivado?: boolean }>('verificar', { documento_id: documentoId });
+      toast.success('Documento verificado', { description: r.aviso_desactivado ? 'Avisos a este colegio apagados: no se envió correo.' : r.correo ? `Se avisó a ${r.destinatario}` : 'Sin correo de administrador en el Directorio; no se envió aviso.' });
       listo('verificado');
     } catch (e: any) { toast.error(e.message); }
     finally { setTrabajando(null); }
@@ -83,8 +83,8 @@ export default function ArchivosDocumento({
     if (!motivo.trim()) { toast.error('Escribe el motivo del rechazo'); return; }
     setTrabajando('rechazar');
     try {
-      const r = await accionCumplimiento<{ correo: boolean; destinatario: string | null; archivos_borrados: number }>('rechazar', { documento_id: documentoId, motivo });
-      toast.success('Documento rechazado', { description: `${r.archivos_borrados} archivo(s) eliminados${r.correo ? ` · se avisó a ${r.destinatario}` : ''}` });
+      const r = await accionCumplimiento<{ correo: boolean; destinatario: string | null; archivos_borrados: number; aviso_desactivado?: boolean }>('rechazar', { documento_id: documentoId, motivo });
+      toast.success('Documento rechazado', { description: `${r.archivos_borrados} archivo(s) eliminados${r.aviso_desactivado ? ' · avisos a este colegio apagados: no se envió correo' : r.correo ? ` · se avisó a ${r.destinatario}` : ''}` });
       setRechazando(false); setMotivo('');
       listo('rechazado');
     } catch (e: any) { toast.error(e.message); }

@@ -234,6 +234,12 @@ serve(async (req) => {
     }
 
     const { data: dir } = await db.from('directorio').select('codigo, nombre, adm_nombre, adm_correo');
+    // Solo colegios con los recordatorios ENCENDIDOS (Expediente por Colegio → Avisos a colegios).
+    // A los apagados no se les manda ni se marca nada: si luego se encienden,
+    // el aviso pendiente sale en la siguiente corrida.
+    const { data: avisos } = await db.from('compliance_avisos_colegio').select('colegio, avisar_recordatorios');
+    const conRecordatorio = new Set((avisos ?? []).filter((a: any) => a.avisar_recordatorios).map((a: any) => a.colegio));
+    for (const col of Array.from(porColegio.keys())) if (!conRecordatorio.has(col)) porColegio.delete(col);
     const contacto = new Map((dir ?? []).map((r: any) => [r.codigo, r]));
 
     const resultado: any[] = [];
