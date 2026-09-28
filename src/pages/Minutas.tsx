@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabaseClient';
 import { toast } from 'sonner';
@@ -119,7 +120,11 @@ export default function Minutas() {
   const [search, setSearch]           = useState('');
   const [filterTipo, setFilterTipo]   = useState<'all' | 'minuta' | 'nota_tecnica'>('all');
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
-  const [vistaActiva, setVistaActiva] = useState<'documentos' | 'acuerdos'>('documentos');
+  // ?vista=acuerdos (p. ej. desde NEXUS) abre directo el Seguimiento de Acuerdos
+  const [searchParams] = useSearchParams();
+  const [vistaActiva, setVistaActiva] = useState<'documentos' | 'acuerdos'>(
+    searchParams.get('vista') === 'acuerdos' ? 'acuerdos' : 'documentos'
+  );
   const [showForm, setShowForm]       = useState(false);
   const [editItem, setEditItem]       = useState<Minuta | null>(null);
   const [deleteItem, setDeleteItem]   = useState<Minuta | null>(null);

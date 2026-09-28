@@ -9,17 +9,21 @@ import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { logAudit } from '@/lib/audit';
 import { notifyByEmail } from '@/lib/notifications';
+import { Link as RouterLink } from 'react-router-dom';
 import {
   Plus, X, Pencil, Trash2, CheckCircle2, Clock, AlertCircle,
   MessageSquare, Send, FileText, Pin, Search, Download,
   BookOpen, ListChecks, Users, MapPin, Building2, Link2,
-  ClipboardList, BarChart3, Ban,
+  ClipboardList, BarChart3, Ban, Handshake, Wrench, ExternalLink, Lock,
 } from 'lucide-react';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 interface Nota      { id: string; titulo: string; contenido: string; categoria: string; color: string; fijada: boolean; colegio: string; territorio: string; created_at: string; updated_at: string; }
 interface Pendiente { id: string; titulo: string; descripcion: string; tipo: string; asignado_a: string; asignado_nombre: string; asignado_cc: string; asignado_cc_nombre: string; prioridad: string; fecha_limite: string | null; estatus: string; completado_at: string | null; created_by: string; created_at: string;
-  proyecto_id?: string; proyecto_nombre?: string; ticket_id?: string; ticket_folio?: string; colegio?: string; territorio?: string; }
+  proyecto_id?: string; proyecto_nombre?: string; ticket_id?: string; ticket_folio?: string; colegio?: string; territorio?: string;
+  // Vínculo con Minutas (lo llenan los triggers de la base de datos)
+  acuerdo_id?: string | null; minuta_id?: string | null; origen?: 'acuerdo' | 'accion' | null; origen_numero?: number | null;
+  origen_asunto?: string | null; origen_fecha?: string | null; origen_responsable?: string | null; origen_url?: string | null; }
 interface Comentario { id: string; pendiente_id: string; autor_email: string; autor_nombre: string; contenido: string; leido: boolean; created_at: string; }
 interface Seguimiento { id: string; proyecto_id: string; proyecto_nombre: string; territorio: string; colegio: string; estatus: 'activo'|'completado'|'cancelado'; completado_at: string | null; cancelado_at: string | null; created_at: string; presentado_semana: boolean; }
 interface SeguimientoAnteproyecto { id: string; anteproyecto_id: string; anteproyecto_nombre: string; territorio: string; colegio: string; estatus: 'activo'|'completado'; completado_at: string | null; created_at: string; }
@@ -38,6 +42,14 @@ const EST_CFG: Record<string,{label:string;icon:React.ReactNode;cls:string;cardB
   en_proceso: { label:'En Proceso', icon:<AlertCircle className="w-3 h-3"/>,  cls:'bg-blue-100 text-blue-700 border-blue-200',       cardBorder:'border-t-blue-400'    },
   completado: { label:'Completado', icon:<CheckCircle2 className="w-3 h-3"/>, cls:'bg-emerald-100 text-emerald-700 border-emerald-200', cardBorder:'border-t-emerald-400' },
 };
+// Pendientes que vienen de Minutas: cada origen con su propio color e ícono
+const ORIGEN_CFG: Record<'acuerdo'|'accion', { label:string; corto:string; doc:string; Icon:React.ElementType; band:string; soft:string; chip:string; ring:string }> = {
+  acuerdo: { label:'Acuerdo de minuta',      corto:'Acuerdo', doc:'Minuta',       Icon:Handshake, band:'bg-indigo-600', soft:'bg-indigo-50 border-indigo-200 text-indigo-900', chip:'bg-indigo-50 text-indigo-700 border-indigo-200', ring:'ring-indigo-200' },
+  accion:  { label:'Acción de nota técnica', corto:'Acción',  doc:'Nota técnica', Icon:Wrench,    band:'bg-orange-600', soft:'bg-orange-50 border-orange-200 text-orange-900', chip:'bg-orange-50 text-orange-700 border-orange-200', ring:'ring-orange-200' },
+};
+const origenDe = (p: { acuerdo_id?: string|null; origen?: string|null }) =>
+  p.acuerdo_id && (p.origen === 'acuerdo' || p.origen === 'accion') ? ORIGEN_CFG[p.origen] : null;
+
 const fmtDate = (d?: string | null) => d ? format(new Date(d.includes('T') ? d : d + 'T12:00:00'), "d MMM yyyy", { locale: es }) : '—';
 const fmtFull = (d?: string | null) => d ? format(new Date(d), "d MMM yyyy HH:mm", { locale: es }) : '—';
 const inputCls  = "w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-slate-900 focus:outline-none bg-white";
@@ -478,7 +490,8 @@ export default function Nexus() {
   const [editPend,  setEditPend]  = useState<Pendiente|null>(null);
   const [viewNota,  setViewNota]  = useState<Nota|null>(null);
   const [viewPend,  setViewPend]  = useState<Pendiente|null>(null);
-  const [confirmDel, setConfirmDel] = useState<{type:'nota'|'pendiente';id:string;titulo:string}|null>(null);
+  const [confirmDel, setConfirmDel] = useState<{type:'nota'|'pendiente';id:string;titulo:string;origen?:'acuerdo'|'accion'|null;completado?:boolean}|null>(null);
+  const [filtroOrigen, setFiltroOrigen] = useState<'todos'|'acuerdo'|'accion'|'otros'>('todos');
 
   // ── Queries ───────────────────────────────────────────────────────────────
   const { data: allUsers = [] } = useQuery({ queryKey:['sys_users_nexus'], queryFn: async()=>{ const {data}=await supabase.from('user_permissions').select('user_email, nombre, territorio, colegio, puesto').neq('user_email',userEmail); return (data??[]) as SysUser[]; }, enabled:isAdmin });
@@ -703,7 +716,12 @@ export default function Nexus() {
       }
       logAudit({ accion: 'completar', modulo: 'nexus', registro_id: p.id, registro_ref: p.titulo });
     },
-    onSuccess: () => { qc.invalidateQueries({queryKey:['nexus_pendientes']}); toast.success('Pendiente completado ✓'); }
+    onSuccess: (_d, p) => {
+      qc.invalidateQueries({queryKey:['nexus_pendientes']});
+      const o = origenDe(p);
+      if (o) { qc.invalidateQueries({queryKey:['minuta_acuerdos']}); qc.invalidateQueries({queryKey:['acuerdos_seguimiento']}); }
+      toast.success(o ? `${o.corto} completado ✓ — también quedó Cumplido en Minutas` : 'Pendiente completado ✓');
+    }
   });
 
   const deleteMutation = useMutation({
@@ -712,7 +730,7 @@ export default function Nexus() {
       else{ await supabase.from('nexus_comentarios').delete().eq('pendiente_id',id); await supabase.from('nexus_pendientes').delete().eq('id',id); }
       logAudit({ accion: 'eliminar', modulo: 'nexus', registro_id: id, registro_ref: type });
     },
-    onSuccess:()=>{ qc.invalidateQueries({queryKey:['nexus_notas']}); qc.invalidateQueries({queryKey:['nexus_pendientes']}); toast.success('Eliminado'); setConfirmDel(null); }
+    onSuccess:()=>{ qc.invalidateQueries({queryKey:['nexus_notas']}); qc.invalidateQueries({queryKey:['nexus_pendientes']}); qc.invalidateQueries({queryKey:['minuta_acuerdos']}); toast.success('Eliminado'); setConfirmDel(null); }
   });
 
   // Marcar comentarios como leídos cuando se abre el pendiente
@@ -735,7 +753,16 @@ export default function Nexus() {
   const kpis = useMemo(()=>({ total: pendientes.length, personales: pendientes.filter(p=>p.tipo==='personal').length, compartidos: pendientes.filter(p=>p.tipo==='compartido').length, completados: pendientes.filter(p=>p.estatus==='completado').length, urgentes: pendientes.filter(p=>p.prioridad==='urgente'&&p.estatus!=='completado').length, activos: pendientes.filter(p=>p.estatus!=='completado').length, }),[pendientes]);
 
   const filteredNotas   = useMemo(()=>notas.filter(n=>!search||n.titulo.toLowerCase().includes(search.toLowerCase())||n.contenido.toLowerCase().includes(search.toLowerCase())),[notas,search]);
-  const pendPersonales  = useMemo(()=>pendientes.filter(p=>p.tipo==='personal'),[pendientes]);
+  const pendPersonalesTodos = useMemo(()=>pendientes.filter(p=>p.tipo==='personal'),[pendientes]);
+  const conteoOrigen = useMemo(()=>{
+    const act = pendPersonalesTodos.filter(p=>p.estatus!=='completado');
+    return { todos: act.length, acuerdo: act.filter(p=>origenDe(p)&&p.origen==='acuerdo').length, accion: act.filter(p=>origenDe(p)&&p.origen==='accion').length, otros: act.filter(p=>!origenDe(p)).length };
+  },[pendPersonalesTodos]);
+  const pendPersonales  = useMemo(()=>pendPersonalesTodos.filter(p=>{
+    if (filtroOrigen==='todos') return true;
+    const o = origenDe(p);
+    return filtroOrigen==='otros' ? !o : (!!o && p.origen===filtroOrigen);
+  }),[pendPersonalesTodos, filtroOrigen]);
   const pendCompartidos = useMemo(()=>isAdmin?pendientes.filter(p=>p.tipo==='compartido'):pendientes,[pendientes,isAdmin]);
 
   // ── Tarjeta de Pendiente ──────────────────────────────────────────────────
@@ -744,9 +771,16 @@ export default function Nexus() {
     const eCfg   = EST_CFG[p.estatus];
     const coment = comentariosMap[p.id];
     const hasComents = coment && coment.count > 0;
+    const org = origenDe(p);
     return (
       <div onClick={() => { setViewPend(p); marcarComentariosLeidos(p.id); }}
-        className={`bg-white rounded-xl border border-slate-200 border-t-4 border-l-4 ${eCfg?.cardBorder??'border-t-slate-300'} ${pCfg?.cardLeft??'border-l-slate-300'} shadow-sm overflow-hidden flex flex-col cursor-pointer hover:shadow-md transition`}>
+        className={`bg-white rounded-xl border border-slate-200 border-t-4 border-l-4 ${eCfg?.cardBorder??'border-t-slate-300'} ${pCfg?.cardLeft??'border-l-slate-300'} ${org?`ring-2 ${org.ring}`:''} shadow-sm overflow-hidden flex flex-col cursor-pointer hover:shadow-md transition`}>
+        {org && (
+          <div className={`${org.band} text-white px-4 py-1.5 flex items-center gap-1.5`}>
+            <org.Icon className="w-3.5 h-3.5 shrink-0"/>
+            <span className="text-[10px] font-black uppercase tracking-wider truncate">{org.label}{p.origen_numero?` #${p.origen_numero}`:''}</span>
+          </div>
+        )}
         <div className="p-4 flex-1">
           <div className="flex items-start justify-between gap-2 mb-2">
             <h3 className={`font-black text-sm text-slate-900 leading-snug ${p.estatus==='completado'?'line-through text-slate-400':''}`}>{p.titulo}</h3>
@@ -754,8 +788,16 @@ export default function Nexus() {
           </div>
 
           {/* Descripción */}
-          {p.descripcion && (
+          {p.descripcion && !(org && p.descripcion === p.titulo) && (
             <p className="text-xs text-slate-500 line-clamp-2 mb-2">{p.descripcion}</p>
+          )}
+
+          {/* Minuta / nota técnica de origen */}
+          {org && (
+            <div className={`rounded-lg border px-2.5 py-1.5 mb-2 text-[11px] leading-snug ${org.soft}`}>
+              <p className="font-bold truncate"><FileText className="w-3 h-3 inline mr-1 -mt-0.5"/>{org.doc}: {p.origen_asunto || 'Sin asunto'}{p.origen_fecha?` · ${fmtDate(p.origen_fecha)}`:''}</p>
+              {p.origen_responsable && <p className="opacity-80 truncate">Responsable: <span className="font-semibold">{p.origen_responsable}</span></p>}
+            </div>
           )}
 
           {/* Proyecto / Ticket */}
@@ -813,9 +855,9 @@ export default function Nexus() {
           <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-bold border ${eCfg?.cls}`}>{eCfg?.icon}{eCfg?.label}</span>
           <div className="flex items-center gap-1">
             {isAdmin && p.estatus!=='completado' && <button type="button" onClick={e=>{e.stopPropagation();completarPend.mutate(p);}} className="p-1.5 text-emerald-500 hover:text-emerald-700 hover:bg-emerald-50 rounded-lg transition" title="Completar"><CheckCircle2 className="w-4 h-4"/></button>}
-            {isAdmin&&p.estatus!=='completado' && <button type="button" onClick={e=>{e.stopPropagation();openPend(p);}} className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition"><Pencil className="w-3.5 h-3.5"/></button>}
+            {isAdmin&&p.estatus!=='completado'&&!org && <button type="button" onClick={e=>{e.stopPropagation();openPend(p);}} className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition"><Pencil className="w-3.5 h-3.5"/></button>}
             {p.estatus==='completado' && <button type="button" onClick={async e=>{e.stopPropagation();const items=await supabase.from('nexus_comentarios').select('*').eq('pendiente_id',p.id).order('created_at').then(r=>r.data??[]); generarPDFPendiente(p,items as Comentario[]);}} className="p-1.5 text-slate-400 hover:text-teal-600 rounded-lg transition" title="PDF"><Download className="w-4 h-4"/></button>}
-            {isAdmin && <button type="button" onClick={e=>{e.stopPropagation();setConfirmDel({type:'pendiente',id:p.id,titulo:p.titulo});}} className="p-1.5 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition"><Trash2 className="w-3.5 h-3.5"/></button>}
+            {isAdmin && <button type="button" onClick={e=>{e.stopPropagation();setConfirmDel({type:'pendiente',id:p.id,titulo:p.titulo,origen:org?p.origen:null,completado:p.estatus==='completado'});}} className="p-1.5 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition"><Trash2 className="w-3.5 h-3.5"/></button>}
             {/* Ícono comentarios — con color e indicador si hay comentarios */}
             <div className="relative p-1.5">
               <MessageSquare className={`w-3.5 h-3.5 ${hasComents ? 'text-teal-500' : 'text-slate-300'}`}/>
@@ -845,6 +887,7 @@ export default function Nexus() {
         const pCfg   = PRIO_CFG[p.prioridad];
         const coment = comentariosMap[p.id];
         const hasComents = coment && coment.count > 0;
+        const org = origenDe(p);
         return (
           <div key={p.id}
             onClick={() => { setViewPend(p); marcarComentariosLeidos(p.id); }}
@@ -856,6 +899,7 @@ export default function Nexus() {
                 <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold border shrink-0 ${pCfg?.cls}`}>{pCfg?.label}</span>
               </div>
               <div className="flex items-center gap-2 flex-wrap mt-0.5">
+                {org && <span className={`inline-flex items-center gap-1 text-[10px] font-bold border px-2 py-0.5 rounded-full ${org.chip}`}><org.Icon className="w-3 h-3"/>{org.corto}{p.origen_numero?` #${p.origen_numero}`:''} · {p.origen_asunto || org.doc}</span>}
                 {p.proyecto_nombre && <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-blue-700 bg-blue-50 border border-blue-200 px-2 py-0.5 rounded-full"><ClipboardList className="w-3 h-3"/>{p.proyecto_nombre}</span>}
                 {p.ticket_folio && <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-purple-700 bg-purple-50 border border-purple-200 px-2 py-0.5 rounded-full"><Link2 className="w-3 h-3"/>{p.ticket_folio}</span>}
                 {p.colegio && <span className="text-[10px] font-semibold text-slate-500 bg-slate-100 px-2 py-0.5 rounded-full"><Building2 className="w-2.5 h-2.5 inline mr-0.5"/>{p.colegio}</span>}
@@ -864,7 +908,7 @@ export default function Nexus() {
             </div>
             <div className="flex items-center gap-1 shrink-0" onClick={e => e.stopPropagation()}>
               <button type="button" onClick={async e=>{e.stopPropagation();const items2=await supabase.from('nexus_comentarios').select('*').eq('pendiente_id',p.id).order('created_at').then(r=>r.data??[]); generarPDFPendiente(p,items2 as Comentario[]);}} className="p-1.5 text-slate-400 hover:text-teal-600 rounded-lg transition" title="PDF"><Download className="w-4 h-4"/></button>
-              {isAdmin && <button type="button" onClick={e=>{e.stopPropagation();setConfirmDel({type:'pendiente',id:p.id,titulo:p.titulo});}} className="p-1.5 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition"><Trash2 className="w-3.5 h-3.5"/></button>}
+              {isAdmin && <button type="button" onClick={e=>{e.stopPropagation();setConfirmDel({type:'pendiente',id:p.id,titulo:p.titulo,origen:org?p.origen:null,completado:true});}} className="p-1.5 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition"><Trash2 className="w-3.5 h-3.5"/></button>}
               <div className="relative p-1.5">
                 <MessageSquare className={`w-3.5 h-3.5 ${hasComents ? 'text-teal-500' : 'text-slate-300'}`}/>
                 {hasComents && (
@@ -918,7 +962,7 @@ export default function Nexus() {
       {/* Tabs */}
       <div className="flex gap-1 bg-slate-100 rounded-lg p-1 w-fit">
         {isAdmin&&<button type="button" onClick={()=>setTab('notas')} className={`flex items-center gap-1.5 px-4 py-2 rounded-md text-sm font-semibold transition ${tab==='notas'?'bg-white text-slate-900 shadow-sm':'text-slate-500 hover:text-slate-700'}`}><FileText className="w-4 h-4"/>Notas<span className={`ml-1 text-xs px-1.5 py-0.5 rounded-full font-bold ${tab==='notas'?'bg-slate-900 text-white':'bg-slate-200 text-slate-500'}`}>{notas.length}</span></button>}
-        {isAdmin&&<button type="button" onClick={()=>setTab('personales')} className={`flex items-center gap-1.5 px-4 py-2 rounded-md text-sm font-semibold transition ${tab==='personales'?'bg-white text-slate-900 shadow-sm':'text-slate-500 hover:text-slate-700'}`}><ListChecks className="w-4 h-4"/>Mis Pendientes<span className={`ml-1 text-xs px-1.5 py-0.5 rounded-full font-bold ${tab==='personales'?'bg-slate-900 text-white':'bg-slate-200 text-slate-500'}`}>{pendPersonales.filter(p=>p.estatus!=='completado').length}</span></button>}
+        {isAdmin&&<button type="button" onClick={()=>setTab('personales')} className={`flex items-center gap-1.5 px-4 py-2 rounded-md text-sm font-semibold transition ${tab==='personales'?'bg-white text-slate-900 shadow-sm':'text-slate-500 hover:text-slate-700'}`}><ListChecks className="w-4 h-4"/>Mis Pendientes<span className={`ml-1 text-xs px-1.5 py-0.5 rounded-full font-bold ${tab==='personales'?'bg-slate-900 text-white':'bg-slate-200 text-slate-500'}`}>{pendPersonalesTodos.filter(p=>p.estatus!=='completado').length}</span></button>}
         <button type="button" onClick={()=>setTab('compartidos')} className={`flex items-center gap-1.5 px-4 py-2 rounded-md text-sm font-semibold transition ${tab==='compartidos'?'bg-white text-slate-900 shadow-sm':'text-slate-500 hover:text-slate-700'}`}><Users className="w-4 h-4"/>{isAdmin?'Compartidos':'Mis Pendientes'}<span className={`ml-1 text-xs px-1.5 py-0.5 rounded-full font-bold ${tab==='compartidos'?'bg-slate-900 text-white':'bg-slate-200 text-slate-500'}`}>{pendCompartidos.filter(p=>p.estatus!=='completado').length}</span></button>
         {isAdmin&&<button type="button" onClick={()=>setTab('seguimiento')} className={`flex items-center gap-1.5 px-4 py-2 rounded-md text-sm font-semibold transition ${tab==='seguimiento'?'bg-white text-slate-900 shadow-sm':'text-slate-500 hover:text-slate-700'}`}><ClipboardList className="w-4 h-4"/>Seguimiento Proyectos<span className={`ml-1 text-xs px-1.5 py-0.5 rounded-full font-bold ${tab==='seguimiento'?'bg-slate-900 text-white':'bg-slate-200 text-slate-500'}`}>{seguimientosActivos.length}</span></button>}
         {isAdmin&&<button type="button" onClick={()=>setTab('seg_ante')} className={`flex items-center gap-1.5 px-4 py-2 rounded-md text-sm font-semibold transition ${tab==='seg_ante'?'bg-white text-slate-900 shadow-sm':'text-slate-500 hover:text-slate-700'}`}><ClipboardList className="w-4 h-4"/>Seguimiento Anteproyectos<span className={`ml-1 text-xs px-1.5 py-0.5 rounded-full font-bold ${tab==='seg_ante'?'bg-slate-900 text-white':'bg-slate-200 text-slate-500'}`}>{seguimientosAnteActivos.length}</span></button>}
@@ -959,6 +1003,23 @@ export default function Nexus() {
       {/* ── Pendientes ───────────────────────────────────────────────────── */}
       {(tab==='personales'||tab==='compartidos')&&(
         <div className="space-y-6">
+          {/* Filtro por origen — solo si hay acuerdos/acciones de Minutas */}
+          {tab==='personales' && (conteoOrigen.acuerdo>0 || conteoOrigen.accion>0 || filtroOrigen!=='todos') && (
+            <div className="flex items-center gap-2 flex-wrap">
+              {([
+                { k:'todos',   label:'Todos',                cls:'bg-slate-900 text-white border-slate-900', Icon:ListChecks },
+                { k:'acuerdo', label:'Acuerdos de minuta',   cls:'bg-indigo-600 text-white border-indigo-600', Icon:Handshake },
+                { k:'accion',  label:'Acciones de nota técnica', cls:'bg-orange-600 text-white border-orange-600', Icon:Wrench },
+                { k:'otros',   label:'Otros pendientes',     cls:'bg-slate-600 text-white border-slate-600', Icon:ClipboardList },
+              ] as const).map(f => (
+                <button key={f.k} type="button" onClick={()=>setFiltroOrigen(f.k)}
+                  className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold border transition ${filtroOrigen===f.k?f.cls:'bg-white text-slate-600 border-slate-200 hover:border-slate-400'}`}>
+                  <f.Icon className="w-3.5 h-3.5"/>{f.label}
+                  <span className={`px-1.5 rounded-full text-[10px] ${filtroOrigen===f.k?'bg-white/25':'bg-slate-100'}`}>{conteoOrigen[f.k]}</span>
+                </button>
+              ))}
+            </div>
+          )}
           {/* Activos */}
           {(tab==='personales'?pendPersonales:pendCompartidos).filter(p=>p.estatus!=='completado').length===0 && <div className="text-center py-12"><CheckCircle2 className="w-10 h-10 text-emerald-200 mx-auto mb-3"/><p className="text-sm font-semibold text-slate-500">¡Todo al día!</p></div>}
           <PendGrid items={(tab==='personales'?pendPersonales:pendCompartidos).filter(p=>p.estatus!=='completado')}/>
@@ -1138,8 +1199,28 @@ export default function Nexus() {
               <span className="text-xs text-slate-400 ml-auto">{fmtDate(viewPend.created_at)}</span>
             </div>
 
+            {/* Origen: acuerdo de minuta / acción de nota técnica */}
+            {(() => { const org = origenDe(viewPend); if (!org) return null; return (
+              <div className={`rounded-xl border overflow-hidden ${org.soft}`}>
+                <div className={`${org.band} text-white px-4 py-2 flex items-center gap-2`}>
+                  <org.Icon className="w-4 h-4"/>
+                  <span className="text-xs font-black uppercase tracking-wider">{org.label}{viewPend.origen_numero?` #${viewPend.origen_numero}`:''}</span>
+                </div>
+                <div className="px-4 py-3 grid grid-cols-2 gap-3 text-sm">
+                  <div className="col-span-2"><p className="text-[10px] font-bold uppercase opacity-60 mb-0.5">{org.doc}</p><p className="font-bold">{viewPend.origen_asunto || 'Sin asunto'}</p></div>
+                  {viewPend.origen_fecha && <div><p className="text-[10px] font-bold uppercase opacity-60 mb-0.5">Fecha de la {org.doc.toLowerCase()}</p><p className="font-semibold">{fmtDate(viewPend.origen_fecha)}</p></div>}
+                  <div><p className="text-[10px] font-bold uppercase opacity-60 mb-0.5">Responsable</p><p className="font-semibold">{viewPend.origen_responsable || '—'}</p></div>
+                </div>
+                <div className="px-4 pb-3 flex flex-wrap gap-2">
+                  {viewPend.origen_url && <a href={viewPend.origen_url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white border border-current/20 rounded-lg text-xs font-bold hover:shadow-sm transition"><ExternalLink className="w-3.5 h-3.5"/>Ver documento</a>}
+                  <RouterLink to="/minutas?vista=acuerdos" className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white border border-current/20 rounded-lg text-xs font-bold hover:shadow-sm transition"><FileText className="w-3.5 h-3.5"/>Ir a Seguimiento de Acuerdos</RouterLink>
+                </div>
+                <p className="px-4 pb-3 text-[11px] opacity-75 flex items-start gap-1.5"><Lock className="w-3 h-3 mt-0.5 shrink-0"/><span>Sincronizado con Minutas: al completarlo aquí queda <b>Cumplido</b> allá. El texto, responsable y fecha se editan desde Minutas.</span></p>
+              </div>
+            ); })()}
+
             {/* Descripción */}
-            {viewPend.descripcion && (
+            {viewPend.descripcion && !(origenDe(viewPend) && viewPend.descripcion === viewPend.titulo) && (
               <div className="bg-slate-50 rounded-lg p-4 text-sm text-slate-700 whitespace-pre-wrap min-h-[60px]">{viewPend.descripcion}</div>
             )}
 
@@ -1163,7 +1244,7 @@ export default function Nexus() {
 
           <div className="flex gap-3 mt-4">
             <button type="button" onClick={() => setViewPend(null)} className={btnOutline + " flex-1"}>Cerrar</button>
-            {isAdmin && viewPend.estatus !== 'completado' && (
+            {isAdmin && viewPend.estatus !== 'completado' && !origenDe(viewPend) && (
               <button type="button" onClick={() => { setViewPend(null); openPend(viewPend); }} className={btnPrimary + " flex-1 flex items-center justify-center gap-2"}><Pencil className="w-4 h-4"/>Editar</button>
             )}
             {isAdmin && viewPend.estatus !== 'completado' && (
@@ -1325,7 +1406,7 @@ export default function Nexus() {
       </Modal>)}
 
       {/* Confirmar eliminación */}
-      {confirmDel&&(<Modal title="Confirmar eliminación" onClose={()=>setConfirmDel(null)}><div className="space-y-3"><div className="bg-red-50 border border-red-200 rounded-lg p-4"><p className="font-bold text-red-800 text-sm mb-1">¿Eliminar "{confirmDel.titulo}"?</p><p className="text-xs text-red-700">Esta acción no se puede deshacer.</p></div></div><div className="flex gap-3 mt-4"><button type="button" onClick={()=>setConfirmDel(null)} className={btnOutline+" flex-1"}>Cancelar</button><button type="button" disabled={deleteMutation.isPending} onClick={()=>deleteMutation.mutate(confirmDel)} className="flex-1 py-2 bg-red-600 text-white rounded-lg text-sm font-semibold hover:bg-red-700 disabled:opacity-40 transition">{deleteMutation.isPending?'Eliminando...':'Sí, eliminar'}</button></div></Modal>)}
+      {confirmDel&&(<Modal title="Confirmar eliminación" onClose={()=>setConfirmDel(null)}><div className="space-y-3"><div className="bg-red-50 border border-red-200 rounded-lg p-4"><p className="font-bold text-red-800 text-sm mb-1">¿Eliminar "{confirmDel.titulo}"?</p><p className="text-xs text-red-700">Esta acción no se puede deshacer.</p></div>{confirmDel.origen&&(<div className={`rounded-lg p-3 border text-xs ${ORIGEN_CFG[confirmDel.origen].soft}`}><p className="font-bold mb-0.5">Este pendiente viene de {confirmDel.origen==='acuerdo'?'un acuerdo de minuta':'una acción de nota técnica'}.</p><p>{confirmDel.completado?'En Minutas se conserva como Cumplido.':'En Minutas quedará como Cancelado.'}</p></div>)}</div><div className="flex gap-3 mt-4"><button type="button" onClick={()=>setConfirmDel(null)} className={btnOutline+" flex-1"}>Cancelar</button><button type="button" disabled={deleteMutation.isPending} onClick={()=>deleteMutation.mutate(confirmDel)} className="flex-1 py-2 bg-red-600 text-white rounded-lg text-sm font-semibold hover:bg-red-700 disabled:opacity-40 transition">{deleteMutation.isPending?'Eliminando...':'Sí, eliminar'}</button></div></Modal>)}
     </div>
   );
 }
