@@ -13,6 +13,7 @@ import {
   Package, Truck, ClipboardList, ExternalLink, Download,
   ShieldCheck, Clock, AlertCircle, ChevronDown, ChevronUp, Upload, FileArchive,
 } from 'lucide-react';
+import { logoCuadradoDataURL } from '@/lib/logoPdf';
 
 const REQ_PAGE_SIZE = 20;
 
@@ -109,7 +110,7 @@ async function construirPDFRequisicion(req: Requisicion, items: ReqItem[], autor
   try {
     const logoImg = await new Promise<string>((res, rej) => {
       const img = new Image(); img.crossOrigin = 'anonymous';
-      img.onload = () => { const cv = document.createElement('canvas'); cv.width = img.width; cv.height = img.height; cv.getContext('2d')!.drawImage(img, 0, 0); res(cv.toDataURL('image/png')); };
+      img.onload = () => res(logoCuadradoDataURL(img));
       img.onerror = rej; img.src = '/logo.png';
     });
     doc.addImage(logoImg, 'PNG', W - 38, 3, 22, 22);

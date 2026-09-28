@@ -24,6 +24,7 @@ import { format, parseISO } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { usePermissions } from '@/hooks/usePermissions';
 import { useScope } from '@/hooks/useScope';
+import { logoCuadradoDataURL } from '@/lib/logoPdf';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // TAB 1 — HELPERS (Checklists normales)
@@ -336,7 +337,7 @@ async function generarPDFMinimos(ev: EvalMinimos) {
   try {
     const logoImg = await new Promise<string>((res, rej) => {
       const img = new Image(); img.crossOrigin = 'anonymous';
-      img.onload = () => { const cv = document.createElement('canvas'); cv.width = img.width; cv.height = img.height; cv.getContext('2d')!.drawImage(img, 0, 0); res(cv.toDataURL('image/png')); };
+      img.onload = () => res(logoCuadradoDataURL(img));
       img.onerror = rej; img.src = '/logo.png';
     });
     doc.addImage(logoImg, 'PNG', W - 38, 2, 28, 24);
@@ -465,7 +466,7 @@ async function generarReporteColegio(ev: EvalMinimos) {
   try {
     const logoImg = await new Promise<string>((res, rej) => {
       const img = new Image(); img.crossOrigin = 'anonymous';
-      img.onload = () => { const cv = document.createElement('canvas'); cv.width = img.width; cv.height = img.height; cv.getContext('2d')!.drawImage(img, 0, 0); res(cv.toDataURL('image/png')); };
+      img.onload = () => res(logoCuadradoDataURL(img));
       img.onerror = rej; img.src = '/logo.png';
     });
     doc.addImage(logoImg, 'PNG', W - 38, 2, 28, 24);
@@ -689,7 +690,7 @@ async function generarReporteGeneral(evaluaciones: EvalMinimos[]) {
   try {
     const logoImg = await new Promise<string>((res, rej) => {
       const img = new Image(); img.crossOrigin = 'anonymous';
-      img.onload = () => { const cv = document.createElement('canvas'); cv.width = img.width; cv.height = img.height; cv.getContext('2d')!.drawImage(img, 0, 0); res(cv.toDataURL('image/png')); };
+      img.onload = () => res(logoCuadradoDataURL(img));
       img.onerror = rej; img.src = '/logo.png';
     });
     doc.addImage(logoImg, 'PNG', W / 2 - 20, 40, 40, 32);

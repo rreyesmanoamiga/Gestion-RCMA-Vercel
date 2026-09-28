@@ -1,5 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { jsPDF } from 'jspdf';
+import { logoCuadradoDataURL } from '@/lib/logoPdf';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import ColegioSelector from '@/components/shared/ColegioSelector';
 import { COLEGIOS } from '@/lib/colegios';
@@ -360,7 +361,7 @@ function TabReporteGeneral({ reportesGenerales, planteles, pagos, comunicados, e
       try {
         logoData = await new Promise<string>((res, rej) => {
           const img = new Image(); img.crossOrigin = 'anonymous';
-          img.onload = () => { const cv = document.createElement('canvas'); cv.width = img.width; cv.height = img.height; cv.getContext('2d')!.drawImage(img, 0, 0); res(cv.toDataURL('image/png')); };
+          img.onload = () => res(logoCuadradoDataURL(img));
           img.onerror = rej; img.src = '/logo.png';
         });
       } catch { /* sin logo */ }
@@ -1520,14 +1521,18 @@ async function buildPDFBlob(plantel: Plantel, c: { fecha_emision: string; fecha_
   };
 
   const np = (need = 10) => {
-    if (y + need > 272) { drawFooter(); doc.addPage(); drawHeaderWithLogo(); y = 42; }
+    if (y + need > 272) {
+      drawFooter(); doc.addPage(); drawHeaderWithLogo(); y = 42;
+      // El encabezado deja la letra chica y en gris claro: se regresa al estilo del cuerpo
+      doc.setFont('helvetica', 'normal'); doc.setFontSize(10); doc.setTextColor(30, 30, 30);
+    }
   };
 
   let logoImg = '';
   try {
     logoImg = await new Promise<string>((res, rej) => {
       const img = new Image(); img.crossOrigin = 'anonymous';
-      img.onload = () => { const cv = document.createElement('canvas'); cv.width = img.width; cv.height = img.height; cv.getContext('2d')!.drawImage(img, 0, 0); res(cv.toDataURL('image/png')); };
+      img.onload = () => res(logoCuadradoDataURL(img));
       img.onerror = rej; img.src = '/logo.png';
     });
   } catch { /* sin logo */ }
@@ -1549,6 +1554,7 @@ async function buildPDFBlob(plantel: Plantel, c: { fecha_emision: string; fecha_
     setBody();
     const lines = doc.splitTextToSize(txt, TW);
     np(lines.length * 5.5 + gap);
+    setBody(); // por si hubo salto de página
     doc.text(lines, ML, y); y += lines.length * 5.5 + gap;
   };
 

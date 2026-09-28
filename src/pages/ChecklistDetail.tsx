@@ -8,6 +8,7 @@ import { db } from '@/lib/db';
 import ChecklistForm, { type ChecklistItem } from '@/components/checklists/ChecklistForm';
 import { format, parseISO } from 'date-fns';
 import { es } from 'date-fns/locale';
+import { logoCuadradoDataURL } from '@/lib/logoPdf';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 const STATUS_CONFIG: Record<string, { label: string; color: string; bg: string; border: string }> = {
@@ -81,12 +82,7 @@ async function generarPDF(c: ChecklistRecord) {
   try {
     const logoImg = await new Promise<string>((res, rej) => {
       const img = new Image(); img.crossOrigin = 'anonymous';
-      img.onload = () => {
-        const cv = document.createElement('canvas');
-        cv.width = img.width; cv.height = img.height;
-        cv.getContext('2d')!.drawImage(img, 0, 0);
-        res(cv.toDataURL('image/png'));
-      };
+      img.onload = () => res(logoCuadradoDataURL(img));
       img.onerror = rej; img.src = '/logo.png';
     });
     doc.addImage(logoImg, 'PNG', W - 38, 2, 28, 24);

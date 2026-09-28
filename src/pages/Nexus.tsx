@@ -16,6 +16,7 @@ import {
   BookOpen, ListChecks, Users, MapPin, Building2, Link2,
   ClipboardList, BarChart3, Ban, Handshake, Wrench, ExternalLink, Lock,
 } from 'lucide-react';
+import { logoCuadradoDataURL } from '@/lib/logoPdf';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 interface Nota      { id: string; titulo: string; contenido: string; categoria: string; color: string; fijada: boolean; colegio: string; territorio: string; created_at: string; updated_at: string; }
@@ -67,7 +68,7 @@ async function generarPDFPendiente(p: Pendiente, comentarios: Comentario[]) {
   doc.setFillColor(15,23,42); doc.rect(0,0,W,32,'F'); doc.setFillColor(13,138,126); doc.rect(0,0,4,32,'F');
   doc.setFontSize(14); doc.setFont('helvetica','bold'); doc.setTextColor(255,255,255); doc.text('NEXUS — Pendiente',14,13);
   doc.setFontSize(8); doc.setFont('helvetica','normal'); doc.setTextColor(148,163,184); doc.text('Sistema RCMA  ·  Generado el '+now,14,21); doc.text('Documento confidencial — solo para uso interno',14,27);
-  try { const li=await new Promise<string>((res,rej)=>{const img=new Image();img.crossOrigin='anonymous';img.onload=()=>{const cv=document.createElement('canvas');cv.width=img.width;cv.height=img.height;cv.getContext('2d')!.drawImage(img,0,0);res(cv.toDataURL('image/png'));};img.onerror=rej;img.src='/logo.png';}); doc.addImage(li,'PNG',W-38,4,22,22); } catch {}
+  try { const li=await new Promise<string>((res,rej)=>{const img=new Image();img.crossOrigin='anonymous';img.onload=()=>res(logoCuadradoDataURL(img));img.onerror=rej;img.src='/logo.png';}); doc.addImage(li,'PNG',W-38,4,22,22); } catch {}
   y = 42;
   // Recuadro info del pendiente
   const PRIO_LABEL_PDF: Record<string,string> = { urgente:'URGENTE', alta:'ALTA', normal:'NORMAL', baja:'BAJA' };

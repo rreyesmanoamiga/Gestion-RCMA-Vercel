@@ -10,6 +10,7 @@ import PageHeader from '@/components/shared/PageHeader';
 import { mergeActividadesConCustom, calcularFechasEnMes } from './CalendarioMantenimiento';
 import { COLEGIOS } from '@/lib/colegios';
 import { useComplianceDocs, esRetraso, type ComplianceDoc } from '@/lib/complianceShared';
+import { logoCuadradoDataURL } from '@/lib/logoPdf';
 
 const btnOutline = "flex items-center gap-2 px-4 py-2.5 border border-slate-300 rounded-lg text-sm font-bold text-slate-700 hover:bg-slate-50 transition-all shadow-sm disabled:opacity-40 disabled:cursor-not-allowed";
 const cardClass  = "bg-white p-6 rounded-xl border border-slate-200 shadow-sm";
@@ -204,7 +205,7 @@ async function pdfHeader(doc: Doc, W: number, title: string, subtitle: string) {
   try {
     const logoImg = await new Promise<string>((res, rej) => {
       const img = new Image(); img.crossOrigin = 'anonymous';
-      img.onload = () => { const c = document.createElement('canvas'); c.width = img.width; c.height = img.height; c.getContext('2d')!.drawImage(img, 0, 0); res(c.toDataURL('image/png')); };
+      img.onload = () => res(logoCuadradoDataURL(img));
       img.onerror = rej; img.src = '/logo.png';
     });
     doc.addImage(logoImg, 'PNG', W - 32, 2, 22, 22);
@@ -443,7 +444,7 @@ async function exportResumenPDF({ stats, projects, checklists, solicitudes, tick
   try {
     const logoImg = await new Promise<string>((res, rej) => {
       const img = new Image(); img.crossOrigin = 'anonymous';
-      img.onload = () => { const c = document.createElement('canvas'); c.width = img.width; c.height = img.height; c.getContext('2d')!.drawImage(img, 0, 0); res(c.toDataURL('image/png')); };
+      img.onload = () => res(logoCuadradoDataURL(img));
       img.onerror = rej; img.src = '/logo.png';
     });
     doc.addImage(logoImg, 'PNG', W - 38, 3, 26, 26);

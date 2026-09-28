@@ -8,6 +8,7 @@ import {
   FileDown, FileSpreadsheet, Calendar,
 } from 'lucide-react';
 import PageHeader from '@/components/shared/PageHeader';
+import { logoCuadradoDataURL } from '@/lib/logoPdf';
 
 type Doc = import('jspdf').jsPDF;
 
@@ -54,7 +55,7 @@ async function pdfHeader(doc: Doc, W: number, title: string, subtitle: string) {
   try {
     const logoImg = await new Promise<string>((res, rej) => {
       const img = new Image(); img.crossOrigin = 'anonymous';
-      img.onload = () => { const c = document.createElement('canvas'); c.width = img.width; c.height = img.height; c.getContext('2d')!.drawImage(img, 0, 0); res(c.toDataURL('image/png')); };
+      img.onload = () => res(logoCuadradoDataURL(img));
       img.onerror = rej; img.src = '/logo.png';
     });
     doc.addImage(logoImg, 'PNG', W - 32, 2, 22, 22);
