@@ -172,6 +172,8 @@ export default function JornadaPresupuestal() {
                             <p className="text-[10px] text-sky-700 bg-sky-50 border border-sky-200 rounded px-1.5 py-0.5 inline-block mt-1">
                               💰 Partida: {d.partida}
                             </p>
+                          ) : d.costo === 0 ? (
+                            <p className="text-[10px] text-slate-400 italic mt-1">Sin costo — no requiere partida</p>
                           ) : (
                             <p className="text-[10px] text-slate-300 italic mt-1">Sin partida asignada — captúrala en Catálogo</p>
                           )}
