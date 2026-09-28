@@ -2,11 +2,13 @@ import React, { useMemo, useState } from 'react';
 import { toast } from 'sonner';
 import { useAuth } from '@/lib/AuthContext';
 import PageHeader from '@/components/shared/PageHeader';
-import { FileBarChart, FileSpreadsheet, Loader2, ShieldCheck } from 'lucide-react';
+import { FileBarChart, FileSpreadsheet, Loader2, ShieldCheck, Database } from 'lucide-react';
+import { supabase } from '@/lib/supabaseClient';
+import { COLEGIOS } from '@/lib/colegios';
 import {
-  useComplianceDocs, LoadingBlock, ErrorBlock, type ComplianceDoc,
+  useComplianceDocs, LoadingBlock, ErrorBlock, type ComplianceDoc, HOJA_POR_COLEGIO,
 } from '@/lib/complianceShared';
-import { generarExcelCumplimiento, generarPDFGeneralCumplimiento, type ComplianceDocReport } from '@/lib/reportesCumplimiento';
+import { generarExcelCumplimiento, generarPDFGeneralCumplimiento, generarExcelMatrizBase, type ComplianceDocReport } from '@/lib/reportesCumplimiento';
 import { usePermissions } from '@/hooks/usePermissions';
 import AccesoRestringido from '@/components/shared/AccesoRestringido';
 
@@ -19,7 +21,7 @@ export default function CumplimientoReportesEjecutivos() {
   const [territorioFiltro, setTerritorioFiltro] = useState('Todos');
   const [colegioFiltro, setColegioFiltro] = useState('Todos');
   const [añoFiltro, setAñoFiltro] = useState<number | 'Todos'>(añoActual);
-  const [generando, setGenerando] = useState<'' | 'pdf' | 'excel'>('');
+  const [generando, setGenerando] = useState<'' | 'pdf' | 'excel' | 'matriz'>('');
 
   const años = useMemo(() => Array.from(new Set(docs.map(d => d.año))).sort((a, b) => b - a), [docs]);
   const colegios = useMemo(
@@ -93,6 +95,38 @@ export default function CumplimientoReportesEjecutivos() {
     } finally { setGenerando(''); }
   };
 
+  // Matriz de datos base: catálogo de conceptos + lista de costos por colegio.
+  // La hoja de costos solo la descarga el administrador (igual que Lista de Costos).
+  const puedeMatriz = isAdmin || can('editar_cumplimiento');
+  const generarMatriz = async () => {
+    setGenerando('matriz');
+    try {
+      const traer = async (tabla: string, cols = '*') => {
+        let desde = 0; let todo: any[] = [];
+        while (true) {
+          const { data, error } = await supabase.from(tabla).select(cols).range(desde, desde + 999);
+          if (error) throw error;
+          todo = todo.concat(data ?? []);
+          if (!data || data.length < 1000) break;
+          desde += 1000;
+        }
+        return todo;
+      };
+      const conceptos = await traer('compliance_conceptos');
+      const [costos, desglose, subconceptos] = isAdmin
+        ? await Promise.all([traer('costos_conceptos'), traer('costos_desglose'), traer('costos_subconceptos', 'id, nombre')])
+        : [undefined, [], []];
+      await generarExcelMatrizBase({
+        conceptos,
+        colegios: COLEGIOS.filter(c => c.territorio !== 'FMA' && !c.colegio.startsWith('CLIN')),
+        costos, desglose, subconceptos, hojaPorColegio: HOJA_POR_COLEGIO,
+      });
+      toast.success('Matriz de datos base generada');
+    } catch (err: any) {
+      toast.error(`No se pudo generar la matriz: ${err?.message ?? 'error desconocido'}`);
+    } finally { setGenerando(''); }
+  };
+
   if (!isAdmin && !can('ver_cumplimiento')) {
     return (
       <div className="p-6 lg:p-8 max-w-[1200px] mx-auto">
@@ -139,7 +173,7 @@ export default function CumplimientoReportesEjecutivos() {
           </div>
 
           {/* ─── Generar ─────────────────────────────────────────────────────── */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div className={`grid grid-cols-1 gap-4 ${puedeMatriz ? 'sm:grid-cols-3' : 'sm:grid-cols-2'}`}>
             <button onClick={generarPDF} disabled={generando !== ''}
               className="bg-white border border-slate-200 hover:border-[#00295A] rounded-xl p-6 text-left transition-colors disabled:opacity-50 group">
               <div className="flex items-center gap-3 mb-2">
@@ -165,6 +199,21 @@ export default function CumplimientoReportesEjecutivos() {
                 Detalle completo, documento por documento, con TODO el historial de años — para quien necesite revisar a fondo lo que sustenta el resumen.
               </p>
             </button>
+
+            {puedeMatriz && (
+              <button onClick={generarMatriz} disabled={generando !== ''}
+                className="bg-white border border-slate-200 hover:border-orange-500 rounded-xl p-6 text-left transition-colors disabled:opacity-50 group">
+                <div className="flex items-center gap-3 mb-2">
+                  <div className="w-10 h-10 rounded-lg bg-orange-500 flex items-center justify-center shrink-0">
+                    {generando === 'matriz' ? <Loader2 className="w-5 h-5 text-white animate-spin" /> : <Database className="w-5 h-5 text-white" />}
+                  </div>
+                  <p className="font-bold text-orange-600">Matriz de Datos Base</p>
+                </div>
+                <p className="text-xs text-slate-500">
+                  Excel con el catálogo de conceptos (materia, notas y fundamento, periodicidad y partida presupuestal){isAdmin ? ' y la lista de costos por colegio, con sus sub-conceptos agrupados' : ''}. No depende de los filtros de arriba.
+                </p>
+              </button>
+            )}
           </div>
         </>
       )}

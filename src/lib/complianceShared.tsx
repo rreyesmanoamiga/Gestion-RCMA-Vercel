@@ -24,6 +24,18 @@ export interface ComplianceDoc {
 
 // Materias del catálogo (mismas categorías que "Presupuesto Normativo de Apertura")
 export const MATERIAS = ['Todas', 'Donatarias / RVOE', 'Fiscal', 'Fiscal / Comercial', 'Gestión de Riesgos', 'Inmobiliaria', 'Jurídico', 'Construcción', 'Protección Civil', 'Salud y Sanidad'] as const;
+// Hoja del "Presupuesto Normativo de Apertura" (una por estado) de la que se
+// tomaron los costos de cada colegio.
+export const HOJA_POR_COLEGIO: Record<string, string> = {
+  'MA ACA': 'Acapulco (Gro)', 'MA AGS': 'Aguascalientes (Ags)',
+  'MA CAN': 'Cancún y Conkal (Qroo-Yuc)', 'MA CON': 'Cancún y Conkal (Qroo-Yuc)',
+  'MA CHA': 'Chalco y Zomeyucan (Edomex)', 'MA ZOM': 'Chalco y Zomeyucan (Edomex)', 'MA LER': 'Chalco y Zomeyucan (Edomex)',
+  'MA GDL': 'Guadalajara (Jal)', 'MA LEO': 'León y Villas San Juan (Gto)', 'MA VSJ': 'León y Villas San Juan (Gto)',
+  'MA MTY': 'Mty, La Cima, Sta Catarina', 'MA CIM': 'Mty, La Cima, Sta Catarina', 'MA SCA': 'Mty, La Cima, Sta Catarina',
+  'MA MOR': 'Morelia (Mich)', 'MA PIE': 'Piedras Negras y Torreón', 'MA TOR': 'Piedras Negras y Torreón',
+  'MA PUE': 'Puebla (Pue)', 'MA QRO': 'Querétaro (Qro)', 'MA TAP': 'Tapachula (Chis)', 'MA TIJ': 'Tijuana (BC)',
+};
+
 export const ESTADOS_EDITABLES = ['Pendiente', 'Solicitado', 'En Trámite', 'Verificado'];
 export const PAGE_SIZE = 25;
 

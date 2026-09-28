@@ -6,6 +6,7 @@ import PageHeader from '@/components/shared/PageHeader';
 import { usePermissions } from '@/hooks/usePermissions';
 import AccesoRestringido from '@/components/shared/AccesoRestringido';
 import { COLEGIOS } from '@/lib/colegios';
+import { HOJA_POR_COLEGIO } from '@/lib/complianceShared';
 import { ChevronDown, Plus, X, Loader2 } from 'lucide-react';
 
 interface Concepto { id: string; nombre: string; materia: string; orden: number; activo: boolean; }
@@ -15,17 +16,6 @@ interface Desglose { id: string; colegio: string; concepto_id: string; subconcep
 
 const COLEGIOS_PC = COLEGIOS.filter(c => c.territorio !== 'FMA' && !c.colegio.startsWith('CLIN'));
 
-// Hoja del "Presupuesto Normativo de Apertura" (una por estado) de la que se
-// tomaron los costos de cada colegio.
-const HOJA_POR_COLEGIO: Record<string, string> = {
-  'MA ACA': 'Acapulco (Gro)', 'MA AGS': 'Aguascalientes (Ags)',
-  'MA CAN': 'Cancún y Conkal (Qroo-Yuc)', 'MA CON': 'Cancún y Conkal (Qroo-Yuc)',
-  'MA CHA': 'Chalco y Zomeyucan (Edomex)', 'MA ZOM': 'Chalco y Zomeyucan (Edomex)', 'MA LER': 'Chalco y Zomeyucan (Edomex)',
-  'MA GDL': 'Guadalajara (Jal)', 'MA LEO': 'León y Villas San Juan (Gto)', 'MA VSJ': 'León y Villas San Juan (Gto)',
-  'MA MTY': 'Mty, La Cima, Sta Catarina', 'MA CIM': 'Mty, La Cima, Sta Catarina', 'MA SCA': 'Mty, La Cima, Sta Catarina',
-  'MA MOR': 'Morelia (Mich)', 'MA PIE': 'Piedras Negras y Torreón', 'MA TOR': 'Piedras Negras y Torreón',
-  'MA PUE': 'Puebla (Pue)', 'MA QRO': 'Querétaro (Qro)', 'MA TAP': 'Tapachula (Chis)', 'MA TIJ': 'Tijuana (BC)',
-};
 
 const fmtTotal = (n: number) => '$' + n.toLocaleString('es-MX', { minimumFractionDigits: 0, maximumFractionDigits: 2 });
 

@@ -532,3 +532,225 @@ export async function generarPDFColegioCumplimiento(opts: {
   pdfFooter(doc);
   doc.save(`Cumplimiento_${colegio.replace(/\s+/g, '_')}_${new Date().toISOString().slice(0, 10)}.pdf`);
 }
+
+// ============================================================================
+// EXCEL — MATRIZ DE DATOS BASE
+//   Hoja "Catálogo base": los conceptos activos con materia, notas y fundamento,
+//   periodicidad y partida presupuestal (tabla real de Excel).
+//   Hoja "Lista de costos": costo de cada concepto por colegio (una columna por
+//   colegio) y, debajo de cada concepto, sus sub-conceptos agrupados (se
+//   expanden / contraen con el botón +/- de Excel).
+// ============================================================================
+export interface MatrizConcepto {
+  id: string; orden: number; nombre: string; materia: string; norma: string | null;
+  periodicidad: string; activo: boolean;
+  partida_hoja: string | null; partida_seccion: string | null; partida_linea: string | null; partida_notas: string | null;
+}
+export interface MatrizCosto { colegio: string; concepto_id: string; costo_total: number | null; notas: string | null; }
+export interface MatrizDesglose { colegio: string; concepto_id: string; subconcepto_id: string; costo: number | null; }
+export interface MatrizSubconcepto { id: string; nombre: string; }
+
+export async function generarExcelMatrizBase(opts: {
+  conceptos: MatrizConcepto[];
+  colegios: { colegio: string; territorio: string }[];
+  costos?: MatrizCosto[];               // si no se pasan, no se genera la hoja de costos
+  desglose?: MatrizDesglose[];
+  subconceptos?: MatrizSubconcepto[];
+  hojaPorColegio?: Record<string, string>;
+}) {
+  const { colegios, costos, desglose = [], subconceptos = [], hojaPorColegio = {} } = opts;
+  const conceptos = [...opts.conceptos].filter(c => c.activo).sort((a, b) => a.orden - b.orden);
+
+  const wb = new ExcelJS.Workbook();
+  wb.creator = 'Sistema RCMA';
+  wb.created = new Date();
+  const logoBuffer = await cargarLogoBuffer();
+  const logoId = logoBuffer ? wb.addImage({ buffer: logoBuffer as any, extension: 'png' }) : null;
+  const generadoStr = new Date().toLocaleDateString('es-MX', { day: 'numeric', month: 'long', year: 'numeric' });
+  const FILA = 6;
+  const MONEY = '"$"#,##0.00';
+
+  const banner = (ws: ExcelJS.Worksheet, titulo: string, subtitulo: string, ultimaCol: number) => {
+    const cols = Math.max(ultimaCol, 10);
+    ws.getRow(1).height = 34; ws.getRow(2).height = 20; ws.getRow(3).height = 6; ws.getRow(4).height = 20;
+    if (logoId !== null) ws.addImage(logoId, { tl: { col: 0, row: 0 }, ext: { width: 70, height: 42 } });
+    ws.mergeCells(1, 3, 1, cols);
+    Object.assign(ws.getCell(1, 3), { value: 'COLEGIOS MANO AMIGA — CUMPLIMIENTO NORMATIVO' });
+    ws.getCell(1, 3).font = { bold: true, size: 13, color: { argb: NAVY }, name: 'Calibri' };
+    ws.getCell(1, 3).alignment = { vertical: 'middle' };
+    ws.mergeCells(2, 3, 2, cols);
+    ws.getCell(2, 3).value = titulo;
+    ws.getCell(2, 3).font = { bold: true, size: 10, color: { argb: ORANGE }, name: 'Calibri' };
+    ws.getCell(2, 3).alignment = { vertical: 'middle' };
+    for (let c = 1; c <= cols; c++) ws.getCell(3, c).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: ORANGE } };
+    ws.mergeCells(4, 1, 4, cols);
+    ws.getCell(4, 1).value = subtitulo;
+    ws.getCell(4, 1).font = { italic: true, size: 10, color: { argb: SKY }, name: 'Calibri' };
+    ws.getCell(4, 1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF5F7FA' } };
+    ws.getCell(4, 1).alignment = { horizontal: 'left', vertical: 'middle', indent: 1 };
+  };
+
+  // ── Hoja 1: Catálogo base ───────────────────────────────────────────────
+  const ws1 = wb.addWorksheet('Catálogo base');
+  ws1.views = [{ showGridLines: false, state: 'frozen', ySplit: FILA, xSplit: 2 }];
+  const headers1 = ['#', 'Concepto', 'Materia', 'Notas y Fundamento', 'Periodicidad', 'Hoja presupuesto', 'Sección presupuesto', 'Línea', 'Notas de la partida'];
+  banner(ws1, 'MATRIZ DE DATOS BASE — CATÁLOGO DE CONCEPTOS', `Generado: ${generadoStr}   |   ${conceptos.length} conceptos activos`, headers1.length);
+  ws1.addTable({
+    name: 'CatalogoBase', ref: `A${FILA}`, headerRow: true,
+    style: { theme: 'TableStyleMedium2', showRowStripes: true },
+    columns: headers1.map(h => ({ name: h, filterButton: true })),
+    rows: conceptos.map((c, i) => [
+      i + 1, c.nombre, c.materia, c.norma ?? '', c.periodicidad,
+      c.partida_hoja ?? 'No aplica', c.partida_seccion ?? '—', c.partida_linea ?? '', c.partida_notas ?? '',
+    ]),
+  });
+  [5, 48, 20, 55, 15, 17, 36, 18, 40].forEach((w, i) => { ws1.getColumn(i + 1).width = w; });
+  for (let c = 1; c <= headers1.length; c++) {
+    const cell = ws1.getCell(FILA, c);
+    cell.font = { bold: true, size: 10, color: { argb: WHITE }, name: 'Calibri' };
+    cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: NAVY } };
+    cell.alignment = { horizontal: c === 1 ? 'center' : 'left', vertical: 'middle', indent: c === 1 ? 0 : 1, wrapText: true };
+  }
+  conceptos.forEach((c, i) => {
+    const r = FILA + 1 + i;
+    for (let k = 1; k <= headers1.length; k++) {
+      const cell = ws1.getCell(r, k);
+      cell.font = { size: 9.5, name: 'Calibri', color: { argb: k === 6 && !c.partida_hoja ? 'FF94A3B8' : 'FF1E293B' }, bold: k === 2 };
+      cell.alignment = { horizontal: k === 1 ? 'center' : 'left', vertical: 'middle', indent: k === 1 ? 0 : 1, wrapText: k === 4 || k === 9 };
+    }
+  });
+
+  // ── Hoja 2: Lista de costos ─────────────────────────────────────────────
+  if (costos) {
+    const ws2 = wb.addWorksheet('Lista de costos');
+    const fijas = ['#', 'Concepto / Sub-concepto', 'Materia', 'Hoja presupuesto', 'Sección presupuesto'];
+    const nF = fijas.length;
+    const nC = colegios.length;
+    const colTotal = nF + nC + 1;
+    ws2.views = [{ showGridLines: false, state: 'frozen', ySplit: FILA + 1, xSplit: 2 }];
+    ws2.properties.outlineProperties = { summaryBelow: false, summaryRight: false };
+    banner(ws2, 'MATRIZ DE DATOS BASE — LISTA DE COSTOS POR COLEGIO',
+      `Generado: ${generadoStr}   |   Costos en MXN   |   Las filas agrupadas (+/-) son el desglose en sub-conceptos   |   Celdas en ámbar = costo por confirmar (ver nota)`, colTotal);
+
+    // Encabezado (fila 6) + fila de la hoja de referencia de cada colegio (fila 7)
+    const hdr = [...fijas, ...colegios.map(c => c.colegio), 'Total nacional'];
+    hdr.forEach((h, i) => {
+      const cell = ws2.getCell(FILA, i + 1);
+      cell.value = h;
+      cell.font = { bold: true, size: 10, color: { argb: WHITE }, name: 'Calibri' };
+      cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: NAVY } };
+      cell.alignment = { horizontal: i < nF ? 'left' : 'center', vertical: 'middle', indent: i < nF ? 1 : 0, wrapText: true };
+    });
+    ws2.getRow(FILA).height = 30;
+    const refRow = ws2.getRow(FILA + 1);
+    refRow.getCell(2).value = 'Territorio / hoja de referencia';
+    colegios.forEach((c, i) => {
+      const cell = refRow.getCell(nF + 1 + i);
+      cell.value = `${c.territorio}${hojaPorColegio[c.colegio] ? '\n' + hojaPorColegio[c.colegio] : ''}`;
+      cell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
+    });
+    for (let k = 1; k <= colTotal; k++) {
+      const cell = refRow.getCell(k);
+      cell.font = { italic: true, size: 8, color: { argb: 'FF475569' }, name: 'Calibri' };
+      cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE2E8F0' } };
+      if (k <= nF) cell.alignment = { vertical: 'middle', indent: 1 };
+    }
+    refRow.height = 36;
+
+    const costoDe = (colegio: string, conceptoId: string) => costos.find(k => k.colegio === colegio && k.concepto_id === conceptoId);
+    const subNombre = (id: string) => subconceptos.find(s => s.id === id)?.nombre ?? '—';
+    const colLetra = (n: number) => ws2.getColumn(n).letter;
+    const filasConcepto: number[] = [];
+    let r = FILA + 2;
+
+    conceptos.forEach((c, i) => {
+      const row = ws2.getRow(r);
+      filasConcepto.push(r);
+      row.getCell(1).value = i + 1;
+      row.getCell(2).value = c.nombre;
+      row.getCell(3).value = c.materia;
+      row.getCell(4).value = c.partida_hoja ?? 'No aplica';
+      row.getCell(5).value = c.partida_seccion ?? '—';
+      colegios.forEach((col, j) => {
+        const k = costoDe(col.colegio, c.id);
+        const cell = row.getCell(nF + 1 + j);
+        cell.value = k?.costo_total ?? null;
+        cell.numFmt = MONEY;
+        if (k?.notas?.trim()) {
+          cell.note = k.notas.trim();
+          if (k.notas.trim().startsWith('⚠')) cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFEF3C7' } };
+        }
+      });
+      const suma = colegios.reduce((s, col) => s + Number(costoDe(col.colegio, c.id)?.costo_total ?? 0), 0);
+      row.getCell(colTotal).value = { formula: `SUM(${colLetra(nF + 1)}${r}:${colLetra(nF + nC)}${r})`, result: suma };
+      row.getCell(colTotal).numFmt = MONEY;
+      for (let k = 1; k <= colTotal; k++) {
+        const cell = row.getCell(k);
+        cell.font = { size: 9.5, name: 'Calibri', bold: k === 2 || k === colTotal, color: { argb: 'FF1E293B' } };
+        if (k <= nF) cell.alignment = { vertical: 'middle', horizontal: k === 1 ? 'center' : 'left', indent: k === 1 ? 0 : 1 };
+        cell.border = { top: { style: 'thin', color: { argb: 'FFE2E8F0' } } };
+      }
+      r++;
+
+      // Sub-conceptos: una fila por sub-concepto que tenga desglose en algún colegio
+      const subIds = Array.from(new Set(desglose.filter(d => d.concepto_id === c.id).map(d => d.subconcepto_id)))
+        .sort((a, b) => subNombre(a).localeCompare(subNombre(b)));
+      subIds.forEach(sid => {
+        const sr = ws2.getRow(r);
+        sr.outlineLevel = 1;
+        sr.getCell(2).value = `   ↳ ${subNombre(sid)}`;
+        sr.getCell(3).value = c.materia;
+        colegios.forEach((col, j) => {
+          const d = desglose.find(x => x.colegio === col.colegio && x.concepto_id === c.id && x.subconcepto_id === sid);
+          const cell = sr.getCell(nF + 1 + j);
+          cell.value = d ? (d.costo ?? null) : null;
+          cell.numFmt = MONEY;
+        });
+        const sumaSub = colegios.reduce((s, col) => s + Number(desglose.find(x => x.colegio === col.colegio && x.concepto_id === c.id && x.subconcepto_id === sid)?.costo ?? 0), 0);
+        sr.getCell(colTotal).value = { formula: `SUM(${colLetra(nF + 1)}${r}:${colLetra(nF + nC)}${r})`, result: sumaSub };
+        sr.getCell(colTotal).numFmt = MONEY;
+        for (let k = 1; k <= colTotal; k++) {
+          const cell = sr.getCell(k);
+          cell.font = { size: 9, italic: true, name: 'Calibri', color: { argb: 'FF64748B' } };
+          cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF8FAFC' } };
+          if (k <= nF) cell.alignment = { vertical: 'middle', indent: 1 };
+        }
+        r++;
+      });
+    });
+
+    // Fila de totales (solo filas de concepto; el desglose es de referencia)
+    const tr = ws2.getRow(r + 1);
+    tr.getCell(2).value = 'TOTAL POR COLEGIO';
+    for (let k = nF + 1; k <= colTotal; k++) {
+      const L = colLetra(k);
+      const res = filasConcepto.reduce((s, fr) => {
+        const v = ws2.getCell(fr, k).value as any;
+        return s + Number(typeof v === 'object' && v !== null ? v.result ?? 0 : v ?? 0);
+      }, 0);
+      tr.getCell(k).value = { formula: `SUM(${filasConcepto.map(fr => `${L}${fr}`).join(',')})`, result: res };
+      tr.getCell(k).numFmt = MONEY;
+    }
+    for (let k = 1; k <= colTotal; k++) {
+      const cell = tr.getCell(k);
+      cell.font = { bold: true, size: 10, color: { argb: WHITE }, name: 'Calibri' };
+      cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: NAVY } };
+      if (k <= nF) cell.alignment = { indent: 1 };
+    }
+    tr.height = 22;
+
+    ws2.autoFilter = { from: { row: FILA, column: 1 }, to: { row: r - 1, column: colTotal } };
+    [5, 46, 18, 16, 30].forEach((w, i) => { ws2.getColumn(i + 1).width = w; });
+    for (let j = 0; j < nC; j++) ws2.getColumn(nF + 1 + j).width = 13;
+    ws2.getColumn(colTotal).width = 16;
+  }
+
+  const buffer = await wb.xlsx.writeBuffer();
+  const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `Cumplimiento_Matriz_Datos_Base_${new Date().toISOString().slice(0, 10)}.xlsx`;
+  document.body.appendChild(a); a.click(); a.remove();
+  URL.revokeObjectURL(url);
+}
