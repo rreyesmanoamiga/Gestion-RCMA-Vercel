@@ -15,6 +15,20 @@ interface Desglose { id: string; colegio: string; concepto_id: string; subconcep
 
 const COLEGIOS_PC = COLEGIOS.filter(c => c.territorio !== 'FMA' && !c.colegio.startsWith('CLIN'));
 
+// Hoja del "Presupuesto Normativo de Apertura" (una por estado) de la que se
+// tomaron los costos de cada colegio.
+const HOJA_POR_COLEGIO: Record<string, string> = {
+  'MA ACA': 'Acapulco (Gro)', 'MA AGS': 'Aguascalientes (Ags)',
+  'MA CAN': 'Cancún y Conkal (Qroo-Yuc)', 'MA CON': 'Cancún y Conkal (Qroo-Yuc)',
+  'MA CHA': 'Chalco y Zomeyucan (Edomex)', 'MA ZOM': 'Chalco y Zomeyucan (Edomex)', 'MA LER': 'Chalco y Zomeyucan (Edomex)',
+  'MA GDL': 'Guadalajara (Jal)', 'MA LEO': 'León y Villas San Juan (Gto)', 'MA VSJ': 'León y Villas San Juan (Gto)',
+  'MA MTY': 'Mty, La Cima, Sta Catarina', 'MA CIM': 'Mty, La Cima, Sta Catarina', 'MA SCA': 'Mty, La Cima, Sta Catarina',
+  'MA MOR': 'Morelia (Mich)', 'MA PIE': 'Piedras Negras y Torreón', 'MA TOR': 'Piedras Negras y Torreón',
+  'MA PUE': 'Puebla (Pue)', 'MA QRO': 'Querétaro (Qro)', 'MA TAP': 'Tapachula (Chis)', 'MA TIJ': 'Tijuana (BC)',
+};
+
+const fmtTotal = (n: number) => '$' + n.toLocaleString('es-MX', { minimumFractionDigits: 0, maximumFractionDigits: 2 });
+
 const parseMXN = (s: string) => s.replace(/[^0-9.]/g, '');
 const formatMXN = (s: string | number | null) => {
   if (s === null || s === '') return '';
@@ -73,6 +87,23 @@ export default function CostosLista() {
   const getCosto = (conceptoId: string) => costos.find(c => c.colegio === colegioSel && c.concepto_id === conceptoId);
   const getDesglose = (conceptoId: string) => desglose.filter(d => d.colegio === colegioSel && d.concepto_id === conceptoId);
   const getSubNombre = (id: string) => subconceptos.find(s => s.id === id)?.nombre ?? '—';
+
+  // Conceptos activos agrupados por materia (en el orden del catálogo) + totales del colegio
+  const grupos = useMemo(() => {
+    const out: { materia: string; items: Concepto[]; subtotal: number }[] = [];
+    for (const c of conceptos.filter(x => x.activo)) {
+      let g = out.find(x => x.materia === c.materia);
+      if (!g) { g = { materia: c.materia, items: [], subtotal: 0 }; out.push(g); }
+      g.items.push(c);
+      g.subtotal += Number(costos.find(k => k.colegio === colegioSel && k.concepto_id === c.id)?.costo_total ?? 0);
+    }
+    return out;
+  }, [conceptos, costos, colegioSel]);
+  const totalColegio = grupos.reduce((s, g) => s + g.subtotal, 0);
+  const porConfirmar = useMemo(() => {
+    const activos = new Set(conceptos.filter(c => c.activo).map(c => c.id));
+    return costos.filter(k => k.colegio === colegioSel && activos.has(k.concepto_id) && k.notas?.trim().startsWith('⚠')).length;
+  }, [conceptos, costos, colegioSel]);
 
   // ── Guardar el costo total de un concepto para el colegio seleccionado ────
   const saveCostoMutation = useMutation({
@@ -148,9 +179,27 @@ export default function CostosLista() {
         </select>
       </div>
 
-      <p className="text-xs text-slate-400 -mt-3">
-        El costo total de cada concepto lo capturas tú, a partir de las cotizaciones que presenten en <strong>{colegioSel}</strong>.
-        El desglose de abajo es solo de referencia — no se suma automático al total.
+      {/* Resumen del colegio */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        <div className="bg-white rounded-xl border border-slate-200 px-4 py-3">
+          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Total {colegioSel}</p>
+          <p className="text-2xl font-black text-slate-900">{fmtTotal(totalColegio)}</p>
+        </div>
+        <div className="bg-white rounded-xl border border-slate-200 px-4 py-3">
+          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Costos de referencia</p>
+          <p className="text-sm font-bold text-slate-700 mt-1">{HOJA_POR_COLEGIO[colegioSel] ?? 'Captura manual'}</p>
+          <p className="text-[11px] text-slate-400">Presupuesto Normativo de Apertura</p>
+        </div>
+        <div className={`rounded-xl border px-4 py-3 ${porConfirmar > 0 ? 'bg-amber-50 border-amber-200' : 'bg-white border-slate-200'}`}>
+          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Por confirmar</p>
+          <p className={`text-2xl font-black ${porConfirmar > 0 ? 'text-amber-700' : 'text-slate-900'}`}>{porConfirmar}</p>
+          <p className="text-[11px] text-slate-400">tarifas por validar con la autoridad</p>
+        </div>
+      </div>
+
+      <p className="text-xs text-slate-400">
+        Los costos vienen del estado de <strong>{colegioSel}</strong>; puedes ajustarlos con las cotizaciones reales.
+        El desglose de cada concepto es solo de referencia — no se suma automático al total.
       </p>
 
       {isLoading ? (
@@ -158,8 +207,16 @@ export default function CostosLista() {
       ) : (
         <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
           <div className="divide-y divide-slate-100">
-            {conceptos.filter(c => c.activo).map(concepto => {
+            {grupos.map(g => (
+            <React.Fragment key={g.materia}>
+            <div className="flex items-center justify-between px-5 py-2 bg-slate-50">
+              <p className="text-[11px] font-black text-slate-500 uppercase tracking-wider">{g.materia} <span className="font-semibold text-slate-400">· {g.items.length}</span></p>
+              <p className="text-xs font-bold text-slate-600">{fmtTotal(g.subtotal)}</p>
+            </div>
+            {g.items.map(concepto => {
               const costo = getCosto(concepto.id);
+              const nota = costo?.notas?.trim() ?? '';
+              const porConf = nota.startsWith('⚠');
               const items = getDesglose(concepto.id);
               const abierto = expandido.has(concepto.id);
               return (
@@ -170,10 +227,14 @@ export default function CostosLista() {
                     </button>
                     <div className="min-w-0 flex-1 cursor-pointer" onClick={() => toggleExpandido(concepto.id)}>
                       <p className="text-sm font-semibold text-slate-800 truncate">{concepto.nombre}</p>
-                      <p className="text-[11px] text-slate-400">{concepto.materia}{items.length > 0 ? ` · ${items.length} sub-concepto${items.length !== 1 ? 's' : ''}` : ''}</p>
+                      <p className="text-[11px] text-slate-400 flex items-center gap-1.5 flex-wrap">
+                        {porConf && <span className="font-bold text-amber-700 bg-amber-50 border border-amber-200 px-1.5 rounded">⚠ Por confirmar</span>}
+                        {items.length > 0 && <span>{items.length} sub-concepto{items.length !== 1 ? 's' : ''}</span>}
+                      </p>
                     </div>
                     <div className="relative shrink-0">
                       <input
+                        key={`${colegioSel}-${concepto.id}-${costo?.costo_total ?? ''}`}
                         type="text" inputMode="decimal" placeholder="$0.00" disabled={!puedeEditar}
                         defaultValue={formatMXN(costo?.costo_total ?? null)}
                         onBlur={e => {
@@ -188,6 +249,9 @@ export default function CostosLista() {
 
                   {abierto && (
                     <div className="bg-slate-50 px-5 py-3 pl-12 space-y-2 border-t border-slate-100">
+                      {nota && (
+                        <p className={`text-xs rounded-md border px-2.5 py-1.5 ${porConf ? 'bg-amber-50 border-amber-200 text-amber-800' : 'bg-white border-slate-200 text-slate-600'}`}>{nota}</p>
+                      )}
                       {items.length === 0 && (
                         <p className="text-xs text-slate-400 italic">Sin desglose capturado todavía.</p>
                       )}
@@ -195,6 +259,7 @@ export default function CostosLista() {
                         <div key={item.id} className="flex items-center gap-2">
                           <span className="text-sm text-slate-600 flex-1">{getSubNombre(item.subconcepto_id)}</span>
                           <input
+                            key={`${item.id}-${item.costo ?? ''}`}
                             type="text" inputMode="decimal" placeholder="$0.00" disabled={!puedeEditar}
                             defaultValue={formatMXN(item.costo)}
                             onBlur={e => {
@@ -243,6 +308,8 @@ export default function CostosLista() {
                 </div>
               );
             })}
+            </React.Fragment>
+            ))}
           </div>
         </div>
       )}

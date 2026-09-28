@@ -402,7 +402,7 @@ export function DetalleModal({ doc, onClose, onSaved, periodicidad }: { doc: Com
               </select>
             </div>
             <div>
-              <label className={labelCls}>Norma / referencia</label>
+              <label className={labelCls}>Notas y Fundamento</label>
               <input value={form.norma} onChange={set('norma')} disabled={updateDoc.isPending} placeholder="—" className={inputCls} />
             </div>
             <div>

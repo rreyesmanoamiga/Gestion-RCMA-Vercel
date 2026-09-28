@@ -319,7 +319,8 @@ export default function CumplimientoCatalogo() {
                 <span className="text-[10px] font-bold text-slate-300 w-6 shrink-0">{c.orden}</span>
                 <div className="min-w-0 flex-1">
                   <p className="text-sm font-semibold text-slate-800 truncate">{c.nombre}</p>
-                  <p className="text-[11px] text-slate-400">{c.materia}{c.norma ? ` · ${c.norma}` : ''}</p>
+                  <p className="text-[11px] text-slate-400">{c.materia}</p>
+                  {c.norma && <p className="text-[11px] text-slate-500 italic line-clamp-2">{c.norma}</p>}
                   {c.partida_hoja && (
                     <p className="text-[10px] text-slate-300 mt-0.5">
                       💰 {c.partida_hoja}{c.partida_seccion ? ` → ${c.partida_seccion}` : ''}
@@ -409,8 +410,8 @@ export default function CumplimientoCatalogo() {
                 </select>
               </div>
               <div>
-                <label className="block text-xs font-bold text-slate-500 uppercase mb-1.5">Norma (opcional)</label>
-                <input className={inputClass} value={form.norma} onChange={e => setForm(p => ({ ...p, norma: e.target.value }))} />
+                <label className="block text-xs font-bold text-slate-500 uppercase mb-1.5">Notas y Fundamento</label>
+                <textarea className={inputClass + ' resize-none'} rows={2} value={form.norma} onChange={e => setForm(p => ({ ...p, norma: e.target.value }))} />
               </div>
               <div>
                 <label className="block text-xs font-bold text-slate-500 uppercase mb-1.5">Periodicidad</label>
