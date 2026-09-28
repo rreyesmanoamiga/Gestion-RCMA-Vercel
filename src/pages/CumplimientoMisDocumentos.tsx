@@ -10,6 +10,9 @@ import AccesoRestringido from '@/components/shared/AccesoRestringido';
 import ArchivosDocumento from '@/components/cumplimiento/ArchivosDocumento';
 import { useConteoArchivos } from '@/lib/cumplimientoArchivos';
 import { formatFecha, LoadingBlock } from '@/lib/complianceShared';
+import { COLEGIOS } from '@/lib/colegios';
+
+const COLEGIOS_PC = COLEGIOS.filter(c => c.territorio !== 'FMA' && !c.colegio.startsWith('CLIN'));
 import { FolderOpen, CheckCircle2, Clock, XCircle, Upload, ChevronRight, X, Search, AlertTriangle } from 'lucide-react';
 
 interface MiDoc {
@@ -29,23 +32,34 @@ const SIT: Record<Situacion, { label: string; cls: string; Icon: React.ElementTy
 
 export default function CumplimientoMisDocumentos() {
   const { isAdmin, can, permsRecord } = usePermissions();
-  const puede = can('subir_cumplimiento');
-  const colegio = (permsRecord as any)?.colegio as string | undefined;
-  const [anio] = useState(new Date().getFullYear());
+  // El administrador ve el expediente de CUALQUIER colegio (selector); el
+  // usuario de colegio, solo el suyo.
+  const puede = isAdmin || can('subir_cumplimiento');
+  const [colegioAdmin, setColegioAdmin] = useState(COLEGIOS_PC[0]?.colegio ?? '');
+  const colegio = isAdmin ? colegioAdmin : ((permsRecord as any)?.colegio as string | undefined);
+  const [anio, setAnio] = useState(new Date().getFullYear());
   const [abierto, setAbierto] = useState<MiDoc | null>(null);
   const [filtro, setFiltro] = useState<'todos' | Situacion>('todos');
   const [busqueda, setBusqueda] = useState('');
 
   const { data: docs = [], isLoading, error } = useQuery({
-    queryKey: ['cumplimiento_mis_documentos', anio],
-    enabled: puede && !isAdmin,
+    queryKey: ['cumplimiento_mis_documentos', anio, isAdmin ? colegio : 'propio'],
+    enabled: puede && !!colegio,
     queryFn: async () => {
+      if (isAdmin) {
+        const { data, error } = await supabase.from('compliance_documentos')
+          .select('id, colegio, materia, tipo_documento, norma, estado, vigente, vigente_desde, vigente_hasta, año, revision, revision_motivo')
+          .eq('colegio', colegio!).eq('activo', true).eq('año', anio)
+          .order('materia').order('tipo_documento');
+        if (error) throw error;
+        return (data ?? []) as unknown as MiDoc[];
+      }
       const { data, error } = await supabase.rpc('cumplimiento_mis_documentos', { p_anio: anio });
       if (error) throw error;
       return (data ?? []) as MiDoc[];
     },
   });
-  const { data: conteo = {} } = useConteoArchivos(puede && !isAdmin);
+  const { data: conteo = {} } = useConteoArchivos(puede);
 
   // Días para que venza, calculado hoy (no depende del campo guardado)
   const diasParaVencer = (d: MiDoc) => d.vigente_hasta
@@ -75,16 +89,6 @@ export default function CumplimientoMisDocumentos() {
     return Array.from(out.entries());
   }, [docs, filtro, busqueda]);
 
-  if (isAdmin) {
-    return (
-      <div className="p-6 lg:p-8 max-w-[1100px] mx-auto">
-        <PageHeader title="Mis Documentos de Cumplimiento" subtitle="Vista del administrador de cada colegio" />
-        <div className="bg-white border border-slate-200 rounded-xl p-8 text-center text-sm text-slate-500">
-          Esta pantalla es la que ven los administradores de colegio. Tú revisas y subes documentos desde <b>Validación de Vigencias</b>.
-        </div>
-      </div>
-    );
-  }
   if (!puede || !colegio) {
     return (
       <div className="p-6 lg:p-8 max-w-[1100px] mx-auto">
@@ -98,14 +102,33 @@ export default function CumplimientoMisDocumentos() {
 
   return (
     <div className="p-6 lg:p-8 max-w-[1100px] mx-auto space-y-5">
-      <PageHeader title="Mis Documentos de Cumplimiento" subtitle={`Expediente ${anio} · ${colegio}`} />
+      {isAdmin ? (
+        <div className="flex items-start justify-between gap-4 flex-wrap">
+          <PageHeader title="Expediente por Colegio" subtitle={`Documentos de Cumplimiento ${anio} · ${colegio}`} />
+          <div className="flex items-center gap-2">
+            <select value={colegioAdmin} onChange={e => { setColegioAdmin(e.target.value); setAbierto(null); }}
+              className="text-sm font-bold text-slate-700 border border-slate-300 rounded-lg px-3 py-2 bg-white">
+              {COLEGIOS_PC.map(c => <option key={c.colegio} value={c.colegio}>{c.colegio} — {c.territorio}</option>)}
+            </select>
+            <input type="number" value={anio} onChange={e => { const v = parseInt(e.target.value, 10); if (!isNaN(v)) setAnio(v); }}
+              className="w-24 text-sm font-bold text-slate-700 border border-slate-300 rounded-lg px-3 py-2 bg-white" />
+          </div>
+        </div>
+      ) : (
+        <PageHeader title="Mis Documentos de Cumplimiento" subtitle={`Expediente ${anio} · ${colegio}`} />
+      )}
 
       <div className={`rounded-xl border px-5 py-4 ${faltan ? 'bg-orange-50 border-orange-200' : 'bg-emerald-50 border-emerald-200'}`}>
         <p className={`text-sm font-bold ${faltan ? 'text-orange-800' : 'text-emerald-800'}`}>
-          {faltan ? `Te faltan ${faltan} documento${faltan !== 1 ? 's' : ''} por enviar` : '¡Tu expediente está al día!'}
+          {isAdmin
+            ? (faltan ? `A ${colegio} le faltan ${faltan} documento${faltan !== 1 ? 's' : ''} por enviar` : `El expediente de ${colegio} está al día`)
+            : (faltan ? `Te faltan ${faltan} documento${faltan !== 1 ? 's' : ''} por enviar` : '¡Tu expediente está al día!')}
+          {isAdmin && (conteoSit.por_revisar ?? 0) > 0 && <span className="ml-2 text-sky-700">· {conteoSit.por_revisar} por revisar</span>}
         </p>
         <p className="text-xs text-slate-600 mt-1">
-          Abre cada documento y sube su archivo (PDF, imagen o Word; puedes subir varios). La Coordinación RCMA lo revisa y te avisa por correo cuando quede verificado o si hay que corregir algo.
+          {isAdmin
+            ? 'Esta es la misma vista que tiene el administrador del colegio. Abre cualquier documento para subir archivos, verificarlo o rechazarlo.'
+            : 'Abre cada documento y sube su archivo (PDF, imagen o Word; puedes subir varios). La Coordinación RCMA lo revisa y te avisa por correo cuando quede verificado o si hay que corregir algo.'}
         </p>
       </div>
 
@@ -179,8 +202,8 @@ export default function CumplimientoMisDocumentos() {
                 documentoId={abierto.id}
                 revision={abierto.revision}
                 revisionMotivo={abierto.revision_motivo}
-                esAdmin={false}
-                bloqueado={situacion(abierto) === 'verificado'}
+                esAdmin={isAdmin}
+                bloqueado={isAdmin ? false : situacion(abierto) === 'verificado'}
                 onCambio={() => setAbierto(null)}
               />
             </div>
