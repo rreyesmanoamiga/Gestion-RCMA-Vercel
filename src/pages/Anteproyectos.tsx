@@ -3,7 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabaseClient';
 import { useSharePointUpload } from '@/hooks/useSharePointUpload';
 import { db } from '@/lib/db';
-import { FolderOpen, ChevronDown, Pencil, Trash2, X, Save, Calendar, Link2, FolderInput, TrendingUp, CheckCircle2, Clock, DollarSign, Upload, FileArchive, ExternalLink } from 'lucide-react';
+import { FolderOpen, ChevronDown, Pencil, Trash2, X, Save, Calendar, Link2, FolderInput, TrendingUp, CheckCircle2, Clock, DollarSign, Upload, FileArchive, ExternalLink, Download } from 'lucide-react';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { toast } from 'sonner';
@@ -550,6 +550,31 @@ export default function Anteproyectos() {
   const hasMore   = visibleCount < filtered.length;
   const remaining = filtered.length - visibleCount;
 
+  // ── Descarga del ZIP ────────────────────────────────────────────────────────
+  // El archivo vive en el OneDrive de la Coordinación; la función del servidor
+  // revisa permiso y alcance y regresa un link de descarga directo y temporal,
+  // así cualquiera con "Ver Anteproyectos" lo baja sin cuenta de Microsoft.
+  const [descargando, setDescargando] = useState<string | null>(null);
+  const descargarZip = async (ant: Anteproyecto) => {
+    setDescargando(ant.id);
+    try {
+      const { data, error } = await supabase.functions.invoke('anteproyecto-descarga', { body: { anteproyecto_id: ant.id } });
+      if (error) {
+        let msg = error.message;
+        try { const b = await (error as any).context?.json?.(); if (b?.error) msg = b.error; } catch { /* sin cuerpo */ }
+        throw new Error(msg);
+      }
+      if (!data?.url) throw new Error(data?.error ?? 'No se pudo obtener el archivo');
+      const a = document.createElement('a');
+      a.href = data.url; a.download = data.nombre ?? 'anteproyecto.zip'; a.rel = 'noreferrer';
+      document.body.appendChild(a); a.click(); a.remove();
+    } catch (e: any) {
+      toast.error(`No se pudo descargar: ${e.message ?? 'error'}`);
+    } finally {
+      setDescargando(null);
+    }
+  };
+
   // ── ZipUploader ─────────────────────────────────────────────────────────────
   function ZipUploader({ ant }: { ant: any }) {
     const qcZ = useQueryClient();
@@ -580,23 +605,34 @@ export default function Anteproyectos() {
         }).catch(() => {});
       }
     };
-    if (ant.zip_url) {
+    if (ant.zip_url || ant.zip_nombre) {
+      // Carpeta en OneDrive: solo para el administrador (es su OneDrive).
       // Si es un link de compartir anónimo de SharePoint (ej. /:u:/g/personal/...token?e=...),
       // el último segmento es el token del link, NO un nombre de archivo dentro de una carpeta.
-      // Truncarlo rompe el link (404). Solo se trunca cuando es el webUrl canónico con ruta de carpetas.
-      const isShareLink = /\/:[a-z]:\//i.test(ant.zip_url);
-      const openUrl = isShareLink
+      const isShareLink = ant.zip_url ? /\/:[a-z]:\//i.test(ant.zip_url) : false;
+      const openUrl = !ant.zip_url ? null : isShareLink
         ? ant.zip_url
-        : ant.zip_url.substring(0, ant.zip_url.lastIndexOf('/')); // Abrir carpeta padre (no el archivo directo que descarga)
+        : ant.zip_url.substring(0, ant.zip_url.lastIndexOf('/')); // Abrir carpeta padre
       return (
-        <a href={openUrl} target="_blank" rel="noreferrer"
-          className="flex items-center gap-1.5 mt-1.5 bg-blue-50 border border-blue-200 rounded-lg px-2 py-1 hover:bg-blue-100 transition">
-          <FolderOpen className="w-3 h-3 text-blue-500 shrink-0" />
-          <span className="text-[10px] text-blue-700 font-semibold truncate max-w-[140px]">{ant.zip_nombre ?? 'Ver en SharePoint'}</span>
-          <ExternalLink className="w-3 h-3 text-blue-400 shrink-0" />
-        </a>
+        <div className="flex items-center gap-1.5 mt-1.5">
+          <button type="button" onClick={() => descargarZip(ant)} disabled={descargando === ant.id}
+            title="Descargar ZIP"
+            className="flex items-center gap-1.5 bg-blue-50 border border-blue-200 rounded-lg px-2 py-1 hover:bg-blue-100 transition disabled:opacity-50 min-w-0">
+            {descargando === ant.id
+              ? <span className="w-3 h-3 border-2 border-blue-300 border-t-blue-600 rounded-full animate-spin shrink-0" />
+              : <Download className="w-3 h-3 text-blue-500 shrink-0" />}
+            <span className="text-[10px] text-blue-700 font-semibold truncate max-w-[140px]">{ant.zip_nombre ?? 'Descargar ZIP'}</span>
+          </button>
+          {isAdmin && openUrl && (
+            <a href={openUrl} target="_blank" rel="noreferrer" title="Abrir carpeta en OneDrive"
+              className="p-1 rounded-md border border-slate-200 text-slate-400 hover:text-blue-600 hover:bg-slate-50 transition shrink-0">
+              <FolderOpen className="w-3 h-3" />
+            </a>
+          )}
+        </div>
       );
     }
+    if (!puedeCrear && !puedeEditar) return null;
     return (
       <label className={`flex items-center gap-1.5 mt-1.5 cursor-pointer bg-slate-50 border border-dashed border-slate-300 hover:border-blue-400 hover:bg-blue-50 rounded-lg px-2 py-1 transition ${uploading?'opacity-50 pointer-events-none':''}`}>
         <Upload className="w-3 h-3 text-slate-400" />
