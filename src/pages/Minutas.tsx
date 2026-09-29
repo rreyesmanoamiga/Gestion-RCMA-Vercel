@@ -11,7 +11,7 @@ import {
 } from 'lucide-react';
 import PageHeader from '@/components/shared/PageHeader';
 import { usePermissions } from '@/hooks/usePermissions';
-import { useScope } from '@/hooks/useScope';
+import { useScope, esColegioDeOficina } from '@/hooks/useScope';
 import { useAuth } from '@/lib/AuthContext';
 import { logAudit } from '@/lib/audit';
 import { useSharePointUpload } from '@/hooks/useSharePointUpload';
@@ -109,7 +109,8 @@ export default function Minutas() {
   // un colegio específico en Accesos (no ECO, no vacío/general). Ese perfil solo debe ver
   // minutas (nunca notas técnicas) de SU colegio, y solo las que se marcaron para notificarle.
   const miColegio       = String((permsRecord as any)?.colegio ?? '');
-  const esAdminColegio  = !isAdmin && !!miColegio && miColegio !== 'ECO';
+  // OF. MTY / OF. CDMX / GENERAL no son un colegio: se rigen por territorio (useScope).
+  const esAdminColegio  = !isAdmin && !!miColegio && miColegio !== 'ECO' && !esColegioDeOficina(miColegio);
 
   // Usuarios con alcance por territorio (ORSER, Coordinación, ECO) que NO son admin
   // de colegio ni tienen alcance General: ven minutas y notas técnicas, pero solo

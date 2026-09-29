@@ -11,6 +11,8 @@ import { usePermissions } from './usePermissions';
  *   solo ve filas de ESE colegio.
  * - Un usuario de Colegio marcado como "ECO" (cubre varios colegios) o un usuario
  *   ORSER/Coordinación con territorio (Norte/México) ve TODO ese territorio.
+ * - Oficinas FMA: colegio "OF. MTY" ve todo el territorio NORTE y "OF. CDMX" todo
+ *   MÉXICO (sin importar el área). Colegio "GENERAL" ve todo.
  * - Usuarios antiguos sin `area`/`territorio` capturados (de antes de esta función)
  *   se tratan como generales, para no ocultarles de golpe algo que ya veían.
  *
@@ -18,12 +20,24 @@ import { usePermissions } from './usePermissions';
  * de cada fila y filtra el arreglo — no toca la consulta a Supabase, funciona
  * sobre datos ya traídos (igual que el resto de los filtros del sistema).
  */
+// Oficinas FMA que equivalen a un territorio completo.
+export const OFICINA_TERRITORIO: Record<string, string> = {
+  'OF. MTY':  'NORTE',
+  'OF. CDMX': 'MEXICO',
+};
+/** true si el colegio asignado NO es un colegio real (oficina FMA o GENERAL). */
+export const esColegioDeOficina = (c?: string | null) =>
+  !!c && (c === 'GENERAL' || c in OFICINA_TERRITORIO);
+
 export function useScope() {
   const { isAdmin, permsRecord } = usePermissions();
 
   const area       = (permsRecord as Record<string, unknown> | null)?.area as string | undefined;
-  const territorio = (permsRecord as Record<string, unknown> | null)?.territorio as string | undefined;
   const colegio    = (permsRecord as Record<string, unknown> | null)?.colegio as string | undefined;
+  const territorioCapturado = (permsRecord as Record<string, unknown> | null)?.territorio as string | undefined;
+  // Territorio efectivo: la oficina manda sobre lo capturado (FMA → NORTE / MEXICO).
+  const oficinaTerritorio = colegio ? OFICINA_TERRITORIO[colegio] : undefined;
+  const territorio = oficinaTerritorio ?? territorioCapturado;
 
   const esGeneral = isAdmin
     || !territorio
@@ -32,7 +46,7 @@ export function useScope() {
 
   // Área "colegio-céntrica": tiene sentido filtrar por colegio exacto (si trae uno real, no ECO).
   const areaEsColegio = !area || area === 'colegio' || area === 'director_colegio';
-  const colegioEspecifico = areaEsColegio && colegio && colegio !== 'ECO' ? colegio : null;
+  const colegioEspecifico = areaEsColegio && colegio && colegio !== 'ECO' && !esColegioDeOficina(colegio) ? colegio : null;
 
   const filtrarPorAlcance = useMemo(() => {
     return function filtrar<T>(
