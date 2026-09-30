@@ -1019,7 +1019,15 @@ function TabPlanteles({ planteles, loading, qc, directorio, puedeCrear, puedeEli
             {planteles.length === 0 && (
               <tr><td colSpan={8} className="text-center py-8 text-slate-400">Sin planteles registrados</td></tr>
             )}
-            {planteles.map(p => (
+            {/* Ordenados por fecha de inicio: el más antiguo arriba, el más reciente abajo.
+                Los que no tienen fecha van al final (por nombre). */}
+            {[...planteles].sort((a, b) => {
+              if (!a.fecha_inicio && !b.fecha_inicio) return (a.colegio_nombre ?? '').localeCompare(b.colegio_nombre ?? '');
+              if (!a.fecha_inicio) return 1;
+              if (!b.fecha_inicio) return -1;
+              return a.fecha_inicio.localeCompare(b.fecha_inicio)
+                || (a.colegio_nombre ?? '').localeCompare(b.colegio_nombre ?? '');
+            }).map(p => (
               <tr key={p.id} className="hover:bg-slate-50">
                 <td className="px-4 py-3 font-medium text-slate-900">
                   <div>{p.colegio_nombre}</div>
