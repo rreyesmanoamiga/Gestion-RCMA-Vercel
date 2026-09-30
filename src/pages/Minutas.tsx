@@ -96,7 +96,13 @@ export default function Minutas() {
   const carPorColegioMap = useMemo(() => {
     const map: Record<string, { email: string; nombre: string }> = {};
     directorioRows.forEach(r => {
-      if (r.car_correo) map[r.nombre] = { email: r.car_correo, nombre: r.car_nombre || 'CAR' };
+      // form.colegio guarda el CÓDIGO corto ("MA CON"), no el nombre completo:
+      // se indexa por código (y por nombre como respaldo).
+      if (r.car_correo) {
+        const car = { email: r.car_correo, nombre: r.car_nombre || 'CAR' };
+        if (r.codigo) map[r.codigo] = car;
+        if (r.nombre) map[r.nombre] = car;
+      }
     });
     return map;
   }, [directorioRows]);
