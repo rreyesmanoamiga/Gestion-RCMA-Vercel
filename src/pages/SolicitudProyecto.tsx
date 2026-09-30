@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabaseClient';
 import { useAuth } from '@/lib/AuthContext';
@@ -157,6 +157,14 @@ export default function SolicitudProyecto() {
   const donMonto   = toNum(form.monto_donativos);
   const otrasMonto = toNum(form.monto_otras);
   const totalMonto = opMonto + fbcMonto + donMonto + otrasMonto;
+  // "Otras Fuentes" con monto capturado exige especificar a qué se refiere.
+  const otrasSinDetalle = otrasMonto > 0 && !form.monto_otras_detalle.trim();
+  const otrasDetalleRef = useRef<HTMLInputElement>(null);
+  const avisarOtrasFuentes = () => {
+    toast.error('Indicaste un monto en "Otras Fuentes": es obligatorio especificar a qué se refiere antes de continuar.');
+    otrasDetalleRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    otrasDetalleRef.current?.focus();
+  };
   const pct = (m: number) => costo > 0 ? ((m / costo) * 100).toFixed(0) + '%' : '0%';
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -171,9 +179,7 @@ export default function SolicitudProyecto() {
     if (form.tipo_iniciativa !== 'GARANTÍAS' && (!costo || costo <= 0)) {
       toast.error('Ingresa el costo aproximado del proyecto'); return;
     }
-    if (otrasMonto > 0 && !form.monto_otras_detalle.trim()) {
-      toast.error('Especifica a qué se refiere "Otras Fuentes" antes de enviar'); return;
-    }
+    if (otrasSinDetalle) { avisarOtrasFuentes(); return; }
     if (!tieneCotizaciones || cotizacionFiles.length === 0) {
       toast.warning('Recuerda adjuntar la cotización más adelante en cuanto la tengas disponible.');
     }
@@ -183,6 +189,8 @@ export default function SolicitudProyecto() {
   };
 
   const doSubmit = async () => {
+    // Respaldo: nunca enviar si "Otras Fuentes" tiene monto sin especificar.
+    if (otrasSinDetalle) { setShowConfirmSend(false); avisarOtrasFuentes(); return; }
     setShowConfirmSend(false);
     setLoading(true);
     try {
@@ -520,16 +528,24 @@ export default function SolicitudProyecto() {
                   <td className={tdNum}>{pct(otrasMonto)}</td>
                 </tr>
                 {otrasMonto > 0 && (
-                  <tr>
-                    <td className="border border-slate-400 px-3 py-1.5 text-[11px] font-bold text-slate-700 uppercase">
+                  <tr className={otrasSinDetalle ? 'bg-red-50' : ''}>
+                    <td className={`border px-3 py-1.5 text-[11px] font-bold uppercase ${otrasSinDetalle ? 'border-red-500 text-red-700 bg-red-100' : 'border-slate-400 text-slate-700'}`}>
                       ¿A qué se refiere? *
                     </td>
-                    <td className="border border-slate-400 px-0 py-0" colSpan={2}>
-                      <input type="text" className={inputClass}
-                        required
+                    <td className={`border px-0 py-0 ${otrasSinDetalle ? 'border-red-500' : 'border-slate-400'}`} colSpan={2}>
+                      <input type="text" ref={otrasDetalleRef}
+                        className={otrasSinDetalle
+                          ? inputClass + ' !border-2 !border-red-500 !bg-red-50 placeholder:text-red-400 focus:!ring-red-500'
+                          : inputClass}
+                        aria-invalid={otrasSinDetalle}
                         value={form.monto_otras_detalle}
                         onChange={e => set('monto_otras_detalle', e.target.value)}
                         placeholder="Especifica de dónde proviene este monto (ej. aportación de municipio, venta de activo, etc.)" />
+                      {otrasSinDetalle && (
+                        <p className="px-2 py-1 text-xs font-bold text-red-600">
+                          ⚠ Obligatorio: escribe de qué fuente proviene el monto de "Otras Fuentes". Sin este dato no podrás enviar la solicitud.
+                        </p>
+                      )}
                     </td>
                   </tr>
                 )}
