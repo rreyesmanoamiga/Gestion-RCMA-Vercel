@@ -35,6 +35,7 @@ interface Solicitud {
   monto_fbc?:            number | null;
   monto_donativos?:      number | null;
   monto_otras?:          number | null;
+  monto_otras_detalle?:  string | null;
   estatus?:              string;
   created_at?:           string;
   recibida_at?:          string;
@@ -120,6 +121,7 @@ export default function SolicitudesRecibidas() {
     <tr><td class="label">FBC</td><td class="num">${fmxP(s.monto_fbc)}</td><td class="num">${pct(s.monto_fbc)}</td></tr>
     <tr><td class="label">Donativos</td><td class="num">${fmxP(s.monto_donativos)}</td><td class="num">${pct(s.monto_donativos)}</td></tr>
     <tr><td class="label">Otras Fuentes</td><td class="num">${fmxP(s.monto_otras)}</td><td class="num">${pct(s.monto_otras)}</td></tr>
+    ${(s.monto_otras ?? 0) > 0 ? `<tr><td class="label">¿A qué se refiere?</td><td class="value" colspan="2"${s.monto_otras_detalle ? '' : ' style="color:#dc2626;font-weight:700;"'}>${s.monto_otras_detalle || 'No especificado'}</td></tr>` : ''}
   </table>
 
   <div class="footer">
@@ -632,6 +634,14 @@ export default function SolicitudesRecibidas() {
                           <td className="border border-slate-300 px-2 py-1.5 text-right font-mono text-slate-800">{fmx(v as number)}</td>
                         </tr>
                       ))}
+                      {(viewing.monto_otras ?? 0) > 0 && (
+                        <tr>
+                          <td className="border border-slate-300 px-2 py-1.5 bg-slate-100 font-bold text-slate-700 w-44">¿A qué se refiere? (Otras Fuentes)</td>
+                          <td className={`border border-slate-300 px-2 py-1.5 ${viewing.monto_otras_detalle ? 'text-slate-800' : 'text-red-600 font-bold'}`}>
+                            {viewing.monto_otras_detalle || 'No especificado'}
+                          </td>
+                        </tr>
+                      )}
                     </tbody>
                   </table>
                 </div>
