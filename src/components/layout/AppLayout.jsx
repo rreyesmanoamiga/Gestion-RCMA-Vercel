@@ -5,9 +5,11 @@ import NotificationBell from './NotificationBell';
 import GlobalSearch from './GlobalSearch';
 import UserMenu from './UserMenu';
 import OfflineBanner from '@/components/shared/OfflineBanner';
+import { useLimpiarFiltrosAlSalir } from '@/lib/filtrosPersistentes';
 
 export default function AppLayout() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  useLimpiarFiltrosAlSalir();
 
   const handleToggle = useCallback(
     () => setSidebarOpen(prev => !prev),

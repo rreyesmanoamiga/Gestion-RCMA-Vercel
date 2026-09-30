@@ -1,4 +1,5 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
+import { leerFiltros, guardarFiltros } from '@/lib/filtrosPersistentes';
 import { db } from '@/lib/db';
 import { supabase } from '@/lib/supabaseClient';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -44,16 +45,40 @@ interface Project {
   budget?:        number | null;
 }
 
+interface FiltrosProyectos {
+  statuses: string[]; tipo: string; territorio: string; colegio: string; visibles: number; scroll: number;
+}
+
 export default function Projects() {
   const { isAdmin, can } = usePermissions();
   const { filtrarPorAlcance } = useScope();
   const puedeCrear = isAdmin || can('crear_proyectos');
   const [showForm, setShowForm]                 = useState(false);
-  const [filterStatuses, setFilterStatuses]         = useState<Set<string>>(new Set());
-  const [filterTipoProyecto, setFilterTipoProyecto] = useState('all');
-  const [filterTerritorio, setFilterTerritorio]     = useState('all');
-  const [filterColegio, setFilterColegio]           = useState('all');
-  const [visibleCount, setVisibleCount]         = useState(PAGE_SIZE);
+  // Filtros: se conservan al entrar a un proyecto y regresar; se borran al
+  // cambiar a otro módulo del menú (ver lib/filtrosPersistentes).
+  const previo = leerFiltros<FiltrosProyectos>('proyectos');
+  const [filterStatuses, setFilterStatuses]         = useState<Set<string>>(() => new Set(previo?.statuses ?? []));
+  const [filterTipoProyecto, setFilterTipoProyecto] = useState(previo?.tipo ?? 'all');
+  const [filterTerritorio, setFilterTerritorio]     = useState(previo?.territorio ?? 'all');
+  const [filterColegio, setFilterColegio]           = useState(previo?.colegio ?? 'all');
+  const [visibleCount, setVisibleCount]         = useState(previo?.visibles ?? PAGE_SIZE);
+  const scrollRef = useRef(previo?.scroll ?? 0);
+  useEffect(() => {
+    guardarFiltros<FiltrosProyectos>('proyectos', {
+      statuses: [...filterStatuses], tipo: filterTipoProyecto, territorio: filterTerritorio,
+      colegio: filterColegio, visibles: visibleCount, scroll: scrollRef.current,
+    });
+  }, [filterStatuses, filterTipoProyecto, filterTerritorio, filterColegio, visibleCount]);
+  // Posición de la lista: se guarda al salir y se recupera al regresar
+  useEffect(() => {
+    const onScroll = () => { scrollRef.current = window.scrollY; };
+    window.addEventListener('scroll', onScroll, { passive: true });
+    return () => {
+      window.removeEventListener('scroll', onScroll);
+      const f = leerFiltros<FiltrosProyectos>('proyectos');
+      if (f) guardarFiltros('proyectos', { ...f, scroll: scrollRef.current });
+    };
+  }, []);
   const queryClient = useQueryClient();
 
   const { data: rawProjects = [], isLoading } = useQuery({
@@ -72,6 +97,15 @@ export default function Projects() {
       return data ?? [];
     },
   });
+
+  // Al regresar de un proyecto, vuelve a la misma altura de la lista
+  const scrollRestaurado = useRef(false);
+  useEffect(() => {
+    if (isLoading || scrollRestaurado.current) return;
+    scrollRestaurado.current = true;
+    const y = scrollRef.current;
+    if (y > 0) requestAnimationFrame(() => window.scrollTo(0, y));
+  }, [isLoading]);
 
   const projectsAlcance = rawProjects as unknown as Project[];
   const projects = useMemo(
