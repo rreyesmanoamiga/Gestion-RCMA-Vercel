@@ -8,6 +8,7 @@ import {
   TrendingDown, Minus, Save, X, ClipboardList, Camera, Upload, ImagePlus,
 } from 'lucide-react';
 import ProjectForm from '@/components/projects/ProjectForm';
+import GaleriaEvidencia, { queryKeyFotosProyecto } from '@/components/projects/GaleriaEvidencia';
 import { supabase } from '@/lib/supabaseClient';
 import { logAudit } from '@/lib/audit';
 import { notifyByEmail } from '@/lib/notifications';
@@ -313,6 +314,9 @@ export default function ProjectDetail() {
       toast.success(`${totalArchivos} foto${totalArchivos !== 1 ? 's' : ''} subida${totalArchivos !== 1 ? 's' : ''} al Expediente ✓`);
       setEvidenciaFiles({ antes: [], durante: [], despues: [] });
       setShowEvidencia(false);
+      // Microsoft tarda unos segundos en generar las miniaturas de lo recién subido
+      queryClient.invalidateQueries({ queryKey: queryKeyFotosProyecto(id!) });
+      setTimeout(() => queryClient.invalidateQueries({ queryKey: queryKeyFotosProyecto(id!) }), 8000);
     } catch (e: any) {
       toast.error('Error al subir evidencia: ' + (e.message ?? 'desconocido'));
     } finally {
@@ -651,7 +655,8 @@ export default function ProjectDetail() {
             </div>
           ) : (
             <div className="px-6 py-4">
-              <p className="text-xs text-slate-400 italic">Sin fotos agregadas desde aquí todavía. Usa "Agregar fotos" para subir evidencia de Antes / Durante / Después directo al Expediente.</p>
+              <GaleriaEvidencia proyectoId={id!}
+                textoVacio='Sin fotos en el Expediente todavía. Usa "Agregar fotos" para subir evidencia de Antes / Durante / Después.' />
             </div>
           )}
         </div>
