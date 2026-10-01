@@ -10,6 +10,7 @@ import { logAudit } from '@/lib/audit';
 import { generarReporteIndividualExcel, generarReporteGeneralPDF, generarReporteIndividualPDFFirma, type CumplimientoColegioPC } from '@/lib/reportesProteccionCivil';
 import { useDirectorio, getDirector, getAdministrador, findColegio } from '@/lib/directorio';
 import { useSharePointUpload } from '@/hooks/useSharePointUpload';
+import DetalleCumplimientoColegio, { type InstanciaActividad } from '@/components/calendario/DetalleCumplimientoColegio';
 
 // Comprime/redimensiona una foto antes de subirla — clave para que la
 // evidencia obligatoria de mantenimiento no dispare el uso de almacenamiento.
@@ -610,7 +611,7 @@ export default function CalendarioMantenimiento() {
         .gte('fecha_programada', inicioMesISO)
         .lte('fecha_programada', finMesISO);
       if (error) throw error;
-      return data as { id: string; actividad_ref: string; colegio: string; fecha_programada: string; evidencia_url: string | null }[];
+      return data as { id: string; actividad_ref: string; colegio: string; fecha_programada: string; evidencia_url: string | null; realizado_por?: string | null }[];
     },
   });
 
@@ -691,17 +692,25 @@ export default function CalendarioMantenimiento() {
     return total;
   }, [todasActividades, año, mes]);
 
-  // Actividades faltantes de un colegio para el mes (usado en el desglose de Cumplimiento)
-  const actividadesFaltantes = (colegio: string) => {
-    const faltan: { act: Actividad; fecha: Date }[] = [];
+  // Todas las actividades del mes de un colegio, con su cumplimiento (desglose
+  // por día en la vista de Cumplimiento)
+  const instanciasColegio = (colegio: string): InstanciaActividad[] => {
+    const porClave = new Map(completions.filter(c => c.colegio === colegio)
+      .map(c => [`${c.fecha_programada}|${c.actividad_ref}`, c]));
+    const lista: InstanciaActividad[] = [];
     todasActividades.forEach(act => {
       calcularFechasEnMes(act, año, mes).forEach(f => {
-        const key = `${colegio}|${fechaISO(f)}|${actividadRef(act)}`;
-        if (!completionsSet.has(key)) faltan.push({ act, fecha: f });
+        const comp = porClave.get(`${fechaISO(f)}|${actividadRef(act)}`);
+        lista.push({
+          fecha: fechaISO(f), dia: f.getDate(), actividad: act.actividad, categoria: act.categoria,
+          color: COLORES_CATEGORIA[act.categoria] || '#64748b',
+          completion: comp ? { id: comp.id, evidencia_url: comp.evidencia_url, realizado_por: comp.realizado_por ?? null } : null,
+        });
       });
     });
-    return faltan.sort((a, b) => a.fecha.getTime() - b.fecha.getTime());
+    return lista;
   };
+
   const anteriorMes = () => { if (mes === 0) { setMes(11); setAño(a => a-1); } else setMes(m => m-1); setDiaSeleccionado(null); };
   const siguienteMes = () => { if (mes === 11) { setMes(0); setAño(a => a+1); } else setMes(m => m+1); setDiaSeleccionado(null); };
   const colorCat = (cat: string) => COLORES_CATEGORIA[cat] || '#64748b';
@@ -1073,31 +1082,10 @@ export default function CalendarioMantenimiento() {
                     </div>
                     {colegioExpandido === c.colegio ? <ChevronUp className="w-4 h-4 text-slate-400 shrink-0" /> : <ChevronDown className="w-4 h-4 text-slate-400 shrink-0" />}
                   </button>
-                  {colegioExpandido === c.colegio && (() => {
-                    const faltantes = actividadesFaltantes(c.colegio);
-                    return (
-                      <div className="px-5 pb-4 bg-slate-50">
-                        {faltantes.length === 0 ? (
-                          <p className="text-xs text-green-600 font-bold py-2">✓ Sin pendientes este mes.</p>
-                        ) : (
-                          <div className="max-h-56 overflow-y-auto space-y-1 pt-1">
-                            {faltantes.map((f, i) => {
-                              const vencido = f.fecha < new Date(new Date().setHours(0,0,0,0));
-                              return (
-                                <div key={i} className="flex items-center gap-2 text-xs bg-white border border-slate-200 rounded-md px-2.5 py-1.5">
-                                  <span className={`font-bold ${vencido ? 'text-red-600' : 'text-slate-500'}`}>
-                                    {DIAS_SEMANA[f.fecha.getDay()]} {f.fecha.getDate()}
-                                  </span>
-                                  <span className="text-slate-700 flex-1 truncate">{f.act.actividad}</span>
-                                  {vencido && <span className="text-[9px] font-bold px-1.5 py-0.5 bg-red-100 text-red-700 rounded-full shrink-0">VENCIDO</span>}
-                                </div>
-                              );
-                            })}
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })()}
+                  {colegioExpandido === c.colegio && (
+                    <DetalleCumplimientoColegio key={`${c.colegio}-${año}-${mes}`}
+                      colegio={c.colegio} año={año} mes={mes} instancias={instanciasColegio(c.colegio)} />
+                  )}
                 </div>
               ))}
           </div>

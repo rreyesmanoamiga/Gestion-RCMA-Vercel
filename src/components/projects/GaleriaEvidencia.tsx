@@ -71,7 +71,7 @@ function Miniatura({ foto, onClick }: { foto: FotoEvidencia; onClick: () => void
   );
 }
 
-function Visor({ fotos, indice, onCerrar, onCambiar }: {
+export function VisorFotos({ fotos, indice, onCerrar, onCambiar }: {
   fotos: (FotoEvidencia & { seccion: string })[];
   indice: number;
   onCerrar: () => void;
@@ -219,7 +219,7 @@ export default function GaleriaEvidencia({ proyectoId, textoVacio }: { proyectoI
       })}
 
       {abierta !== null && (
-        <Visor fotos={todas} indice={abierta} onCerrar={() => setAbierta(null)} onCambiar={setAbierta} />
+        <VisorFotos fotos={todas} indice={abierta} onCerrar={() => setAbierta(null)} onCambiar={setAbierta} />
       )}
     </div>
   );
