@@ -28,7 +28,7 @@ export interface ComplianceDoc {
 }
 
 // Materias del catálogo (mismas categorías que "Presupuesto Normativo de Apertura")
-export const MATERIAS = ['Todas', 'Donatarias / RVOE', 'Fiscal', 'Fiscal / Comercial', 'Gestión de Riesgos', 'Inmobiliaria', 'Jurídico', 'Construcción', 'Protección Civil', 'Salud y Sanidad'] as const;
+export const MATERIAS = ['Todas', 'Donatarias / RVOE', 'Fiscal', 'Fiscal / Comercial', 'Gestión de Riesgos', 'Inmobiliaria', 'Jurídico', 'Construcción', 'Protección Civil', 'Salud y Sanidad', 'Educativo'] as const;
 // Hoja del "Presupuesto Normativo de Apertura" (una por estado) de la que se
 // tomaron los costos de cada colegio.
 export const HOJA_POR_COLEGIO: Record<string, string> = {
