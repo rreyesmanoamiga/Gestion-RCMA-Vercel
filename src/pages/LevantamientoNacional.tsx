@@ -41,7 +41,7 @@ import { toast } from 'sonner';
 import {
   MapPin, ClipboardList, DollarSign, FileText, Upload,
   Calendar, CheckCircle2, Circle, ChevronDown, ChevronUp,
-  Plus, X, Edit2, Save, Download, Eye, Loader2, Trash2
+  Plus, X, Edit2, Save, Download, Eye, Loader2, Trash2, Lock
 } from 'lucide-react';
 import PageHeader from '@/components/shared/PageHeader';
 import { usePermissions } from '@/hooks/usePermissions';
@@ -859,7 +859,7 @@ function TabPlanteles({ planteles, loading, qc, directorio, puedeCrear, puedeEli
     setTerritorio(info?.territorio ?? p.zona ?? '');
     setColegio(p.colegio_clave);
     setForm({
-      asignacion: p.asignacion ?? asignacionDeFase(p.fase),
+      asignacion: asignacionDeFase(p.fase),
       fase: p.fase,
       fecha_inicio: p.fecha_inicio ?? '',
       fecha_termino: p.fecha_termino ?? '',
@@ -879,7 +879,7 @@ function TabPlanteles({ planteles, loading, qc, directorio, puedeCrear, puedeEli
         colegio_nombre: datos?.nombre ?? colegio,
         zona:           info?.territorio ?? territorio,
         eco_nombre:     getEco(colegio) || null,
-        asignacion:     form.asignacion || null,
+        asignacion:     asignacionDeFase(form.fase),
         fase:           form.fase,
         fecha_inicio:   form.fecha_inicio || null,
         fecha_termino:  form.fecha_termino || null,
@@ -965,11 +965,12 @@ function TabPlanteles({ planteles, loading, qc, directorio, puedeCrear, puedeEli
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="text-xs font-bold text-slate-500 uppercase block mb-1">Asignación <span className="normal-case font-normal text-slate-400">(automática por fase)</span></label>
-                  <select className={inputCls} value={form.asignacion} onChange={e => set('asignacion', e.target.value)}>
-                    <option value="PROVEEDOR">PROVEEDOR</option>
-                    <option value="ECO">ECO</option>
-                    <option value="MA SERVICIOS">MA SERVICIOS</option>
-                  </select>
+                  {/* Solo lectura: la define la fase */}
+                  <div className={`${inputCls} bg-slate-100 text-slate-600 cursor-not-allowed flex items-center gap-1.5`}
+                    title="Se asigna automáticamente según la fase">
+                    <Lock className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                    {form.asignacion}
+                  </div>
                 </div>
                 <div>
                   <label className="text-xs font-bold text-slate-500 uppercase block mb-1">Fase</label>
