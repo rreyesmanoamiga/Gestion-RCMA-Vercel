@@ -148,6 +148,15 @@ const FASES = [
   { key: 'FASE5',      label: 'Fase 5 – Cierre','color': 'bg-emerald-100 text-emerald-700'},
 ];
 
+// Quién tiene a cargo cada fase: se asigna sola al cambiar la fase
+const ASIGNACION_POR_FASE: Record<string, string> = {
+  COMUNICADO: 'MA SERVICIOS',
+  FASE1: 'PROVEEDOR', FASE2: 'PROVEEDOR', FASE3: 'PROVEEDOR',
+  FASE4: 'ECO',
+  FASE5: 'MA SERVICIOS',
+};
+const asignacionDeFase = (f: string) => ASIGNACION_POR_FASE[f] ?? 'PROVEEDOR';
+
 const faseColor = (f: string) => FASES.find(x => x.key === f)?.color ?? 'bg-slate-100 text-slate-700';
 const faseLabel = (f: string) => FASES.find(x => x.key === f)?.label ?? f;
 
@@ -822,7 +831,7 @@ function TabPlanteles({ planteles, loading, qc, directorio, puedeCrear, puedeEli
   const [territorio, setTerritorio] = useState('');
   const [colegio, setColegio]     = useState('');
   const [form, setForm] = useState({
-    asignacion: 'PROVEEDOR', fase: 'COMUNICADO', fecha_inicio: '', fecha_termino: '', notas: ''
+    asignacion: asignacionDeFase('COMUNICADO'), fase: 'COMUNICADO', fecha_inicio: '', fecha_termino: '', notas: ''
   });
   const set = (k: string, v: string) => setForm(f => ({ ...f, [k]: v }));
   const { getEco } = useEcoLookup();
@@ -839,7 +848,7 @@ function TabPlanteles({ planteles, loading, qc, directorio, puedeCrear, puedeEli
   const openNew = () => {
     setEditItem(null);
     setTerritorio(''); setColegio('');
-    setForm({ asignacion: 'PROVEEDOR', fase: 'COMUNICADO', fecha_inicio: '', fecha_termino: '', notas: '' });
+    setForm({ asignacion: asignacionDeFase('COMUNICADO'), fase: 'COMUNICADO', fecha_inicio: '', fecha_termino: '', notas: '' });
     setShowForm(true);
   };
 
@@ -850,7 +859,7 @@ function TabPlanteles({ planteles, loading, qc, directorio, puedeCrear, puedeEli
     setTerritorio(info?.territorio ?? p.zona ?? '');
     setColegio(p.colegio_clave);
     setForm({
-      asignacion: p.asignacion ?? 'PROVEEDOR',
+      asignacion: p.asignacion ?? asignacionDeFase(p.fase),
       fase: p.fase,
       fecha_inicio: p.fecha_inicio ?? '',
       fecha_termino: p.fecha_termino ?? '',
@@ -955,7 +964,7 @@ function TabPlanteles({ planteles, loading, qc, directorio, puedeCrear, puedeEli
               {/* Asignación + Fase */}
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="text-xs font-bold text-slate-500 uppercase block mb-1">Asignación</label>
+                  <label className="text-xs font-bold text-slate-500 uppercase block mb-1">Asignación <span className="normal-case font-normal text-slate-400">(automática por fase)</span></label>
                   <select className={inputCls} value={form.asignacion} onChange={e => set('asignacion', e.target.value)}>
                     <option value="PROVEEDOR">PROVEEDOR</option>
                     <option value="ECO">ECO</option>
@@ -964,7 +973,8 @@ function TabPlanteles({ planteles, loading, qc, directorio, puedeCrear, puedeEli
                 </div>
                 <div>
                   <label className="text-xs font-bold text-slate-500 uppercase block mb-1">Fase</label>
-                  <select className={inputCls} value={form.fase} onChange={e => set('fase', e.target.value)}>
+                  <select className={inputCls} value={form.fase}
+                    onChange={e => setForm(f => ({ ...f, fase: e.target.value, asignacion: asignacionDeFase(e.target.value) }))}>
                     {FASES.map(f => <option key={f.key} value={f.key}>{f.label}</option>)}
                   </select>
                 </div>
@@ -1675,7 +1685,7 @@ function TabComunicados({ comunicados, planteles, directorio, qc, puedeCrear, pu
             colegio_nombre: datosCom?.nombre ?? colegio,
             zona:           info?.territorio ?? territorio,
             eco_nombre:     getEco(colegio) || null,
-            asignacion:     'PROVEEDOR',
+            asignacion:     asignacionDeFase('COMUNICADO'),
             fase:           'COMUNICADO',
             fecha_inicio:   form.fecha_visita || null,
             updated_at:     new Date().toISOString(),
