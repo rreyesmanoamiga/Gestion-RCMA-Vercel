@@ -1,6 +1,7 @@
 import React from 'react';
 import { Printer, X } from 'lucide-react';
 import DOMPurify from 'dompurify';
+import { imprimirHTML } from '@/lib/imprimir';
 
 // Botones fuera del componente — se definen una sola vez
 const btnPrint = "flex items-center gap-2 px-4 py-2 bg-slate-800 text-white rounded-md text-sm font-medium hover:bg-slate-700 transition-colors shadow-sm";
@@ -8,19 +9,9 @@ const btnClose = "p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-200 rou
 
 export default function ReportViewer({ report, onClose }) {
   const handlePrint = () => {
-    const printWindow = window.open('', '_blank');
-
-    // Guard — popup puede estar bloqueado por el navegador
-    if (!printWindow) {
-      alert('Por favor permite las ventanas emergentes para poder imprimir.');
-      return;
-    }
-
-    // Sanitizar antes de inyectar en la ventana de impresión
+    // Sanitizar antes de mandar a imprimir
     const safeHTML = DOMPurify.sanitize(report?.content_html || '');
-
-    printWindow.document.write(`
-      <!DOCTYPE html>
+    imprimirHTML(`<!DOCTYPE html>
       <html lang="es">
       <head>
         <meta charset="UTF-8" />
@@ -38,16 +29,7 @@ export default function ReportViewer({ report, onClose }) {
         </style>
       </head>
       <body>${safeHTML}</body>
-      </html>
-    `);
-    printWindow.document.close();
-
-    // onload en lugar de setTimeout — dispara cuando el contenido realmente cargó
-    printWindow.onload = () => {
-      printWindow.focus();
-      printWindow.print();
-      printWindow.close();
-    };
+      </html>`);
   };
 
   if (!report) return null;

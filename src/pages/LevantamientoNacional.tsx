@@ -38,6 +38,7 @@ function codigoCorto(clave: string): string {
 }
 import { supabase } from '@/lib/supabaseClient';
 import { toast } from 'sonner';
+import { imprimirHTML } from '@/lib/imprimir';
 import {
   MapPin, ClipboardList, DollarSign, FileText, Upload,
   Calendar, CheckCircle2, Circle, ChevronDown, ChevronUp,
@@ -238,12 +239,7 @@ Este proyecto es fundamental para el desarrollo de futuras iniciativas de mejora
 <div class="footer">Coordinación de Obras y Mantenimiento RCMA</div>
 </body></html>`;
 
-  const win = window.open('', '_blank');
-  if (!win) { toast.error('Permite ventanas emergentes para generar el PDF'); return; }
-  win.document.write(html);
-  win.document.close();
-  win.focus();
-  setTimeout(() => win.print(), 600);
+  imprimirHTML(html);
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -1812,10 +1808,7 @@ function TabComunicados({ comunicados, planteles, directorio, qc, puedeCrear, pu
     const plantel = planteles.find(p => p.id === c.plantel_id);
     if (!plantel) return;
     const html = buildPreviewHTML(plantel, c);
-    const win = window.open('', '_blank');
-    if (!win) { toast.error('Permite ventanas emergentes'); return; }
-    win.document.write(html); win.document.close(); win.focus();
-    setTimeout(() => win.print(), 800);
+    imprimirHTML(html);
   };
 
   const previewHTML = previewCom

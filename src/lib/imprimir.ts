@@ -32,7 +32,9 @@ export function imprimirHTML(html: string) {
     // Esperar imágenes (máx. 5 s para no quedarse colgado)
     const imagenes = Array.from(d.images).filter(img => !img.complete).map(img =>
       new Promise<void>(res => { img.onload = () => res(); img.onerror = () => res(); }));
-    await Promise.race([Promise.all(imagenes), new Promise(res => setTimeout(res, 5000))]);
+    // …y las tipografías (diplomas y reportes usan fuentes web)
+    const fuentes = (d as Document & { fonts?: { ready: Promise<unknown> } }).fonts?.ready ?? Promise.resolve();
+    await Promise.race([Promise.all([...imagenes, fuentes]), new Promise(res => setTimeout(res, 5000))]);
     if (titulo) document.title = titulo;
     w.addEventListener('afterprint', limpiar);
     w.focus();

@@ -593,15 +593,8 @@ export async function parseSolExcel(file: File | ArrayBuffer, directorio: Direct
   return out;
 }
 
-// ── Impresión (mismo patrón que el resto del sistema: ventana + print) ───────
-export function imprimirHTML(html: string) {
-  const w = window.open('', '_blank');
-  if (!w) { alert('Permite las ventanas emergentes para generar el PDF.'); return; }
-  w.document.open();
-  w.document.write(html);
-  w.document.close();
-  setTimeout(() => w.print(), 700);
-}
+// ── Impresión: la del sistema (iframe oculto, sin pestaña en blanco) ─────────
+export { imprimirHTML } from '@/lib/imprimir';
 
 const esc = (s: unknown) => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 export const escHTML = esc;
