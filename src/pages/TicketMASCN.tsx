@@ -2,6 +2,7 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabaseClient';
 import { toast } from 'sonner';
+import { imprimirHTML } from '@/lib/imprimir';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { useAuth } from '@/lib/AuthContext';
@@ -465,11 +466,7 @@ export default function TicketMASCN() {
   };
 
   const handlePrint = (t: TicketMASCN) => {
-    const w = window.open('', '_blank');
-    if (!w) { toast.error('Habilita las ventanas emergentes para imprimir'); return; }
-    w.document.write(generarHTMLTicketCN(t));
-    w.document.close();
-    setTimeout(() => w.print(), 400);
+    imprimirHTML(generarHTMLTicketCN(t));
   };
 
   // ── Crear expediente en OneDrive: Cumplimiento Normativo/{año}/{colegio}/{folio} - {nombre}/RCMA ──

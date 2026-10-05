@@ -2,6 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabaseClient';
 import { toast } from 'sonner';
+import { imprimirHTML } from '@/lib/imprimir';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { ChevronDown, CheckCircle, Eye, X, Building2, User, Mail, Calendar, DollarSign, Printer, Trash2, Ban, Send } from 'lucide-react';
@@ -131,12 +132,7 @@ export default function SolicitudesRecibidas() {
 </body>
 </html>`;
 
-    const win = window.open('', '_blank');
-    if (win) {
-      win.document.write(html);
-      win.document.close();
-      win.onload = () => { win.focus(); win.print(); };
-    }
+    imprimirHTML(html);
   };
   const [filterEstatus, setFilterEstatus] = useState('all');
   const [visibleCount, setVisibleCount]   = useState(PAGE_SIZE);

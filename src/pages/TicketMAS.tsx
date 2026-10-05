@@ -2,6 +2,7 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabaseClient';
 import { toast } from 'sonner';
+import { imprimirHTML } from '@/lib/imprimir';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { useAuth } from '@/lib/AuthContext';
@@ -898,8 +899,7 @@ export default function TicketMAS() {
     // ── Imprimir ticket ────────────────────────────────────────────────────────────
   const handlePrint = (t: TicketMAS) => {
     const html = generarHTMLTicket(t, FIRMA_RCMA);
-    const win  = window.open('', '_blank');
-    if (win) { win.document.write(html); win.document.close(); win.onload = () => { win.focus(); win.print(); }; }
+    imprimirHTML(html);
   };
 
   // ── Abrir para revisión ───────────────────────────────────────────────────────
