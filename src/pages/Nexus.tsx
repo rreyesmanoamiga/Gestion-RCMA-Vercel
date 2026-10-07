@@ -24,7 +24,9 @@ interface Pendiente { id: string; titulo: string; descripcion: string; tipo: str
   proyecto_id?: string; proyecto_nombre?: string; ticket_id?: string; ticket_folio?: string; colegio?: string; territorio?: string;
   // Vínculo con Minutas (lo llenan los triggers de la base de datos)
   acuerdo_id?: string | null; minuta_id?: string | null; origen?: 'acuerdo' | 'accion' | null; origen_numero?: number | null;
-  origen_asunto?: string | null; origen_fecha?: string | null; origen_responsable?: string | null; origen_url?: string | null; }
+  origen_asunto?: string | null; origen_fecha?: string | null; origen_responsable?: string | null; origen_url?: string | null;
+  // Sale en la Presentación Semanal (Reportes) como "Proyecto en preparación"
+  presentar_semanal?: boolean | null; }
 interface Comentario { id: string; pendiente_id: string; autor_email: string; autor_nombre: string; contenido: string; leido: boolean; created_at: string; }
 interface Seguimiento { id: string; proyecto_id: string; proyecto_nombre: string; territorio: string; colegio: string; estatus: 'activo'|'completado'|'cancelado'; completado_at: string | null; cancelado_at: string | null; created_at: string; presentado_semana: boolean; }
 interface SeguimientoAnteproyecto { id: string; anteproyecto_id: string; anteproyecto_nombre: string; territorio: string; colegio: string; estatus: 'activo'|'completado'; completado_at: string | null; created_at: string; }
@@ -615,7 +617,7 @@ export default function Nexus() {
   });
 
   // ── Form Pendiente ────────────────────────────────────────────────────────
-  const [pendForm, setPendForm] = useState({ titulo:'',descripcion:'',tipo:'personal',asignado_a:'',asignado_nombre:'',asignado_cc:'',asignado_cc_nombre:'',prioridad:'normal',fecha_limite:'',estatus:'pendiente',proyecto_id:'',proyecto_nombre:'',ticket_id:'',ticket_folio:'',colegio:'',territorio:'' });
+  const [pendForm, setPendForm] = useState({ titulo:'',descripcion:'',tipo:'personal',asignado_a:'',asignado_nombre:'',asignado_cc:'',asignado_cc_nombre:'',prioridad:'normal',fecha_limite:'',estatus:'pendiente',proyecto_id:'',proyecto_nombre:'',ticket_id:'',ticket_folio:'',colegio:'',territorio:'',presentar_semanal:false });
   const [sinProyecto, setSinProyecto] = useState(false);
 
   // Usuarios: colegio seleccionado + FMA siempre disponible
@@ -748,7 +750,7 @@ export default function Nexus() {
 
   const openNota = (n?:Nota)=>{ setEditNota(n??null); setNotaConColegio(!!(n?.colegio)); setNotaForm(n?{titulo:n.titulo,contenido:n.contenido,categoria:n.categoria,color:n.color,fijada:n.fijada,territorio:n.territorio??'',colegio:n.colegio??''}:{titulo:'',contenido:'',categoria:'General',color:'#0f172a',fijada:false,territorio:'',colegio:''}); setShowNota(true); };
 
-  const openPend = (p?:Pendiente)=>{ setEditPend(p??null); setSinProyecto(!!(p&&!p.proyecto_id&&p.proyecto_nombre)); setPendForm(p?{titulo:p.titulo,descripcion:p.descripcion,tipo:p.tipo,asignado_a:p.asignado_a,asignado_nombre:p.asignado_nombre,asignado_cc:p.asignado_cc??'',asignado_cc_nombre:p.asignado_cc_nombre??'',prioridad:p.prioridad,fecha_limite:p.fecha_limite??'',estatus:p.estatus,proyecto_id:p.proyecto_id??'',proyecto_nombre:p.proyecto_nombre??'',ticket_id:p.ticket_id??'',ticket_folio:p.ticket_folio??'',colegio:p.colegio??'',territorio:p.territorio??''}:{titulo:'',descripcion:'',tipo:tab==='compartidos'?'compartido':'personal',asignado_a:'',asignado_nombre:'',asignado_cc:'',asignado_cc_nombre:'',prioridad:'normal',fecha_limite:'',estatus:'pendiente',proyecto_id:'',proyecto_nombre:'',ticket_id:'',ticket_folio:'',colegio:'',territorio:''}); setShowPend(true); };
+  const openPend = (p?:Pendiente)=>{ setEditPend(p??null); setSinProyecto(!!(p&&!p.proyecto_id&&p.proyecto_nombre)); setPendForm(p?{titulo:p.titulo,descripcion:p.descripcion,tipo:p.tipo,asignado_a:p.asignado_a,asignado_nombre:p.asignado_nombre,asignado_cc:p.asignado_cc??'',asignado_cc_nombre:p.asignado_cc_nombre??'',prioridad:p.prioridad,fecha_limite:p.fecha_limite??'',estatus:p.estatus,proyecto_id:p.proyecto_id??'',proyecto_nombre:p.proyecto_nombre??'',ticket_id:p.ticket_id??'',ticket_folio:p.ticket_folio??'',colegio:p.colegio??'',territorio:p.territorio??'',presentar_semanal:!!p.presentar_semanal}:{titulo:'',descripcion:'',tipo:tab==='compartidos'?'compartido':'personal',asignado_a:'',asignado_nombre:'',asignado_cc:'',asignado_cc_nombre:'',prioridad:'normal',fecha_limite:'',estatus:'pendiente',proyecto_id:'',proyecto_nombre:'',ticket_id:'',ticket_folio:'',colegio:'',territorio:'',presentar_semanal:false}); setShowPend(true); };
 
   // ── KPIs ─────────────────────────────────────────────────────────────────
   const kpis = useMemo(()=>({ total: pendientes.length, personales: pendientes.filter(p=>p.tipo==='personal').length, compartidos: pendientes.filter(p=>p.tipo==='compartido').length, completados: pendientes.filter(p=>p.estatus==='completado').length, urgentes: pendientes.filter(p=>p.prioridad==='urgente'&&p.estatus!=='completado').length, activos: pendientes.filter(p=>p.estatus!=='completado').length, }),[pendientes]);
@@ -791,6 +793,10 @@ export default function Nexus() {
           {/* Descripción */}
           {p.descripcion && !(org && p.descripcion === p.titulo) && (
             <p className="text-xs text-slate-500 line-clamp-2 mb-2">{p.descripcion}</p>
+          )}
+
+          {p.presentar_semanal && p.estatus!=='completado' && (
+            <span className="inline-flex items-center gap-1 mb-2 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wide bg-orange-100 text-orange-700 border border-orange-200">Presentación semanal</span>
           )}
 
           {/* Minuta / nota técnica de origen */}
@@ -1402,6 +1408,15 @@ export default function Nexus() {
             <div><label className="block text-xs font-bold text-slate-500 uppercase mb-1">Fecha límite</label><input type="date" className={inputCls} value={pendForm.fecha_limite} onChange={e=>setPendForm(f=>({...f,fecha_limite:e.target.value}))}/></div>
             {editPend&&<div><label className="block text-xs font-bold text-slate-500 uppercase mb-1">Estatus</label><select className={inputCls} value={pendForm.estatus} onChange={e=>setPendForm(f=>({...f,estatus:e.target.value}))}><option value="pendiente">Pendiente</option><option value="en_proceso">En Proceso</option><option value="completado">Completado</option></select></div>}
           </div>
+          {isAdmin&&(
+            <label className="flex items-start gap-2 rounded-lg border border-orange-200 bg-orange-50 px-3 py-2.5 cursor-pointer">
+              <input type="checkbox" className="mt-0.5" checked={pendForm.presentar_semanal} onChange={e=>setPendForm(f=>({...f,presentar_semanal:e.target.checked}))}/>
+              <span className="text-xs text-slate-700">
+                <span className="font-bold text-orange-700">Presentar en la semanal</span> — sale en la Presentación Semanal (Reportes) como "Proyecto en preparación" en la diapositiva de su colegio.
+                {pendForm.presentar_semanal&&!pendForm.colegio&&<span className="block text-red-600 font-semibold mt-0.5">Selecciona un colegio para que pueda aparecer.</span>}
+              </span>
+            </label>
+          )}
         </div>
         <div className="flex gap-3 mt-4"><button type="button" onClick={()=>{setShowPend(false);setEditPend(null);}} className={btnOutline+" flex-1"}>Cancelar</button><button type="button" disabled={!pendForm.titulo.trim()||(pendForm.tipo==='compartido'&&!pendForm.asignado_a)||savePend.isPending} onClick={()=>savePend.mutate()} className={btnPrimary+" flex-1"}>{savePend.isPending?'Guardando...':'Guardar'}</button></div>
       </Modal>)}

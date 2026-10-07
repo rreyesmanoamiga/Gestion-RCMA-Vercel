@@ -40,6 +40,11 @@ export interface ProyectoSemana {
   folio?: string | null;
   comentarios: ComentarioSemana[]; // todos, en orden cronológico
   concluido?: string | null;     // fecha de cierre si se completó dentro del corte semanal
+  // Pendientes NEXUS marcados "Presentar en la semanal" (proyectos en preparación, sin ticket)
+  esPendiente?: boolean;
+  prioridad?: string | null;
+  fechaLimite?: string | null;
+  descripcion?: string | null;
 }
 export interface PlantelSemana {
   colegio_clave: string;
@@ -95,7 +100,9 @@ const TITULO_FASE: Record<string, string> = {
   'COMUNICADO INSTITUCIONAL': 'COMUNICADO', 'FASE 1': 'FASE1', 'FASE 2': 'FASE2', 'FASE 3': 'FASE3', 'FASE 4': 'FASE4',
 };
 const ORDEN_FASE = ['COMUNICADO', 'FASE1', 'FASE2', 'FASE3', 'FASE4'];
+const PRIORIDAD: Record<string, string> = { urgente: 'URGENTE', alta: 'ALTA', normal: 'NORMAL', baja: 'BAJA' };
 const ESTATUS: Record<string, string> = {
+  pendiente: 'PENDIENTE',
   en_espera: 'EN ESPERA', en_proceso: 'EN PROCESO', pausado: 'PAUSADO', completado: 'COMPLETADO', cancelado: 'CANCELADO',
 };
 
@@ -404,11 +411,15 @@ function textoAvance(p: ProyectoSemana, inicio: Date, fin: Date): string[] {
   const lineas: string[] = [];
   if (deLaSemana.length) {
     for (const c of deLaSemana.slice(-4)) lineas.push(`• ${fechaCorta(c.fecha)} — ${c.texto.replace(/\s+/g, ' ').trim()}`);
-  } else if (p.comentarios.length) {
+  } else if (p.comentarios.length && !(p.esPendiente && p.descripcion?.trim())) {
     const u = p.comentarios[p.comentarios.length - 1];
     lineas.push(`${p.concluido ? 'Proyecto concluido.' : 'Sin actualización esta semana.'} Último seguimiento (${fechaLarga(u.fecha)}): ${u.texto.replace(/\s+/g, ' ').trim()}`);
+  } else if (p.esPendiente && p.descripcion?.trim()) {
+    lineas.push(p.descripcion.replace(/\s+/g, ' ').trim());
   } else {
-    lineas.push(p.concluido ? 'Proyecto concluido esta semana.' : 'Sin actualizaciones registradas en el seguimiento de este proyecto.');
+    lineas.push(p.concluido ? 'Proyecto concluido esta semana.'
+      : p.esPendiente ? 'Sin comentarios registrados en este pendiente.'
+      : 'Sin actualizaciones registradas en el seguimiento de este proyecto.');
   }
   // La caja da para ~4 renglones: se recorta lo que no cabe
   let total = 0;
@@ -432,14 +443,18 @@ function llenarObra(doc: Document, p: ProyectoSemana | null, idx: number, de: nu
     ponerTexto(forma(doc, 'Text 17'), [''], {});
     return;
   }
-  const etiqueta = p.concluido ? 'PROYECTO CONCLUIDO' : 'PROYECTO ACTIVO';
-  if (de > 1 || p.concluido) {
+  const etiqueta = p.esPendiente ? 'PROYECTO EN PREPARACIÓN' : p.concluido ? 'PROYECTO CONCLUIDO' : 'PROYECTO ACTIVO';
+  if (de > 1 || p.concluido || p.esPendiente) {
     ensanchar(forma(doc, 'Text 10'), 3000000);
     ponerTexto(forma(doc, 'Text 10'), [de > 1 ? `${etiqueta}  ·  ${idx} DE ${de}` : etiqueta]);
   }
   ensanchar(forma(doc, 'Text 15'), 5800000);
   ponerTexto(forma(doc, 'Text 13'), [recortar(p.nombre, 95)], { color: COLOR_TITULO });
-  const estado = p.concluido
+  const estado = p.esPendiente
+    ? [ESTATUS[p.estatus ?? ''] ?? (p.estatus ?? '').toUpperCase(),
+       p.prioridad ? `PRIORIDAD ${PRIORIDAD[p.prioridad] ?? p.prioridad.toUpperCase()}` : '',
+       p.fechaLimite ? `FECHA LÍMITE ${fechaLarga(p.fechaLimite)}` : ''].filter(Boolean).join('  ·  ')
+    : p.concluido
     ? `COMPLETADO  ·  100%  ·  CERRADO EL ${fechaLarga(p.concluido)}`
     : [ESTATUS[p.estatus ?? ''] ?? (p.estatus ?? '').toUpperCase(),
        p.avance != null ? `${Math.round(p.avance)}% DE AVANCE` : ''].filter(Boolean).join('  ·  ');
@@ -550,7 +565,9 @@ export async function generarPresentacionSemanal(op: OpcionesPresentacion): Prom
     if (!porColegio.has(k)) porColegio.set(k, []);
     porColegio.get(k)!.push(p);
   }
-  for (const lista of porColegio.values()) lista.sort((a, b) => Number(!!a.concluido) - Number(!!b.concluido));
+  // En cada colegio: activos, luego concluidos en la semana, luego pendientes en preparación
+  const orden = (p: ProyectoSemana) => (p.esPendiente ? 2 : p.concluido ? 1 : 0);
+  for (const lista of porColegio.values()) lista.sort((a, b) => orden(a) - orden(b));
   const ordenColegios = info.filter(i => i.tipo.tipo === 'obra').map(i => (i.tipo as { colegio: string }).colegio);
   const pendientesLev = op.planteles
     .filter(pl => ORDEN_FASE.includes(pl.fase))
@@ -587,7 +604,7 @@ export async function generarPresentacionSemanal(op: OpcionesPresentacion): Prom
         const doc = await paq.leer(ref.archivo);
         llenarObra(doc, p, i + 1, instancias.length, op.semana);
         const nuevo = await paq.nuevoSlide(ref.archivo, doc);
-        if (p && op.fotos) {
+        if (p && op.fotos && !p.esPendiente) {
           const fotos = await op.fotos(p.id).catch(() => [] as FotoSlide[]);
           if (fotos.length) { ponerFotos(doc, nuevo.rels, fotos, paq); limpiarAnimaciones(doc); }
           zip.file(nuevo.archivo, serializar(doc), SIN_CARPETAS);

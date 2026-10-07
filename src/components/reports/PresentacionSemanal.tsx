@@ -87,6 +87,26 @@ async function cargarDatos(inicio: Date, fin: Date) {
     })
     .filter(p => p.estatus !== 'cancelado');
 
+  // Pendientes NEXUS marcados "Presentar en la semanal" (aún sin ticket)
+  const { data: pends, error: e5 } = await supabase.from('nexus_pendientes')
+    .select('id, titulo, descripcion, prioridad, fecha_limite, estatus, colegio')
+    .eq('presentar_semanal', true).in('estatus', ['pendiente', 'en_proceso']);
+  if (e5) throw new Error('No se pudieron leer los pendientes: ' + e5.message);
+  const listaPend = (pends ?? []).filter((p: any) => p.colegio);
+  const { data: comsPend, error: e6 } = listaPend.length
+    ? await supabase.from('nexus_comentarios').select('pendiente_id, contenido, autor_nombre, created_at')
+        .in('pendiente_id', listaPend.map((p: any) => p.id)).order('created_at', { ascending: true })
+    : { data: [], error: null };
+  if (e6) throw new Error('No se pudieron leer los comentarios de pendientes: ' + e6.message);
+  for (const p of listaPend as any[]) {
+    proyectos.push({
+      id: 'pend:' + p.id, colegio: p.colegio, nombre: p.titulo ?? 'Pendiente',
+      estatus: p.estatus, esPendiente: true, prioridad: p.prioridad, fechaLimite: p.fecha_limite, descripcion: p.descripcion,
+      comentarios: (comsPend ?? []).filter((c: any) => c.pendiente_id === p.id)
+        .map((c: any) => ({ fecha: c.created_at, texto: c.contenido ?? '', autor: c.autor_nombre })),
+    });
+  }
+
   const planteles: PlantelSemana[] = (pls ?? []).map((p: any) => ({
     colegio_clave: p.colegio_clave ?? '', colegio_nombre: p.colegio_nombre ?? p.colegio_clave ?? '',
     fase: p.fase ?? '', fecha_inicio: p.fecha_inicio, fecha_termino: p.fecha_termino, notas: p.notas,
@@ -124,7 +144,8 @@ export default function PresentacionSemanal({ className }: { className?: string 
       document.body.appendChild(a); a.click(); a.remove();
       setTimeout(() => URL.revokeObjectURL(a.href), 30_000);
       const cerrados = proyectos.filter(p => p.concluido).length;
-      setAvance(`Listo: ${proyectos.length - cerrados} proyecto(s) activo(s) y ${cerrados} concluido(s) en la semana.`);
+      const enPrep = proyectos.filter(p => p.esPendiente).length;
+      setAvance(`Listo: ${proyectos.length - cerrados - enPrep} activo(s), ${cerrados} concluido(s) y ${enPrep} en preparación.`);
     } catch (e) {
       console.error('[presentacion semanal]', e);
       setError((e as Error).message ?? String(e));
