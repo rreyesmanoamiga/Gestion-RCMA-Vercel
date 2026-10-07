@@ -11,7 +11,7 @@
 // Body JSON: { proyecto_id }
 // Respuesta: { encontrado, carpeta_url?, antes: Foto[], durante: Foto[], despues: Foto[] }
 //
-// Body JSON: { proyecto_id, modo: 'presentacion', max?: 3 }
+// Body JSON: { proyecto_id, modo: 'presentacion', max?: 3, prioridad?: 'reciente' | 'despues' }
 // Respuesta: { encontrado, fotos: { nombre, tipo, base64 }[] }   (Presentación Semanal)
 // ============================================================================
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
@@ -216,7 +216,10 @@ serve(async (req) => {
       };
       const [a, d, s] = await Promise.all([leerCrudo('antes'), leerCrudo('durante'), leerCrudo('despues')]);
       const recientes = (l: Item[]) => [...l].sort((x, y) => (y.createdDateTime ?? '').localeCompare(x.createdDateTime ?? ''));
-      const elegidas = [...recientes([...d, ...s]), ...recientes(a)].slice(0, max);
+      // prioridad 'despues' (proyectos concluidos): Después → Durante → Antes
+      const elegidas = (body.prioridad === 'despues'
+        ? [...recientes(s), ...recientes(d), ...recientes(a)]
+        : [...recientes([...d, ...s]), ...recientes(a)]).slice(0, max);
       const fotosB64 = (await Promise.all(elegidas.map(async it => {
         const url = it.thumbnails?.[0]?.large?.url ?? it.thumbnails?.[0]?.medium?.url;
         if (!url) return null;

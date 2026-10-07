@@ -25,9 +25,10 @@ function base64ABytes(b64: string) {
   return out;
 }
 
-async function fotosDeProyecto(proyectoId: string): Promise<FotoSlide[]> {
+async function fotosDeProyecto(proyectoId: string, concluido = false): Promise<FotoSlide[]> {
   const { data, error } = await supabase.functions.invoke('proyecto-fotos', {
-    body: { proyecto_id: proyectoId, modo: 'presentacion', max: 3 },
+    // En proyectos concluidos se priorizan las fotos de "Después"
+    body: { proyecto_id: proyectoId, modo: 'presentacion', max: 3, prioridad: concluido ? 'despues' : 'reciente' },
   });
   if (error || data?.error) return [];
   const lista = (data?.fotos ?? []) as { tipo: string; base64: string }[];
@@ -43,20 +44,22 @@ async function fotosDeProyecto(proyectoId: string): Promise<FotoSlide[]> {
   return fotos;
 }
 
-async function cargarDatos() {
+async function cargarDatos(inicio: Date, fin: Date) {
+  // Activos + los que se completaron dentro del corte (miércoles a miércoles)
   const { data: segs, error: e1 } = await supabase.from('nexus_seguimientos')
-    .select('id, proyecto_id, proyecto_nombre, colegio, estatus').eq('estatus', 'activo');
+    .select('id, proyecto_id, proyecto_nombre, colegio, estatus, completado_at').in('estatus', ['activo', 'completado']);
   if (e1) throw new Error('No se pudieron leer los seguimientos: ' + e1.message);
-  const seguimientos = (segs ?? []) as { id: string; proyecto_id: string | null; proyecto_nombre?: string; colegio?: string }[];
-  const idsProy = [...new Set(seguimientos.map(s => s.proyecto_id).filter(Boolean))] as string[];
+  type Seg = { id: string; proyecto_id: string | null; proyecto_nombre?: string; colegio?: string; estatus: string; completado_at?: string | null };
+  const todos = (segs ?? []) as Seg[];
+  const idsProy = [...new Set(todos.map(s => s.proyecto_id).filter(Boolean))] as string[];
 
   const [{ data: proys, error: e2 }, { data: coms, error: e3 }, { data: pls, error: e4 }] = await Promise.all([
     idsProy.length
-      ? supabase.from('projects').select('id, name, status, progress, colegio, folio').in('id', idsProy)
+      ? supabase.from('projects').select('id, name, status, progress, colegio, folio, completado_at').in('id', idsProy)
       : Promise.resolve({ data: [], error: null }),
-    seguimientos.length
+    todos.length
       ? supabase.from('nexus_comentarios').select('seguimiento_id, contenido, autor_nombre, created_at')
-          .in('seguimiento_id', seguimientos.map(s => s.id)).order('created_at', { ascending: true })
+          .in('seguimiento_id', todos.map(s => s.id)).order('created_at', { ascending: true })
       : Promise.resolve({ data: [], error: null }),
     supabase.from('levantamiento_planteles').select('colegio_clave, colegio_nombre, fase, fecha_inicio, fecha_termino, notas'),
   ]);
@@ -65,6 +68,9 @@ async function cargarDatos() {
   if (e4) throw new Error('No se pudo leer Levantamiento: ' + e4.message);
 
   const proyPorId = new Map((proys ?? []).map((p: any) => [p.id, p]));
+  const enCorte = (f?: string | null) => { if (!f) return false; const d = new Date(f); return d >= inicio && d <= fin; };
+  const fechaCierre = (s: Seg) => s.completado_at ?? (proyPorId.get(s.proyecto_id!) as any)?.completado_at ?? null;
+  const seguimientos = todos.filter(s => s.estatus === 'activo' || enCorte(fechaCierre(s)));
   const proyectos: ProyectoSemana[] = seguimientos
     .filter(s => s.proyecto_id && proyPorId.has(s.proyecto_id))
     .map(s => {
@@ -74,6 +80,7 @@ async function cargarDatos() {
         colegio: p.colegio ?? s.colegio ?? '',
         nombre: p.name ?? s.proyecto_nombre ?? 'Proyecto',
         estatus: p.status, avance: p.progress, folio: p.folio,
+        concluido: s.estatus === 'completado' ? fechaCierre(s) : null,
         comentarios: (coms ?? []).filter((c: any) => c.seguimiento_id === s.id)
           .map((c: any) => ({ fecha: c.created_at, texto: c.contenido ?? '', autor: c.autor_nombre })),
       };
@@ -102,13 +109,13 @@ export default function PresentacionSemanal({ className }: { className?: string 
     setTrabajando(true); setError(''); setAvance('Leyendo datos del sistema…');
     try {
       const [{ proyectos, planteles }, plantilla] = await Promise.all([
-        cargarDatos(),
+        cargarDatos(semana.inicio, semana.fin),
         fetch(PLANTILLA_URL).then(r => { if (!r.ok) throw new Error('No se encontró la plantilla'); return r.arrayBuffer(); }),
       ]);
       const blob = await generarPresentacionSemanal({
         plantilla, semana, proyectos, planteles,
         incluirSinProyecto: sinProyecto,
-        fotos: conFotos ? fotosDeProyecto : undefined,
+        fotos: conFotos ? (id: string) => fotosDeProyecto(id, !!proyectos.find(p => p.id === id)?.concluido) : undefined,
         progreso: setAvance,
       });
       const a = document.createElement('a');
@@ -116,7 +123,8 @@ export default function PresentacionSemanal({ className }: { className?: string 
       a.download = `Seguimiento_Semanal_S${semana.numero}_${semana.anio}.pptx`;
       document.body.appendChild(a); a.click(); a.remove();
       setTimeout(() => URL.revokeObjectURL(a.href), 30_000);
-      setAvance(`Listo: ${proyectos.length} proyecto(s) en seguimiento.`);
+      const cerrados = proyectos.filter(p => p.concluido).length;
+      setAvance(`Listo: ${proyectos.length - cerrados} proyecto(s) activo(s) y ${cerrados} concluido(s) en la semana.`);
     } catch (e) {
       console.error('[presentacion semanal]', e);
       setError((e as Error).message ?? String(e));
@@ -141,7 +149,7 @@ export default function PresentacionSemanal({ className }: { className?: string 
                   <Presentation className="w-5 h-5 text-orange-600" /> Presentación Semanal
                 </h3>
                 <p className="text-xs text-slate-500 mt-1">
-                  Usa la plantilla institucional y la llena con los proyectos en Seguimiento NEXUS y el Levantamiento.
+                  Usa la plantilla institucional y la llena con los proyectos en Seguimiento NEXUS (activos y los concluidos en el corte) y el Levantamiento.
                   Cumplimiento Normativo se queda como en la plantilla para llenarlo a mano.
                 </p>
               </div>
@@ -155,7 +163,7 @@ export default function PresentacionSemanal({ className }: { className?: string 
               <input type="date" value={fecha} onChange={e => e.target.value && setFecha(e.target.value)} disabled={trabajando}
                 className="mt-1 w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" />
               <span className="text-xs text-slate-500 mt-1 block">
-                Semana {semana.numero} · {semana.anio} — del {fmt(semana.inicio)} al {fmt(semana.fin)}
+                Semana {semana.numero} · {semana.anio} — corte del miércoles {fmt(semana.inicio)} al miércoles {fmt(semana.fin)}
               </span>
             </label>
 

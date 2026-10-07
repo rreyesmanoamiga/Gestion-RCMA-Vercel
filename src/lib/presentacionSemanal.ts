@@ -39,6 +39,7 @@ export interface ProyectoSemana {
   avance?: number | null;        // 0–100
   folio?: string | null;
   comentarios: ComentarioSemana[]; // todos, en orden cronológico
+  concluido?: string | null;     // fecha de cierre si se completó dentro del corte semanal
 }
 export interface PlantelSemana {
   colegio_clave: string;
@@ -60,15 +61,19 @@ export interface OpcionesPresentacion {
   progreso?: (msg: string) => void;
 }
 
-// ── Semana ISO ──────────────────────────────────────────────────────────────
+// ── Semana del reporte ──────────────────────────────────────────────────────
+// La junta es los miércoles: el corte va del miércoles anterior (00:00) al
+// miércoles del reporte (23:59), los dos incluidos. El número de semana es la
+// semana ISO de ese miércoles.
 export function semanaISO(fecha: Date) {
-  const d = new Date(Date.UTC(fecha.getFullYear(), fecha.getMonth(), fecha.getDate()));
-  const dia = d.getUTCDay() || 7;
-  d.setUTCDate(d.getUTCDate() + 4 - dia);
+  const dia = fecha.getDay() || 7;                       // lunes = 1 … domingo = 7
+  const miercoles = new Date(fecha.getFullYear(), fecha.getMonth(), fecha.getDate() - dia + 3);
+  const d = new Date(Date.UTC(miercoles.getFullYear(), miercoles.getMonth(), miercoles.getDate()));
+  d.setUTCDate(d.getUTCDate() + 4 - 3);
   const anio = d.getUTCFullYear();
   const numero = Math.ceil(((d.getTime() - Date.UTC(anio, 0, 1)) / 86400000 + 1) / 7);
-  const inicio = new Date(fecha.getFullYear(), fecha.getMonth(), fecha.getDate() - ((fecha.getDay() || 7) - 1));
-  const fin = new Date(inicio.getFullYear(), inicio.getMonth(), inicio.getDate() + 6, 23, 59, 59, 999);
+  const inicio = new Date(miercoles.getFullYear(), miercoles.getMonth(), miercoles.getDate() - 7, 0, 0, 0, 0);
+  const fin = new Date(miercoles.getFullYear(), miercoles.getMonth(), miercoles.getDate(), 23, 59, 59, 999);
   return { numero, anio, inicio, fin };
 }
 
@@ -401,9 +406,9 @@ function textoAvance(p: ProyectoSemana, inicio: Date, fin: Date): string[] {
     for (const c of deLaSemana.slice(-4)) lineas.push(`• ${fechaCorta(c.fecha)} — ${c.texto.replace(/\s+/g, ' ').trim()}`);
   } else if (p.comentarios.length) {
     const u = p.comentarios[p.comentarios.length - 1];
-    lineas.push(`Sin actualización esta semana. Último seguimiento (${fechaLarga(u.fecha)}): ${u.texto.replace(/\s+/g, ' ').trim()}`);
+    lineas.push(`${p.concluido ? 'Proyecto concluido.' : 'Sin actualización esta semana.'} Último seguimiento (${fechaLarga(u.fecha)}): ${u.texto.replace(/\s+/g, ' ').trim()}`);
   } else {
-    lineas.push('Sin actualizaciones registradas en el seguimiento de este proyecto.');
+    lineas.push(p.concluido ? 'Proyecto concluido esta semana.' : 'Sin actualizaciones registradas en el seguimiento de este proyecto.');
   }
   // La caja da para ~4 renglones: se recorta lo que no cabe
   let total = 0;
@@ -427,11 +432,17 @@ function llenarObra(doc: Document, p: ProyectoSemana | null, idx: number, de: nu
     ponerTexto(forma(doc, 'Text 17'), [''], {});
     return;
   }
-  if (de > 1) { ensanchar(forma(doc, 'Text 10'), 3000000); ponerTexto(forma(doc, 'Text 10'), [`PROYECTO ACTIVO  ·  ${idx} DE ${de}`]); }
+  const etiqueta = p.concluido ? 'PROYECTO CONCLUIDO' : 'PROYECTO ACTIVO';
+  if (de > 1 || p.concluido) {
+    ensanchar(forma(doc, 'Text 10'), 3000000);
+    ponerTexto(forma(doc, 'Text 10'), [de > 1 ? `${etiqueta}  ·  ${idx} DE ${de}` : etiqueta]);
+  }
   ensanchar(forma(doc, 'Text 15'), 5800000);
   ponerTexto(forma(doc, 'Text 13'), [recortar(p.nombre, 95)], { color: COLOR_TITULO });
-  const estado = [ESTATUS[p.estatus ?? ''] ?? (p.estatus ?? '').toUpperCase(),
-    p.avance != null ? `${Math.round(p.avance)}% DE AVANCE` : ''].filter(Boolean).join('  ·  ');
+  const estado = p.concluido
+    ? `COMPLETADO  ·  100%  ·  CERRADO EL ${fechaLarga(p.concluido)}`
+    : [ESTATUS[p.estatus ?? ''] ?? (p.estatus ?? '').toUpperCase(),
+       p.avance != null ? `${Math.round(p.avance)}% DE AVANCE` : ''].filter(Boolean).join('  ·  ');
   ponerTexto(forma(doc, 'Text 15'), [estado || '—'], { color: COLOR_ESTADO });
   const lineas = textoAvance(p, semana.inicio, semana.fin);
   const largo = lineas.join(' ').length;
@@ -539,6 +550,7 @@ export async function generarPresentacionSemanal(op: OpcionesPresentacion): Prom
     if (!porColegio.has(k)) porColegio.set(k, []);
     porColegio.get(k)!.push(p);
   }
+  for (const lista of porColegio.values()) lista.sort((a, b) => Number(!!a.concluido) - Number(!!b.concluido));
   const ordenColegios = info.filter(i => i.tipo.tipo === 'obra').map(i => (i.tipo as { colegio: string }).colegio);
   const pendientesLev = op.planteles
     .filter(pl => ORDEN_FASE.includes(pl.fase))
