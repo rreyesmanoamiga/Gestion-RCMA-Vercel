@@ -25,6 +25,9 @@ const T_SLIDE = 'http://schemas.openxmlformats.org/officeDocument/2006/relations
 const T_IMAGE = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/image';
 const T_NOTES = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/notesSlide';
 const CT_SLIDE = 'application/vnd.openxmlformats-officedocument.presentationml.slide+xml';
+const NS_P14 = 'http://schemas.microsoft.com/office/powerpoint/2010/main';
+// PowerPoint rechaza el archivo si el ZIP trae entradas de carpeta vacías
+const SIN_CARPETAS = { createFolders: false } as const;
 
 // ── Datos de entrada ────────────────────────────────────────────────────────
 export interface ComentarioSemana { fecha: string; texto: string; autor?: string | null }
@@ -154,7 +157,7 @@ function ponerTexto(sp: Element | null, parrafos: string[], estilo: EstiloTexto 
       const r = doc.createElementNS(NS.a, 'a:r');
       r.appendChild(rPr.cloneNode(true));
       const t = doc.createElementNS(NS.a, 'a:t');
-      t.textContent = linea;
+      t.textContent = limpiarTexto(linea);
       r.appendChild(t);
       p.appendChild(r);
     }
@@ -173,6 +176,10 @@ function ponerSemana(doc: Document, numero: number, anio: number) {
   }
 }
 
+// Quita caracteres que no se permiten en XML (controles pegados desde Word/WhatsApp)
+const limpiarTexto = (s: string) =>
+  s.replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\uFFFE\uFFFF]/g, '')
+   .replace(/[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/g, '');
 const recortar = (s: string, max: number) => (s.length > max ? s.slice(0, max - 1).trimEnd() + '…' : s);
 const fechaCorta = (iso: string) => {
   const d = new Date(iso);
@@ -218,21 +225,30 @@ class Paquete {
   relsDe(archivo: string) { return archivo.replace(/([^/]+)$/, '_rels/$1.rels'); }
 
   /** Crea un slide nuevo a partir del XML ya modificado de otro (sin notas) */
+  private idsUsados = new Set<number>();
   async nuevoSlide(origen: string, doc: Document): Promise<{ archivo: string; rels: Document }> {
     const n = this.siguienteSlide++;
+    // Cada copia necesita su propio identificador de diapositiva (si se repite, PowerPoint pide "Reparar")
+    for (const c of Array.from(doc.getElementsByTagNameNS(NS_P14, 'creationId'))) {
+      let v = 0;
+      do { v = 1 + Math.floor(Math.random() * 2147483646); } while (this.idsUsados.has(v));
+      this.idsUsados.add(v);
+      c.setAttribute('val', String(v));
+    }
+    doc.documentElement.removeAttribute('show');   // las copias siempre visibles
     const archivo = `ppt/slides/slide${n}.xml`;
     const rels = parsear(await this.zip.file(this.relsDe(origen))!.async('string'));
     hijosNS(rels, NS.rel, 'Relationship').filter(r => r.getAttribute('Type') === T_NOTES).forEach(r => r.remove());
     const o = this.tipos.createElementNS(NS.ct, 'Override');
     o.setAttribute('PartName', '/' + archivo); o.setAttribute('ContentType', CT_SLIDE);
     this.tipos.documentElement.appendChild(o);
-    this.zip.file(archivo, serializar(doc));
+    this.zip.file(archivo, serializar(doc), SIN_CARPETAS);
     return { archivo, rels };
   }
 
   agregarMedia(bytes: Uint8Array, ext: string) {
     const nombre = `foto_semanal_${this.siguienteMedia++}.${ext}`;
-    this.zip.file(`ppt/media/${nombre}`, bytes);
+    this.zip.file(`ppt/media/${nombre}`, bytes, SIN_CARPETAS);
     return `../media/${nombre}`;
   }
 
@@ -294,11 +310,33 @@ class Paquete {
     }
   }
 
+  /** Quita el historial de cambios de coautoría (apunta a slides que ya no existen) */
+  quitarHistorial() {
+    for (const r of hijosNS(this.presRels, NS.rel, 'Relationship')) {
+      if (!/changesInfo|revisionInfo/i.test(r.getAttribute('Type') ?? '')) continue;
+      const parte = 'ppt/' + (r.getAttribute('Target') ?? '').replace(/^\.?\//, '');
+      this.zip.remove(parte);
+      hijosNS(this.tipos, NS.ct, 'Override').filter(o => o.getAttribute('PartName') === '/' + parte).forEach(o => o.remove());
+      r.remove();
+    }
+  }
+
   async guardar(): Promise<Blob> {
-    this.zip.file('ppt/presentation.xml', serializar(this.pres));
-    this.zip.file('ppt/_rels/presentation.xml.rels', serializar(this.presRels));
-    this.zip.file('[Content_Types].xml', serializar(this.tipos));
-    return this.zip.generateAsync({
+    this.quitarHistorial();
+    // Se arma un ZIP nuevo con [Content_Types].xml al principio, como lo escribe Office
+    const salida = new JSZip();
+    const sinCarpetas = { createFolders: false };
+    salida.file('[Content_Types].xml', serializar(this.tipos), sinCarpetas);
+    salida.file('_rels/.rels', await this.zip.file('_rels/.rels')!.async('uint8array'), sinCarpetas);
+    const propios: Record<string, string> = {
+      'ppt/presentation.xml': serializar(this.pres),
+      'ppt/_rels/presentation.xml.rels': serializar(this.presRels),
+    };
+    for (const [ruta, txt] of Object.entries(propios)) salida.file(ruta, txt, sinCarpetas);
+    const resto = Object.keys(this.zip.files).filter(n => !this.zip.files[n].dir && !(n in propios)
+      && n !== '[Content_Types].xml' && n !== '_rels/.rels');
+    for (const n of resto) salida.file(n, await this.zip.file(n)!.async('uint8array'), sinCarpetas);
+    return salida.generateAsync({
       type: 'blob', compression: 'DEFLATE', compressionOptions: { level: 6 },
       mimeType: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
     });
@@ -530,9 +568,9 @@ export async function generarPresentacionSemanal(op: OpcionesPresentacion): Prom
         if (p && op.fotos) {
           const fotos = await op.fotos(p.id).catch(() => [] as FotoSlide[]);
           if (fotos.length) ponerFotos(doc, nuevo.rels, fotos, paq);
-          zip.file(nuevo.archivo, serializar(doc));
+          zip.file(nuevo.archivo, serializar(doc), SIN_CARPETAS);
         }
-        zip.file(paq.relsDe(nuevo.archivo), serializar(nuevo.rels));
+        zip.file(paq.relsDe(nuevo.archivo), serializar(nuevo.rels), SIN_CARPETAS);
         final.push(nuevo.archivo);
       }
       continue;
@@ -547,7 +585,7 @@ export async function generarPresentacionSemanal(op: OpcionesPresentacion): Prom
         const doc = await paq.leer(origen);
         llenarLevantamiento(doc, pl, ubicaciones.get(pl.colegio_clave), op.semana);
         const nuevo = await paq.nuevoSlide(origen, doc);
-        zip.file(paq.relsDe(nuevo.archivo), serializar(nuevo.rels));
+        zip.file(paq.relsDe(nuevo.archivo), serializar(nuevo.rels), SIN_CARPETAS);
         final.push(nuevo.archivo);
       }
       continue;
@@ -555,7 +593,7 @@ export async function generarPresentacionSemanal(op: OpcionesPresentacion): Prom
     // Portada, cumplimiento, cierre: se quedan, solo se actualiza la semana
     const doc = await paq.leer(ref.archivo);
     ponerSemana(doc, op.semana.numero, op.semana.anio);
-    zip.file(ref.archivo, serializar(doc));
+    zip.file(ref.archivo, serializar(doc), SIN_CARPETAS);
     // El separador de Cumplimiento y lo que sigue ya no se quitan
     if (separador) separador = null;
     final.push(ref.archivo);
