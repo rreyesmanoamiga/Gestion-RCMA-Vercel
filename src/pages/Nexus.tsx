@@ -14,9 +14,10 @@ import {
   Plus, X, Pencil, Trash2, CheckCircle2, Clock, AlertCircle,
   MessageSquare, Send, FileText, Pin, Search, Download,
   BookOpen, ListChecks, Users, MapPin, Building2, Link2,
-  ClipboardList, BarChart3, Ban, Handshake, Wrench, ExternalLink, Lock,
+  ClipboardList, BarChart3, Ban, Handshake, Wrench, ExternalLink, Lock, Loader2,
 } from 'lucide-react';
 import { logoCuadradoDataURL } from '@/lib/logoPdf';
+import { useAdjuntos, SelectorFotos, subirFotos, useFotosNexus, FotosDeComentario, type FotoRef } from '@/components/nexus/FotosComentario';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 interface Nota      { id: string; titulo: string; contenido: string; categoria: string; color: string; fijada: boolean; colegio: string; territorio: string; created_at: string; updated_at: string; }
@@ -27,7 +28,7 @@ interface Pendiente { id: string; titulo: string; descripcion: string; tipo: str
   origen_asunto?: string | null; origen_fecha?: string | null; origen_responsable?: string | null; origen_url?: string | null;
   // Sale en la Presentación Semanal (Reportes) como "Proyecto en preparación"
   presentar_semanal?: boolean | null; }
-interface Comentario { id: string; pendiente_id: string; autor_email: string; autor_nombre: string; contenido: string; leido: boolean; created_at: string; }
+interface Comentario { id: string; pendiente_id: string; autor_email: string; autor_nombre: string; contenido: string; leido: boolean; created_at: string; fotos?: FotoRef[] | null; }
 interface Seguimiento { id: string; proyecto_id: string; proyecto_nombre: string; territorio: string; colegio: string; estatus: 'activo'|'completado'|'cancelado'; completado_at: string | null; cancelado_at: string | null; created_at: string; presentado_semana: boolean; }
 interface SeguimientoAnteproyecto { id: string; anteproyecto_id: string; anteproyecto_nombre: string; territorio: string; colegio: string; estatus: 'activo'|'completado'; completado_at: string | null; created_at: string; }
 interface SysUser   { user_email: string; nombre: string; territorio: string; colegio: string; puesto: string; }
@@ -161,16 +162,21 @@ function ComentariosPanel({ pendiente, userEmail, userName, isAdmin }: { pendien
   const qc = useQueryClient();
   const [texto, setTexto] = useState('');
   const endRef = useRef<HTMLDivElement>(null);
+  const fotosAdj = useAdjuntos();
   const { data: comentarios = [] } = useQuery({ queryKey:['nexus_comentarios',pendiente.id], queryFn: async()=>{ const {data}=await supabase.from('nexus_comentarios').select('*').eq('pendiente_id',pendiente.id).order('created_at'); return (data??[]) as Comentario[]; }, refetchInterval:15000 });
+  const mapaFotos = useFotosNexus(comentarios.flatMap(c => (c.fotos ?? []).map(f => f.id)));
+  const puedeEnviar = (!!texto.trim() || fotosAdj.adjuntos.length > 0);
   const sendMutation = useMutation({ mutationFn: async(contenido:string)=>{ 
-    await supabase.from('nexus_comentarios').insert({pendiente_id:pendiente.id,autor_email:userEmail,autor_nombre:userName,contenido}); 
+    const fotos = fotosAdj.adjuntos.length ? await subirFotos(fotosAdj.adjuntos, { pendiente_id: pendiente.id }) : null;
+    const { error } = await supabase.from('nexus_comentarios').insert({pendiente_id:pendiente.id,autor_email:userEmail,autor_nombre:userName,contenido,fotos}); 
+    if (error) throw error;
     // Solo notificar si es compartido y hay alguien asignado
     if (pendiente.tipo === 'compartido') {
       const destEmail=isAdmin?pendiente.asignado_a:(pendiente.created_by||'rreyes@manoamiga.edu.mx'); 
       const destNombre=isAdmin?pendiente.asignado_nombre:'Ricardo Joanathan Reyes Medina'; 
       if(destEmail){ await supabase.functions.invoke('notify-nexus-comentario',{body:{destinatario_email:destEmail,destinatario_nombre:destNombre,autor_nombre:userName,pendiente_titulo:pendiente.titulo,comentario:contenido,siteUrl:window.location.origin}}); }
     }
-  }, onSuccess:()=>{ qc.invalidateQueries({queryKey:['nexus_comentarios',pendiente.id]}); setTexto(''); setTimeout(()=>endRef.current?.scrollIntoView({behavior:'smooth'}),100); }, onError:(e:any)=>toast.error(e.message??'Error') });
+  }, onSuccess:()=>{ qc.invalidateQueries({queryKey:['nexus_comentarios',pendiente.id]}); setTexto(''); fotosAdj.limpiar(); setTimeout(()=>endRef.current?.scrollIntoView({behavior:'smooth'}),100); }, onError:(e:any)=>toast.error(e.message??'Error') });
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => { const { error } = await supabase.from('nexus_comentarios').delete().eq('id', id); if (error) throw error; },
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['nexus_comentarios', pendiente.id] }); toast.success('Comentario eliminado'); },
@@ -180,12 +186,13 @@ function ComentariosPanel({ pendiente, userEmail, userName, isAdmin }: { pendien
     <div className="flex flex-col h-full">
       <div className="flex-1 overflow-y-auto space-y-3 mb-3 max-h-52">
         {comentarios.length===0&&<p className="text-xs text-slate-400 text-center py-4">Sin comentarios aún.</p>}
-        {comentarios.map(c=>{ const esMio=c.autor_email===userEmail; return (<div key={c.id} className={`flex ${esMio?'justify-end':'justify-start'}`}><div className={`group relative max-w-[80%] rounded-xl px-3 py-2 ${esMio?'bg-slate-900 text-white':'bg-slate-100 text-slate-800'}`}><p className={`text-[10px] font-bold mb-1 ${esMio?'text-slate-300':'text-slate-500'}`}>{c.autor_nombre}</p><p className="text-sm">{c.contenido}</p><p className={`text-[10px] mt-1 ${esMio?'text-slate-400':'text-slate-400'}`}>{fmtFull(c.created_at)}</p>{esMio && (<button onClick={()=>{ if(confirm('¿Eliminar este comentario?')) deleteMutation.mutate(c.id); }} className="absolute -top-2 -left-2 opacity-0 group-hover:opacity-100 transition-opacity bg-white text-red-500 hover:text-red-700 rounded-full p-1 shadow border border-slate-200" title="Eliminar"><Trash2 className="w-3 h-3"/></button>)}</div></div>); })}
+        {comentarios.map(c=>{ const esMio=c.autor_email===userEmail; return (<div key={c.id} className={`flex ${esMio?'justify-end':'justify-start'}`}><div className={`group relative max-w-[80%] rounded-xl px-3 py-2 ${esMio?'bg-slate-900 text-white':'bg-slate-100 text-slate-800'}`}><p className={`text-[10px] font-bold mb-1 ${esMio?'text-slate-300':'text-slate-500'}`}>{c.autor_nombre}</p>{c.contenido && <p className="text-sm">{c.contenido}</p>}<FotosDeComentario fotos={c.fotos} mapa={mapaFotos} oscuro={esMio}/><p className={`text-[10px] mt-1 ${esMio?'text-slate-400':'text-slate-400'}`}>{fmtFull(c.created_at)}</p>{esMio && (<button onClick={()=>{ if(confirm('¿Eliminar este comentario?')) deleteMutation.mutate(c.id); }} className="absolute -top-2 -left-2 opacity-0 group-hover:opacity-100 transition-opacity bg-white text-red-500 hover:text-red-700 rounded-full p-1 shadow border border-slate-200" title="Eliminar"><Trash2 className="w-3 h-3"/></button>)}</div></div>); })}
         <div ref={endRef}/>
       </div>
-      <div className="flex gap-2">
-        <textarea className={inputCls+" resize-none"} rows={2} placeholder="Escribe un comentario..." value={texto} onChange={e=>setTexto(e.target.value)} onKeyDown={e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();if(texto.trim())sendMutation.mutate(texto.trim());}}}/>
-        <button type="button" disabled={!texto.trim()||sendMutation.isPending} onClick={()=>sendMutation.mutate(texto.trim())} className="p-2 bg-slate-900 text-white rounded-lg hover:bg-slate-800 disabled:opacity-40 transition shrink-0"><Send className="w-4 h-4"/></button>
+      <div className="flex flex-wrap gap-2" {...fotosAdj.alSoltar}>
+        <SelectorFotos adjuntos={fotosAdj.adjuntos} agregar={fotosAdj.agregar} quitar={fotosAdj.quitar} deshabilitado={sendMutation.isPending}/>
+        <textarea className={inputCls+" resize-none flex-1 min-w-0"} rows={2} placeholder="Escribe un comentario... (puedes pegar fotos con Ctrl+V)" value={texto} onChange={e=>setTexto(e.target.value)} onPaste={fotosAdj.alPegar} onKeyDown={e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();if(puedeEnviar&&!sendMutation.isPending)sendMutation.mutate(texto.trim());}}}/>
+        <button type="button" disabled={!puedeEnviar||sendMutation.isPending} onClick={()=>sendMutation.mutate(texto.trim())} className="p-2 bg-slate-900 text-white rounded-lg hover:bg-slate-800 disabled:opacity-40 transition shrink-0">{sendMutation.isPending&&fotosAdj.adjuntos.length?<Loader2 className="w-4 h-4 animate-spin"/>:<Send className="w-4 h-4"/>}</button>
       </div>
     </div>
   );
@@ -195,6 +202,7 @@ function ComentariosPanel({ pendiente, userEmail, userName, isAdmin }: { pendien
 function SeguimientoModal({ seguimiento, userEmail, userName, onClose }: { seguimiento:Seguimiento; userEmail:string; userName:string; onClose:()=>void }) {
   const qc = useQueryClient();
   const [texto, setTexto] = useState('');
+  const fotosAdj = useAdjuntos();
   const [showConvertir, setShowConvertir] = useState(false);
   const [convTitulo, setConvTitulo] = useState('');
   const [convPrioridad, setConvPrioridad] = useState('normal');
@@ -209,16 +217,21 @@ function SeguimientoModal({ seguimiento, userEmail, userName, onClose }: { segui
     },
     refetchInterval: 15000,
   });
+  const mapaFotos = useFotosNexus(comentarios.flatMap(c => (c.fotos ?? []).map(f => f.id)));
+  const puedeEnviar = !!texto.trim() || fotosAdj.adjuntos.length > 0;
 
   const sendMutation = useMutation({
     mutationFn: async (contenido: string) => {
-      const { error } = await supabase.from('nexus_comentarios').insert({ seguimiento_id: seguimiento.id, autor_email: userEmail, autor_nombre: userName, contenido });
+      // Las fotos van al Expediente del proyecto (ECO / 06 - Fotografías / Durante)
+      const fotos = fotosAdj.adjuntos.length ? await subirFotos(fotosAdj.adjuntos, { seguimiento_id: seguimiento.id }) : null;
+      const { error } = await supabase.from('nexus_comentarios').insert({ seguimiento_id: seguimiento.id, autor_email: userEmail, autor_nombre: userName, contenido, fotos });
       if (error) throw error;
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['seguimiento_comentarios', seguimiento.id] });
       qc.invalidateQueries({ queryKey: ['seguimiento_comentarios_resumen'] });
       setTexto('');
+      fotosAdj.limpiar();
       setTimeout(() => endRef.current?.scrollIntoView({ behavior: 'smooth' }), 100);
     },
     onError: (e: any) => toast.error(e.message ?? 'Error'),
@@ -272,7 +285,8 @@ function SeguimientoModal({ seguimiento, userEmail, userName, onClose }: { segui
           {comentarios.map(c => (
             <div key={c.id} className="group relative bg-slate-50 rounded-lg px-3 py-2">
               <p className="text-[10px] font-bold text-slate-500 mb-1">{c.autor_nombre} · {fmtFull(c.created_at)}</p>
-              <p className="text-sm text-slate-800 whitespace-pre-wrap pr-5">{c.contenido}</p>
+              {c.contenido && <p className="text-sm text-slate-800 whitespace-pre-wrap pr-5">{c.contenido}</p>}
+              <FotosDeComentario fotos={c.fotos} mapa={mapaFotos} />
               {c.autor_email === userEmail && (
                 <button onClick={() => { if (confirm('¿Eliminar este comentario?')) deleteComentarioMutation.mutate(c.id); }}
                   className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity text-slate-300 hover:text-red-600" title="Eliminar">
@@ -321,12 +335,15 @@ function SeguimientoModal({ seguimiento, userEmail, userName, onClose }: { segui
               </div>
             )}
 
-            <div className="flex gap-2 px-5 py-4 border-t border-slate-100">
-              <textarea className={inputCls + ' resize-none'} rows={2} placeholder="Escribe una nota de seguimiento..."
-                value={texto} onChange={e => setTexto(e.target.value)}
-                onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); if (texto.trim()) sendMutation.mutate(texto.trim()); } }} />
-              <button disabled={!texto.trim() || sendMutation.isPending} onClick={() => sendMutation.mutate(texto.trim())}
-                className="p-2 bg-slate-900 text-white rounded-lg hover:bg-slate-800 disabled:opacity-40 transition shrink-0"><Send className="w-4 h-4" /></button>
+            <div className="flex flex-wrap gap-2 px-5 py-4 border-t border-slate-100" {...fotosAdj.alSoltar}>
+              <SelectorFotos adjuntos={fotosAdj.adjuntos} agregar={fotosAdj.agregar} quitar={fotosAdj.quitar} deshabilitado={sendMutation.isPending} />
+              <textarea className={inputCls + ' resize-none flex-1 min-w-0'} rows={2} placeholder="Escribe una nota de seguimiento... (puedes pegar fotos con Ctrl+V)"
+                value={texto} onChange={e => setTexto(e.target.value)} onPaste={fotosAdj.alPegar}
+                onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); if (puedeEnviar && !sendMutation.isPending) sendMutation.mutate(texto.trim()); } }} />
+              <button disabled={!puedeEnviar || sendMutation.isPending} onClick={() => sendMutation.mutate(texto.trim())}
+                className="p-2 bg-slate-900 text-white rounded-lg hover:bg-slate-800 disabled:opacity-40 transition shrink-0">
+                {sendMutation.isPending && fotosAdj.adjuntos.length ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+              </button>
             </div>
           </>
         )}

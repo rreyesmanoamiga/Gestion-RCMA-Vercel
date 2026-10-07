@@ -25,23 +25,43 @@ function base64ABytes(b64: string) {
   return out;
 }
 
-async function fotosDeProyecto(proyectoId: string, concluido = false): Promise<FotoSlide[]> {
-  const { data, error } = await supabase.functions.invoke('proyecto-fotos', {
-    // En proyectos concluidos se priorizan las fotos de "Después"
-    body: { proyecto_id: proyectoId, modo: 'presentacion', max: 3, prioridad: concluido ? 'despues' : 'reciente' },
-  });
-  if (error || data?.error) return [];
-  const lista = (data?.fotos ?? []) as { tipo: string; base64: string }[];
-  const fotos: FotoSlide[] = [];
+async function aFotosSlide(lista: { id?: string; tipo: string; base64: string }[]) {
+  const fotos: (FotoSlide & { id?: string })[] = [];
   for (const f of lista) {
     try {
       const bytes = base64ABytes(f.base64);
       const bmp = await createImageBitmap(new Blob([bytes], { type: f.tipo }));
-      fotos.push({ bytes, ext: /png/i.test(f.tipo) ? 'png' : 'jpg', ancho: bmp.width, alto: bmp.height });
+      fotos.push({ id: f.id, bytes, ext: /png/i.test(f.tipo) ? 'png' : 'jpg', ancho: bmp.width, alto: bmp.height });
       bmp.close();
     } catch { /* imagen que no se pudo leer: se omite */ }
   }
   return fotos;
+}
+
+/** Fotos de la diapositiva: primero las que se pegaron en los comentarios de la semana
+ *  (NEXUS) y después, hasta completar 3, las del Expediente en OneDrive. */
+async function fotosDeProyecto(p: ProyectoSemana, inicio: Date, fin: Date): Promise<FotoSlide[]> {
+  const idsSemana = p.comentarios
+    .filter(c => { const d = new Date(c.fecha); return d >= inicio && d <= fin; })
+    .flatMap(c => c.fotos ?? []).reverse().slice(0, 3);
+  let fotos: (FotoSlide & { id?: string })[] = [];
+  if (idsSemana.length) {
+    const { data } = await supabase.functions.invoke('nexus-fotos', { body: { accion: 'base64', ids: idsSemana } });
+    const porId = new Map(((data?.fotos ?? []) as { id: string; tipo: string; base64: string }[]).map(f => [f.id, f]));
+    fotos = await aFotosSlide(idsSemana.map(id => porId.get(id)).filter(Boolean) as { id: string; tipo: string; base64: string }[]);
+  }
+  if (fotos.length < 3 && !p.esPendiente) {
+    const { data, error } = await supabase.functions.invoke('proyecto-fotos', {
+      // En proyectos concluidos se priorizan las fotos de "Después"
+      body: { proyecto_id: p.id, modo: 'presentacion', max: 3 + fotos.length, prioridad: p.concluido ? 'despues' : 'reciente' },
+    });
+    if (!error && !data?.error) {
+      const ya = new Set(fotos.map(f => f.id));
+      const extra = ((data?.fotos ?? []) as { id?: string; tipo: string; base64: string }[]).filter(f => !f.id || !ya.has(f.id));
+      fotos = [...fotos, ...(await aFotosSlide(extra.slice(0, 3 - fotos.length)))];
+    }
+  }
+  return fotos.slice(0, 3);
 }
 
 async function cargarDatos(inicio: Date, fin: Date) {
@@ -58,7 +78,7 @@ async function cargarDatos(inicio: Date, fin: Date) {
       ? supabase.from('projects').select('id, name, status, progress, colegio, folio, completado_at').in('id', idsProy)
       : Promise.resolve({ data: [], error: null }),
     todos.length
-      ? supabase.from('nexus_comentarios').select('seguimiento_id, contenido, autor_nombre, created_at')
+      ? supabase.from('nexus_comentarios').select('seguimiento_id, contenido, autor_nombre, created_at, fotos')
           .in('seguimiento_id', todos.map(s => s.id)).order('created_at', { ascending: true })
       : Promise.resolve({ data: [], error: null }),
     supabase.from('levantamiento_planteles').select('colegio_clave, colegio_nombre, fase, fecha_inicio, fecha_termino, notas'),
@@ -82,7 +102,7 @@ async function cargarDatos(inicio: Date, fin: Date) {
         estatus: p.status, avance: p.progress, folio: p.folio,
         concluido: s.estatus === 'completado' ? fechaCierre(s) : null,
         comentarios: (coms ?? []).filter((c: any) => c.seguimiento_id === s.id)
-          .map((c: any) => ({ fecha: c.created_at, texto: c.contenido ?? '', autor: c.autor_nombre })),
+          .map((c: any) => ({ fecha: c.created_at, texto: c.contenido ?? '', autor: c.autor_nombre, fotos: (c.fotos ?? []).map((f: any) => f.id) })),
       };
     })
     .filter(p => p.estatus !== 'cancelado');
@@ -94,7 +114,7 @@ async function cargarDatos(inicio: Date, fin: Date) {
   if (e5) throw new Error('No se pudieron leer los pendientes: ' + e5.message);
   const listaPend = (pends ?? []).filter((p: any) => p.colegio);
   const { data: comsPend, error: e6 } = listaPend.length
-    ? await supabase.from('nexus_comentarios').select('pendiente_id, contenido, autor_nombre, created_at')
+    ? await supabase.from('nexus_comentarios').select('pendiente_id, contenido, autor_nombre, created_at, fotos')
         .in('pendiente_id', listaPend.map((p: any) => p.id)).order('created_at', { ascending: true })
     : { data: [], error: null };
   if (e6) throw new Error('No se pudieron leer los comentarios de pendientes: ' + e6.message);
@@ -103,7 +123,7 @@ async function cargarDatos(inicio: Date, fin: Date) {
       id: 'pend:' + p.id, colegio: p.colegio, nombre: p.titulo ?? 'Pendiente',
       estatus: p.estatus, esPendiente: true, prioridad: p.prioridad, fechaLimite: p.fecha_limite, descripcion: p.descripcion,
       comentarios: (comsPend ?? []).filter((c: any) => c.pendiente_id === p.id)
-        .map((c: any) => ({ fecha: c.created_at, texto: c.contenido ?? '', autor: c.autor_nombre })),
+        .map((c: any) => ({ fecha: c.created_at, texto: c.contenido ?? '', autor: c.autor_nombre, fotos: (c.fotos ?? []).map((f: any) => f.id) })),
     });
   }
 
@@ -135,7 +155,7 @@ export default function PresentacionSemanal({ className }: { className?: string 
       const blob = await generarPresentacionSemanal({
         plantilla, semana, proyectos, planteles,
         incluirSinProyecto: sinProyecto,
-        fotos: conFotos ? (id: string) => fotosDeProyecto(id, !!proyectos.find(p => p.id === id)?.concluido) : undefined,
+        fotos: conFotos ? (id: string) => { const p = proyectos.find(x => x.id === id); return p ? fotosDeProyecto(p, semana.inicio, semana.fin) : Promise.resolve([]); } : undefined,
         progreso: setAvance,
       });
       const a = document.createElement('a');
@@ -191,7 +211,7 @@ export default function PresentacionSemanal({ className }: { className?: string 
             <div className="space-y-2">
               <label className="flex items-center gap-2 text-sm text-slate-700">
                 <input type="checkbox" checked={conFotos} onChange={e => setConFotos(e.target.checked)} disabled={trabajando} />
-                Incluir fotos del Expediente (3 más recientes por proyecto)
+                Incluir fotos (primero las pegadas en los comentarios de la semana, luego las del Expediente)
               </label>
               <label className="flex items-center gap-2 text-sm text-slate-700">
                 <input type="checkbox" checked={sinProyecto} onChange={e => setSinProyecto(e.target.checked)} disabled={trabajando} />

@@ -12,7 +12,7 @@
 // Respuesta: { encontrado, carpeta_url?, antes: Foto[], durante: Foto[], despues: Foto[] }
 //
 // Body JSON: { proyecto_id, modo: 'presentacion', max?: 3, prioridad?: 'reciente' | 'despues' }
-// Respuesta: { encontrado, fotos: { nombre, tipo, base64 }[] }   (Presentación Semanal)
+// Respuesta: { encontrado, fotos: { id, nombre, tipo, base64 }[] }   (Presentación Semanal)
 // ============================================================================
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
@@ -227,7 +227,7 @@ serve(async (req) => {
         if (!r.ok) return null;
         const bytes = new Uint8Array(await r.arrayBuffer());
         const tipo = r.headers.get('content-type') ?? 'image/jpeg';
-        return { nombre: it.name, tipo, base64: base64(bytes) };
+        return { id: it.id, nombre: it.name, tipo, base64: base64(bytes) };
       }))).filter(Boolean);
       return json({ encontrado: true, fotos: fotosB64 });
     }

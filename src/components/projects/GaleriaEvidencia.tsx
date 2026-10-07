@@ -101,7 +101,7 @@ export function VisorFotos({ fotos, indice, onCerrar, onCambiar }: {
 
   // Se monta directo en <body> para que ningún contenedor de la página lo recorte
   return createPortal(
-    <div className="fixed inset-0 z-[60] bg-black/90 flex flex-col" onClick={onCerrar}>
+    <div className="fixed inset-0 z-[200] bg-black/90 flex flex-col" onClick={onCerrar}>
       <div className="flex items-center gap-3 px-4 py-3 text-white" onClick={e => e.stopPropagation()}>
         <span className="text-xs font-bold uppercase tracking-wide bg-white/15 rounded px-2 py-0.5">{foto.seccion}</span>
         <p className="text-sm truncate flex-1 min-w-0">{foto.nombre}</p>

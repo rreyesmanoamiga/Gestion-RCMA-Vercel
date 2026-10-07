@@ -30,7 +30,7 @@ const NS_P14 = 'http://schemas.microsoft.com/office/powerpoint/2010/main';
 const SIN_CARPETAS = { createFolders: false } as const;
 
 // ── Datos de entrada ────────────────────────────────────────────────────────
-export interface ComentarioSemana { fecha: string; texto: string; autor?: string | null }
+export interface ComentarioSemana { fecha: string; texto: string; autor?: string | null; fotos?: string[] }
 export interface ProyectoSemana {
   id: string;
   colegio: string;               // clave COLEGIOS: 'MA MTY', 'OF. CDMX', 'CLIN COT'…
@@ -407,12 +407,12 @@ function ponerFotos(doc: Document, rels: Document, fotos: FotoSlide[], paquete: 
 
 // ── Textos del slide de obra ────────────────────────────────────────────────
 function textoAvance(p: ProyectoSemana, inicio: Date, fin: Date): string[] {
-  const deLaSemana = p.comentarios.filter(c => { const d = new Date(c.fecha); return d >= inicio && d <= fin; });
+  const deLaSemana = p.comentarios.filter(c => { const d = new Date(c.fecha); return d >= inicio && d <= fin && c.texto.trim(); });
   const lineas: string[] = [];
   if (deLaSemana.length) {
     for (const c of deLaSemana.slice(-4)) lineas.push(`• ${fechaCorta(c.fecha)} — ${c.texto.replace(/\s+/g, ' ').trim()}`);
-  } else if (p.comentarios.length && !(p.esPendiente && p.descripcion?.trim())) {
-    const u = p.comentarios[p.comentarios.length - 1];
+  } else if (p.comentarios.some(c => c.texto.trim()) && !(p.esPendiente && p.descripcion?.trim())) {
+    const u = p.comentarios.filter(c => c.texto.trim()).slice(-1)[0];
     lineas.push(`${p.concluido ? 'Proyecto concluido.' : 'Sin actualización esta semana.'} Último seguimiento (${fechaLarga(u.fecha)}): ${u.texto.replace(/\s+/g, ' ').trim()}`);
   } else if (p.esPendiente && p.descripcion?.trim()) {
     lineas.push(p.descripcion.replace(/\s+/g, ' ').trim());
@@ -604,7 +604,7 @@ export async function generarPresentacionSemanal(op: OpcionesPresentacion): Prom
         const doc = await paq.leer(ref.archivo);
         llenarObra(doc, p, i + 1, instancias.length, op.semana);
         const nuevo = await paq.nuevoSlide(ref.archivo, doc);
-        if (p && op.fotos && !p.esPendiente) {
+        if (p && op.fotos) {
           const fotos = await op.fotos(p.id).catch(() => [] as FotoSlide[]);
           if (fotos.length) { ponerFotos(doc, nuevo.rels, fotos, paq); limpiarAnimaciones(doc); }
           zip.file(nuevo.archivo, serializar(doc), SIN_CARPETAS);
