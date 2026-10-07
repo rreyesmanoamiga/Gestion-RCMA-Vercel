@@ -2,7 +2,8 @@
 // Junta los datos del sistema y se los pasa a generarPresentacionSemanal().
 import React, { useState } from 'react';
 import { createPortal } from 'react-dom';
-import { Presentation, X, Loader2, Download } from 'lucide-react';
+import { Presentation, X, Loader2, Download, FolderOpen } from 'lucide-react';
+import { useSharePointUpload } from '@/hooks/useSharePointUpload';
 import { supabase } from '@/lib/supabaseClient';
 import {
   generarPresentacionSemanal, semanaISO,
@@ -16,6 +17,10 @@ const hoyISO = () => {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 };
 const fechaDeInput = (s: string) => { const [y, m, d] = s.split('-').map(Number); return new Date(y, m - 1, d); };
+const MESES = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
+/** Carpeta en OneDrive (dentro de "Sistema RCMA Doc"): Presentaciones Semanales / año / mes del miércoles del reporte */
+const carpetaOneDrive = (miercoles: Date) =>
+  `Presentaciones Semanales/${miercoles.getFullYear()}/${String(miercoles.getMonth() + 1).padStart(2, '0')} - ${MESES[miercoles.getMonth()]}`;
 const fmt = (d: Date) => d.toLocaleDateString('es-MX', { day: '2-digit', month: 'short' });
 
 function base64ABytes(b64: string) {
@@ -142,11 +147,13 @@ export default function PresentacionSemanal({ className }: { className?: string 
   const [trabajando, setTrabajando] = useState(false);
   const [avance, setAvance] = useState('');
   const [error, setError] = useState('');
+  const [linkOneDrive, setLinkOneDrive] = useState<string | null>(null);
+  const { uploadCustom } = useSharePointUpload();
 
   const semana = semanaISO(fechaDeInput(fecha));
 
   const generar = async () => {
-    setTrabajando(true); setError(''); setAvance('Leyendo datos del sistema…');
+    setTrabajando(true); setError(''); setLinkOneDrive(null); setAvance('Leyendo datos del sistema…');
     try {
       const [{ proyectos, planteles }, plantilla] = await Promise.all([
         cargarDatos(semana.inicio, semana.fin),
@@ -158,14 +165,22 @@ export default function PresentacionSemanal({ className }: { className?: string 
         fotos: conFotos ? (id: string) => { const p = proyectos.find(x => x.id === id); return p ? fotosDeProyecto(p, semana.inicio, semana.fin) : Promise.resolve([]); } : undefined,
         progreso: setAvance,
       });
+      const nombre = `Seguimiento_Semanal_S${semana.numero}_${semana.anio}.pptx`;
       const a = document.createElement('a');
       a.href = URL.createObjectURL(blob);
-      a.download = `Seguimiento_Semanal_S${semana.numero}_${semana.anio}.pptx`;
+      a.download = nombre;
       document.body.appendChild(a); a.click(); a.remove();
       setTimeout(() => URL.revokeObjectURL(a.href), 30_000);
       const cerrados = proyectos.filter(p => p.concluido).length;
       const enPrep = proyectos.filter(p => p.esPendiente).length;
-      setAvance(`Listo: ${proyectos.length - cerrados - enPrep} activo(s), ${cerrados} concluido(s) y ${enPrep} en preparación.`);
+      const resumen = `${proyectos.length - cerrados - enPrep} activo(s), ${cerrados} concluido(s) y ${enPrep} en preparación`;
+
+      // Copia en OneDrive (si se vuelve a generar la misma semana, se reemplaza)
+      setAvance('Guardando copia en OneDrive…');
+      const archivo = new File([blob], nombre, { type: 'application/vnd.openxmlformats-officedocument.presentationml.presentation' });
+      const link = await uploadCustom(archivo, carpetaOneDrive(semana.fin), nombre);
+      setLinkOneDrive(link);
+      setAvance(link ? `Listo: ${resumen}. Se guardó en OneDrive.` : `Listo: ${resumen}. No se pudo guardar la copia en OneDrive (la descarga sí se hizo).`);
     } catch (e) {
       console.error('[presentacion semanal]', e);
       setError((e as Error).message ?? String(e));
@@ -192,6 +207,7 @@ export default function PresentacionSemanal({ className }: { className?: string 
                 <p className="text-xs text-slate-500 mt-1">
                   Usa la plantilla institucional y la llena con los proyectos en Seguimiento NEXUS (activos y los concluidos en el corte) y el Levantamiento.
                   Cumplimiento Normativo se queda como en la plantilla para llenarlo a mano.
+                  Además de descargarse, se guarda una copia en OneDrive: Presentaciones Semanales / año / mes.
                 </p>
               </div>
               <button onClick={() => setAbierto(false)} disabled={trabajando} className="p-1 rounded hover:bg-slate-100 disabled:opacity-40">
@@ -223,6 +239,12 @@ export default function PresentacionSemanal({ className }: { className?: string 
               <p className="text-xs text-slate-600 flex items-center gap-2">
                 {trabajando && <Loader2 className="w-3.5 h-3.5 animate-spin" />} {avance}
               </p>
+            )}
+            {linkOneDrive && (
+              <a href={linkOneDrive} target="_blank" rel="noreferrer"
+                className="inline-flex items-center gap-1.5 text-xs font-bold text-blue-600 hover:underline">
+                <FolderOpen className="w-3.5 h-3.5" /> Abrir en OneDrive ({carpetaOneDrive(semana.fin)})
+              </a>
             )}
             {error && <p className="text-xs text-red-600">{error}</p>}
 
