@@ -2,8 +2,9 @@
 // Junta los datos del sistema y se los pasa a generarPresentacionSemanal().
 import React, { useState } from 'react';
 import { createPortal } from 'react-dom';
-import { Presentation, X, Loader2, Download, FolderOpen } from 'lucide-react';
+import { Presentation, X, Loader2, Save, FolderOpen } from 'lucide-react';
 import { useSharePointUpload } from '@/hooks/useSharePointUpload';
+import { toast } from 'sonner';
 import { supabase } from '@/lib/supabaseClient';
 import {
   generarPresentacionSemanal, semanaISO,
@@ -166,21 +167,28 @@ export default function PresentacionSemanal({ className }: { className?: string 
         progreso: setAvance,
       });
       const nombre = `Seguimiento_Semanal_S${semana.numero}_${semana.anio}.pptx`;
-      const a = document.createElement('a');
-      a.href = URL.createObjectURL(blob);
-      a.download = nombre;
-      document.body.appendChild(a); a.click(); a.remove();
-      setTimeout(() => URL.revokeObjectURL(a.href), 30_000);
+      const carpeta = carpetaOneDrive(semana.fin);
       const cerrados = proyectos.filter(p => p.concluido).length;
       const enPrep = proyectos.filter(p => p.esPendiente).length;
       const resumen = `${proyectos.length - cerrados - enPrep} activo(s), ${cerrados} concluido(s) y ${enPrep} en preparación`;
 
-      // Copia en OneDrive (si se vuelve a generar la misma semana, se reemplaza)
-      setAvance('Guardando copia en OneDrive…');
+      // Se guarda solo en OneDrive (si se vuelve a generar la misma semana, se reemplaza)
+      setAvance('Guardando en OneDrive…');
       const archivo = new File([blob], nombre, { type: 'application/vnd.openxmlformats-officedocument.presentationml.presentation' });
-      const link = await uploadCustom(archivo, carpetaOneDrive(semana.fin), nombre);
-      setLinkOneDrive(link);
-      setAvance(link ? `Listo: ${resumen}. Se guardó en OneDrive.` : `Listo: ${resumen}. No se pudo guardar la copia en OneDrive (la descarga sí se hizo).`);
+      const link = await uploadCustom(archivo, carpeta, nombre);
+      if (link) {
+        setLinkOneDrive(link);
+        setAvance(`Listo: ${resumen}.`);
+        toast.success(`Presentación guardada en OneDrive: ${carpeta}/${nombre}`, { duration: 8000 });
+      } else {
+        // Si OneDrive falla, se descarga para no perder la presentación
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = nombre;
+        document.body.appendChild(a); a.click(); a.remove();
+        setTimeout(() => URL.revokeObjectURL(a.href), 30_000);
+        setAvance(`Listo: ${resumen}. No se pudo guardar en OneDrive, así que se descargó a tu equipo.`);
+      }
     } catch (e) {
       console.error('[presentacion semanal]', e);
       setError((e as Error).message ?? String(e));
@@ -207,7 +215,7 @@ export default function PresentacionSemanal({ className }: { className?: string 
                 <p className="text-xs text-slate-500 mt-1">
                   Usa la plantilla institucional y la llena con los proyectos en Seguimiento NEXUS (activos y los concluidos en el corte) y el Levantamiento.
                   Cumplimiento Normativo se queda como en la plantilla para llenarlo a mano.
-                  Además de descargarse, se guarda una copia en OneDrive: Presentaciones Semanales / año / mes.
+                  Se guarda en OneDrive: Presentaciones Semanales / año / mes.
                 </p>
               </div>
               <button onClick={() => setAbierto(false)} disabled={trabajando} className="p-1 rounded hover:bg-slate-100 disabled:opacity-40">
@@ -250,8 +258,8 @@ export default function PresentacionSemanal({ className }: { className?: string 
 
             <button onClick={generar} disabled={trabajando}
               className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg bg-[#ED7102] text-white text-sm font-bold hover:bg-[#d66500] disabled:opacity-50">
-              {trabajando ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
-              {trabajando ? 'Generando…' : 'Generar y descargar'}
+              {trabajando ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+              {trabajando ? 'Generando…' : 'Generar y guardar en OneDrive'}
             </button>
           </div>
         </div>,
