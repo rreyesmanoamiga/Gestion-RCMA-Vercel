@@ -236,6 +236,7 @@ class Paquete {
       c.setAttribute('val', String(v));
     }
     doc.documentElement.removeAttribute('show');   // las copias siempre visibles
+    limpiarAnimaciones(doc);
     const archivo = `ppt/slides/slide${n}.xml`;
     const rels = parsear(await this.zip.file(this.relsDe(origen))!.async('string'));
     hijosNS(rels, NS.rel, 'Relationship').filter(r => r.getAttribute('Type') === T_NOTES).forEach(r => r.remove());
@@ -341,6 +342,14 @@ class Paquete {
       mimeType: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
     });
   }
+}
+
+/** Si una animación apunta a una forma que ya no existe, PowerPoint marca el archivo como
+ *  dañado: en ese caso se quitan las animaciones de ese slide (el contenido queda igual). */
+function limpiarAnimaciones(doc: Document) {
+  const ids = new Set(hijosNS(doc, NS.p, 'cNvPr').map(c => c.getAttribute('id')));
+  const huerfana = hijosNS(doc, NS.p, 'spTgt').some(t => !ids.has(t.getAttribute('spid')));
+  if (huerfana) hijosNS(doc, NS.p, 'timing').forEach(t => t.remove());
 }
 
 // ── Fotos en las cajas "INSERTAR IMAGEN" ────────────────────────────────────
@@ -461,19 +470,20 @@ function ensanchar(sp: Element | null, cx: number) {
   if (ext && Number(ext.getAttribute('cx')) < cx) ext.setAttribute('cx', String(cx));
 }
 
-/** Pone el pin de ubicación del colegio (copiado de su slide de obra) */
+/** Pone el pin de ubicación del colegio (posición y tamaño copiados de su slide de obra).
+ *  Se conserva el pin propio del slide (mismo id) porque la animación de entrada lo usa:
+ *  si se cambia el id, PowerPoint marca el archivo como dañado. */
 function ponerPin(doc: Document, pinOrigen: Element) {
   const actual = forma(doc, 'Group 45');
   if (!actual) return;
-  const embed = hijosNS(actual, NS.a, 'blip')[0]?.getAttributeNS(NS.r, 'embed');
-  const nuevo = doc.importNode(pinOrigen, true) as Element;
-  if (embed) hijosNS(nuevo, NS.a, 'blip').forEach(b => b.setAttributeNS(NS.r, 'r:embed', embed));
-  let maxId = Math.max(0, ...hijosNS(doc, NS.p, 'cNvPr').map(c => Number(c.getAttribute('id')) || 0));
-  hijosNS(nuevo, NS.p, 'cNvPr').forEach(c => c.setAttribute('id', String(++maxId)));
+  const xfrmDe = (g: Element) => Array.from(g.children).find(c => c.localName === 'grpSpPr')
+    ?.getElementsByTagNameNS(NS.a, 'xfrm')[0] ?? null;
+  const destino = xfrmDe(actual), origen = xfrmDe(pinOrigen);
+  if (destino && origen) destino.parentNode!.replaceChild(doc.importNode(origen, true), destino);
   // Al final del árbol para que quede encima del mapa (en los slides de fase venía debajo)
   const arbol = actual.parentNode!;
-  actual.remove();
-  arbol.appendChild(nuevo);
+  arbol.removeChild(actual);
+  arbol.appendChild(actual);
 }
 
 // ── Generador ───────────────────────────────────────────────────────────────
@@ -567,7 +577,7 @@ export async function generarPresentacionSemanal(op: OpcionesPresentacion): Prom
         const nuevo = await paq.nuevoSlide(ref.archivo, doc);
         if (p && op.fotos) {
           const fotos = await op.fotos(p.id).catch(() => [] as FotoSlide[]);
-          if (fotos.length) ponerFotos(doc, nuevo.rels, fotos, paq);
+          if (fotos.length) { ponerFotos(doc, nuevo.rels, fotos, paq); limpiarAnimaciones(doc); }
           zip.file(nuevo.archivo, serializar(doc), SIN_CARPETAS);
         }
         zip.file(paq.relsDe(nuevo.archivo), serializar(nuevo.rels), SIN_CARPETAS);
