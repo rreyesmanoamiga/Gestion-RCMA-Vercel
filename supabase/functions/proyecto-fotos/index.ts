@@ -10,6 +10,9 @@
 //
 // Body JSON: { proyecto_id }
 // Respuesta: { encontrado, carpeta_url?, antes: Foto[], durante: Foto[], despues: Foto[] }
+//
+// Body JSON: { proyecto_id, modo: 'presentacion', max?: 3 }
+// Respuesta: { encontrado, fotos: { nombre, tipo, base64 }[] }   (Presentación Semanal)
 // ============================================================================
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
@@ -92,6 +95,12 @@ async function porRuta(token: string, ruta: string): Promise<Item | null> {
 async function subcarpeta(token: string, padreId: string, nombre: string | ((n: string) => boolean)): Promise<Item | null> {
   const ok = typeof nombre === 'string' ? (n: string) => clave(n) === clave(nombre) : nombre;
   return (await hijos(token, padreId)).find(h => h.folder && ok(h.name)) ?? null;
+}
+
+function base64(bytes: Uint8Array) {
+  let s = '';
+  for (let i = 0; i < bytes.length; i += 0x8000) s += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+  return btoa(s);
 }
 
 const esImagen = (it: Item) =>
@@ -195,6 +204,31 @@ serve(async (req) => {
           };
         });
     };
+    // ── Modo presentación: las N fotos más recientes ya descargadas (base64) ──
+    // Lo usa la Presentación Semanal de Reportes: prioriza Durante/Después y
+    // completa con Antes. Se manda la vista "grande" de Microsoft (≈800 px, JPG),
+    // suficiente para el slide y ligera.
+    if (body.modo === 'presentacion') {
+      const max = Math.min(Math.max(Number(body.max) || 3, 1), 6);
+      const leerCrudo = async (nombre: string) => {
+        const c = secciones.find(s => s.folder && clave(s.name) === nombre);
+        return c ? (await hijos(token, c.id, true)).filter(esImagen) : [];
+      };
+      const [a, d, s] = await Promise.all([leerCrudo('antes'), leerCrudo('durante'), leerCrudo('despues')]);
+      const recientes = (l: Item[]) => [...l].sort((x, y) => (y.createdDateTime ?? '').localeCompare(x.createdDateTime ?? ''));
+      const elegidas = [...recientes([...d, ...s]), ...recientes(a)].slice(0, max);
+      const fotosB64 = (await Promise.all(elegidas.map(async it => {
+        const url = it.thumbnails?.[0]?.large?.url ?? it.thumbnails?.[0]?.medium?.url;
+        if (!url) return null;
+        const r = await fetch(url);
+        if (!r.ok) return null;
+        const bytes = new Uint8Array(await r.arrayBuffer());
+        const tipo = r.headers.get('content-type') ?? 'image/jpeg';
+        return { nombre: it.name, tipo, base64: base64(bytes) };
+      }))).filter(Boolean);
+      return json({ encontrado: true, fotos: fotosB64 });
+    }
+
     const [antes, durante, despues] = await Promise.all([leer('antes'), leer('durante'), leer('despues')]);
 
     return json({ encontrado: true, carpeta_url: esAdmin ? fotos.webUrl : undefined, antes, durante, despues });

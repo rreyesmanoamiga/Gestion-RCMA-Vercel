@@ -11,6 +11,8 @@ import { mergeActividadesConCustom, calcularFechasEnMes } from './CalendarioMant
 import { COLEGIOS } from '@/lib/colegios';
 import { useComplianceDocs, esRetraso, type ComplianceDoc } from '@/lib/complianceShared';
 import { logoCuadradoDataURL } from '@/lib/logoPdf';
+import PresentacionSemanal from '@/components/reports/PresentacionSemanal';
+import { usePermissions } from '@/hooks/usePermissions';
 
 const btnOutline = "flex items-center gap-2 px-4 py-2.5 border border-slate-300 rounded-lg text-sm font-bold text-slate-700 hover:bg-slate-50 transition-all shadow-sm disabled:opacity-40 disabled:cursor-not-allowed";
 const cardClass  = "bg-white p-6 rounded-xl border border-slate-200 shadow-sm";
@@ -1390,6 +1392,7 @@ async function exportMatrizExcel(data: {
 
 // ─── Componente ───────────────────────────────────────────────────────────────
 export default function Reports() {
+  const { isAdmin } = usePermissions();
   const { data: rawProjects    = [] } = useQuery({ queryKey: ['projects'],    queryFn: () => db.Project.list('-created_at', 500) });
   const { data: rawChecklists  = [] } = useQuery({ queryKey: ['checklists'],  queryFn: () => db.Checklist.list('-created_at', 500) });
   const { data: rawMinimos = [] } = useQuery({
@@ -1719,6 +1722,7 @@ export default function Reports() {
             <button className={btnOutline} onClick={handleExportIncidencias}>
               <Filter className="w-4 h-4 text-slate-600" /> Reporte de Incidencias
             </button>
+            {isAdmin && <PresentacionSemanal className={btnOutline} />}
           </div>
         </div>
         <div className={`${cardClass} bg-slate-900 text-white border-none relative overflow-hidden flex flex-col justify-center`}>
