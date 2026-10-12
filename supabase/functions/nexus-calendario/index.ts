@@ -3,11 +3,15 @@
 //
 // La base de datos llama a esta función (trigger con pg_net) cada vez que un
 // pendiente se crea, cambia o se borra. Si el pendiente es de Ricardo y tiene
-// fecha límite, se mantienen DOS eventos en su calendario de Outlook:
-//   · "Vence en 3 días"  → 3 días antes de la fecha límite, 9:00, con recordatorio
-//   · "Vence hoy"        → el día de la fecha límite, 9:00, con recordatorio
-// Si cambia la fecha, los eventos se mueven; si se completa, se borra o se
-// queda sin fecha, se eliminan. Los ids de los eventos se guardan en
+// fecha límite, se mantiene UN evento en su calendario de Outlook:
+//   · "Vence: <pendiente>" → el día de la fecha límite, 9:00, con el
+//     recordatorio de Outlook 3 días antes.
+// Si cambia la fecha, el evento se mueve (también si el pendiente ya venció
+// y se le pone una fecha nueva). Mientras el pendiente siga abierto el evento
+// se conserva aunque ya haya vencido; si se completa, se borra o se queda sin
+// fecha, se elimina. (La versión anterior creaba además un evento
+// "Vence en 3 días"; al sincronizar, esos se borran solos.)
+// Los ids de los eventos se guardan en
 // nexus_calendario_eventos (no en nexus_pendientes, para no disparar el
 // trigger otra vez).
 //
@@ -27,7 +31,7 @@ const SECRETO   = Deno.env.get('NEXUS_CAL_SECRET') ?? '';
 const GRAPH     = `https://graph.microsoft.com/v1.0/users/${CAL_EMAIL}/events`;
 const HORA      = '09:00:00';
 const ZONA      = 'Central Standard Time (Mexico)'; // Ciudad de México / Monterrey, UTC-6 sin horario de verano
-const OFFSET_H  = 6;
+const RECORDATORIO_MIN = 3 * 24 * 60; // 3 días antes del inicio (9:00 → 9:00)
 
 const json = (data: unknown, status = 200) =>
   new Response(JSON.stringify(data), { status, headers: { 'Content-Type': 'application/json' } });
@@ -71,8 +75,6 @@ function sumarDias(fecha: string, dias: number): string {
   d.setUTCDate(d.getUTCDate() + dias);
   return d.toISOString().slice(0, 10);
 }
-/** Momento (UTC) de las 9:00 hora de México de ese día */
-const momento = (fecha: string) => new Date(`${fecha}T${HORA}Z`).getTime() + OFFSET_H * 3600_000;
 
 const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 const fechaLarga = (f: string) => new Date(f + 'T12:00:00Z').toLocaleDateString('es-MX', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' });
@@ -80,7 +82,7 @@ const fechaLarga = (f: string) => new Date(f + 'T12:00:00Z').toLocaleDateString(
 function evento(p: Pendiente, tipo: Tipo) {
   const fechaLimite = p.fecha_limite!.slice(0, 10);
   const dia = tipo === '3d' ? sumarDias(fechaLimite, -3) : fechaLimite;
-  const asunto = tipo === '3d' ? `Vence en 3 días: ${p.titulo}` : `Vence hoy: ${p.titulo}`;
+  const asunto = tipo === '3d' ? `Vence en 3 días: ${p.titulo}` : `Vence: ${p.titulo}`;
   const filas = [
     ['Fecha límite', fechaLarga(fechaLimite)],
     ['Prioridad', p.prioridad ? (PRIORIDAD[p.prioridad] ?? p.prioridad) : ''],
@@ -100,7 +102,7 @@ ${p.descripcion ? `<p style="white-space:pre-wrap">${esc(p.descripcion)}</p>` : 
     start: { dateTime: `${dia}T${HORA}`, timeZone: ZONA },
     end: { dateTime: `${dia}T09:15:00`, timeZone: ZONA },
     isReminderOn: true,
-    reminderMinutesBeforeStart: 0,
+    reminderMinutesBeforeStart: tipo === 'dia' ? RECORDATORIO_MIN : 0,
     showAs: 'free',
     importance: p.prioridad === 'urgente' || p.prioridad === 'alta' ? 'high' : 'normal',
     location: p.colegio ? { displayName: p.colegio } : undefined,
@@ -140,20 +142,21 @@ async function sincronizar(db: DB, token: string, pendienteId: string): Promise<
     .eq('id', pendienteId).maybeSingle() as { data: Pendiente | null };
   const { data: mapa } = await db.from('nexus_calendario_eventos').select('*').eq('pendiente_id', pendienteId).maybeSingle() as { data: Mapa | null };
 
-  const ahora = Date.now();
-  const quiero: Record<Tipo, boolean> = { '3d': false, dia: false };
-  if (p && esMio(p) && p.fecha_limite && p.estatus !== 'completado') {
-    const f = p.fecha_limite.slice(0, 10);
-    quiero['3d'] = momento(sumarDias(f, -3)) > ahora;
-    quiero.dia = momento(f) + 9 * 3600_000 > ahora; // se puede crear hasta las 18:00 del día
-  }
+  // Un solo evento: el día que vence, con recordatorio 3 días antes. Se
+  // conserva aunque el pendiente ya haya vencido, mientras siga abierto,
+  // para que al ponerle fecha nueva se mueva en Outlook. El tipo '3d' ya no
+  // se crea: si existe de la versión anterior, se borra.
+  const quiero: Record<Tipo, boolean> = {
+    '3d': false,
+    dia: !!(p && esMio(p) && p.fecha_limite && p.estatus !== 'completado'),
+  };
 
   const ids: Record<Tipo, string | null> = { '3d': mapa?.evento_3d ?? null, dia: mapa?.evento_dia ?? null };
   let error: string | null = null;
   for (const tipo of ['3d', 'dia'] as Tipo[]) {
     try {
       if (quiero[tipo] && p) {
-        ids[tipo] = await guardarEvento(token, ids[tipo], evento(p, tipo), `nexus-${p.id}-${tipo}-${p.fecha_limite!.slice(0, 10)}`);
+        ids[tipo] = await guardarEvento(token, ids[tipo], evento(p, tipo), `nexus-${p.id}-${tipo}2-${p.fecha_limite!.slice(0, 10)}`);
       } else if (ids[tipo]) {
         await borrarEvento(token, ids[tipo]);
         ids[tipo] = null;
@@ -173,7 +176,7 @@ async function sincronizar(db: DB, token: string, pendienteId: string): Promise<
     await db.from('nexus_calendario_eventos').delete().eq('pendiente_id', pendienteId);
   }
   if (error) return `error: ${error}`;
-  return quiero['3d'] || quiero.dia ? `ok (${[quiero['3d'] && '3 días', quiero.dia && 'día'].filter(Boolean).join(' + ')})` : 'sin eventos';
+  return quiero.dia ? 'ok' : 'sin evento';
 }
 
 serve(async (req) => {
@@ -186,9 +189,9 @@ serve(async (req) => {
     const token = await graphToken();
 
     if (body.accion === 'resincronizar') {
-      const hoy = new Date(Date.now() - OFFSET_H * 3600_000).toISOString().slice(0, 10);
+      // Todos los pendientes abiertos con fecha (también los vencidos)
       const { data: abiertos } = await db.from('nexus_pendientes').select('id')
-        .neq('estatus', 'completado').gte('fecha_limite', hoy)
+        .neq('estatus', 'completado').not('fecha_limite', 'is', null)
         .or(`asignado_a.ilike.${CAL_EMAIL},and(tipo.eq.personal,created_by.ilike.${CAL_EMAIL})`);
       const { data: conEventos } = await db.from('nexus_calendario_eventos').select('pendiente_id');
       const ids = [...new Set([...(abiertos ?? []).map((r: { id: string }) => r.id), ...(conEventos ?? []).map((r: { pendiente_id: string }) => r.pendiente_id)])];
