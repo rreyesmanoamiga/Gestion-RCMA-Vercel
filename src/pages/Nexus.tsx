@@ -14,8 +14,9 @@ import {
   Plus, X, Pencil, Trash2, CheckCircle2, Clock, AlertCircle,
   MessageSquare, Send, FileText, Pin, Search, Download,
   BookOpen, ListChecks, Users, MapPin, Building2, Link2,
-  ClipboardList, BarChart3, Ban, Handshake, Wrench, ExternalLink, Lock, Loader2,
+  ClipboardList, BarChart3, Ban, Handshake, Wrench, ExternalLink, Lock, Loader2, CalendarPlus,
 } from 'lucide-react';
+import { descargarICSPendiente } from '@/lib/icsPendiente';
 import { logoCuadradoDataURL } from '@/lib/logoPdf';
 import { useAdjuntos, SelectorFotos, subirFotos, useFotosNexus, FotosDeComentario, type FotoRef } from '@/components/nexus/FotosComentario';
 
@@ -878,6 +879,7 @@ export default function Nexus() {
         <div className="px-4 py-2 bg-slate-50 border-t border-slate-100 flex items-center justify-between" onClick={e => e.stopPropagation()}>
           <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-bold border ${eCfg?.cls}`}>{eCfg?.icon}{eCfg?.label}</span>
           <div className="flex items-center gap-1">
+            {p.estatus!=='completado' && <button type="button" onClick={e=>{e.stopPropagation();descargarICSPendiente(p);toast.success('Archivo de calendario descargado: ábrelo para agregarlo a Outlook');}} className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition" title="Agregar a mi calendario (.ics)" aria-label="Agregar a mi calendario"><CalendarPlus className="w-4 h-4"/></button>}
             {isAdmin && p.estatus!=='completado' && <button type="button" onClick={e=>{e.stopPropagation();completarPend.mutate(p);}} className="p-1.5 text-emerald-500 hover:text-emerald-700 hover:bg-emerald-50 rounded-lg transition" title="Completar"><CheckCircle2 className="w-4 h-4"/></button>}
             {isAdmin&&p.estatus!=='completado'&&!org && <button type="button" onClick={e=>{e.stopPropagation();openPend(p);}} className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition"><Pencil className="w-3.5 h-3.5"/></button>}
             {p.estatus==='completado' && <button type="button" onClick={async e=>{e.stopPropagation();const items=await supabase.from('nexus_comentarios').select('*').eq('pendiente_id',p.id).order('created_at').then(r=>r.data??[]); generarPDFPendiente(p,items as Comentario[]);}} className="p-1.5 text-slate-400 hover:text-teal-600 rounded-lg transition" title="PDF"><Download className="w-4 h-4"/></button>}
@@ -1268,6 +1270,10 @@ export default function Nexus() {
 
           <div className="flex gap-3 mt-4">
             <button type="button" onClick={() => setViewPend(null)} className={btnOutline + " flex-1"}>Cerrar</button>
+            {viewPend.estatus !== 'completado' && (
+              <button type="button" onClick={() => { descargarICSPendiente(viewPend); toast.success('Archivo de calendario descargado: ábrelo para agregarlo a Outlook'); }}
+                className={btnOutline + " flex-1 flex items-center justify-center gap-2"}><CalendarPlus className="w-4 h-4"/>Agregar a calendario</button>
+            )}
             {isAdmin && viewPend.estatus !== 'completado' && !origenDe(viewPend) && (
               <button type="button" onClick={() => { setViewPend(null); openPend(viewPend); }} className={btnPrimary + " flex-1 flex items-center justify-center gap-2"}><Pencil className="w-4 h-4"/>Editar</button>
             )}
