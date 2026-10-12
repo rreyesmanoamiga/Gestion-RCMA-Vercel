@@ -509,6 +509,9 @@ export default function Nexus() {
   const [showPend,  setShowPend]  = useState(false);
   const [editNota,  setEditNota]  = useState<Nota|null>(null);
   const [editPend,  setEditPend]  = useState<Pendiente|null>(null);
+  // Pendientes que vienen de Minutas: se editan en el acuerdo (la base de datos sincroniza NEXUS)
+  const [editAcuerdo, setEditAcuerdo] = useState<Pendiente|null>(null);
+  const [acForm, setAcForm] = useState({ descripcion:'', fecha:'', prioridad:'normal', presentar_semanal:false });
   const [viewNota,  setViewNota]  = useState<Nota|null>(null);
   const [viewPend,  setViewPend]  = useState<Pendiente|null>(null);
   const [confirmDel, setConfirmDel] = useState<{type:'nota'|'pendiente';id:string;titulo:string;origen?:'acuerdo'|'accion'|null;completado?:boolean}|null>(null);
@@ -745,6 +748,37 @@ export default function Nexus() {
     }
   });
 
+  const abrirEditarAcuerdo = (p: Pendiente) => {
+    setAcForm({ descripcion: p.descripcion || p.titulo, fecha: p.fecha_limite ?? '', prioridad: p.prioridad || 'normal', presentar_semanal: !!p.presentar_semanal });
+    setEditAcuerdo(p);
+  };
+  const saveAcuerdo = useMutation({
+    mutationFn: async (p: Pendiente) => {
+      if (!isAdmin) throw new Error('Solo el administrador puede editar acuerdos');
+      if (!acForm.descripcion.trim()) throw new Error('El texto del acuerdo es obligatorio');
+      // 1) El acuerdo en Minutas: la base de datos actualiza el pendiente (título, descripción y fecha límite)
+      const { error: e1 } = await supabase.from('minuta_acuerdos')
+        .update({ descripcion: acForm.descripcion.trim(), fecha_compromiso: acForm.fecha || null })
+        .eq('id', p.acuerdo_id!);
+      if (e1) throw e1;
+      // 2) Lo que solo existe en NEXUS
+      const { error: e2 } = await supabase.from('nexus_pendientes')
+        .update({ prioridad: acForm.prioridad, presentar_semanal: acForm.presentar_semanal, updated_at: new Date().toISOString() })
+        .eq('id', p.id);
+      if (e2) throw e2;
+      logAudit({ accion: 'editar', modulo: 'nexus', registro_id: p.id, registro_ref: `Acuerdo de minuta: ${p.titulo}` });
+    },
+    onSuccess: (_d, p) => {
+      qc.invalidateQueries({ queryKey: ['nexus_pendientes'] });
+      qc.invalidateQueries({ queryKey: ['minuta_acuerdos'] });
+      qc.invalidateQueries({ queryKey: ['acuerdos_seguimiento'] });
+      const o = origenDe(p);
+      toast.success(`${o?.corto ?? 'Acuerdo'} actualizado — también en Minutas`);
+      setEditAcuerdo(null);
+    },
+    onError: (e: Error) => toast.error(e.message || 'No se pudo actualizar el acuerdo'),
+  });
+
   const deleteMutation = useMutation({
     mutationFn: async({type,id}:{type:'nota'|'pendiente';id:string})=>{
       if(type==='nota') await supabase.from('nexus_notas').delete().eq('id',id);
@@ -881,7 +915,7 @@ export default function Nexus() {
           <div className="flex items-center gap-1">
             {p.estatus!=='completado' && <button type="button" onClick={e=>{e.stopPropagation();descargarICSPendiente(p);toast.success('Archivo de calendario descargado: ábrelo para agregarlo a Outlook');}} className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition" title="Agregar a mi calendario (.ics)" aria-label="Agregar a mi calendario"><CalendarPlus className="w-4 h-4"/></button>}
             {isAdmin && p.estatus!=='completado' && <button type="button" onClick={e=>{e.stopPropagation();completarPend.mutate(p);}} className="p-1.5 text-emerald-500 hover:text-emerald-700 hover:bg-emerald-50 rounded-lg transition" title="Completar"><CheckCircle2 className="w-4 h-4"/></button>}
-            {isAdmin&&p.estatus!=='completado'&&!org && <button type="button" onClick={e=>{e.stopPropagation();openPend(p);}} className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition"><Pencil className="w-3.5 h-3.5"/></button>}
+            {isAdmin&&p.estatus!=='completado' && <button type="button" title={org?'Editar acuerdo (también se actualiza en Minutas)':'Editar'} onClick={e=>{e.stopPropagation();if(org)abrirEditarAcuerdo(p);else openPend(p);}} className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition"><Pencil className="w-3.5 h-3.5"/></button>}
             {p.estatus==='completado' && <button type="button" onClick={async e=>{e.stopPropagation();const items=await supabase.from('nexus_comentarios').select('*').eq('pendiente_id',p.id).order('created_at').then(r=>r.data??[]); generarPDFPendiente(p,items as Comentario[]);}} className="p-1.5 text-slate-400 hover:text-teal-600 rounded-lg transition" title="PDF"><Download className="w-4 h-4"/></button>}
             {isAdmin && <button type="button" onClick={e=>{e.stopPropagation();setConfirmDel({type:'pendiente',id:p.id,titulo:p.titulo,origen:org?p.origen:null,completado:p.estatus==='completado'});}} className="p-1.5 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition"><Trash2 className="w-3.5 h-3.5"/></button>}
             {/* Ícono comentarios — con color e indicador si hay comentarios */}
@@ -1274,8 +1308,8 @@ export default function Nexus() {
               <button type="button" onClick={() => { descargarICSPendiente(viewPend); toast.success('Archivo de calendario descargado: ábrelo para agregarlo a Outlook'); }}
                 className={btnOutline + " flex-1 flex items-center justify-center gap-2"}><CalendarPlus className="w-4 h-4"/>Agregar a calendario</button>
             )}
-            {isAdmin && viewPend.estatus !== 'completado' && !origenDe(viewPend) && (
-              <button type="button" onClick={() => { setViewPend(null); openPend(viewPend); }} className={btnPrimary + " flex-1 flex items-center justify-center gap-2"}><Pencil className="w-4 h-4"/>Editar</button>
+            {isAdmin && viewPend.estatus !== 'completado' && (
+              <button type="button" onClick={() => { const v = viewPend; setViewPend(null); if (origenDe(v)) abrirEditarAcuerdo(v); else openPend(v); }} className={btnPrimary + " flex-1 flex items-center justify-center gap-2"}><Pencil className="w-4 h-4"/>Editar</button>
             )}
             {isAdmin && viewPend.estatus !== 'completado' && (
               <button type="button" onClick={() => { completarPend.mutate(viewPend); setViewPend(null); }}
@@ -1443,6 +1477,36 @@ export default function Nexus() {
         </div>
         <div className="flex gap-3 mt-4"><button type="button" onClick={()=>{setShowPend(false);setEditPend(null);}} className={btnOutline+" flex-1"}>Cancelar</button><button type="button" disabled={!pendForm.titulo.trim()||(pendForm.tipo==='compartido'&&!pendForm.asignado_a)||savePend.isPending} onClick={()=>savePend.mutate()} className={btnPrimary+" flex-1"}>{savePend.isPending?'Guardando...':'Guardar'}</button></div>
       </Modal>)}
+
+      {/* Editar pendiente que viene de un acuerdo de minuta / acción de nota técnica */}
+      {editAcuerdo && (() => { const o = origenDe(editAcuerdo); return (
+        <Modal title={`Editar ${o?.corto?.toLowerCase() ?? 'acuerdo'}`} onClose={() => setEditAcuerdo(null)}>
+          <div className="space-y-3">
+            <div className={`rounded-lg border px-3 py-2 text-xs ${o?.soft ?? 'bg-slate-50 border-slate-200'}`}>
+              <p className="font-bold"><FileText className="w-3 h-3 inline mr-1 -mt-0.5"/>{o?.doc ?? 'Minuta'}: {editAcuerdo.origen_asunto || 'Sin asunto'}{editAcuerdo.origen_fecha ? ` · ${fmtDate(editAcuerdo.origen_fecha)}` : ''}</p>
+              <p className="opacity-80">El texto y la fecha también se actualizan en Minutas{editAcuerdo.origen_responsable ? ` · Responsable: ${editAcuerdo.origen_responsable}` : ''}.</p>
+            </div>
+            <div><label className="block text-xs font-bold text-slate-500 uppercase mb-1">{o?.corto ?? 'Acuerdo'} *</label>
+              <textarea className={inputCls} rows={3} value={acForm.descripcion} onChange={e => setAcForm(f => ({ ...f, descripcion: e.target.value }))}/></div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div><label className="block text-xs font-bold text-slate-500 uppercase mb-1">Fecha límite (compromiso)</label>
+                <input type="date" className={inputCls} value={acForm.fecha} onChange={e => setAcForm(f => ({ ...f, fecha: e.target.value }))}/></div>
+              <div><label className="block text-xs font-bold text-slate-500 uppercase mb-1">Prioridad</label>
+                <select className={inputCls} value={acForm.prioridad} onChange={e => setAcForm(f => ({ ...f, prioridad: e.target.value }))}>
+                  {(['baja','normal','alta','urgente'] as const).map(p => <option key={p} value={p}>{PRIO_CFG[p].label}</option>)}
+                </select></div>
+            </div>
+            <label className="flex items-start gap-2 rounded-lg border border-orange-200 bg-orange-50 px-3 py-2.5 cursor-pointer">
+              <input type="checkbox" className="mt-0.5" checked={acForm.presentar_semanal} onChange={e => setAcForm(f => ({ ...f, presentar_semanal: e.target.checked }))}/>
+              <span className="text-xs text-slate-700"><span className="font-bold text-orange-700">Presentar en la semanal</span> — sale en la Presentación Semanal como "Proyecto en preparación".</span>
+            </label>
+          </div>
+          <div className="flex gap-3 mt-4">
+            <button type="button" onClick={() => setEditAcuerdo(null)} className={btnOutline + " flex-1"}>Cancelar</button>
+            <button type="button" disabled={!acForm.descripcion.trim() || saveAcuerdo.isPending} onClick={() => saveAcuerdo.mutate(editAcuerdo)} className={btnPrimary + " flex-1"}>{saveAcuerdo.isPending ? 'Guardando...' : 'Guardar'}</button>
+          </div>
+        </Modal>
+      ); })()}
 
       {/* Confirmar eliminación */}
       {confirmDel&&(<Modal title="Confirmar eliminación" onClose={()=>setConfirmDel(null)}><div className="space-y-3"><div className="bg-red-50 border border-red-200 rounded-lg p-4"><p className="font-bold text-red-800 text-sm mb-1">¿Eliminar "{confirmDel.titulo}"?</p><p className="text-xs text-red-700">Esta acción no se puede deshacer.</p></div>{confirmDel.origen&&(<div className={`rounded-lg p-3 border text-xs ${ORIGEN_CFG[confirmDel.origen].soft}`}><p className="font-bold mb-0.5">Este pendiente viene de {confirmDel.origen==='acuerdo'?'un acuerdo de minuta':'una acción de nota técnica'}.</p><p>{confirmDel.completado?'En Minutas se conserva como Cumplido.':'En Minutas quedará como Cancelado.'}</p></div>)}</div><div className="flex gap-3 mt-4"><button type="button" onClick={()=>setConfirmDel(null)} className={btnOutline+" flex-1"}>Cancelar</button><button type="button" disabled={deleteMutation.isPending} onClick={()=>deleteMutation.mutate(confirmDel)} className="flex-1 py-2 bg-red-600 text-white rounded-lg text-sm font-semibold hover:bg-red-700 disabled:opacity-40 transition">{deleteMutation.isPending?'Eliminando...':'Sí, eliminar'}</button></div></Modal>)}
