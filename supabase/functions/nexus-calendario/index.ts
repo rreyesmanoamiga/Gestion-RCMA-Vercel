@@ -42,11 +42,21 @@ type Pendiente = {
   id: string; titulo: string; descripcion: string | null; tipo: string; asignado_a: string | null;
   created_by: string | null; prioridad: string | null; fecha_limite: string | null; estatus: string;
   colegio: string | null; territorio: string | null; proyecto_nombre: string | null; ticket_folio: string | null;
+  asignado_nombre: string | null; created_at: string | null; updated_at: string | null;
+  acuerdo_id: string | null; origen: string | null; origen_numero: number | null; origen_asunto: string | null;
+  origen_fecha: string | null; origen_responsable: string | null; origen_url: string | null;
 };
-type Mapa = { pendiente_id: string; evento_3d: string | null; evento_dia: string | null };
+type Mapa = {
+  pendiente_id: string; evento_3d: string | null; evento_dia: string | null;
+  fecha_original?: string | null; ultima_fecha?: string | null; reprogramaciones?: number | null;
+};
+type Historial = { fechaOriginal: string | null; reprogramaciones: number };
 type Tipo = '3d' | 'dia';
 
 const PRIORIDAD: Record<string, string> = { urgente: 'Urgente', alta: 'Alta', normal: 'Normal', baja: 'Baja' };
+const PRIORIDAD_COLOR: Record<string, string> = { urgente: '#DC2626', alta: '#EA580C', normal: '#2563EB', baja: '#64748B' };
+const AZUL = '#00295A';
+const NARANJA = '#ED7102';
 
 async function graphToken(): Promise<string> {
   const res = await fetch(`https://login.microsoftonline.com/${Deno.env.get('AZURE_TENANT_ID')}/oauth2/v2.0/token`, {
@@ -79,26 +89,79 @@ function sumarDias(fecha: string, dias: number): string {
 const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 const fechaLarga = (f: string) => new Date(f + 'T12:00:00Z').toLocaleDateString('es-MX', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' });
 
-function evento(p: Pendiente, tipo: Tipo) {
+const fechaCorta = (f: string) => new Date(f.slice(0, 10) + 'T12:00:00Z').toLocaleDateString('es-MX', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' });
+const fechaHora = (iso: string) => new Date(iso).toLocaleString('es-MX', { day: 'numeric', month: 'short', year: 'numeric', hour: 'numeric', minute: '2-digit', timeZone: 'America/Mexico_City' });
+
+/** Renglón de la ficha (mismo estilo que los correos del sistema) */
+function fila(etiqueta: string, valorHtml: string, i: number): string {
+  const fondo = i % 2 === 0 ? 'background:#f8fafc;' : '';
+  return `<tr style="${fondo}"><td style="padding:10px 16px;font-size:11px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:0.03em;width:38%;border-bottom:1px solid #e2e8f0;vertical-align:top;font-family:Arial,sans-serif;">${etiqueta}</td><td style="padding:10px 16px;font-size:14px;color:#0f172a;border-bottom:1px solid #e2e8f0;font-family:Arial,sans-serif;">${valorHtml}</td></tr>`;
+}
+
+function cuerpoHtml(p: Pendiente, h: Historial): string {
+  const fechaLimite = p.fecha_limite!.slice(0, 10);
+  const esMinuta = !!p.acuerdo_id && (p.origen === 'acuerdo' || p.origen === 'accion');
+  const doc = p.origen === 'accion' ? 'Nota técnica' : 'Minuta';
+  const tipoTxt = !esMinuta ? 'Pendiente de NEXUS'
+    : `${p.origen === 'accion' ? 'Acción' : 'Acuerdo'}${p.origen_numero ? ` #${p.origen_numero}` : ''} de ${doc.toLowerCase()}`;
+  const prio = p.prioridad ?? 'normal';
+  const prioHtml = `<span style="display:inline-block;padding:2px 10px;border-radius:10px;background:${PRIORIDAD_COLOR[prio] ?? '#2563EB'};color:#ffffff;font-size:12px;font-weight:700;">${esc(PRIORIDAD[prio] ?? prio)}</span>`;
+  const reprogHtml = h.reprogramaciones > 0 && h.fechaOriginal
+    ? `<span style="color:${NARANJA};font-weight:700;">Reprogramado ${h.reprogramaciones === 1 ? '1 vez' : `${h.reprogramaciones} veces`}</span><br/><span style="font-size:12px;color:#64748b;">Fecha original: ${esc(fechaCorta(h.fechaOriginal))}</span>`
+    : '<span style="color:#059669;font-weight:700;">Sin cambios de fecha</span>';
+  const paraQuien = p.tipo === 'compartido' && p.asignado_nombre ? p.asignado_nombre : (p.asignado_nombre || 'Ricardo Reyes Medina');
+
+  const filas: [string, string][] = [];
+  filas.push(['Origen', `<strong>${esc(tipoTxt)}</strong>`]);
+  if (esMinuta) {
+    filas.push([doc, `${esc(p.origen_asunto || 'Sin asunto')}${p.origen_fecha ? `<br/><span style="font-size:12px;color:#64748b;">${esc(fechaLarga(p.origen_fecha.slice(0, 10)))}</span>` : ''}`]);
+    filas.push([`Responsable según la ${doc.toLowerCase()}`, `<strong>${esc(p.origen_responsable || 'Sin responsable')}</strong>`]);
+  }
+  filas.push(['Pendiente asignado a', esc(paraQuien)]);
+  filas.push(['Fecha límite', `<strong>${esc(fechaLarga(fechaLimite))}</strong>`]);
+  filas.push(['Reprogramación', reprogHtml]);
+  filas.push(['Prioridad', prioHtml]);
+  if (p.colegio) filas.push(['Colegio', esc(p.colegio)]);
+  if (p.territorio) filas.push(['Territorio', esc(p.territorio)]);
+  if (p.proyecto_nombre) filas.push(['Proyecto', esc(p.proyecto_nombre)]);
+  if (p.ticket_folio) filas.push(['Ticket', `<span style="color:#4F82C2;font-weight:700;">${esc(p.ticket_folio)}</span>`]);
+  if (p.updated_at) filas.push(['Última actualización', esc(fechaHora(p.updated_at))]);
+
+  const texto = p.descripcion?.trim() || p.titulo;
+  const boton = (href: string, txt: string, fondo: string) =>
+    `<a href="${href}" style="display:inline-block;background:${fondo};color:#ffffff;padding:11px 22px;border-radius:8px;font-size:14px;font-weight:700;text-decoration:none;font-family:Arial,sans-serif;">${txt}</a>`;
+
+  return `<table width="100%" cellpadding="0" cellspacing="0" style="background:#f1f5f9;padding:16px 0;"><tr><td align="center">
+<table width="600" cellpadding="0" cellspacing="0" style="max-width:600px;background:#ffffff;border-radius:12px;overflow:hidden;border:1px solid #e2e8f0;">
+<tr><td style="background:${AZUL};padding:22px 32px;border-bottom:3px solid ${NARANJA};">
+  <p style="margin:0;color:#ffffff;font-size:20px;font-weight:700;font-family:Arial,sans-serif;">Sistema RCMA · NEXUS</p>
+  <p style="margin:4px 0 0;color:#94a3b8;font-size:12px;font-family:Arial,sans-serif;">Coordinación de Obras — Colegios Mano Amiga</p>
+</td></tr>
+<tr><td style="background:${NARANJA};padding:12px 32px;">
+  <p style="margin:0;color:#ffffff;font-size:14px;font-weight:700;font-family:Arial,sans-serif;">Vence el ${esc(fechaLarga(fechaLimite))}</p>
+</td></tr>
+<tr><td style="padding:28px 32px 8px;">
+  <p style="margin:0 0 6px;color:#64748b;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;font-family:Arial,sans-serif;">${esc(esMinuta ? tipoTxt : 'Pendiente')}</p>
+  <p style="margin:0 0 20px;color:#0f172a;font-size:16px;line-height:1.5;font-weight:600;white-space:pre-wrap;font-family:Arial,sans-serif;">${esc(texto)}</p>
+  <table width="100%" cellpadding="0" cellspacing="0" style="border:1px solid #e2e8f0;border-radius:8px;overflow:hidden;margin-bottom:22px;">
+    <tr style="background:#FFF4EA;"><td colspan="2" style="padding:9px 16px;font-size:12px;font-weight:700;color:#C25A00;border-bottom:1px solid #FDDDBF;font-family:Arial,sans-serif;">Datos del pendiente</td></tr>
+    ${filas.map(([k, v], i) => fila(k, v, i)).join('\n    ')}
+  </table>
+  <p style="margin:0 0 24px;">${boton(`${SITE_URL}/nexus`, 'Abrir pendiente en NEXUS', NARANJA)}${esMinuta && p.origen_url ? `&nbsp;&nbsp;${boton(p.origen_url, `Ver ${doc.toLowerCase()}`, AZUL)}` : ''}</p>
+</td></tr>
+<tr><td style="background:#f8fafc;padding:16px 32px;border-top:1px solid #e2e8f0;">
+  <p style="margin:0;color:#94a3b8;font-size:11px;text-align:center;font-family:Arial,sans-serif;">Evento creado automáticamente por el Sistema RCMA. Se actualiza solo cuando cambias el pendiente${esMinuta ? ` o el acuerdo en la ${doc.toLowerCase()}` : ''}.<br/>Al completarlo, se elimina de tu calendario.</p>
+</td></tr>
+</table></td></tr></table>`;
+}
+
+function evento(p: Pendiente, tipo: Tipo, h: Historial) {
   const fechaLimite = p.fecha_limite!.slice(0, 10);
   const dia = tipo === '3d' ? sumarDias(fechaLimite, -3) : fechaLimite;
   const asunto = tipo === '3d' ? `Vence en 3 días: ${p.titulo}` : `Vence: ${p.titulo}`;
-  const filas = [
-    ['Fecha límite', fechaLarga(fechaLimite)],
-    ['Prioridad', p.prioridad ? (PRIORIDAD[p.prioridad] ?? p.prioridad) : ''],
-    ['Colegio', p.colegio ?? ''],
-    ['Territorio', p.territorio ?? ''],
-    ['Proyecto', p.proyecto_nombre ?? ''],
-    ['Ticket', p.ticket_folio ?? ''],
-  ].filter(([, v]) => v);
-  const html = `<div style="font-family:Segoe UI,Arial,sans-serif;font-size:14px;color:#1f2937">
-${p.descripcion ? `<p style="white-space:pre-wrap">${esc(p.descripcion)}</p>` : ''}
-<table style="border-collapse:collapse">${filas.map(([k, v]) => `<tr><td style="padding:2px 12px 2px 0;color:#6b7280">${k}</td><td style="padding:2px 0;font-weight:600">${esc(v)}</td></tr>`).join('')}</table>
-<p><a href="${SITE_URL}/nexus">Abrir pendiente en NEXUS</a></p>
-<p style="color:#9ca3af;font-size:12px">Evento creado automáticamente por el Sistema RCMA. Se actualiza solo si cambias el pendiente.</p></div>`;
   return {
     subject: asunto,
-    body: { contentType: 'HTML', content: html },
+    body: { contentType: 'HTML', content: cuerpoHtml(p, h) },
     start: { dateTime: `${dia}T${HORA}`, timeZone: ZONA },
     end: { dateTime: `${dia}T09:15:00`, timeZone: ZONA },
     isReminderOn: true,
@@ -138,7 +201,7 @@ async function borrarEvento(token: string, id: string | null) {
 
 async function sincronizar(db: DB, token: string, pendienteId: string): Promise<string> {
   const { data: p } = await db.from('nexus_pendientes')
-    .select('id,titulo,descripcion,tipo,asignado_a,created_by,prioridad,fecha_limite,estatus,colegio,territorio,proyecto_nombre,ticket_folio')
+    .select('id,titulo,descripcion,tipo,asignado_a,asignado_nombre,created_by,prioridad,fecha_limite,estatus,colegio,territorio,proyecto_nombre,ticket_folio,created_at,updated_at,acuerdo_id,origen,origen_numero,origen_asunto,origen_fecha,origen_responsable,origen_url')
     .eq('id', pendienteId).maybeSingle() as { data: Pendiente | null };
   const { data: mapa } = await db.from('nexus_calendario_eventos').select('*').eq('pendiente_id', pendienteId).maybeSingle() as { data: Mapa | null };
 
@@ -151,12 +214,21 @@ async function sincronizar(db: DB, token: string, pendienteId: string): Promise<
     dia: !!(p && esMio(p) && p.fecha_limite && p.estatus !== 'completado'),
   };
 
+  // Historial de fechas: la primera fecha límite que vio el calendario y
+  // cuántas veces se ha movido desde entonces
+  const fechaActual = p?.fecha_limite?.slice(0, 10) ?? null;
+  const hist: Historial = {
+    fechaOriginal: mapa?.fecha_original ?? fechaActual,
+    reprogramaciones: (mapa?.reprogramaciones ?? 0) +
+      (mapa?.ultima_fecha && fechaActual && mapa.ultima_fecha !== fechaActual ? 1 : 0),
+  };
+
   const ids: Record<Tipo, string | null> = { '3d': mapa?.evento_3d ?? null, dia: mapa?.evento_dia ?? null };
   let error: string | null = null;
   for (const tipo of ['3d', 'dia'] as Tipo[]) {
     try {
       if (quiero[tipo] && p) {
-        ids[tipo] = await guardarEvento(token, ids[tipo], evento(p, tipo), `nexus-${p.id}-${tipo}2-${p.fecha_limite!.slice(0, 10)}`);
+        ids[tipo] = await guardarEvento(token, ids[tipo], evento(p, tipo, hist), `nexus-${p.id}-${tipo}2-${p.fecha_limite!.slice(0, 10)}`);
       } else if (ids[tipo]) {
         await borrarEvento(token, ids[tipo]);
         ids[tipo] = null;
@@ -168,10 +240,15 @@ async function sincronizar(db: DB, token: string, pendienteId: string): Promise<
   }
 
   if (ids['3d'] || ids.dia || error) {
-    await db.from('nexus_calendario_eventos').upsert({
+    const fila = {
       pendiente_id: pendienteId, evento_3d: ids['3d'], evento_dia: ids.dia,
       sincronizado_at: new Date().toISOString(), error,
+    };
+    const { error: e1 } = await db.from('nexus_calendario_eventos').upsert({
+      ...fila, fecha_original: hist.fechaOriginal, ultima_fecha: fechaActual, reprogramaciones: hist.reprogramaciones,
     });
+    // Si todavía no se agregan las columnas del historial, guardar al menos los ids
+    if (e1) await db.from('nexus_calendario_eventos').upsert(fila);
   } else if (mapa) {
     await db.from('nexus_calendario_eventos').delete().eq('pendiente_id', pendienteId);
   }
