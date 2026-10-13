@@ -261,6 +261,31 @@ export interface SolReconocimiento {
   beneficiarios: string | null; detalle: Record<string, unknown>; fecha_emision: string; created_at: string;
 }
 
+// ── Voluntariado ──────────────────────────────────────────────────────────────
+export const SOL_TIPOS_ALIADO: { key: string; label: string }[] = [
+  { key: 'empresa', label: 'Empresa' }, { key: 'universidad', label: 'Universidad' },
+  { key: 'escuela', label: 'Escuela / colegio' }, { key: 'organizacion', label: 'Organización civil' }, { key: 'otro', label: 'Otro' },
+];
+export const tipoAliadoLabel = (k?: string | null) => SOL_TIPOS_ALIADO.find(t => t.key === k)?.label ?? (k ?? '—');
+
+export interface SolAliado {
+  id: string; nombre: string; tipo: string;
+  contacto_nombre: string | null; contacto_telefono: string | null; contacto_correo: string | null;
+  notas: string | null; activo: boolean; created_at: string;
+}
+export interface SolFotoApoyo { url: string; nombre: string; momento: 'antes' | 'despues'; }
+export interface SolApoyo {
+  id: string; folio: string | null; aliado_id: string; colegio: string; territorio: string | null; ciclo: string; fecha: string;
+  componentes: SolComponente[]; area: string | null; actividad: string; voluntarios: number | null; horas: number | null;
+  hallazgos_ids: string[]; tarjetas_ids: string[]; fotos: SolFotoApoyo[];
+  responsable_campus: string | null; constancia_fecha: string | null; notas: string | null; created_at: string;
+}
+export interface SolAliadoReconocimiento {
+  id: string; aliado_id: string; ciclo: string; apoyos: number; horas: number | null; colegios: string[]; fecha_emision: string; created_at: string;
+}
+/** Horas-voluntario de un apoyo (voluntarios × horas de la jornada). */
+export const horasVoluntario = (a: Pick<SolApoyo, 'voluntarios' | 'horas'>) => (a.voluntarios ?? 0) * Number(a.horas ?? 0);
+
 export interface SolResumenCampus {
   colegio: string;
   hallazgos_total: number; hallazgos_abiertos: number; hallazgos_vencidos: number;
@@ -706,7 +731,7 @@ export function htmlReporteTrimestral(ciclo: string, trimestre: number, filas: F
 
 // ── Diplomas (SOL-F03 / F04 / F06) ───────────────────────────────────────────
 export interface DatosDiploma {
-  tipo: 'campus' | 'guardian' | 'grupo';
+  tipo: 'campus' | 'guardian' | 'grupo' | 'aliado' | 'aliado_anual';
   campusNombre: string;
   ciclo: string;
   ciudad: string;
@@ -717,6 +742,13 @@ export interface DatosDiploma {
   directorCampus?: string;
   coordinadorComite?: string;
   directorNacional?: string;
+  // Voluntariado (aliado = reconocimiento de la jornada · aliado_anual = Aliado SOL del ciclo)
+  aliadoNombre?: string;
+  actividad?: string;          // qué hicieron en la jornada
+  fechaApoyo?: string;         // yyyy-mm-dd
+  apoyos?: number;             // jornadas del ciclo (anual)
+  horas?: number;              // horas-voluntario del ciclo (anual)
+  campusLista?: string[];      // campus apoyados (anual)
 }
 
 // Diseño institucional (Reconocimientos_SOL.docx): el marco, el logotipo, la marca
@@ -727,7 +759,11 @@ const DIPLOMA = {
   campus:   { titulo: 'CAMPUS SOL',         clave: 'SOL-F03', color: '#C95F14', tam: 38, fondo: 'diploma-campus.jpg' },
   guardian: { titulo: 'GUARDIÁN SOL',       clave: 'SOL-F04', color: '#2F6DB5', tam: 38, fondo: 'diploma-guardian.jpg' },
   grupo:    { titulo: 'GRUPO GUARDIÁN SOL', clave: 'SOL-F06', color: '#A67C00', tam: 34, fondo: 'diploma-grupo.jpg' },
+  aliado:       { titulo: 'ALIADO SOL',         clave: 'SOL-V01', color: '#237A55', tam: 38, fondo: 'diploma-aliado.jpg' },
+  aliado_anual: { titulo: 'ALIADO SOL DEL AÑO', clave: 'SOL-V02', color: '#237A55', tam: 34, fondo: 'diploma-aliado.jpg' },
 } as const;
+
+const listaNatural = (xs: string[]) => xs.length <= 1 ? (xs[0] ?? '') : `${xs.slice(0, -1).join(', ')} y ${xs[xs.length - 1]}`;
 
 export function htmlDiplomas(d: DatosDiploma): string {
   const cfg = DIPLOMA[d.tipo];
@@ -735,15 +771,23 @@ export function htmlDiplomas(d: DatosDiploma): string {
   const lugar = `${esc(d.ciudad || '[Ciudad]')}, a ${fechaLarga(d.fecha)}`;
   const firma = (n: string | undefined, p: string) =>
     `<div class="f"><div class="ln"></div><b>${esc(n || '')}</b><span>${p}</span></div>`;
-  const firmas = d.tipo === 'campus'
+  const firmas = d.tipo === 'campus' || d.tipo === 'aliado_anual'
     ? firma(d.directorNacional, 'Director Nacional') + firma('Ing. Ricardo Reyes Medina', 'Coordinador de Obras y Mantenimiento (RCMA)')
+    : d.tipo === 'aliado'
+      ? firma(d.directorCampus, 'Director(a) del campus') + firma('Ing. Ricardo Reyes Medina', 'Coordinador de Obras y Mantenimiento (RCMA)')
     : d.tipo === 'guardian'
       ? firma(d.directorCampus, 'Director(a) del campus') + firma(d.coordinadorComite, 'Coordinador(a) del Comité SOL')
       : firma(d.directorCampus, 'Director(a) del campus') + firma(d.coordinadorComite, 'Coordinador(a) del Comité SOL')
         + firma(d.directorNacional, 'Director Nacional') + firma('Ing. Ricardo Reyes Medina', 'Coordinador RCMA');
   const pagina = (nombre: string) => {
     const quien = nombre ? esc(nombre) : '&nbsp;';
-    const cuerpo = d.tipo === 'campus'
+    const cuerpo = d.tipo === 'aliado'
+      ? `<p class="a">a</p><p class="nom">${esc(d.aliadoNombre || '')}</p>
+         <p class="txt">por su valiosa participación como voluntarios en ${esc(d.actividad || 'la jornada de voluntariado')}, en el campus ${esc(d.campusNombre)}<br/>el ${fechaLarga(d.fechaApoyo || d.fecha)}, cuidando la Seguridad, el Orden y la Limpieza de nuestra comunidad.</p>`
+      : d.tipo === 'aliado_anual'
+      ? `<p class="a">a</p><p class="nom">${esc(d.aliadoNombre || '')}</p>
+         <p class="txt">por ser el aliado que más apoyó a la Red durante el ciclo escolar ${cicloLabel(d.ciclo)},<br/>con ${d.apoyos ?? 0} jornada${d.apoyos === 1 ? '' : 's'} de voluntariado${d.horas ? ` (${Math.round(d.horas)} horas&#8209;voluntario)` : ''} en ${(d.campusLista ?? []).length === 1 ? 'el campus' : 'los campus'} ${esc(listaNatural(d.campusLista ?? []))},<br/>a favor de la Seguridad, el Orden y la Limpieza.</p>`
+      : d.tipo === 'campus'
       ? `<p class="a">a</p><p class="nom">${esc(d.campusNombre)}</p>
          <p class="txt">por sostener durante el ciclo escolar ${cicloLabel(d.ciclo)} un Índice SOL de excelencia en Seguridad, Orden y Limpieza,<br/>cuidando a cada persona que forma parte de nuestra comunidad.</p>`
       : d.tipo === 'guardian'
@@ -759,8 +803,8 @@ export function htmlDiplomas(d: DatosDiploma): string {
         <div class="firmas ${d.tipo === 'grupo' ? 'cuatro' : ''}">${firmas}</div>
       </div></section>`;
   };
-  const nombres = d.tipo === 'campus' ? [''] : (d.beneficiarios.length ? d.beneficiarios : ['']);
-  return `<!doctype html><html><head><meta charset="utf-8"><title>${cfg.titulo} · ${esc(d.campusNombre)}</title>
+  const nombres = d.tipo === 'campus' || d.tipo === 'aliado' || d.tipo === 'aliado_anual' ? [''] : (d.beneficiarios.length ? d.beneficiarios : ['']);
+  return `<!doctype html><html><head><meta charset="utf-8"><title>${cfg.titulo} · ${esc(d.aliadoNombre || d.campusNombre)}</title>
   <link rel="preconnect" href="https://fonts.googleapis.com"><link href="https://fonts.googleapis.com/css2?family=Carlito:ital,wght@0,400;0,700;1,400&display=swap" rel="stylesheet">
   <style>
    @page { size: letter landscape; margin: 0; }

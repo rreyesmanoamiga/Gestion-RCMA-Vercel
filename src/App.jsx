@@ -81,6 +81,7 @@ import SolComites from '@/pages/SolComites';
 import SolGuardianes from '@/pages/SolGuardianes';
 import SolReconocimientos from '@/pages/SolReconocimientos';
 import SolCatalogo from '@/pages/SolCatalogo';
+import SolVoluntariado from '@/pages/SolVoluntariado';
 import PWAUpdatePrompt from '@/components/PWAUpdatePrompt';
 
 const inputClass = "w-full px-3 py-2 border border-slate-300 rounded-md text-sm focus:ring-2 focus:ring-slate-900 focus:outline-none bg-white";
@@ -488,6 +489,7 @@ function AuthenticatedApp() {
           <Route path="/sol/guardianes"           element={<SolGuardianes />} />
           <Route path="/sol/reconocimientos"      element={<SolReconocimientos />} />
           <Route path="/sol/catalogo"             element={<SolCatalogo />} />
+          <Route path="/sol/voluntariado"         element={<SolVoluntariado />} />
 
           <Route path="/login"               element={<Navigate to="/" replace />} />
           <Route path="*"                   element={<PageNotFound />} />

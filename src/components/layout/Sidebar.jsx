@@ -21,6 +21,7 @@ import {
   BookUser, Package, Layers, ShieldAlert, ShieldCheck, ListTodo,
   Network, Clock3,
   Gauge, Flag, Users, Star, Award, ListChecks, ClipboardList, Settings2,
+  HeartHandshake,
 } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import SidebarAccordionGroup from './SidebarAccordionGroup';
@@ -219,6 +220,7 @@ export default function Sidebar({ isOpen, onToggle }) {
   const solOrganizacion = [
     { to: '/sol/comites',        icon: Users,         label: 'Comités SOL' },
     { to: '/sol/guardianes',     icon: Star,          label: 'Guardianes SOL' },
+    { to: '/sol/voluntariado',   icon: HeartHandshake, label: 'Voluntariado' },
   ];
   const solResultados = [
     { to: '/sol/reconocimientos', icon: Award,        label: 'Reconocimientos y Reportes' },
