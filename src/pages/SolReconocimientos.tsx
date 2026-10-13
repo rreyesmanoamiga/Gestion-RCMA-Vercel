@@ -137,7 +137,7 @@ function TabCampus({ ciclo, campus, data, dirNacional, registrar, quitar }: { ci
 
   return (
     <div>
-      <p className="text-sm text-slate-600 mb-3">Se dictamina al cierre del ciclo con el promedio del año y la última auditoría cruzada; se entrega en la reunión nacional de directores de agosto. Criterios del Manual 11.1:</p>
+      <p className="text-sm text-slate-600 mb-3">Se dictamina al cierre del ciclo con el promedio del año y la última auditoría cruzada; se entrega en marzo, en el Congreso de Directores. Criterios del Manual 11.1:</p>
       <ol className="text-sm text-slate-600 list-decimal pl-5 mb-4 space-y-0.5">
         <li>Índice SOL promedio del ciclo de 85 o más (sin contar la línea base).</li>
         <li>Ninguna área en rojo en las dos últimas auditorías cruzadas.</li>

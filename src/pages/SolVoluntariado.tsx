@@ -156,11 +156,11 @@ function TabApoyos({ ciclo, campus, directorio, data, refrescar }: { ciclo: stri
         <table className="w-full text-sm">
           <thead className="bg-slate-50 text-[11px] uppercase tracking-wider text-slate-500"><tr>
             <th className="text-left px-4 py-3">Folio / fecha</th><th className="text-left px-4 py-3">Aliado</th><th className="text-left px-4 py-3">Campus / área</th>
-            <th className="text-left px-4 py-3">Actividad</th><th className="text-right px-3 py-3">Vol.</th><th className="text-right px-3 py-3">Horas-vol.</th>
-            <th className="text-left px-3 py-3">Atendido</th><th className="text-left px-3 py-3">Fotos</th><th className="px-4 py-3" />
+            <th className="text-left px-4 py-3">Actividad</th><th className="text-right px-3 py-3">Voluntarios</th>
+            <th className="text-left px-3 py-3">Atendido / fotos</th><th className="px-3 py-3" />
           </tr></thead>
           <tbody className="divide-y divide-slate-100">
-            {filtrados.length === 0 && <tr><td colSpan={9} className="px-4 py-10 text-center text-slate-500">Sin apoyos de voluntariado en {cicloLabel(ciclo)} con estos filtros.</td></tr>}
+            {filtrados.length === 0 && <tr><td colSpan={7} className="px-4 py-10 text-center text-slate-500">Sin apoyos de voluntariado en {cicloLabel(ciclo)} con estos filtros.</td></tr>}
             {filtrados.map(a => {
               const antes = a.fotos.filter(f => f.momento === 'antes').length;
               const despues = a.fotos.length - antes;
@@ -168,24 +168,23 @@ function TabApoyos({ ciclo, campus, directorio, data, refrescar }: { ciclo: stri
                 <tr key={a.id} className="align-top">
                   <td className="px-4 py-3 whitespace-nowrap"><p className="font-bold text-slate-900">{a.folio ?? '—'}</p><p className="text-[11px] text-slate-400">{fechaCorta(a.fecha)}</p></td>
                   <td className="px-4 py-3"><p className="font-semibold text-slate-800">{aliadoDe(a.aliado_id)?.nombre ?? '—'}</p><p className="text-[11px] text-slate-500">{tipoAliadoLabel(aliadoDe(a.aliado_id)?.tipo)}</p></td>
-                  <td className="px-4 py-3"><p className="text-slate-800">{nombreCampus(directorio, a.colegio)}</p>
+                  <td className="px-4 py-3"><p className="text-slate-800">{ciudadDe(nombreCampus(directorio, a.colegio))}</p>
                     <p className="text-[11px] text-slate-500">{[a.componentes.join(' · '), a.area].filter(Boolean).join(' — ') || '—'}</p></td>
                   <td className="px-4 py-3 max-w-[280px]"><p className="text-slate-700">{a.actividad}</p>{a.responsable_campus && <p className="text-[11px] text-slate-500">Recibió: {a.responsable_campus}</p>}</td>
-                  <td className="px-3 py-3 text-right tabular-nums">{a.voluntarios ?? '—'}</td>
-                  <td className="px-3 py-3 text-right tabular-nums">{a.voluntarios && a.horas ? fmtHoras(horasVoluntario(a)) : '—'}</td>
+                  <td className="px-3 py-3 text-right whitespace-nowrap">
+                    <p className="tabular-nums text-slate-800">{a.voluntarios ?? '—'}{a.horas ? <span className="text-slate-500"> × {fmtHoras(Number(a.horas))} h</span> : null}</p>
+                    {a.voluntarios && a.horas ? <p className="text-[11px] font-bold text-slate-600 tabular-nums">{fmtHoras(horasVoluntario(a))} horas-vol.</p> : null}
+                  </td>
                   <td className="px-3 py-3 whitespace-nowrap text-xs text-slate-600">
                     {a.hallazgos_ids.length > 0 && <p><ListChecks className="w-3.5 h-3.5 inline mr-1" />{a.hallazgos_ids.length} hallazgo(s)</p>}
                     {a.tarjetas_ids.length > 0 && <p><Flag className="w-3.5 h-3.5 inline mr-1 text-red-600" />{a.tarjetas_ids.length} tarjeta(s)</p>}
-                    {!a.hallazgos_ids.length && !a.tarjetas_ids.length && <span className="text-slate-400">—</span>}
+                    <p className={a.fotos.length ? '' : 'text-slate-400'}><Camera className="w-3.5 h-3.5 inline mr-1" />{a.fotos.length ? `${antes} antes · ${despues} después` : 'Sin fotos'}</p>
                   </td>
-                  <td className="px-3 py-3 whitespace-nowrap text-xs text-slate-600">{a.fotos.length ? <span><Camera className="w-3.5 h-3.5 inline mr-1" />{antes} antes · {despues} después</span> : <span className="text-slate-400">Sin fotos</span>}</td>
-                  <td className="px-4 py-3 whitespace-nowrap text-right">
-                    <button className={btnSecondary + ' !px-2.5 !py-1.5 text-xs'} title="Reconocimiento de la jornada" onClick={() => diploma(a)}>
-                      <Printer className="w-3.5 h-3.5" />{a.constancia_fecha ? 'Reimprimir' : 'Reconocimiento'}
-                    </button>
+                  <td className="px-3 py-3 whitespace-nowrap text-right">
+                    <button className="p-2 rounded-md hover:bg-emerald-50 text-emerald-700" title={a.constancia_fecha ? 'Reimprimir reconocimiento de la jornada' : 'Imprimir reconocimiento de la jornada'} onClick={() => diploma(a)}><Printer className="w-4 h-4" /></button>
                     <button className="p-2 rounded-md hover:bg-slate-100 text-slate-500" title="Editar" onClick={() => setEditando(a)}><Pencil className="w-4 h-4" /></button>
                     <button className="p-2 rounded-md hover:bg-red-50 text-slate-400 hover:text-red-600" title="Eliminar" onClick={() => eliminar(a)}><Trash2 className="w-4 h-4" /></button>
-                    {a.constancia_fecha && <p className="text-[11px] text-emerald-700 mt-1">Entregado {fechaCorta(a.constancia_fecha)}</p>}
+                    <p className={`text-[11px] mt-0.5 ${a.constancia_fecha ? 'text-emerald-700' : 'text-amber-700'}`}>{a.constancia_fecha ? `Entregado ${fechaCorta(a.constancia_fecha)}` : 'Sin reconocimiento'}</p>
                   </td>
                 </tr>
               );
