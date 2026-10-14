@@ -410,7 +410,9 @@ function textoAvance(p: ProyectoSemana, inicio: Date, fin: Date): string[] {
   const deLaSemana = p.comentarios.filter(c => { const d = new Date(c.fecha); return d >= inicio && d <= fin && c.texto.trim(); });
   const lineas: string[] = [];
   if (deLaSemana.length) {
-    for (const c of deLaSemana.slice(-4)) lineas.push(`• ${fechaCorta(c.fecha)} — ${c.texto.replace(/\s+/g, ' ').trim()}`);
+    // Solo el último avance registrado: el historial completo no cabe en la caja
+    const u = deLaSemana[deLaSemana.length - 1];
+    lineas.push(`${fechaCorta(u.fecha)} — ${u.texto.replace(/\s+/g, ' ').trim()}`);
   } else if (p.comentarios.some(c => c.texto.trim()) && !(p.esPendiente && p.descripcion?.trim())) {
     const u = p.comentarios.filter(c => c.texto.trim()).slice(-1)[0];
     lineas.push(`${p.concluido ? 'Proyecto concluido.' : 'Sin actualización esta semana.'} Último seguimiento (${fechaLarga(u.fecha)}): ${u.texto.replace(/\s+/g, ' ').trim()}`);
