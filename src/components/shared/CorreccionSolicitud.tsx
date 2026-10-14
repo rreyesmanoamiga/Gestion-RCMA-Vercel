@@ -3,7 +3,7 @@
 import React, { useMemo, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import { PencilLine, X, Loader2, History, AlertTriangle, ArrowRight } from 'lucide-react';
+import { PencilLine, X, Loader2, History, AlertTriangle, ArrowRight, Mail } from 'lucide-react';
 import { supabase } from '@/lib/supabaseClient';
 import { useAuth } from '@/lib/AuthContext';
 import { logAudit } from '@/lib/audit';
@@ -76,7 +76,9 @@ export function CorregirModal<T extends { id: string }>({ config, registro, refe
   onSaved: (actualizado: T) => void;
 }) {
   const qc = useQueryClient();
+  const { user } = useAuth();
   const fila = registro as unknown as Record<string, unknown>;
+  const correo = config.notificar?.(fila) ?? null;
   const original = useMemo(() => {
     const o: Valores = {};
     config.campos.forEach(c => { o[c.key] = aTexto(c, fila[c.key]); });
@@ -109,6 +111,23 @@ export function CorregirModal<T extends { id: string }>({ config, registro, refe
       const { data, error: e } = await supabase.from(config.tabla).update(upd).eq('id', registro.id).select().single();
       if (e) throw e;
       if (!data) throw new Error('No se pudo guardar la corrección');
+      const listaCambios = cambios.map(({ campo, antes, despues }) => ({ campo, antes, despues }));
+
+      // Aviso por correo al solicitante con copia a quienes reciben la solicitud original
+      let avisoCorreo: string | null = null;
+      if (correo) {
+        const { data: r, error: eMail } = await supabase.functions.invoke('notify-correccion', {
+          body: { ...correo, copias: undefined, motivo: motivo.trim(), cambios: listaCambios, corregido_por: user?.user_metadata?.full_name ?? user?.email },
+        });
+        const res = r as { para?: string; copias?: string[] } | null;
+        if (eMail || !res?.para) {
+          avisoCorreo = 'No se pudo enviar el correo';
+          toast.warning('La corrección se guardó, pero no se pudo enviar el correo al solicitante.');
+        } else {
+          avisoCorreo = `Enviado a ${res.para}${res.copias?.length ? ` con copia a ${res.copias.join(', ')}` : ''}`;
+        }
+      }
+
       await logAudit({
         accion: 'editar',
         modulo: config.modulo,
@@ -117,11 +136,12 @@ export function CorregirModal<T extends { id: string }>({ config, registro, refe
         detalle: {
           tipo: TIPO_CORRECCION,
           motivo: motivo.trim(),
-          cambios: cambios.map(({ campo, antes, despues }) => ({ campo, antes, despues })),
+          cambios: listaCambios,
+          ...(avisoCorreo ? { correo: avisoCorreo } : {}),
         },
       });
       qc.invalidateQueries({ queryKey: ['correcciones', config.modulo] });
-      toast.success(`Corrección guardada (${cambios.length} campo${cambios.length === 1 ? '' : 's'}) y registrada en Auditoría`);
+      toast.success(`Corrección guardada (${cambios.length} campo${cambios.length === 1 ? '' : 's'}) y registrada en Auditoría${avisoCorreo?.startsWith('Enviado') ? '; se avisó por correo' : ''}`);
       onSaved({ ...registro, ...(data as object) } as T);
     } catch (e: unknown) {
       toast.error((e as { message?: string })?.message ?? 'Error al guardar la corrección');
@@ -203,6 +223,13 @@ export function CorregirModal<T extends { id: string }>({ config, registro, refe
               placeholder="Ej. El colegio confirmó por correo que el monto de FBC es de $120,000 y no de $1,200,000." />
             <p className="text-[11px] text-slate-400 mt-1">Obligatorio. Explica qué estaba mal y por qué se corrige (por ejemplo, quién lo confirmó y por qué medio).</p>
           </div>
+
+          {correo && (
+            <p className="text-xs text-slate-600 bg-blue-50 border border-blue-100 rounded-md px-3 py-2 flex gap-2">
+              <Mail className="w-4 h-4 shrink-0 text-blue-600" />
+              <span>Al guardar se enviará un correo a <b>{correo.nombre_solicitante || 'quien llenó la solicitud'}</b> ({correo.correo_solicitante || 'sin correo'}) con los cambios y el motivo, con copia a {correo.copias}.</span>
+            </p>
+          )}
         </div>
 
         <div className="px-5 py-4 border-t border-slate-100 flex items-center justify-end gap-2">
@@ -220,7 +247,7 @@ export function CorregirModal<T extends { id: string }>({ config, registro, refe
 // ── Historial y marca de "Corregida" ───────────────────────────────────────
 interface RegistroCorreccion {
   id: string; created_at: string; usuario_nombre: string | null; usuario_email: string | null; registro_id: string | null;
-  detalle: { motivo?: string; cambios?: CambioCorreccion[] } | null;
+  detalle: { motivo?: string; cambios?: CambioCorreccion[]; correo?: string } | null;
 }
 
 /** Correcciones de un módulo (solo las ve la Coordinación). */
@@ -271,6 +298,7 @@ export function HistorialCorrecciones({ modulo, id }: { modulo: string; id: stri
               <li key={i}><span className="font-semibold">{c.campo}:</span> <span className="line-through text-slate-400">{c.antes}</span> → <span className="font-semibold text-slate-900">{c.despues}</span></li>
             ))}
           </ul>
+          {r.detalle?.correo && <p className="mt-0.5 text-slate-500">✉ {r.detalle.correo}</p>}
         </div>
       ))}
     </div>

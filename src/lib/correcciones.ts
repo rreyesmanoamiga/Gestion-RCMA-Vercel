@@ -36,7 +36,18 @@ export interface ConfigCorreccion {
   avisar?: (v: Valores) => string | null;
   /** Ajusta campos dependientes cuando cambia uno (ej. Suplemento → Traspaso) */
   derivar?: (key: string, v: Valores) => Valores;
+  /** Si existe, al guardar se avisa por correo al solicitante (función notify-correccion) */
+  notificar?: (fila: Record<string, unknown>) => AvisoCorreccion;
 }
+
+export interface AvisoCorreccion {
+  tipo: 'solicitud' | 'ticket_mas';
+  folio?: string; proyecto?: string; colegio?: string;
+  nombre_solicitante?: string; correo_solicitante?: string;
+  /** Texto para el modal: quién recibe la copia */
+  copias: string;
+}
+const s = (v: unknown) => (v == null ? undefined : String(v));
 
 export interface CambioCorreccion { campo: string; antes: string; despues: string }
 
@@ -97,6 +108,11 @@ export const CORRECCION_SOLICITUD: ConfigCorreccion = {
   ],
   validar: validarOtras,
   avisar: avisarTotal('costo_aproximado'),
+  notificar: f => ({
+    tipo: 'solicitud', proyecto: s(f.nombre_proyecto), colegio: s(f.nombre_centro),
+    nombre_solicitante: s(f.nombre_solicitante), correo_solicitante: s(f.correo_solicitante),
+    copias: f.nombre_centro === 'FMA' ? 'Gerencia, Finanzas y Coordinación RCMA' : 'Coordinación RCMA y CAR del colegio',
+  }),
 };
 
 export const CORRECCION_SOLICITUD_CN: ConfigCorreccion = {
@@ -141,6 +157,11 @@ export const CORRECCION_TICKET_MAS: ConfigCorreccion = {
     if (key === 'orden_interna' && v.orden_interna === 'SI' && v.numero_orden_interna === 'N/A') return { ...v, numero_orden_interna: '' };
     return v;
   },
+  notificar: f => ({
+    tipo: 'ticket_mas', folio: s(f.folio), proyecto: s(f.nombre_proyecto), colegio: s(f.colegio),
+    nombre_solicitante: s(f.nombre_solicitante), correo_solicitante: s(f.correo_solicitante),
+    copias: 'Coordinación RCMA, Gerente, Director Nacional y CAR del colegio',
+  }),
 };
 
 export const CORRECCION_TICKET_MAS_CN: ConfigCorreccion = {

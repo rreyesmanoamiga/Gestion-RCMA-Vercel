@@ -464,6 +464,7 @@ export default function Auditoria() {
                             <li key={i}><span className="font-semibold">{c.campo}:</span> <span className="line-through text-slate-400">{c.antes}</span> → <span className="font-semibold text-slate-800">{c.despues}</span></li>
                           ))}
                         </ul>
+                        {r.detalle?.correo != null && <p className="mt-1 text-slate-500"><span className="font-bold text-slate-700">Aviso por correo:</span> {String(r.detalle.correo)}</p>}
                       </div>
                     ) : r.detalle && Object.keys(r.detalle).length > 0 && (
                       <p className="text-xs text-slate-400 mt-1 font-mono truncate">
