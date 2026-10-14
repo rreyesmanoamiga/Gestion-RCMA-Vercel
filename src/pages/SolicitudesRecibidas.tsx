@@ -13,6 +13,8 @@ import PageHeader from '@/components/shared/PageHeader';
 import { usePermissions } from '@/hooks/usePermissions';
 import AccesoRestringido from '@/components/shared/AccesoRestringido';
 import { useDirectorio } from '@/lib/directorio';
+import { BotonCorregir, CorregirModal, MarcaCorregida, HistorialCorrecciones } from '@/components/shared/CorreccionSolicitud';
+import { CORRECCION_SOLICITUD } from '@/lib/correcciones';
 
 const PAGE_SIZE = 20;
 
@@ -139,6 +141,7 @@ export default function SolicitudesRecibidas() {
   const [viewing, setViewing]             = useState<Solicitud | null>(null);
   const [deletingId, setDeletingId]       = useState<string | null>(null);
   const [cancelandoId, setCancelandoId]   = useState<Solicitud | null>(null);
+  const [corrigiendo, setCorrigiendo]     = useState<Solicitud | null>(null);
   const [cotModal, setCotModal]           = useState<any>(null);
   const [cotFiles, setCotFiles]           = useState<File[]>([]);
   const { upload: spUpload, uploading: spUploading } = useSharePointUpload();
@@ -458,6 +461,7 @@ export default function SolicitudesRecibidas() {
                     }`}>
                       {s.estatus === 'pendiente' ? 'Pendiente' : s.estatus === 'cancelada' ? 'Cancelada' : 'Recibida'}
                     </span>
+                    <MarcaCorregida modulo="solicitudes" id={s.id} />
                     {s.tipo_iniciativa && (
                       <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 uppercase">
                         {s.tipo_iniciativa}
@@ -520,6 +524,7 @@ export default function SolicitudesRecibidas() {
                       <CheckCircle className="w-4 h-4" /> Ticket MAS habilitado
                     </span>
                   )}
+                  <BotonCorregir modulo="solicitudes" estatus={s.estatus} onClick={() => setCorrigiendo(s)} />
                   {s.estatus !== 'cancelada' && (
                     <button onClick={() => setCancelandoId(s)}
                       className="flex items-center gap-1.5 px-3 py-2 border border-red-200 text-red-600 rounded-md text-sm font-medium hover:bg-red-50 transition-colors">
@@ -642,13 +647,16 @@ export default function SolicitudesRecibidas() {
                   </table>
                 </div>
               </div>
+              <div className="mx-4 mb-4"><HistorialCorrecciones modulo="solicitudes" id={viewing.id} /></div>
             </div>
 
-            <div className="p-4 border-t border-slate-100 flex justify-between items-center bg-slate-50">
+            <div className="p-4 border-t border-slate-100 flex flex-wrap gap-2 items-center bg-slate-50">
               <button onClick={() => handlePrint(viewing)}
                 className="flex items-center gap-2 px-4 py-2 border border-slate-300 rounded-md text-sm font-medium text-slate-700 hover:bg-slate-100 transition-colors">
                 <Printer className="w-4 h-4" /> Imprimir / PDF
               </button>
+              <BotonCorregir modulo="solicitudes" estatus={viewing.estatus} onClick={() => setCorrigiendo(viewing)} />
+              <span className="flex-1" />
               <div className="flex gap-3">
                 <button onClick={() => setViewing(null)}
                   className="px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-200 rounded-md transition-colors">
@@ -742,6 +750,16 @@ export default function SolicitudesRecibidas() {
         </div>
       )}
 
+    {corrigiendo && (
+      <CorregirModal config={CORRECCION_SOLICITUD} registro={corrigiendo}
+        referencia={`${corrigiendo.nombre_proyecto ?? 'Solicitud'} — ${corrigiendo.nombre_centro ?? ''}`}
+        onClose={() => setCorrigiendo(null)}
+        onSaved={act => {
+          setCorrigiendo(null);
+          if (viewing?.id === act.id) setViewing(act);
+          queryClient.invalidateQueries({ queryKey: ['solicitudes'] });
+        }} />
+    )}
     {/* ── Modal Cotizaciones ─────────────────────────────────────────────── */}
     {cotModal && (
       <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4"

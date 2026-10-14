@@ -10,6 +10,8 @@ import { useScope } from '@/hooks/useScope';
 import PageHeader from '@/components/shared/PageHeader';
 import { usePermissions } from '@/hooks/usePermissions';
 import AccesoRestringido from '@/components/shared/AccesoRestringido';
+import { BotonCorregir, CorregirModal, MarcaCorregida, HistorialCorrecciones } from '@/components/shared/CorreccionSolicitud';
+import { CORRECCION_SOLICITUD_CN } from '@/lib/correcciones';
 
 const PAGE_SIZE = 20;
 
@@ -29,6 +31,11 @@ interface SolicitudCN {
   descripcion?: string;
   fecha_requerida?: string;
   costo_estimado?: number | null;
+  monto_operacion?: number | null;
+  monto_fbc?: number | null;
+  monto_donativos?: number | null;
+  monto_otras?: number | null;
+  monto_otras_detalle?: string | null;
   estatus?: string;
   recibida_at?: string;
   motivo_rechazo?: string;
@@ -50,6 +57,7 @@ export default function SolicitudesCNRecibidas() {
   const [rechazarModal, setRechazarModal] = useState<SolicitudCN | null>(null);
   const [motivoRechazo, setMotivoRechazo] = useState('');
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
+  const [corrigiendo, setCorrigiendo] = useState<SolicitudCN | null>(null);
 
   const { data: rawSolicitudes = [], isLoading } = useQuery({
     queryKey: ['compliance_solicitudes_cn'],
@@ -213,6 +221,7 @@ export default function SolicitudesCNRecibidas() {
                     {s.estatus === 'recibida' && s.ticket_mas_cn_habilitado_at && (
                       <span className="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase border bg-blue-50 text-blue-700 border-blue-200">Ticket MAS CN Habilitado</span>
                     )}
+                    <MarcaCorregida modulo="solicitudes_cn" id={s.id} />
                     <h3 className="font-bold text-slate-800 text-sm">{s.concepto_nombre} — {s.especificacion}</h3>
                   </div>
                   <div className="flex items-center gap-4 mt-2 text-xs text-slate-500 flex-wrap">
@@ -224,6 +233,7 @@ export default function SolicitudesCNRecibidas() {
                 </div>
                 <div className="flex items-center gap-1 shrink-0">
                   <button onClick={() => setViewing(s)} title="Ver detalle" className="p-1.5 rounded hover:bg-blue-50 text-blue-600 transition"><Eye className="w-4 h-4" /></button>
+                  <BotonCorregir modulo="solicitudes_cn" estatus={s.estatus} compacto onClick={() => setCorrigiendo(s)} />
                   {s.estatus === 'pendiente' && (
                     <>
                       <button onClick={() => recibirMutation.mutate(s)} title="Marcar como Recibida"
@@ -273,6 +283,17 @@ export default function SolicitudesCNRecibidas() {
               <p><strong>Correo:</strong> {viewing.correo_solicitante}</p>
               <p><strong>Fecha requerida:</strong> {viewing.fecha_requerida || '—'}</p>
               <p><strong>Costo estimado:</strong> {fmx(viewing.costo_estimado)}</p>
+              <div className="border border-slate-200 rounded-lg overflow-hidden">
+                <p className="bg-slate-100 px-3 py-1.5 text-[11px] font-black uppercase tracking-wider text-slate-600">Plan de financiamiento</p>
+                {([['Operación', viewing.monto_operacion], ['FBC (Fondo Bajo Custodia)', viewing.monto_fbc], ['Donativos', viewing.monto_donativos], ['Otras fuentes', viewing.monto_otras]] as [string, number | null | undefined][]).map(([k, val]) => (
+                  <div key={k} className="flex justify-between px-3 py-1 border-t border-slate-100 text-xs"><span className="text-slate-600">{k}</span><span className="font-mono">{fmx(val)}</span></div>
+                ))}
+                {(viewing.monto_otras ?? 0) > 0 && (
+                  <div className="px-3 py-1 border-t border-slate-100 text-xs"><span className="text-slate-600">¿A qué se refiere?</span> <span className={viewing.monto_otras_detalle ? '' : 'text-red-600 font-bold'}>{viewing.monto_otras_detalle || 'No especificado'}</span></div>
+                )}
+              </div>
+              <HistorialCorrecciones modulo="solicitudes_cn" id={viewing.id} />
+              <div className="flex justify-end"><BotonCorregir modulo="solicitudes_cn" estatus={viewing.estatus} onClick={() => setCorrigiendo(viewing)} /></div>
               {viewing.motivo_rechazo && <p className="text-red-600"><strong>Motivo de rechazo:</strong> {viewing.motivo_rechazo}</p>}
             </div>
             {viewing.estatus === 'pendiente' && (
@@ -294,6 +315,17 @@ export default function SolicitudesCNRecibidas() {
             )}
           </div>
         </div>
+      )}
+
+      {corrigiendo && (
+        <CorregirModal config={CORRECCION_SOLICITUD_CN} registro={corrigiendo}
+          referencia={corrigiendo.folio ?? `${corrigiendo.concepto_nombre ?? ''} — ${corrigiendo.especificacion ?? ''}`}
+          onClose={() => setCorrigiendo(null)}
+          onSaved={act => {
+            setCorrigiendo(null);
+            if (viewing?.id === act.id) setViewing(act);
+            qc.invalidateQueries({ queryKey: ['compliance_solicitudes_cn'] });
+          }} />
       )}
 
       {/* Modal: Rechazar */}

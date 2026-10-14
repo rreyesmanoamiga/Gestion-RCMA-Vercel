@@ -142,6 +142,21 @@ const ACCION_META: Record<string, { label: string; icon: React.ElementType; colo
   eliminar:            { label: 'Eliminación',              icon: Trash2,       color: 'bg-red-50 text-red-600' },
 };
 
+// Correcciones de solicitudes por la Coordinación: se guardan como "editar"
+// con detalle.tipo = "Corrección", motivo y la lista de cambios (antes → después).
+const esCorreccion = (r: { detalle: Record<string, unknown> | null }) => r.detalle?.tipo === 'Corrección';
+const META_CORRECCION = { label: 'Corrección', icon: Pencil, color: 'bg-amber-100 text-amber-700' };
+type CambioAud = { campo?: string; antes?: string; despues?: string };
+/** Detalle en una línea de texto (listas y objetos legibles, no "[object Object]"). */
+function detalleTexto(d: Record<string, unknown> | null, sep = ' | '): string {
+  if (!d) return '—';
+  return Object.entries(d).filter(([, v]) => v != null && v !== '').map(([k, v]) => {
+    if (k === 'cambios' && Array.isArray(v)) return 'cambios: ' + (v as CambioAud[]).map(c => `${c.campo}: ${c.antes} → ${c.despues}`).join('; ');
+    if (typeof v === 'object') return `${k}: ${JSON.stringify(v)}`;
+    return `${k}: ${v}`;
+  }).join(sep) || '—';
+}
+
 const MODULO_LABEL: Record<string, string> = {
   usuarios:      'Usuarios',
   solicitudes:   'Solicitudes',
@@ -159,6 +174,9 @@ const MODULO_LABEL: Record<string, string> = {
   minutas:       'Minutas y Notas Técnicas',
   reportes_problema: 'Reportar Problema',
   sol:           'Programa SOL',
+  solicitudes_cn: 'Solicitudes CN',
+  tickets_mas_cn: 'Ticket MAS CN',
+  tramites_cn:   'Trámites CN',
 };
 
 // ─── Export PDF: Reporte de Auditoría ─────────────────────────────────────────
@@ -174,7 +192,7 @@ async function exportAuditoriaPDF(rows: AuditRow[], desde: string, hasta: string
 
   const rowsData = rows.map(r => [
     new Date(r.created_at).toLocaleString('es-MX', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }),
-    ACCION_META[r.accion]?.label ?? r.accion,
+    esCorreccion(r) ? 'Corrección' : ACCION_META[r.accion]?.label ?? r.accion,
     MODULO_LABEL[r.modulo] ?? r.modulo,
     r.usuario_nombre ?? r.usuario_email ?? '—',
     r.registro_ref ?? '—',
@@ -218,13 +236,13 @@ async function exportAuditoriaExcel(rows: AuditRow[], desde: string, hasta: stri
   const headers = ['Fecha y Hora', 'Acción', 'Módulo', 'Usuario', 'Correo', 'Registro Afectado', 'A Nombre De', 'Detalle'];
   const dataRows = rows.map(r => [
     new Date(r.created_at).toLocaleString('es-MX'),
-    ACCION_META[r.accion]?.label ?? r.accion,
+    esCorreccion(r) ? 'Corrección' : ACCION_META[r.accion]?.label ?? r.accion,
     MODULO_LABEL[r.modulo] ?? r.modulo,
     r.usuario_nombre ?? '—',
     r.usuario_email ?? '—',
     r.registro_ref ?? '—',
     r.en_nombre_de ?? '—',
-    r.detalle ? Object.entries(r.detalle).filter(([, v]) => v != null && v !== '').map(([k, v]) => `${k}: ${v}`).join(' | ') : '—',
+    detalleTexto(r.detalle),
   ]);
 
   const aoa: (string | number)[][] = [
@@ -312,7 +330,7 @@ export default function Auditoria() {
   const filtered = useMemo(() => rows.filter(r => {
     const fecha = toFechaMX(r.created_at);
     return (filterModulo === 'all'  || r.modulo === filterModulo) &&
-      (filterAccion === 'all'  || r.accion === filterAccion) &&
+      (filterAccion === 'all'  || (filterAccion === 'correccion' ? esCorreccion(r) : r.accion === filterAccion)) &&
       (filterUsuario === 'all' || r.usuario_email === filterUsuario) &&
       (!fechaDesde || fecha >= fechaDesde) &&
       (!fechaHasta || fecha <= fechaHasta);
@@ -396,6 +414,7 @@ export default function Auditoria() {
           onChange={e => { setFilterAccion(e.target.value); setVisibleCount(PAGE_SIZE); }}>
           <option value="all">Todas las acciones</option>
           {Object.entries(ACCION_META).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
+          <option value="correccion">Corrección de solicitud</option>
         </select>
         <select className={selectClass} value={filterUsuario}
           onChange={e => { setFilterUsuario(e.target.value); setVisibleCount(PAGE_SIZE); }}>
@@ -413,7 +432,8 @@ export default function Auditoria() {
         <div className={cardClass + " p-0 overflow-hidden"}>
           <div className="divide-y divide-slate-100">
             {visible.map(r => {
-              const meta = ACCION_META[r.accion] ?? { label: r.accion, icon: Pencil, color: 'bg-slate-100 text-slate-600' };
+              const corr = esCorreccion(r);
+              const meta = corr ? META_CORRECCION : ACCION_META[r.accion] ?? { label: r.accion, icon: Pencil, color: 'bg-slate-100 text-slate-600' };
               const Icon = meta.icon;
               return (
                 <div key={r.id} className="flex items-start gap-3 p-4 hover:bg-slate-50 transition-colors">
@@ -436,9 +456,18 @@ export default function Auditoria() {
                       <span className="font-semibold">{r.usuario_nombre ?? r.usuario_email ?? 'Desconocido'}</span>
                       {r.registro_ref && <> — <span className="text-slate-500">{r.registro_ref}</span></>}
                     </p>
-                    {r.detalle && Object.keys(r.detalle).length > 0 && (
+                    {corr ? (
+                      <div className="mt-1.5 text-xs text-slate-600 bg-amber-50/60 border border-amber-100 rounded-md px-3 py-2">
+                        <p><span className="font-bold text-slate-700">Motivo:</span> {String(r.detalle?.motivo ?? '—')}</p>
+                        <ul className="mt-1 space-y-0.5">
+                          {((r.detalle?.cambios as CambioAud[] | undefined) ?? []).map((c, i) => (
+                            <li key={i}><span className="font-semibold">{c.campo}:</span> <span className="line-through text-slate-400">{c.antes}</span> → <span className="font-semibold text-slate-800">{c.despues}</span></li>
+                          ))}
+                        </ul>
+                      </div>
+                    ) : r.detalle && Object.keys(r.detalle).length > 0 && (
                       <p className="text-xs text-slate-400 mt-1 font-mono truncate">
-                        {Object.entries(r.detalle).filter(([, v]) => v != null && v !== '').map(([k, v]) => `${k}: ${v}`).join('  ·  ')}
+                        {detalleTexto(r.detalle, '  ·  ')}
                       </p>
                     )}
                   </div>

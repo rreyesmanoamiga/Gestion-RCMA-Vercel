@@ -16,6 +16,8 @@ import {
 import PageHeader from '@/components/shared/PageHeader';
 import { logAudit } from '@/lib/audit';
 import { notifyByEmail } from '@/lib/notifications';
+import { BotonCorregir, CorregirModal, MarcaCorregida, HistorialCorrecciones } from '@/components/shared/CorreccionSolicitud';
+import { CORRECCION_TICKET_MAS_CN } from '@/lib/correcciones';
 
 // Limpia un segmento de nombre de carpeta/archivo para OneDrive — mismo criterio que Ticket MAS de Obras.
 const limpiarSegmento = (s: string, maxLen = 60) => s
@@ -180,6 +182,7 @@ td{border:1px solid #B2BCC7;padding:4px 7px;font-size:10.5px;}
 export default function TicketMASCN() {
   const { user } = useAuth();
   const { can, isAdmin } = usePermissions();
+  const [corrigiendo, setCorrigiendo] = useState(false);
   const { filtrarPorAlcance } = useScope();
   const qc = useQueryClient();
 
@@ -786,7 +789,7 @@ export default function TicketMASCN() {
               <h1 className="text-lg font-black text-slate-800">Ticket {viewing.folio}</h1>
               <p className="text-sm text-slate-500">{viewing.colegio} — {viewing.territorio}</p>
             </div>
-            <EstatusBadge estatus={viewing.estatus} />
+            <div className="flex items-center gap-2"><MarcaCorregida modulo="tickets_mas_cn" id={viewing.id} /><EstatusBadge estatus={viewing.estatus} /></div>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-4 text-sm">
             <p><span className="text-slate-400 font-bold uppercase text-[11px] block">Solicitante</span>{viewing.nombre_solicitante} — {viewing.puesto_solicitante}</p>
@@ -797,11 +800,22 @@ export default function TicketMASCN() {
             <p><span className="text-slate-400 font-bold uppercase text-[11px] block">Cotización 1</span>{viewing.cot1_proveedor} — {fmx(viewing.cot1_importe)}</p>
             {viewing.cot2_proveedor && <p><span className="text-slate-400 font-bold uppercase text-[11px] block">Cotización 2</span>{viewing.cot2_proveedor} — {fmx(viewing.cot2_importe)}</p>}
             {viewing.cot3_proveedor && <p><span className="text-slate-400 font-bold uppercase text-[11px] block">Cotización 3</span>{viewing.cot3_proveedor} — {fmx(viewing.cot3_importe)}</p>}
+            <p><span className="text-slate-400 font-bold uppercase text-[11px] block">Motivo de selección</span>{viewing.motivo_seleccion || '—'}</p>
+            <p><span className="text-slate-400 font-bold uppercase text-[11px] block">Forma de financiamiento</span>{viewing.forma_financiamiento || '—'}</p>
           </div>
+          <div className="mt-4"><HistorialCorrecciones modulo="tickets_mas_cn" id={viewing.id} /></div>
           <div className="flex gap-2 mt-4">
             <button onClick={() => handlePrint(viewing)} className="inline-flex items-center gap-2 px-4 py-2 border border-slate-300 rounded-md text-sm font-bold text-slate-700 hover:bg-slate-50"><Printer className="w-4 h-4" /> Imprimir</button>
+            <BotonCorregir modulo="tickets_mas_cn" estatus={viewing.estatus} onClick={() => setCorrigiendo(true)} />
           </div>
         </div>
+
+        {corrigiendo && (
+          <CorregirModal config={CORRECCION_TICKET_MAS_CN} registro={viewing}
+            referencia={`${viewing.folio ?? 'Ticket MAS CN'} — ${viewing.colegio ?? ''}`}
+            onClose={() => setCorrigiendo(false)}
+            onSaved={act => { setCorrigiendo(false); setViewing(act); qc.invalidateQueries({ queryKey: ['compliance_tickets_mas_cn'] }); }} />
+        )}
 
         {viewing.estatus === 'pendiente' && puedeAutorizar && (
           <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-5 space-y-3">
