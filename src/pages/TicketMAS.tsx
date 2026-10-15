@@ -197,9 +197,7 @@ function generarHTMLTicket(t: TicketMAS, firma: string): string {
   const fechaAuth = t.fecha_autorizacion
     ? format(new Date(t.fecha_autorizacion), "dd/MM/yyyy", { locale: es })
     : hoy;
-  // FMA: la Gerencia firma en el lugar del solicitante (nombre y fecha del Vo. Bo.)
-  const esFMA = t.territorio === 'FMA';
-  const nombreVoBo = t.vobo_por || t.autorizado_por || '';
+  // FMA: firma con el Vo. Bo. de Gerencia (nombre y fecha del Vo. Bo.)
   const fechaVoBo = t.vobo_at ? format(new Date(t.vobo_at), "dd/MM/yyyy HH:mm", { locale: es }) : fechaAuth;
 
   return `<!DOCTYPE html>
@@ -283,31 +281,25 @@ function generarHTMLTicket(t: TicketMAS, firma: string): string {
   </div>
 
   <div class="firma-section">
-    ${esFMA && nombreVoBo ? `
-    <div class="firma-box">
-      <div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:4px 0;gap:4px;">
-        <span style="font-size:10px;font-weight:600;color:#3A4450;">${nombreVoBo}</span>
-        <span style="font-size:8.5px;color:#77889C;">${t.vobo_at ? 'Vo. Bo. en el sistema' : 'Autorizado'}: ${fechaVoBo}</span>
-      </div>
-      <div class="firma-name">Vo. Bo. Gerencia<br/><span class="firma-title">Federación Mano Amiga</span></div>
-    </div>` : esFMA && (t.estatus === 'pendiente' || t.estatus === 'en_revision') ? `
-    <div class="firma-box">
-      <div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:4px 0;gap:4px;">
-        <span style="font-size:10px;font-weight:600;color:#B45309;">Pendiente de Vo. Bo.</span>
-      </div>
-      <div class="firma-name">Vo. Bo. Gerencia<br/><span class="firma-title">Federación Mano Amiga</span></div>
-    </div>` : `
     <div class="firma-box">
       <div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:4px 0;gap:4px;">
         <span style="font-size:10px;font-weight:600;color:#3A4450;">${t.nombre_solicitante ?? '—'}</span>
         <span style="font-size:8.5px;color:#77889C;">Enviado: ${t.created_at ? format(new Date(t.created_at), "dd/MM/yyyy HH:mm", { locale: es }) : '—'}</span>
       </div>
       <div class="firma-name">${t.puesto_solicitante ?? 'Director / Administrador'}<br/><span class="firma-title">${t.colegio ?? ''}</span></div>
-    </div>`}
+    </div>
+    ${t.territorio === 'FMA' && t.autorizado_por ? `
+    <div class="firma-box">
+      <div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:4px 0;gap:4px;">
+        <span style="font-size:10px;font-weight:600;color:#3A4450;">${t.autorizado_por}</span>
+        <span style="font-size:8.5px;color:#77889C;">${t.vobo_at ? 'Vo. Bo. en el sistema' : 'Autorizado'}: ${fechaVoBo}</span>
+      </div>
+      <div class="firma-name">Vo. Bo. Gerencia<br/><span class="firma-title">Federación Mano Amiga</span></div>
+    </div>` : `
     <div class="firma-box">
       <img src="data:image/png;base64,${firma}" alt="Firma RCMA" style="max-height:60px;max-width:180px;object-fit:contain;"/>
       <div class="firma-name">Ricardo Joanathan Reyes Medina<br/><span class="firma-title">Coordinador de Obras y Mantenimiento RCMA</span></div>
-    </div>
+    </div>`}
   </div>
 
   <div class="footer">
