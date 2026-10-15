@@ -142,7 +142,7 @@ export default function Sidebar({ isOpen, onToggle }) {
     { to: '/solicitud',    icon: ClipboardEdit, label: 'Solicitud de Proyecto',  visible: can('ver_solicitud_proyecto') },
     { to: '/solicitudes',  icon: Inbox,         label: 'Solicitudes Recibidas',  visible: isAdmin },
     { to: '/anteproyectos',icon: FolderOpen,    label: 'Anteproyectos',          visible: can('ver_anteproyectos') },
-    { to: '/ticket-mas',   icon: FileSignature, label: 'Ticket MAS',             visible: isAdmin || can('ver_ticket_mas') || can('enviar_ticket_mas') },
+    { to: '/ticket-mas',   icon: FileSignature, label: 'Ticket MAS',             visible: isAdmin || can('ver_ticket_mas') || can('enviar_ticket_mas') || can('autorizar_ticket_mas_fma') },
   ].filter(i => i.visible);
 
   const gOperacion = [

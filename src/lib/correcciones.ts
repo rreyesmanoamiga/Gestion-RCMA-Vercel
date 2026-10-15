@@ -111,7 +111,7 @@ export const CORRECCION_SOLICITUD: ConfigCorreccion = {
   notificar: f => ({
     tipo: 'solicitud', proyecto: s(f.nombre_proyecto), colegio: s(f.nombre_centro),
     nombre_solicitante: s(f.nombre_solicitante), correo_solicitante: s(f.correo_solicitante),
-    copias: f.nombre_centro === 'FMA' ? 'Gerencia, Finanzas y Coordinación RCMA' : 'Coordinación RCMA y CAR del colegio',
+    copias: ['FMA', 'FIA', 'AUN'].includes(String(f.nombre_centro ?? '')) ? 'Gerencia, Finanzas y Coordinación RCMA' : 'Coordinación RCMA y CAR del colegio',
   }),
 };
 

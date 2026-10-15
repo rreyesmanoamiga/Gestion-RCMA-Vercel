@@ -209,7 +209,8 @@ serve(async (req) => {
     // En ese caso la solicitud no la revisa el Coordinador (el mismo que la
     // envía), sino su jefe directo, quien da el visto bueno, con copia a quien
     // fondea el recurso una vez autorizado.
-    const esFMA = centro === 'FMA';
+    // FIA y AUN también son entidades de la Federación: siguen la misma regla
+    const esFMA = ['FMA', 'FIA', 'AUN'].includes(String(centro ?? '').trim());
     const JEFE_EMAIL  = 'arodriguez@manoamiga.edu.mx';
     const FONDEO_EMAIL = 'fguerra@manoamiga.edu.mx';
 

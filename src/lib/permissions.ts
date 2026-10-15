@@ -24,6 +24,7 @@ const PERMISSION_DEFS: PermissionDef[] = [
   { key: 'enviar_ticket_mas',         label: 'Enviar Ticket MAS',         group: 'Ticket MAS',            default: false },
   { key: 'autorizar_ticket_mas',      label: 'Autorizar Ticket MAS',      group: 'Ticket MAS',            default: false },
   { key: 'cancelar_ticket_mas',       label: 'Cancelar Ticket MAS',       group: 'Ticket MAS',            default: false },
+  { key: 'autorizar_ticket_mas_fma',  label: 'Autorizar Ticket MAS de FMA (Gerencia)', group: 'Ticket MAS', default: false },
   { key: 'ver_anteproyectos',         label: 'Ver Anteproyectos',         group: 'Anteproyectos',         default: true  },
   { key: 'crear_anteproyectos',       label: 'Crear Anteproyectos',       group: 'Anteproyectos',         default: false },
   { key: 'editar_anteproyectos',      label: 'Editar Anteproyectos',      group: 'Anteproyectos',         default: false },

@@ -145,7 +145,7 @@ serve(async (req) => {
     if (tipo === 'ticket_mas') {
       // Ticket MAS nuevo: Coordinación + Gerente + Director Nacional + CAR
       copias = [adminEmail, gerenteEmail, directorNacionalEmail, carEmail];
-    } else if (colegio === 'FMA') {
+    } else if (['FMA', 'FIA', 'AUN'].includes(String(colegio ?? '').trim())) {
       // Solicitud de FMA: la revisa el jefe directo, con copia a fondeo y Coordinación
       copias = ['arodriguez@manoamiga.edu.mx', 'fguerra@manoamiga.edu.mx', adminEmail];
     } else {

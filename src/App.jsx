@@ -18,6 +18,7 @@ const PERM_ROUTES = [
   { perm: 'ver_solicitud_proyecto', route: '/protocolo'     },
   { perm: 'ver_reportes',           route: '/reportes'      },
   { perm: 'ver_sol',                route: '/sol'           },
+  { perm: 'autorizar_ticket_mas_fma', route: '/ticket-mas'  },
 ];
 
 function getFirstRoute(permissions, isAdmin) {
