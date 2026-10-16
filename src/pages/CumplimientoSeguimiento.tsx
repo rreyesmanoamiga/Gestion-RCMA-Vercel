@@ -10,8 +10,10 @@ import { Link as RouterLink } from 'react-router-dom';
 import {
   Plus, Search, Pin, Pencil, Trash2, X, FileText, ListChecks, Users,
   ClipboardList, Clock, AlertCircle, CheckCircle2, MessageSquare, Loader2,
-  Handshake, Lightbulb, Lock, Presentation, Send,
+  Handshake, Wrench, Lock, Presentation, Send, Link2, MapPin, Building2, CalendarPlus, Download,
 } from 'lucide-react';
+import { descargarICSPendiente } from '@/lib/icsPendiente';
+import { logoCuadradoDataURL } from '@/lib/logoPdf';
 import { logAudit } from '@/lib/audit';
 import { useAdjuntos, SelectorFotos, subirFotos, useFotosNexus, FotosDeComentario, type FotoRef } from '@/components/nexus/FotosComentario';
 import { useComplianceDocs, LoadingBlock, ErrorBlock } from '@/lib/complianceShared';
@@ -53,32 +55,101 @@ interface SysUser { user_email: string; nombre: string | null; territorio: strin
 const CATEGORIAS = ['General', 'Importante', 'Ideas', 'Recordatorios', 'Colegios', 'Personal'];
 const COLORES = ['#0f172a', '#0d8a7e', '#2563eb', '#7c3aed', '#db2777', '#ea580c', '#16a34a', '#d97706'];
 
-const PRIO_CFG: Record<string, { label: string; cls: string; cardLeft: string }> = {
-  urgente: { label: '🔴 Urgente', cls: 'bg-red-100 text-red-700 border-red-200',    cardLeft: 'border-l-red-500' },
-  alta:    { label: '🟠 Alta',    cls: 'bg-orange-100 text-orange-700 border-orange-200', cardLeft: 'border-l-orange-400' },
-  normal:  { label: '🔵 Normal',  cls: 'bg-blue-100 text-blue-700 border-blue-200',   cardLeft: 'border-l-blue-400' },
-  baja:    { label: '⚪ Baja',    cls: 'bg-slate-100 text-slate-500 border-slate-200', cardLeft: 'border-l-slate-300' },
+// Mismos colores, íconos y etiquetas que NEXUS
+const PRIO_CFG: Record<string,{label:string;cls:string;dot:string;cardLeft:string}> = {
+  urgente: { label:'🔴 Urgente', cls:'bg-red-100 text-red-700 border-red-200',        dot:'bg-red-500',    cardLeft:'border-l-red-500' },
+  alta:    { label:'🟠 Alta',    cls:'bg-orange-100 text-orange-700 border-orange-200', dot:'bg-orange-500', cardLeft:'border-l-orange-400' },
+  normal:  { label:'🔵 Normal',  cls:'bg-blue-100 text-blue-700 border-blue-200',     dot:'bg-blue-500',   cardLeft:'border-l-blue-400' },
+  baja:    { label:'⚪ Baja',    cls:'bg-slate-100 text-slate-500 border-slate-200',  dot:'bg-slate-400',  cardLeft:'border-l-slate-300' },
 };
-const EST_CFG: Record<string, { label: string; icon: React.ReactNode; cls: string }> = {
-  pendiente:  { label: 'Pendiente',  icon: <Clock className="w-3 h-3" />,        cls: 'bg-amber-100 text-amber-700 border-amber-200' },
-  en_proceso: { label: 'En Proceso', icon: <AlertCircle className="w-3 h-3" />,  cls: 'bg-blue-100 text-blue-700 border-blue-200' },
-  completado: { label: 'Completado', icon: <CheckCircle2 className="w-3 h-3" />, cls: 'bg-emerald-100 text-emerald-700 border-emerald-200' },
-  cancelado:  { label: 'Cancelado',  icon: <X className="w-3 h-3" />,            cls: 'bg-slate-100 text-slate-500 border-slate-200' },
+const EST_CFG: Record<string,{label:string;icon:React.ReactNode;cls:string;cardBorder:string}> = {
+  pendiente:  { label:'Pendiente',  icon:<Clock className="w-3 h-3"/>,        cls:'bg-amber-100 text-amber-700 border-amber-200',    cardBorder:'border-t-amber-400'   },
+  en_proceso: { label:'En Proceso', icon:<AlertCircle className="w-3 h-3"/>,  cls:'bg-blue-100 text-blue-700 border-blue-200',       cardBorder:'border-t-blue-400'    },
+  completado: { label:'Completado', icon:<CheckCircle2 className="w-3 h-3"/>, cls:'bg-emerald-100 text-emerald-700 border-emerald-200', cardBorder:'border-t-emerald-400' },
+  cancelado:  { label:'Cancelado',  icon:<X className="w-3 h-3"/>,            cls:'bg-slate-100 text-slate-500 border-slate-200',    cardBorder:'border-t-slate-300'   },
 };
-
-// Pendientes que vienen de Minutas de Cumplimiento (mismo patrón que NEXUS)
-const ORIGEN_CFG: Record<'acuerdo' | 'accion', { label: string; corto: string; doc: string; Icon: React.ElementType; band: string; soft: string; chip: string }> = {
-  acuerdo: { label: 'Acuerdo de minuta', corto: 'Acuerdo', doc: 'Minuta', Icon: Handshake, band: 'bg-indigo-600', soft: 'bg-indigo-50 border-indigo-200 text-indigo-900', chip: 'bg-indigo-50 text-indigo-700 border-indigo-200' },
-  accion:  { label: 'Acción de nota técnica', corto: 'Acción', doc: 'Nota técnica', Icon: Lightbulb, band: 'bg-violet-600', soft: 'bg-violet-50 border-violet-200 text-violet-900', chip: 'bg-violet-50 text-violet-700 border-violet-200' },
+// Pendientes que vienen de Minutas: cada origen con su propio color e ícono (igual que NEXUS)
+const ORIGEN_CFG: Record<'acuerdo'|'accion', { label:string; corto:string; doc:string; Icon:React.ElementType; band:string; soft:string; chip:string; ring:string }> = {
+  acuerdo: { label:'Acuerdo de minuta',      corto:'Acuerdo', doc:'Minuta',       Icon:Handshake, band:'bg-indigo-600', soft:'bg-indigo-50 border-indigo-200 text-indigo-900', chip:'bg-indigo-50 text-indigo-700 border-indigo-200', ring:'ring-indigo-200' },
+  accion:  { label:'Acción de nota técnica', corto:'Acción',  doc:'Nota técnica', Icon:Wrench,    band:'bg-orange-600', soft:'bg-orange-50 border-orange-200 text-orange-900', chip:'bg-orange-50 text-orange-700 border-orange-200', ring:'ring-orange-200' },
 };
-const origenDe = (p: { acuerdo_id?: string | null; origen?: string | null }) =>
+const origenDe = (p: { acuerdo_id?: string|null; origen?: string|null }) =>
   p.acuerdo_id && (p.origen === 'acuerdo' || p.origen === 'accion') ? ORIGEN_CFG[p.origen] : null;
+const abierto = (p: { estatus: string }) => p.estatus !== 'completado' && p.estatus !== 'cancelado';
 
 const fmtDate = (d?: string | null) => d ? format(new Date(d.includes('T') ? d : d + 'T12:00:00'), "d MMM yyyy", { locale: es }) : '—';
 const fmtFull = (d?: string | null) => d ? format(new Date(d), "d MMM yyyy HH:mm", { locale: es }) : '—';
 const inputCls = "w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-slate-900 focus:outline-none bg-white";
 const btnPrimary = "px-4 py-2 bg-slate-900 text-white rounded-lg text-sm font-semibold hover:bg-slate-800 disabled:opacity-40 transition";
 const btnOutline = "px-4 py-2 border border-slate-300 rounded-lg text-sm font-semibold text-slate-700 hover:bg-slate-100 transition";
+
+// ── PDF del pendiente (mismo formato que NEXUS) ────────────────────────────────
+async function generarPDFPendiente(p: Pendiente, comentarios: Comentario[]) {
+  let JsPDF = (window as any).jspdf?.jsPDF;
+  if (!JsPDF) { await new Promise<void>((res, rej) => { const s = document.createElement('script'); s.src = 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js'; s.onload = () => res(); s.onerror = rej; document.head.appendChild(s); }).catch(()=>null); JsPDF = (window as any).jspdf?.jsPDF; }
+  if (!JsPDF) { toast.error('No se pudo cargar jsPDF'); return; }
+  const doc = new JsPDF({ orientation:'portrait', unit:'mm', format:'a4' });
+  const W = 210; let y = 0;
+  const now = format(new Date(), "d 'de' MMMM 'de' yyyy", { locale: es });
+  doc.setFillColor(15,23,42); doc.rect(0,0,W,32,'F'); doc.setFillColor(13,138,126); doc.rect(0,0,4,32,'F');
+  doc.setFontSize(14); doc.setFont('helvetica','bold'); doc.setTextColor(255,255,255); doc.text('Seguimiento de Trámites — Pendiente',14,13);
+  doc.setFontSize(8); doc.setFont('helvetica','normal'); doc.setTextColor(148,163,184); doc.text('Sistema RCMA  ·  Cumplimiento Normativo  ·  Generado el '+now,14,21); doc.text('Documento confidencial — solo para uso interno',14,27);
+  try { const li=await new Promise<string>((res,rej)=>{const img=new Image();img.crossOrigin='anonymous';img.onload=()=>res(logoCuadradoDataURL(img));img.onerror=rej;img.src='/logo.png';}); doc.addImage(li,'PNG',W-38,4,22,22); } catch { /* sin logo */ }
+  y = 42;
+  const PRIO_LABEL_PDF: Record<string,string> = { urgente:'URGENTE', alta:'ALTA', normal:'NORMAL', baja:'BAJA' };
+  const EST_LABEL_PDF:  Record<string,string> = { pendiente:'Pendiente', en_proceso:'En Proceso', completado:'Completado', cancelado:'Cancelado' };
+  const PRIO_RGB: Record<string,[number,number,number]> = { urgente:[220,38,38], alta:[234,88,12], normal:[37,99,235], baja:[100,116,139] };
+  const pRGB = PRIO_RGB[p.prioridad] ?? [100,116,139];
+  doc.setFillColor(...pRGB); doc.rect(12, y, 4, 42, 'F');
+  doc.setFillColor(248,250,252); doc.rect(16, y, W-28, 42, 'F');
+  doc.setDrawColor(220,220,230); doc.setLineWidth(0.3); doc.rect(12, y, W-24, 42, 'D');
+  doc.setFontSize(13); doc.setFont('helvetica','bold'); doc.setTextColor(15,23,42);
+  doc.text(doc.splitTextToSize(p.titulo, W-75)[0], 20, y+8);
+  doc.setFillColor(...pRGB); doc.roundedRect(W-46, y+3, 30, 7, 1, 1, 'F');
+  doc.setFontSize(7); doc.setFont('helvetica','bold'); doc.setTextColor(255,255,255);
+  doc.text(PRIO_LABEL_PDF[p.prioridad] ?? p.prioridad, W-31, y+8, { align:'center' });
+  doc.setFontSize(7.5); doc.setFont('helvetica','bold'); doc.setTextColor(100,116,139);
+  doc.text('Estatus:', 20, y+16);
+  doc.setFont('helvetica','normal'); doc.setTextColor(15,23,42);
+  doc.text(EST_LABEL_PDF[p.estatus] ?? p.estatus, 40, y+16);
+  doc.setFont('helvetica','bold'); doc.setTextColor(100,116,139);
+  doc.text('Tipo:', 80, y+16);
+  doc.setFont('helvetica','normal'); doc.setTextColor(15,23,42);
+  doc.text(p.tipo==='compartido'?'Compartido':'Personal', 93, y+16);
+  if (p.colegio || p.territorio) {
+    doc.setFont('helvetica','bold'); doc.setTextColor(100,116,139);
+    doc.text('Territorio / Colegio:', 20, y+23);
+    doc.setFont('helvetica','normal'); doc.setTextColor(15,23,42);
+    doc.text(`${p.territorio ?? ''}  /  ${p.colegio ?? ''}`, 63, y+23);
+  }
+  const org = origenDe(p);
+  if (org) {
+    doc.setFont('helvetica','bold'); doc.setTextColor(100,116,139);
+    doc.text(`${org.doc}:`, 20, y+30);
+    doc.setFont('helvetica','normal'); doc.setTextColor(37,99,235);
+    const a = `${org.corto}${p.origen_numero ? ` #${p.origen_numero}` : ''} · ${p.origen_asunto ?? ''}`;
+    doc.text(a.length > 70 ? a.slice(0,68)+'...' : a, 44, y+30);
+  }
+  const fechaY = y + (org ? 37 : (p.colegio ? 30 : 23));
+  doc.setFont('helvetica','bold'); doc.setTextColor(100,116,139);
+  if (p.fecha_limite) { doc.text('Fecha limite:', 20, fechaY); doc.setFont('helvetica','normal'); doc.setTextColor(180,90,0); doc.text(fmtDate(p.fecha_limite), 46, fechaY); }
+  if (p.completado_at) {
+    const cx = p.fecha_limite ? 90 : 20;
+    doc.setFont('helvetica','bold'); doc.setTextColor(100,116,139);
+    doc.text('Completado:', cx, fechaY);
+    doc.setFont('helvetica','normal'); doc.setTextColor(22,163,74);
+    doc.text(fmtDate(p.completado_at), cx+28, fechaY);
+  }
+  y += 50;
+  if (p.descripcion) { doc.setFontSize(8.5); doc.setFont('helvetica','normal'); doc.setTextColor(50,50,50); const lines=doc.splitTextToSize(p.descripcion,W-32) as string[]; doc.text(lines,16,y); y+=lines.length*5+8; }
+  if (comentarios.length>0) {
+    doc.setFontSize(9); doc.setFont('helvetica','bold'); doc.setTextColor(15,23,42); doc.text('Historial de comentarios',14,y); y+=5;
+    doc.setDrawColor(220,220,220); doc.line(14,y,W-14,y); y+=6;
+    comentarios.forEach((c,i)=>{ if(y>260){doc.addPage();y=20;} if(i%2===0){doc.setFillColor(248,250,252);doc.rect(12,y-4,W-24,16,'F');} doc.setFontSize(8);doc.setFont('helvetica','bold');doc.setTextColor(15,23,42);doc.text(c.autor_nombre ?? '',16,y);doc.setFontSize(7);doc.setFont('helvetica','normal');doc.setTextColor(100,116,139);doc.text(fmtFull(c.created_at),W-16,y,{align:'right'});doc.setFontSize(8.5);doc.setFont('helvetica','normal');doc.setTextColor(50,50,50);const lines=doc.splitTextToSize(c.contenido || (c.fotos?.length ? `(${c.fotos.length} foto(s))` : ''),W-32) as string[];doc.text(lines,16,y+6);y+=8+(lines.length*5); });
+  }
+  const pages=doc.getNumberOfPages(); for(let i=1;i<=pages;i++){doc.setPage(i);doc.setFillColor(15,23,42);doc.rect(0,286,W,11,'F');doc.setFillColor(13,138,126);doc.rect(0,286,4,11,'F');doc.setFontSize(7);doc.setFont('helvetica','normal');doc.setTextColor(160,160,180);doc.text('Sistema RCMA  ·  Seguimiento de Trámites  ·  Documento confidencial',10,292);doc.text(`Pág. ${i} de ${pages}`,W-14,292,{align:'right'});}
+  doc.save(`Seguimiento-${p.titulo.replace(/\s+/g,'-').slice(0,30)}.pdf`);
+}
 
 // ---------------------------------------------------------------------------
 // Modal genérico
@@ -132,7 +203,7 @@ function Comentarios({ targetField, targetId }: { targetField: 'pendiente_id' | 
       });
       if (error) throw error;
     },
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey }); setTexto(''); fotosAdj.limpiar(); },
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey }); queryClient.invalidateQueries({ queryKey: ['compliance_comentarios_resumen'] }); setTexto(''); fotosAdj.limpiar(); },
     onError: (err: any) => toast.error(err?.message ?? 'No se pudo enviar el comentario'),
   });
 
@@ -225,27 +296,48 @@ export default function CumplimientoSeguimiento() {
   });
 
   const filteredNotas = useMemo(() => notas.filter(n => !search || n.titulo.toLowerCase().includes(search.toLowerCase()) || (n.contenido ?? '').toLowerCase().includes(search.toLowerCase())), [notas, search]);
-  const pasaOrigen = (p: Pendiente) => filtroOrigen === 'todos'
-    || (filtroOrigen === 'otros' ? !origenDe(p) : !!origenDe(p) && p.origen === filtroOrigen);
-  const pendPersonales = useMemo(() => pendientes.filter(p => p.tipo === 'personal' && pasaOrigen(p)), [pendientes, filtroOrigen]); // eslint-disable-line react-hooks/exhaustive-deps
-  const pendCompartidos = useMemo(() => pendientes.filter(p => p.tipo === 'compartido' && pasaOrigen(p)), [pendientes, filtroOrigen]); // eslint-disable-line react-hooks/exhaustive-deps
+  const pendPersonalesTodos = useMemo(() => pendientes.filter(p => p.tipo === 'personal'), [pendientes]);
   const conteoOrigen = useMemo(() => {
-    const act = pendientes.filter(p => p.estatus !== 'completado' && p.estatus !== 'cancelado'
-      && p.tipo === (tab === 'compartidos' ? 'compartido' : 'personal'));
+    const act = pendPersonalesTodos.filter(abierto);
     return { todos: act.length, acuerdo: act.filter(p => origenDe(p) && p.origen === 'acuerdo').length,
       accion: act.filter(p => origenDe(p) && p.origen === 'accion').length, otros: act.filter(p => !origenDe(p)).length };
-  }, [pendientes, tab]);
+  }, [pendPersonalesTodos]);
+  const pendPersonales = useMemo(() => pendPersonalesTodos.filter(p => {
+    if (filtroOrigen === 'todos') return true;
+    const o = origenDe(p);
+    return filtroOrigen === 'otros' ? !o : (!!o && p.origen === filtroOrigen);
+  }), [pendPersonalesTodos, filtroOrigen]);
+  const pendCompartidos = useMemo(() => pendientes.filter(p => p.tipo === 'compartido'), [pendientes]);
+
+  // Resumen de comentarios por pendiente (count + última fecha), igual que NEXUS
+  const { data: rawComentResumen = [] } = useQuery({
+    queryKey: ['compliance_comentarios_resumen'],
+    queryFn: async () => {
+      const { data } = await supabase.from('compliance_comentarios').select('pendiente_id, created_at')
+        .not('pendiente_id', 'is', null).order('created_at', { ascending: false });
+      return data ?? [];
+    },
+    refetchInterval: 30000,
+  });
+  const comentariosMap = useMemo(() => {
+    const map: Record<string, { count: number; lastDate: string }> = {};
+    for (const c of rawComentResumen as any[]) {
+      if (!map[c.pendiente_id]) map[c.pendiente_id] = { count: 1, lastDate: c.created_at };
+      else map[c.pendiente_id].count++;
+    }
+    return map;
+  }, [rawComentResumen]);
   const seguimientosActivos = useMemo(() => seguimientos.filter(s => s.estatus === 'activo'), [seguimientos]);
 
   const kpis = useMemo(() => ({
     total: pendientes.length,
-    activos: pendientes.filter(p => p.estatus !== 'completado' && p.estatus !== 'cancelado').length,
-    personales: pendPersonales.length,
+    activos: pendientes.filter(abierto).length,
+    personales: pendPersonalesTodos.length,
     compartidos: pendCompartidos.length,
     completados: pendientes.filter(p => p.estatus === 'completado').length,
     urgentes: pendientes.filter(p => p.prioridad === 'urgente' && p.estatus !== 'completado').length,
     enSeguimiento: seguimientosActivos.length,
-  }), [pendientes, pendPersonales, pendCompartidos, seguimientosActivos]);
+  }), [pendientes, pendPersonalesTodos, pendCompartidos, seguimientosActivos]);
 
   // ── Mutaciones: Notas ────────────────────────────────────────────────
   const [showNota, setShowNota] = useState(false);
@@ -371,15 +463,14 @@ export default function CumplimientoSeguimiento() {
     },
     onSuccess: (_d, p) => {
       queryClient.invalidateQueries({ queryKey: ['compliance_pendientes'] });
+      queryClient.invalidateQueries({ queryKey: ['compliance_comentarios_resumen'] });
       if (origenDe(p)) invalidarMinutas();
-      toast.success('Pendiente eliminado');
+      toast.success('Eliminado');
+      setConfirmDel(null); setViewPend(null);
     },
   });
-  const confirmarEliminar = (p: Pendiente) => {
-    const o = origenDe(p);
-    const extra = o ? `\n\nViene de ${o.label.toLowerCase()}: en Minutas ${p.estatus === 'completado' ? 'se conserva como Cumplido' : 'quedará como Cancelado'}.` : '';
-    if (confirm(`¿Eliminar este pendiente?${extra}`)) { eliminarPend.mutate(p); setViewPend(null); }
-  };
+  const [confirmDel, setConfirmDel] = useState<Pendiente | null>(null);
+  const confirmarEliminar = (p: Pendiente) => setConfirmDel(p);
 
   const cambiarEstatusPend = useMutation({
     mutationFn: async ({ p, estatus }: { p: Pendiente; estatus: Pendiente['estatus'] }) => {
@@ -469,43 +560,155 @@ export default function CumplimientoSeguimiento() {
   const isError = eNotas || ePend || eSeg;
   const refetchAll = () => { rNotas(); rPend(); rSeg(); };
 
-  // ── Tarjeta de pendiente ─────────────────────────────────────────────
+  const descargarPDF = async (p: Pendiente) => {
+    const { data } = await supabase.from('compliance_comentarios').select('*').eq('pendiente_id', p.id).order('created_at');
+    generarPDFPendiente(p, (data ?? []) as Comentario[]);
+  };
+
+  // ── Tarjeta de Pendiente (idéntica a NEXUS) ──────────────────────────────
+  const PendCard = ({ p }: { p: Pendiente }) => {
+    const pCfg   = PRIO_CFG[p.prioridad];
+    const eCfg   = EST_CFG[p.estatus];
+    const coment = comentariosMap[p.id];
+    const hasComents = coment && coment.count > 0;
+    const org = origenDe(p);
+    return (
+      <div onClick={() => setViewPend(p)}
+        className={`bg-white rounded-xl border border-slate-200 border-t-4 border-l-4 ${eCfg?.cardBorder??'border-t-slate-300'} ${pCfg?.cardLeft??'border-l-slate-300'} ${org?`ring-2 ${org.ring}`:''} shadow-sm overflow-hidden flex flex-col cursor-pointer hover:shadow-md transition`}>
+        {org && (
+          <div className={`${org.band} text-white px-4 py-1.5 flex items-center gap-1.5`}>
+            <org.Icon className="w-3.5 h-3.5 shrink-0"/>
+            <span className="text-[10px] font-black uppercase tracking-wider truncate">{org.label}{p.origen_numero?` #${p.origen_numero}`:''}</span>
+          </div>
+        )}
+        <div className="p-4 flex-1">
+          <div className="flex items-start justify-between gap-2 mb-2">
+            <h3 className={`font-black text-sm text-slate-900 leading-snug ${p.estatus==='completado'?'line-through text-slate-400':''}`}>{p.titulo}</h3>
+            <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-bold border shrink-0 ${pCfg?.cls}`}>{pCfg?.label}</span>
+          </div>
+
+          {/* Descripción */}
+          {p.descripcion && !(org && p.descripcion === p.titulo) && (
+            <p className="text-xs text-slate-500 line-clamp-2 mb-2">{p.descripcion}</p>
+          )}
+
+          {p.presentar_semanal && p.estatus!=='completado' && (
+            <span className="inline-flex items-center gap-1 mb-2 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wide bg-orange-100 text-orange-700 border border-orange-200">Presentación semanal</span>
+          )}
+
+          {/* Minuta / nota técnica de origen */}
+          {org && (
+            <div className={`rounded-lg border px-2.5 py-1.5 mb-2 text-[11px] leading-snug ${org.soft}`}>
+              <p className="font-bold truncate"><FileText className="w-3 h-3 inline mr-1 -mt-0.5"/>{org.doc}: {p.origen_asunto || 'Sin asunto'}{p.origen_fecha?` · ${fmtDate(p.origen_fecha)}`:''}</p>
+              {p.origen_responsable && <p className="opacity-80 truncate">Responsable: <span className="font-semibold">{p.origen_responsable}</span></p>}
+            </div>
+          )}
+
+          {/* Colegio / Territorio */}
+          {(p.colegio||p.territorio) && (
+            <div className="flex items-center gap-1.5 mb-2">
+              {p.territorio && <span className="text-[10px] font-bold text-teal-700 bg-teal-50 border border-teal-200 px-2 py-0.5 rounded-full"><MapPin className="w-2.5 h-2.5 inline mr-0.5"/>{p.territorio}</span>}
+              {p.colegio    && <span className="text-[10px] font-semibold text-slate-600 bg-slate-100 px-2 py-0.5 rounded-full"><Building2 className="w-2.5 h-2.5 inline mr-0.5"/>{p.colegio}</span>}
+            </div>
+          )}
+
+          {/* Asignado / Fecha */}
+          <div className="text-xs text-slate-500 space-y-0.5">
+            {p.tipo==='compartido'&&p.asignado_nombre && <p className="font-semibold text-teal-600 text-xs">→ <span className="font-black">{p.asignado_nombre}</span></p>}
+            {p.fecha_limite && (() => {
+              const limite = new Date(p.fecha_limite.includes('T') ? p.fecha_limite : p.fecha_limite + 'T12:00:00'); limite.setHours(23,59,59,0);
+              const ahora  = new Date();
+              const manana = new Date(ahora); manana.setDate(manana.getDate() + 1); manana.setHours(23,59,59,0);
+              const vencido    = abierto(p) && limite < ahora;
+              const porVencer  = abierto(p) && !vencido && limite <= manana;
+              return (
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  <p className={`font-semibold text-sm ${vencido ? 'text-red-600' : 'text-amber-600'}`}>
+                    📅 {fmtDate(p.fecha_limite)}
+                  </p>
+                  {vencido && (
+                    <span className="text-[10px] font-black px-1.5 py-0.5 rounded-full bg-red-100 text-red-700 animate-pulse">
+                      🔴 VENCIDO
+                    </span>
+                  )}
+                  {porVencer && (
+                    <span className="text-[10px] font-black px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-700">
+                      🟡 Vence hoy/mañana
+                    </span>
+                  )}
+                </div>
+              );
+            })()}
+            {hasComents && coment.lastDate && (
+              <p className="text-slate-400 text-[10px]">Actualizado: {fmtDate(coment.lastDate)}</p>
+            )}
+          </div>
+        </div>
+
+        {/* Footer */}
+        <div className="px-4 py-2 bg-slate-50 border-t border-slate-100 flex items-center justify-between" onClick={e => e.stopPropagation()}>
+          <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-bold border ${eCfg?.cls}`}>{eCfg?.icon}{eCfg?.label}</span>
+          <div className="flex items-center gap-1">
+            {abierto(p) && <button type="button" onClick={e=>{e.stopPropagation();descargarICSPendiente(p);toast.success('Archivo de calendario descargado: ábrelo para agregarlo a Outlook');}} className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition" title="Agregar a mi calendario (.ics)" aria-label="Agregar a mi calendario"><CalendarPlus className="w-4 h-4"/></button>}
+            {abierto(p) && <button type="button" onClick={e=>{e.stopPropagation();cambiarEstatusPend.mutate({ p, estatus: 'completado' });}} className="p-1.5 text-emerald-500 hover:text-emerald-700 hover:bg-emerald-50 rounded-lg transition" title="Completar"><CheckCircle2 className="w-4 h-4"/></button>}
+            {abierto(p) && <button type="button" title={org?'Editar acuerdo (también se actualiza en Minutas)':'Editar'} onClick={e=>{e.stopPropagation();editar(p);}} className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition"><Pencil className="w-3.5 h-3.5"/></button>}
+            {!abierto(p) && <button type="button" onClick={e=>{e.stopPropagation();descargarPDF(p);}} className="p-1.5 text-slate-400 hover:text-teal-600 rounded-lg transition" title="PDF"><Download className="w-4 h-4"/></button>}
+            <button type="button" onClick={e=>{e.stopPropagation();confirmarEliminar(p);}} className="p-1.5 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition"><Trash2 className="w-3.5 h-3.5"/></button>
+            {/* Ícono comentarios — con color e indicador si hay comentarios */}
+            <div className="relative p-1.5">
+              <MessageSquare className={`w-3.5 h-3.5 ${hasComents ? 'text-teal-500' : 'text-slate-300'}`}/>
+              {hasComents && (
+                <span className="absolute -top-0.5 -right-0.5 bg-teal-500 text-white text-[9px] font-black rounded-full w-3.5 h-3.5 flex items-center justify-center leading-none">
+                  {coment.count > 9 ? '9+' : coment.count}
+                </span>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   const PendGrid = ({ items }: { items: Pendiente[] }) => (
-    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+      {items.map(p => <PendCard key={p.id} p={p}/>)}
+    </div>
+  );
+
+  // Lista compacta para Completados (igual que NEXUS)
+  const PendListCompletados = ({ items }: { items: Pendiente[] }) => (
+    <div className="bg-white rounded-xl border border-slate-200 divide-y divide-slate-100 overflow-hidden">
       {items.map(p => {
-        const pCfg = PRIO_CFG[p.prioridad] ?? PRIO_CFG.normal;
-        const eCfg = EST_CFG[p.estatus] ?? EST_CFG.pendiente;
+        const pCfg   = PRIO_CFG[p.prioridad];
+        const coment = comentariosMap[p.id];
+        const hasComents = coment && coment.count > 0;
         const org = origenDe(p);
         return (
-          <div key={p.id} className={`bg-white rounded-xl border border-slate-200 border-l-4 ${pCfg.cardLeft} shadow-sm overflow-hidden cursor-pointer hover:shadow-md transition`} onClick={() => setViewPend(p)}>
-            <div className="p-4">
-              <div className="flex items-start justify-between mb-2">
-                <h3 className="font-bold text-slate-900 text-sm flex-1 min-w-0 truncate">{p.titulo}</h3>
-                <div className="flex gap-1 ml-2 shrink-0" onClick={e => e.stopPropagation()}>
-                  <button onClick={() => editar(p)} title={org ? 'Editar acuerdo (también se actualiza en Minutas)' : 'Editar'} className="p-1 text-slate-400 hover:text-slate-700 rounded"><Pencil className="w-3.5 h-3.5" /></button>
-                  <button onClick={() => confirmarEliminar(p)} className="p-1 text-red-400 hover:text-red-600 rounded"><Trash2 className="w-3.5 h-3.5" /></button>
-                </div>
+          <div key={p.id} onClick={() => setViewPend(p)}
+            className="flex items-center gap-3 px-4 py-3 cursor-pointer hover:bg-slate-50 transition">
+            {p.estatus === 'cancelado' ? <X className="w-4 h-4 text-slate-400 shrink-0" /> : <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0" />}
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2 flex-wrap">
+                <p className="font-bold text-sm text-slate-400 line-through truncate">{p.titulo}</p>
+                <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold border shrink-0 ${pCfg?.cls}`}>{pCfg?.label}</span>
               </div>
-              {org && (
-                <p className={`inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full border mb-2 max-w-full ${org.chip}`}>
-                  <org.Icon className="w-3 h-3 shrink-0" /><span className="truncate">{org.corto}{p.origen_numero ? ` #${p.origen_numero}` : ''} · {p.origen_asunto || org.doc}</span>
-                </p>
-              )}
-              {p.descripcion && !(org && p.descripcion === p.titulo) && <p className="text-xs text-slate-500 line-clamp-2 mb-2">{p.descripcion}</p>}
-              <div className="flex gap-1.5 flex-wrap mb-2">
-                <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold border ${pCfg.cls}`}>{pCfg.label}</span>
-                <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold border ${eCfg.cls}`}>{eCfg.icon}{eCfg.label}</span>
-                {p.presentar_semanal && p.estatus !== 'completado' && (
-                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold border bg-orange-50 text-orange-700 border-orange-200"><Presentation className="w-3 h-3" />Semanal</span>
+              <div className="flex items-center gap-2 flex-wrap mt-0.5">
+                {org && <span className={`inline-flex items-center gap-1 text-[10px] font-bold border px-2 py-0.5 rounded-full ${org.chip}`}><org.Icon className="w-3 h-3"/>{org.corto}{p.origen_numero?` #${p.origen_numero}`:''} · {p.origen_asunto || org.doc}</span>}
+                {p.colegio && <span className="text-[10px] font-semibold text-slate-500 bg-slate-100 px-2 py-0.5 rounded-full"><Building2 className="w-2.5 h-2.5 inline mr-0.5"/>{p.colegio}</span>}
+                {hasComents && coment.lastDate && <span className="text-[10px] text-slate-400">Actualizado: {fmtDate(coment.lastDate)}</span>}
+              </div>
+            </div>
+            <div className="flex items-center gap-1 shrink-0" onClick={e => e.stopPropagation()}>
+              <button type="button" onClick={e=>{e.stopPropagation();descargarPDF(p);}} className="p-1.5 text-slate-400 hover:text-teal-600 rounded-lg transition" title="PDF"><Download className="w-4 h-4"/></button>
+              <button type="button" onClick={e=>{e.stopPropagation();confirmarEliminar(p);}} className="p-1.5 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition"><Trash2 className="w-3.5 h-3.5"/></button>
+              <div className="relative p-1.5">
+                <MessageSquare className={`w-3.5 h-3.5 ${hasComents ? 'text-teal-500' : 'text-slate-300'}`}/>
+                {hasComents && (
+                  <span className="absolute -top-0.5 -right-0.5 bg-teal-500 text-white text-[9px] font-black rounded-full w-3.5 h-3.5 flex items-center justify-center leading-none">
+                    {coment.count > 9 ? '9+' : coment.count}
+                  </span>
                 )}
               </div>
-              <div className="flex items-center justify-between text-[10px] text-slate-400">
-                <span>{p.colegio ? p.colegio.replace('Mano Amiga ', '') : 'General'}</span>
-                {p.fecha_limite && <span className="font-semibold text-amber-600">📅 {fmtDate(p.fecha_limite)}</span>}
-              </div>
-              {p.tipo === 'compartido' && p.asignado_nombre && (
-                <p className="text-[10px] text-teal-600 font-semibold mt-1">→ {p.asignado_nombre}</p>
-              )}
             </div>
           </div>
         );
@@ -561,10 +764,10 @@ export default function CumplimientoSeguimiento() {
               <FileText className="w-4 h-4" />Notas<span className={`ml-1 text-xs px-1.5 py-0.5 rounded-full font-bold ${tab === 'notas' ? 'bg-slate-900 text-white' : 'bg-slate-200 text-slate-500'}`}>{notas.length}</span>
             </button>
             <button onClick={() => setTab('personales')} className={`flex items-center gap-1.5 px-4 py-2 rounded-md text-sm font-semibold transition ${tab === 'personales' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>
-              <ListChecks className="w-4 h-4" />Mis Pendientes<span className={`ml-1 text-xs px-1.5 py-0.5 rounded-full font-bold ${tab === 'personales' ? 'bg-slate-900 text-white' : 'bg-slate-200 text-slate-500'}`}>{pendPersonales.filter(p => p.estatus !== 'completado').length}</span>
+              <ListChecks className="w-4 h-4" />Mis Pendientes<span className={`ml-1 text-xs px-1.5 py-0.5 rounded-full font-bold ${tab === 'personales' ? 'bg-slate-900 text-white' : 'bg-slate-200 text-slate-500'}`}>{pendPersonalesTodos.filter(abierto).length}</span>
             </button>
             <button onClick={() => setTab('compartidos')} className={`flex items-center gap-1.5 px-4 py-2 rounded-md text-sm font-semibold transition ${tab === 'compartidos' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>
-              <Users className="w-4 h-4" />Compartidos<span className={`ml-1 text-xs px-1.5 py-0.5 rounded-full font-bold ${tab === 'compartidos' ? 'bg-slate-900 text-white' : 'bg-slate-200 text-slate-500'}`}>{pendCompartidos.filter(p => p.estatus !== 'completado').length}</span>
+              <Users className="w-4 h-4" />Compartidos<span className={`ml-1 text-xs px-1.5 py-0.5 rounded-full font-bold ${tab === 'compartidos' ? 'bg-slate-900 text-white' : 'bg-slate-200 text-slate-500'}`}>{pendCompartidos.filter(abierto).length}</span>
             </button>
             <button onClick={() => setTab('seguimiento')} className={`flex items-center gap-1.5 px-4 py-2 rounded-md text-sm font-semibold transition ${tab === 'seguimiento' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>
               <ClipboardList className="w-4 h-4" />Seguimiento<span className={`ml-1 text-xs px-1.5 py-0.5 rounded-full font-bold ${tab === 'seguimiento' ? 'bg-slate-900 text-white' : 'bg-slate-200 text-slate-500'}`}>{seguimientosActivos.length}</span>
@@ -607,39 +810,35 @@ export default function CumplimientoSeguimiento() {
             </div>
           )}
 
-          {/* ── Pendientes (personales/compartidos) ── */}
-          {(tab === 'personales' || tab === 'compartidos') && (conteoOrigen.acuerdo + conteoOrigen.accion > 0 || filtroOrigen !== 'todos') && (
-            <div className="flex gap-2 flex-wrap">
-              {([
-                { k: 'todos', label: 'Todos', n: conteoOrigen.todos },
-                { k: 'acuerdo', label: 'Acuerdos de minuta', n: conteoOrigen.acuerdo },
-                { k: 'accion', label: 'Acciones de nota técnica', n: conteoOrigen.accion },
-                { k: 'otros', label: 'Otros', n: conteoOrigen.otros },
-              ] as const).map(f => (
-                <button key={f.k} onClick={() => setFiltroOrigen(f.k)}
-                  className={`px-3 py-1.5 rounded-full text-xs font-bold border transition ${filtroOrigen === f.k ? 'bg-slate-900 text-white border-slate-900' : 'bg-white text-slate-500 border-slate-200 hover:border-slate-400'}`}>
-                  {f.label} <span className="opacity-70">{f.n}</span>
-                </button>
-              ))}
-            </div>
-          )}
+          {/* ── Pendientes (igual que NEXUS) ── */}
           {(tab === 'personales' || tab === 'compartidos') && (
             <div className="space-y-6">
-              {(tab === 'personales' ? pendPersonales : pendCompartidos).filter(p => p.estatus !== 'completado').length === 0 && (
-                <div className="text-center py-12"><CheckCircle2 className="w-10 h-10 text-emerald-200 mx-auto mb-3" /><p className="text-sm font-semibold text-slate-500">¡Todo al día!</p></div>
+              {/* Filtro por origen — solo si hay acuerdos/acciones de Minutas */}
+              {tab==='personales' && (conteoOrigen.acuerdo>0 || conteoOrigen.accion>0 || filtroOrigen!=='todos') && (
+                <div className="flex items-center gap-2 flex-wrap">
+                  {([
+                    { k:'todos',   label:'Todos',                cls:'bg-slate-900 text-white border-slate-900', Icon:ListChecks },
+                    { k:'acuerdo', label:'Acuerdos de minuta',   cls:'bg-indigo-600 text-white border-indigo-600', Icon:Handshake },
+                    { k:'accion',  label:'Acciones de nota técnica', cls:'bg-orange-600 text-white border-orange-600', Icon:Wrench },
+                    { k:'otros',   label:'Otros pendientes',     cls:'bg-slate-600 text-white border-slate-600', Icon:ClipboardList },
+                  ] as const).map(f => (
+                    <button key={f.k} type="button" onClick={()=>setFiltroOrigen(f.k)}
+                      className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold border transition ${filtroOrigen===f.k?f.cls:'bg-white text-slate-600 border-slate-200 hover:border-slate-400'}`}>
+                      <f.Icon className="w-3.5 h-3.5"/>{f.label}
+                      <span className={`px-1.5 rounded-full text-[10px] ${filtroOrigen===f.k?'bg-white/25':'bg-slate-100'}`}>{conteoOrigen[f.k]}</span>
+                    </button>
+                  ))}
+                </div>
               )}
-              <PendGrid items={(tab === 'personales' ? pendPersonales : pendCompartidos).filter(p => p.estatus !== 'completado')} />
-              {(tab === 'personales' ? pendPersonales : pendCompartidos).filter(p => p.estatus === 'completado').length > 0 && (
+              {/* Activos */}
+              {(tab==='personales'?pendPersonales:pendCompartidos).filter(abierto).length===0 && <div className="text-center py-12"><CheckCircle2 className="w-10 h-10 text-emerald-200 mx-auto mb-3"/><p className="text-sm font-semibold text-slate-500">¡Todo al día!</p></div>}
+              <PendGrid items={(tab==='personales'?pendPersonales:pendCompartidos).filter(abierto)}/>
+
+              {/* Completados */}
+              {(tab==='personales'?pendPersonales:pendCompartidos).filter(p=>!abierto(p)).length>0&&(
                 <div>
-                  <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-3 flex items-center gap-2"><CheckCircle2 className="w-3.5 h-3.5" />Completados</p>
-                  <div className="space-y-1.5">
-                    {(tab === 'personales' ? pendPersonales : pendCompartidos).filter(p => p.estatus === 'completado').map(p => (
-                      <div key={p.id} className="flex items-center justify-between bg-white border border-slate-100 rounded-lg px-4 py-2 cursor-pointer hover:bg-slate-50" onClick={() => setViewPend(p)}>
-                        <span className="text-sm text-slate-500 line-through">{p.titulo}</span>
-                        <span className="text-[10px] text-slate-400">{p.colegio ? p.colegio.replace('Mano Amiga ', '') : 'General'}</span>
-                      </div>
-                    ))}
-                  </div>
+                  <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-3 flex items-center gap-2"><CheckCircle2 className="w-3.5 h-3.5"/>Completados — evidencia</p>
+                  <PendListCompletados items={(tab==='personales'?pendPersonales:pendCompartidos).filter(p=>!abierto(p))}/>
                 </div>
               )}
             </div>
@@ -847,6 +1046,25 @@ export default function CumplimientoSeguimiento() {
             <button onClick={() => guardarPend.mutate()} disabled={guardarPend.isPending} className={btnPrimary + " flex-1 flex items-center justify-center gap-2"}>
               {guardarPend.isPending && <Loader2 className="w-4 h-4 animate-spin" />}Guardar
             </button>
+          </div>
+        </Modal>
+      )}
+
+      {/* ── Modal: Confirmar eliminación (igual que NEXUS) ── */}
+      {confirmDel && (
+        <Modal title="Confirmar eliminación" onClose={() => setConfirmDel(null)}>
+          <div className="space-y-3">
+            <div className="bg-red-50 border border-red-200 rounded-lg p-4"><p className="font-bold text-red-800 text-sm mb-1">¿Eliminar "{confirmDel.titulo}"?</p><p className="text-xs text-red-700">Esta acción no se puede deshacer.</p></div>
+            {origenDe(confirmDel) && (
+              <div className={`rounded-lg p-3 border text-xs ${origenDe(confirmDel)!.soft}`}>
+                <p className="font-bold mb-0.5">Este pendiente viene de {confirmDel.origen === 'acuerdo' ? 'un acuerdo de minuta' : 'una acción de nota técnica'}.</p>
+                <p>{confirmDel.estatus === 'completado' ? 'En Minutas se conserva como Cumplido.' : 'En Minutas quedará como Cancelado.'}</p>
+              </div>
+            )}
+          </div>
+          <div className="flex gap-3 mt-4">
+            <button type="button" onClick={() => setConfirmDel(null)} className={btnOutline + " flex-1"}>Cancelar</button>
+            <button type="button" disabled={eliminarPend.isPending} onClick={() => eliminarPend.mutate(confirmDel)} className="flex-1 py-2 bg-red-600 text-white rounded-lg text-sm font-semibold hover:bg-red-700 disabled:opacity-40 transition">{eliminarPend.isPending ? 'Eliminando...' : 'Sí, eliminar'}</button>
           </div>
         </Modal>
       )}
