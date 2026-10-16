@@ -196,12 +196,11 @@ export default function Minutas({ modulo = 'obras' }: { modulo?: ModuloMinutas }
   const [form, setForm]               = useState({ ...FORM_INIT });
   const [file, setFile]               = useState<File | null>(null);
   const [dragActive, setDragActive]   = useState(false);
-  const [notifAngel, setNotifAngel]   = useState(false); // maestro: activa el envío, Angel siempre va como "Para"
   const [notifEnrique, setNotifEnrique] = useState(false);
   const [notifCAR, setNotifCAR]       = useState(false);
   // Notificación independiente al/los administrador(es) del colegio seleccionado
   const [notifAdminColegio, setNotifAdminColegio] = useState<Record<string, boolean>>({});
-  // Cumplimiento: contactos externos marcados (por id) y Gerencia (va en CC)
+  // Contactos externos marcados (por id) y Gerencia — igual en Obras y en Cumplimiento
   const [notifExternos, setNotifExternos] = useState<Record<string, boolean>>({});
   const [notifGerenciaCN, setNotifGerenciaCN] = useState(true);
   const [showContactos, setShowContactos] = useState(false);
@@ -252,16 +251,17 @@ export default function Minutas({ modulo = 'obras' }: { modulo?: ModuloMinutas }
     enabled: !editItem && puedeCrear && !!form.colegio && form.colegio !== 'ECO',
   });
 
-  // Contactos externos (solo Cumplimiento): personas fuera de Mano Amiga que reciben el correo
+  // Contactos externos: personas fuera de Mano Amiga que reciben el correo (cada módulo tiene su lista)
+  const moduloContactos = esCN ? 'minutas_cn' : 'minutas_obras';
   const { data: contactosExternos = [] } = useQuery({
-    queryKey: ['contactos_notificacion', 'minutas_cn'],
+    queryKey: ['contactos_notificacion', moduloContactos],
     queryFn: async () => {
       const { data, error } = await supabase.from('contactos_notificacion')
-        .select('*').eq('modulo', 'minutas_cn').order('orden').order('nombre');
+        .select('*').eq('modulo', moduloContactos).order('orden').order('nombre');
       if (error) throw error;
       return (data ?? []) as ContactoExterno[];
     },
-    enabled: esCN && (puedeCrear || isAdmin),
+    enabled: puedeCrear || isAdmin,
   });
   const externosActivos = useMemo(() => contactosExternos.filter(c => c.activo), [contactosExternos]);
   const externosDefault = () =>
@@ -334,7 +334,6 @@ export default function Minutas({ modulo = 'obras' }: { modulo?: ModuloMinutas }
     setFile(null);
     setSinProyecto(false);
     setEditItem(null);
-    setNotifAngel(false);
     setNotifEnrique(false);
     setNotifCAR(false);
     setNotifAdminColegio({});
@@ -346,9 +345,9 @@ export default function Minutas({ modulo = 'obras' }: { modulo?: ModuloMinutas }
 
   // Al llegar la lista de contactos externos, se marcan los que van por defecto
   useEffect(() => {
-    if (esCN && !editItem) setNotifExternos(prev => Object.keys(prev).length ? prev : externosDefault());
+    if (!editItem) setNotifExternos(prev => Object.keys(prev).length ? prev : externosDefault());
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [esCN, externosActivos]);
+  }, [externosActivos]);
 
   const openEdit = (m: Minuta) => {
     setEditItem(m);
@@ -380,8 +379,9 @@ export default function Minutas({ modulo = 'obras' }: { modulo?: ModuloMinutas }
     const yo = 'rreyes@manoamiga.edu.mx';
     let para: string | null = null;
     let cc: string[] = [];
-    if (esCN) {
-      // Para: contacto(s) externo(s) marcados como "Para" (David). CC: Gerencia y los demás.
+    // Para: contacto(s) externo(s) marcados como "Para". CC: Gerencia y los demás.
+    // Sin externos, el primero de la lista (normalmente Gerencia) queda como "Para".
+    {
       const ext = externosActivos.filter(c => notifExternos[c.id]);
       const extPara = ext.filter(c => c.va_en === 'para').map(c => c.correo);
       const extCC = ext.filter(c => c.va_en === 'cc').map(c => c.correo);
@@ -391,23 +391,11 @@ export default function Minutas({ modulo = 'obras' }: { modulo?: ModuloMinutas }
       if (notifCAR && form.colegio && carPorColegioMap[form.colegio]) resto.push(carPorColegioMap[form.colegio].email);
       const todos = [...extPara, ...extCC, ...resto, ...adminEmails];
       if (todos.length) { para = todos[0]; cc = [...todos.slice(1), yo]; }
-    } else if (notifAngel) {
-      // Un solo correo: Para Angel, con Enrique / CAR / administrador(es) de colegio en CC
-      cc = [yo];
-      if (notifEnrique && directorNacional.correo) cc.push(directorNacional.correo);
-      if (notifCAR && form.colegio && carPorColegioMap[form.colegio]) cc.push(carPorColegioMap[form.colegio].email);
-      cc.push(...adminEmails);
-      para = gerenteFMA.correo || 'arodriguez@manoamiga.edu.mx';
-    } else if (adminEmails.length > 0) {
-      // Angel no fue notificado esta vez: el administrador del colegio va como
-      // destinatario principal (el primero) y el resto, si hay más de uno, en CC.
-      para = adminEmails[0];
-      cc = [yo, ...adminEmails.slice(1)];
     }
     const vistos = new Set<string>(para ? [para.toLowerCase()] : []);
     cc = cc.filter(c => { const k = c.toLowerCase(); if (!c || vistos.has(k)) return false; vistos.add(k); return true; });
-    return { para, cc, adminEmails, hayExterno: esCN && externosActivos.some(c => notifExternos[c.id]) };
-  }, [esCN, externosActivos, notifExternos, notifGerenciaCN, notifAngel, notifEnrique, notifCAR, notifAdminColegio,
+    return { para, cc, adminEmails, hayExterno: externosActivos.some(c => notifExternos[c.id]) };
+  }, [externosActivos, notifExternos, notifGerenciaCN, notifEnrique, notifCAR, notifAdminColegio,
       colegioAdmins, form.colegio, gerenteFMA, directorNacional, carPorColegioMap]);
 
   const agregarFilaAcuerdo = () => setAcuerdosForm(prev => [...prev, { descripcion: '', responsable: '', fecha_compromiso: '' }]);
@@ -641,7 +629,7 @@ export default function Minutas({ modulo = 'obras' }: { modulo?: ModuloMinutas }
             value={search} onChange={e => { setSearch(e.target.value); setVisibleCount(PAGE_SIZE); }} />
         </div>
         <span className="text-sm text-slate-400">{filtered.length} documento{filtered.length !== 1 ? 's' : ''}</span>
-        {esCN && isAdmin && (
+        {isAdmin && (
           <button onClick={() => setShowContactos(true)}
             className="ml-auto flex items-center gap-2 px-3 py-2 bg-white border border-slate-300 text-slate-700 rounded-lg text-sm font-semibold hover:bg-slate-50 transition-colors"
             title="Personas fuera de Mano Amiga que reciben el correo de las minutas">
@@ -650,7 +638,7 @@ export default function Minutas({ modulo = 'obras' }: { modulo?: ModuloMinutas }
         )}
         {puedeCrear && (
           <button onClick={() => { resetForm(); setShowForm(true); }}
-            className={`${esCN && isAdmin ? '' : 'ml-auto '}flex items-center gap-2 px-4 py-2 bg-slate-900 text-white rounded-lg text-sm font-bold hover:bg-slate-800 transition-colors`}>
+            className={`${isAdmin ? '' : 'ml-auto '}flex items-center gap-2 px-4 py-2 bg-slate-900 text-white rounded-lg text-sm font-bold hover:bg-slate-800 transition-colors`}>
             <Plus className="w-4 h-4" /> Nuevo Documento
           </button>
         )}
@@ -901,8 +889,8 @@ export default function Minutas({ modulo = 'obras' }: { modulo?: ModuloMinutas }
                 </div>
               )}
 
-              {/* Cumplimiento: Para el contacto externo (ORS) y en CC Gerencia y los demás */}
-              {!editItem && esCN && (
+              {/* Para el contacto externo y en CC Gerencia y los demás (igual en Obras y Cumplimiento) */}
+              {!editItem && (
                 <div className="bg-slate-50 border border-slate-200 rounded-lg p-3 space-y-2">
                   <p className="text-xs font-bold text-slate-500 uppercase flex items-center gap-1.5"><Mail className="w-3.5 h-3.5" /> Notificar por correo</p>
                   {externosActivos.length === 0 ? (
@@ -943,44 +931,19 @@ export default function Minutas({ modulo = 'obras' }: { modulo?: ModuloMinutas }
                 </div>
               )}
 
-              {!editItem && !esCN && (
-                <div className="bg-slate-50 border border-slate-200 rounded-lg p-3 space-y-2">
-                  <label className="flex items-center gap-2 text-sm font-bold text-slate-700 cursor-pointer">
-                    <input type="checkbox" checked={notifAngel} onChange={e => setNotifAngel(e.target.checked)} className="w-4 h-4 rounded" />
-                    Notificar a Angel Rodríguez (Gerente)
-                  </label>
-                  {notifAngel && (
-                    <div className="pl-6 space-y-2 border-l-2 border-slate-200 ml-1">
-                      <p className="text-[11px] text-slate-400">Con copia a ti automáticamente, y opcionalmente a:</p>
-                      <label className="flex items-center gap-2 text-sm cursor-pointer">
-                        <input type="checkbox" checked={notifEnrique} onChange={e => setNotifEnrique(e.target.checked)} className="w-4 h-4 rounded" />
-                        {directorNacional.nombre || 'Director Nacional'}
-                      </label>
-                      <label className={`flex items-center gap-2 text-sm ${form.colegio && carPorColegioMap[form.colegio] ? 'cursor-pointer' : 'text-slate-400 cursor-not-allowed'}`}>
-                        <input type="checkbox" checked={notifCAR} disabled={!form.colegio || !carPorColegioMap[form.colegio]}
-                          onChange={e => setNotifCAR(e.target.checked)} className="w-4 h-4 rounded" />
-                        {form.colegio && carPorColegioMap[form.colegio] ? carPorColegioMap[form.colegio].nombre + ' (CAR)' : 'CAR del Colegio (selecciona colegio primero)'}
-                      </label>
-                    </div>
-                  )}
-                </div>
-              )}
-
               {/* Notificación independiente al administrador exclusivo del colegio seleccionado.
                   Marcar esta casilla es lo único que hace visible esta minuta para ese administrador
                   dentro del sistema — sin marcarla, no la verá aunque sea de su colegio. */}
               {!editItem && form.colegio && form.colegio !== 'ECO' && colegioAdmins.length > 0 && (
                 <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 space-y-2">
-                  <p className="text-xs font-bold text-amber-700 uppercase">{esCN ? 'Administradores y auxiliares' : 'Administrador'} de {form.colegio}</p>
+                  <p className="text-xs font-bold text-amber-700 uppercase">Administradores y auxiliares de {form.colegio}</p>
                   {colegioAdmins.map(admin => (
                     <label key={admin.user_email} className="flex items-center gap-2 text-sm font-medium text-slate-700 cursor-pointer">
                       <input type="checkbox"
                         checked={!!notifAdminColegio[admin.user_email]}
                         onChange={e => setNotifAdminColegio(prev => ({ ...prev, [admin.user_email]: e.target.checked }))}
                         className="w-4 h-4 rounded" />
-                      {esCN
-                        ? <>Enviar esta minuta a {admin.nombre || admin.user_email} <span className="text-slate-500 font-normal">(con copia, PDF adjunto)</span></>
-                        : <>¿Enviar y hacer visible esta minuta a {admin.nombre || admin.user_email}?</>}
+                      <>Enviar esta minuta a {admin.nombre || admin.user_email} <span className="text-slate-500 font-normal">(con copia, PDF adjunto)</span></>
                     </label>
                   ))}
                 </div>
@@ -1042,8 +1005,8 @@ export default function Minutas({ modulo = 'obras' }: { modulo?: ModuloMinutas }
         </div>
       )}
 
-      {showContactos && esCN && isAdmin && (
-        <ContactosExternosModal contactos={contactosExternos} onClose={() => setShowContactos(false)} qc={qc} />
+      {showContactos && isAdmin && (
+        <ContactosExternosModal contactos={contactosExternos} modulo={moduloContactos} esCN={esCN} onClose={() => setShowContactos(false)} qc={qc} />
       )}
 
       {/* ── Modal: Confirmar eliminación ─────────────────────────────────── */}
@@ -1076,9 +1039,10 @@ export default function Minutas({ modulo = 'obras' }: { modulo?: ModuloMinutas }
 // tengan usuario. Si mañana cambia el líder de la ORS, se cambia aquí.
 const CONTACTO_VACIO = { nombre: '', correo: '', organizacion: '', puesto: '', va_en: 'para' as 'para' | 'cc', marcado_default: true, activo: true };
 
-function ContactosExternosModal({ contactos, onClose, qc }: {
-  contactos: ContactoExterno[]; onClose: () => void; qc: ReturnType<typeof useQueryClient>;
+function ContactosExternosModal({ contactos, modulo, esCN, onClose, qc }: {
+  contactos: ContactoExterno[]; modulo: string; esCN: boolean; onClose: () => void; qc: ReturnType<typeof useQueryClient>;
 }) {
+  const moduloAuditoria = esCN ? 'minutas_cn' : 'minutas';
   const [editId, setEditId] = useState<string | 'nuevo' | null>(null);
   const [f, setF] = useState({ ...CONTACTO_VACIO });
 
@@ -1095,17 +1059,17 @@ function ContactosExternosModal({ contactos, onClose, qc }: {
       if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(correo)) throw new Error('El correo no es válido.');
       const datos = {
         nombre: f.nombre.trim(), correo, organizacion: f.organizacion.trim() || null, puesto: f.puesto.trim() || null,
-        va_en: f.va_en, marcado_default: f.marcado_default, activo: f.activo, modulo: 'minutas_cn',
+        va_en: f.va_en, marcado_default: f.marcado_default, activo: f.activo, modulo,
         updated_at: new Date().toISOString(),
       };
       if (editId === 'nuevo') {
         const { error } = await supabase.from('contactos_notificacion').insert({ ...datos, orden: contactos.length + 1 });
         if (error) throw new Error(error.code === '23505' ? 'Ese correo ya está dado de alta.' : error.message);
-        logAudit({ accion: 'crear', modulo: 'minutas_cn', registro_ref: `Contacto externo: ${datos.nombre} <${correo}>` });
+        logAudit({ accion: 'crear', modulo: moduloAuditoria, registro_ref: `Contacto externo: ${datos.nombre} <${correo}>` });
       } else {
         const { error } = await supabase.from('contactos_notificacion').update(datos).eq('id', editId!);
         if (error) throw new Error(error.message);
-        logAudit({ accion: 'editar', modulo: 'minutas_cn', registro_id: editId, registro_ref: `Contacto externo: ${datos.nombre} <${correo}>` });
+        logAudit({ accion: 'editar', modulo: moduloAuditoria, registro_id: editId, registro_ref: `Contacto externo: ${datos.nombre} <${correo}>` });
       }
     },
     onSuccess: () => {
@@ -1122,7 +1086,7 @@ function ContactosExternosModal({ contactos, onClose, qc }: {
         <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100">
           <div>
             <h2 className="font-bold text-slate-900">Contactos externos</h2>
-            <p className="text-xs text-slate-500">Reciben el correo de las minutas de Cumplimiento con el PDF adjunto, aunque no tengan usuario en el sistema.</p>
+            <p className="text-xs text-slate-500">Reciben el correo de las minutas {esCN ? 'de Cumplimiento' : 'de Obras'} con el PDF adjunto, aunque no tengan usuario en el sistema.</p>
           </div>
           <button onClick={onClose} className="text-slate-400 hover:text-slate-700"><X className="w-5 h-5" /></button>
         </div>
