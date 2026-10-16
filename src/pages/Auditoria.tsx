@@ -172,6 +172,7 @@ const MODULO_LABEL: Record<string, string> = {
   levantamiento: 'Levantamiento Nacional',
   calendario:    'Calendario de Mantenimiento',
   minutas:       'Minutas y Notas Técnicas',
+  minutas_cn:    'Minutas de Cumplimiento',
   reportes_problema: 'Reportar Problema',
   sol:           'Programa SOL',
   solicitudes_cn: 'Solicitudes CN',

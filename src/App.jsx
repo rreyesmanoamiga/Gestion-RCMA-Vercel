@@ -58,6 +58,7 @@ import JornadaPresupuestal from '@/pages/JornadaPresupuestal';
 import CumplimientoReportesEjecutivos from '@/pages/CumplimientoReportesEjecutivos';
 import CumplimientoAlertas from '@/pages/CumplimientoAlertas';
 import CumplimientoSeguimiento from '@/pages/CumplimientoSeguimiento';
+import MinutasCN from '@/pages/MinutasCN';
 import SolicitudCN from '@/pages/SolicitudCN';
 import SolicitudesCNRecibidas from '@/pages/SolicitudesCNRecibidas';
 import TramitesCN from '@/pages/TramitesCN';
@@ -466,6 +467,7 @@ function AuthenticatedApp() {
           <Route path="/cumplimiento/reportes-ejecutivos" element={<CumplimientoReportesEjecutivos />} />
           <Route path="/cumplimiento/alertas"       element={<CumplimientoAlertas />} />
           <Route path="/cumplimiento/seguimiento"   element={<CumplimientoSeguimiento />} />
+          <Route path="/cumplimiento/minutas"       element={<MinutasCN />} />
           <Route path="/cumplimiento/solicitud-cn"    element={<SolicitudCN />} />
           <Route path="/cumplimiento/solicitudes-cn"  element={<SolicitudesCNRecibidas />} />
           <Route path="/cumplimiento/tramites"        element={<TramitesCN />} />

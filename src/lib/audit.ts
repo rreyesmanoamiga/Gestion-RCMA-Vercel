@@ -28,6 +28,7 @@ export type AuditModulo =
   | 'levantamiento'
   | 'calendario'
   | 'minutas'
+  | 'minutas_cn'
   | 'reportes_problema'
   | 'solicitudes_cn'
   | 'tramites_cn'

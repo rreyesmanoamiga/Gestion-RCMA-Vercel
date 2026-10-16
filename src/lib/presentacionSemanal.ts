@@ -8,7 +8,10 @@
 //                    la semana y las 3 fotos más recientes del Expediente).
 //   · Levantamiento  un slide por plantel que no ha cerrado (Comunicado–Fase 4),
 //                    usando el slide de su fase.
-//   · Cumplimiento . se deja tal cual viene en la plantilla (se llena a mano).
+//   · Cumplimiento . los slides por colegio se dejan como vienen en la plantilla
+//                    (se llenan a mano); después del slide de cada colegio se
+//                    agregan los pendientes NEXUS que vienen de Minutas de
+//                    Cumplimiento y están marcados "Presentar en la semanal".
 // Todo se hace en el navegador: la plantilla es un ZIP de XML, aquí se copian
 // los slides de cada colegio y se cambian los textos y las fotos.
 // ============================================================================
@@ -45,6 +48,8 @@ export interface ProyectoSemana {
   prioridad?: string | null;
   fechaLimite?: string | null;
   descripcion?: string | null;
+  // Pendiente que viene de una Minuta de Cumplimiento: va en la sección de Cumplimiento Normativo
+  cumplimiento?: boolean;
 }
 export interface PlantelSemana {
   colegio_clave: string;
@@ -445,7 +450,13 @@ function llenarObra(doc: Document, p: ProyectoSemana | null, idx: number, de: nu
     ponerTexto(forma(doc, 'Text 17'), [''], {});
     return;
   }
-  const etiqueta = p.esPendiente ? 'PROYECTO EN PREPARACIÓN' : p.concluido ? 'PROYECTO CONCLUIDO' : 'PROYECTO ACTIVO';
+  const etiqueta = p.cumplimiento ? 'PENDIENTE DE CUMPLIMIENTO'
+    : p.esPendiente ? 'PROYECTO EN PREPARACIÓN' : p.concluido ? 'PROYECTO CONCLUIDO' : 'PROYECTO ACTIVO';
+  if (p.cumplimiento) {
+    // Ficha de Cumplimiento: misma ficha del colegio, con la insignia de la sección
+    ponerTexto(forma(doc, 'Text 3'), ['CUMPL. NORM.']);
+    ponerTexto(forma(doc, 'Text 18'), ['EVIDENCIA FOTOGRÁFICA']);
+  }
   if (de > 1 || p.concluido || p.esPendiente) {
     ensanchar(forma(doc, 'Text 10'), 3000000);
     ponerTexto(forma(doc, 'Text 10'), [de > 1 ? `${etiqueta}  ·  ${idx} DE ${de}` : etiqueta]);
@@ -519,7 +530,18 @@ type Tipo =
   | { tipo: 'obra'; colegio: string }
   | { tipo: 'levantamiento'; fase: string }
   | { tipo: 'separador' }
+  | { tipo: 'cumplimiento'; colegio: string | null }
   | { tipo: 'otro' };
+
+/** Slide de Cumplimiento por colegio ("MANO AMIGA DE GUADALAJARA") → clave del colegio */
+function colegioDeCumplimiento(titulo: string): string | null {
+  const t = ' ' + normal(titulo).replace(/^MANO AMIGA (DE )?/, '').replace(/[^A-Z ]/g, ' ').replace(/\s+/g, ' ').trim() + ' ';
+  const candidatos = Object.entries(TITULO_COLEGIO)
+    .map(([k, v]) => [k.replace(/^MA /, ''), v] as const)
+    .filter(([k]) => t.includes(' ' + k + ' '))
+    .sort((a, b) => b[0].length - a[0].length);
+  return candidatos[0]?.[1] ?? null;
+}
 
 function clasificar(doc: Document): Tipo {
   const insignia = normal(textoDe(forma(doc, 'Text 3') ?? doc.documentElement));
@@ -530,6 +552,12 @@ function clasificar(doc: Document): Tipo {
     if (fase) return { tipo: 'levantamiento', fase };
   }
   if (esFicha && TITULO_COLEGIO[titulo]) return { tipo: 'obra', colegio: TITULO_COLEGIO[titulo] };
+  // Slide de Cumplimiento por colegio (insignia "CUMPL. NORM.")
+  const insigniaCN = formas(doc).find(f => /^CUMPL\.? ?NORM/.test(normal(textoDe(f))));
+  if (insigniaCN) {
+    const tituloCN = formas(doc).map(f => textoDe(f).trim()).find(x => /^MANO AMIGA/i.test(x)) ?? '';
+    return { tipo: 'cumplimiento', colegio: colegioDeCumplimiento(tituloCN) };
+  }
   // Portadillas: fondo completo sin cajas, con "TERRITORIO", "PROYECTOS FMA", "CLÍNICAS", "LEVANTAMIENTO"…
   const todo = normal(hijosNS(doc, NS.a, 't').map(t => t.textContent ?? '').join(' '));
   if (/ZONA GEOGRAFICA|PROYECTOS FMA|FEDERACION MANO AMIGA|SERVICIOS DE SALUD|PROYECTO ESPECIAL|AVANCES DEL SISTEMA/.test(todo)) return { tipo: 'separador' };
@@ -562,7 +590,9 @@ export async function generarPresentacionSemanal(op: OpcionesPresentacion): Prom
 
   // 2) Armar la lista final, sección por sección
   const porColegio = new Map<string, ProyectoSemana[]>();
+  const deCumplimiento = op.proyectos.filter(p => p.cumplimiento);
   for (const p of op.proyectos) {
+    if (p.cumplimiento) continue;               // esos van en la sección de Cumplimiento
     const k = (p.colegio ?? '').trim();
     if (!porColegio.has(k)) porColegio.set(k, []);
     porColegio.get(k)!.push(p);
@@ -578,6 +608,20 @@ export async function generarPresentacionSemanal(op: OpcionesPresentacion): Prom
       || a.colegio_nombre.localeCompare(b.colegio_nombre));
   const slideDeFase = new Map(info.filter(i => i.tipo.tipo === 'levantamiento').map(i => [(i.tipo as { fase: string }).fase, i.ref.archivo]));
 
+  // Pendientes de Cumplimiento: después del slide de su colegio; los de un colegio sin slide de
+  // Cumplimiento (oficinas) van al final de la sección. Solo se arman si el colegio tiene ficha.
+  const slideObraDe = new Map(info.filter(i => i.tipo.tipo === 'obra').map(i => [(i.tipo as { colegio: string }).colegio, i.ref.archivo]));
+  const colegiosCN = new Set(info.filter(i => i.tipo.tipo === 'cumplimiento').map(i => (i.tipo as { colegio: string | null }).colegio).filter(Boolean));
+  const cnPorColegio = new Map<string, ProyectoSemana[]>();
+  for (const p of deCumplimiento) {
+    const k = (p.colegio ?? '').trim();
+    if (!slideObraDe.has(k)) continue;
+    if (!cnPorColegio.has(k)) cnPorColegio.set(k, []);
+    cnPorColegio.get(k)!.push(p);
+  }
+  const cnSueltos = [...cnPorColegio.entries()].filter(([k]) => !colegiosCN.has(k)).flatMap(([, l]) => l);
+  const ultimoCN = [...info].reverse().find(i => i.tipo.tipo === 'cumplimiento')?.ref.archivo ?? null;
+
   const final: string[] = [];
   let separador: { archivo: string; desde: number } | null = null;
   const cerrarSeccion = () => {
@@ -588,6 +632,25 @@ export async function generarPresentacionSemanal(op: OpcionesPresentacion): Prom
 
   let hechos = 0;
   const totalFichas = op.proyectos.length + pendientesLev.length;
+
+  const fichasCumplimiento = async (lista: ProyectoSemana[]) => {
+    for (let i = 0; i < lista.length; i++) {
+      const p = lista[i];
+      const origen = slideObraDe.get((p.colegio ?? '').trim());
+      if (!origen) continue;
+      aviso(`Cumplimiento ${++hechos} de ${totalFichas}: ${p.nombre}`);
+      const doc = await paq.leer(origen);
+      llenarObra(doc, p, i + 1, lista.length, op.semana);
+      const nuevo = await paq.nuevoSlide(origen, doc);
+      if (op.fotos) {
+        const fotos = await op.fotos(p.id).catch(() => [] as FotoSlide[]);
+        if (fotos.length) { ponerFotos(doc, nuevo.rels, fotos, paq); limpiarAnimaciones(doc); }
+        zip.file(nuevo.archivo, serializar(doc), SIN_CARPETAS);
+      }
+      zip.file(paq.relsDe(nuevo.archivo), serializar(nuevo.rels), SIN_CARPETAS);
+      final.push(nuevo.archivo);
+    }
+  };
   let levantamientoHecho = false;
 
   for (const { ref, tipo } of info) {
@@ -638,6 +701,10 @@ export async function generarPresentacionSemanal(op: OpcionesPresentacion): Prom
     // El separador de Cumplimiento y lo que sigue ya no se quitan
     if (separador) separador = null;
     final.push(ref.archivo);
+    if (tipo.tipo === 'cumplimiento') {
+      if (tipo.colegio) await fichasCumplimiento(cnPorColegio.get(tipo.colegio) ?? []);
+      if (ref.archivo === ultimoCN) await fichasCumplimiento(cnSueltos);
+    }
   }
   cerrarSeccion();
 

@@ -115,7 +115,7 @@ async function cargarDatos(inicio: Date, fin: Date) {
 
   // Pendientes NEXUS marcados "Presentar en la semanal" (aún sin ticket)
   const { data: pends, error: e5 } = await supabase.from('nexus_pendientes')
-    .select('id, titulo, descripcion, prioridad, fecha_limite, estatus, colegio')
+    .select('id, titulo, descripcion, prioridad, fecha_limite, estatus, colegio, minuta_id')
     .eq('presentar_semanal', true).in('estatus', ['pendiente', 'en_proceso']);
   if (e5) throw new Error('No se pudieron leer los pendientes: ' + e5.message);
   const listaPend = (pends ?? []).filter((p: any) => p.colegio);
@@ -124,10 +124,17 @@ async function cargarDatos(inicio: Date, fin: Date) {
         .in('pendiente_id', listaPend.map((p: any) => p.id)).order('created_at', { ascending: true })
     : { data: [], error: null };
   if (e6) throw new Error('No se pudieron leer los comentarios de pendientes: ' + e6.message);
+  // Los que vienen de una Minuta de Cumplimiento van en la sección de Cumplimiento Normativo
+  const idsMinuta = [...new Set(listaPend.map((p: any) => p.minuta_id).filter(Boolean))] as string[];
+  const { data: minutasCN } = idsMinuta.length
+    ? await supabase.from('minutas').select('id').in('id', idsMinuta).eq('modulo', 'cumplimiento')
+    : { data: [] as { id: string }[] };
+  const esMinutaCN = new Set((minutasCN ?? []).map((m: any) => m.id));
   for (const p of listaPend as any[]) {
     proyectos.push({
       id: 'pend:' + p.id, colegio: p.colegio, nombre: p.titulo ?? 'Pendiente',
       estatus: p.estatus, esPendiente: true, prioridad: p.prioridad, fechaLimite: p.fecha_limite, descripcion: p.descripcion,
+      cumplimiento: !!p.minuta_id && esMinutaCN.has(p.minuta_id),
       comentarios: (comsPend ?? []).filter((c: any) => c.pendiente_id === p.id)
         .map((c: any) => ({ fecha: c.created_at, texto: c.contenido ?? '', autor: c.autor_nombre, fotos: (c.fotos ?? []).map((f: any) => f.id) })),
     });
@@ -169,8 +176,10 @@ export default function PresentacionSemanal({ className }: { className?: string 
       const nombre = `Seguimiento_Semanal_S${semana.numero}_${semana.anio}.pptx`;
       const carpeta = carpetaOneDrive(semana.fin);
       const cerrados = proyectos.filter(p => p.concluido).length;
-      const enPrep = proyectos.filter(p => p.esPendiente).length;
-      const resumen = `${proyectos.length - cerrados - enPrep} activo(s), ${cerrados} concluido(s) y ${enPrep} en preparación`;
+      const deCN = proyectos.filter(p => p.cumplimiento).length;
+      const enPrep = proyectos.filter(p => p.esPendiente).length - deCN;
+      const resumen = `${proyectos.length - cerrados - enPrep - deCN} activo(s), ${cerrados} concluido(s), ${enPrep} en preparación` +
+        (deCN ? ` y ${deCN} pendiente(s) de Cumplimiento` : '');
 
       // Se guarda solo en OneDrive (si se vuelve a generar la misma semana, se reemplaza)
       setAvance('Guardando en OneDrive…');
@@ -214,7 +223,7 @@ export default function PresentacionSemanal({ className }: { className?: string 
                 </h3>
                 <p className="text-xs text-slate-500 mt-1">
                   Usa la plantilla institucional y la llena con los proyectos en Seguimiento NEXUS (activos y los concluidos en el corte) y el Levantamiento.
-                  Cumplimiento Normativo se queda como en la plantilla para llenarlo a mano.
+                  Cumplimiento Normativo se queda como en la plantilla para llenarlo a mano; después de cada colegio se agregan los pendientes de sus Minutas de Cumplimiento marcados para la semanal.
                   Se guarda en OneDrive: Presentaciones Semanales / año / mes.
                 </p>
               </div>

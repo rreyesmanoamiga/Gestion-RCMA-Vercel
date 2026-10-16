@@ -181,6 +181,7 @@ export default function Sidebar({ isOpen, onToggle }) {
   ];
   const cGestionPC = [
     { to: '/cumplimiento/alertas', icon: ShieldAlert, label: 'Inspecciones y Alertas Críticas' },
+    ...(isAdmin || can('ver_minutas_cn') ? [{ to: '/cumplimiento/minutas', icon: FileSignature, label: 'Minutas de Cumplimiento' }] : []),
   ];
   const cMonitoreo = [
     { to: '/cumplimiento/seguimiento', icon: ListTodo, label: 'Seguimiento de Trámites' },

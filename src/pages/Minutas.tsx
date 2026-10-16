@@ -7,7 +7,7 @@ import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import {
   FileSignature, Plus, X, Download, Trash2, Pencil, Calendar, Building2,
-  ClipboardList, ChevronDown, Loader2, FileText, Search,
+  ClipboardList, ChevronDown, Loader2, FileText, Search, ShieldCheck, Mail, Users, Paperclip,
 } from 'lucide-react';
 import PageHeader from '@/components/shared/PageHeader';
 import { usePermissions } from '@/hooks/usePermissions';
@@ -34,6 +34,24 @@ interface Minuta {
   onedrive_path: string | null;
   creado_por: string | null;
   notificar_admin_colegio: boolean;
+  modulo?: 'obras' | 'cumplimiento' | null;
+  tema?: string | null;
+}
+
+export type ModuloMinutas = 'obras' | 'cumplimiento';
+
+// Contacto fuera de Mano Amiga que recibe el correo (tabla contactos_notificacion)
+interface ContactoExterno {
+  id: string;
+  nombre: string;
+  correo: string;
+  organizacion: string | null;
+  puesto: string | null;
+  modulo: string;
+  va_en: 'para' | 'cc';
+  marcado_default: boolean;
+  activo: boolean;
+  orden: number;
 }
 
 interface ColegioAdmin {
@@ -75,15 +93,54 @@ const TIPO_CFG: Record<string, { label: string; labelCorto: string; color: strin
   nota_tecnica: { label: 'Nota Técnica de Seguimiento',  labelCorto: 'Nota Técnica', color: 'text-purple-700 bg-purple-50 border-purple-200', carpeta: 'Notas Tecnicas' },
 };
 
+// Temas de Cumplimiento Normativo (la minuta se liga a colegio + tema)
+export const TEMAS_CN = [
+  'Dictamen estructural',
+  'Dictamen eléctrico',
+  'Programa Interno de Protección Civil',
+  'Simulacro',
+  'Visita / inspección de Protección Civil',
+  'Licencias y permisos',
+  'Capacitación de brigadas',
+  'Otro',
+] as const;
+
+// Lo que cambia entre Minutas de Obras y Minutas de Cumplimiento Normativo
+const MODULO_CFG: Record<ModuloMinutas, {
+  titulo: string; carpetaBase: string; ruta: string; auditoria: 'minutas' | 'minutas_cn';
+  perms: { ver: string; crear: string; editar: string; eliminar: string };
+}> = {
+  obras: {
+    titulo: 'Minutas y Notas Técnicas', carpetaBase: '', ruta: '/minutas', auditoria: 'minutas',
+    perms: { ver: 'ver_minutas', crear: 'crear_minutas', editar: 'editar_minutas', eliminar: 'eliminar_minutas' },
+  },
+  cumplimiento: {
+    titulo: 'Minutas de Cumplimiento Normativo', carpetaBase: 'Cumplimiento Normativo/', ruta: '/cumplimiento/minutas', auditoria: 'minutas_cn',
+    perms: { ver: 'ver_minutas_cn', crear: 'crear_minutas_cn', editar: 'editar_minutas_cn', eliminar: 'eliminar_minutas_cn' },
+  },
+};
+
+// El PDF va adjunto al correo hasta este tamaño; si pesa más, solo se manda el link
+const MAX_ADJUNTO_BYTES = 4 * 1024 * 1024;
+async function pdfABase64(f: File): Promise<string> {
+  const buf = new Uint8Array(await f.arrayBuffer());
+  let bin = '';
+  for (let i = 0; i < buf.length; i += 0x8000) bin += String.fromCharCode(...buf.subarray(i, i + 0x8000));
+  return btoa(bin);
+}
+
 const inputCls   = 'w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none bg-white';
 const PAGE_SIZE   = 20;
 const FORM_INIT = {
   tipo: 'minuta' as 'minuta' | 'nota_tecnica',
   asunto: '', fecha: format(new Date(), 'yyyy-MM-dd'),
   proyecto_id: '', proyecto_nombre: '', territorio: '', colegio: '', notas: '',
+  tema: '', temaOtro: '',
 };
 
-export default function Minutas() {
+export default function Minutas({ modulo = 'obras' }: { modulo?: ModuloMinutas }) {
+  const esCN = modulo === 'cumplimiento';
+  const cfgModulo = MODULO_CFG[modulo];
   const { isAdmin, can, permsRecord } = usePermissions();
   const { user } = useAuth();
   const qc = useQueryClient();
@@ -107,9 +164,9 @@ export default function Minutas() {
     return map;
   }, [directorioRows]);
 
-  const puedeCrear    = isAdmin || can('crear_minutas');
-  const puedeEditar   = isAdmin || can('editar_minutas');
-  const puedeEliminar = isAdmin || can('eliminar_minutas');
+  const puedeCrear    = isAdmin || can(cfgModulo.perms.crear as any);
+  const puedeEditar   = isAdmin || can(cfgModulo.perms.editar as any);
+  const puedeEliminar = isAdmin || can(cfgModulo.perms.eliminar as any);
 
   // Un "administrador de colegio" es cualquier usuario no-admin al que se le asignó
   // un colegio específico en Accesos (no ECO, no vacío/general). Ese perfil solo debe ver
@@ -144,6 +201,10 @@ export default function Minutas() {
   const [notifCAR, setNotifCAR]       = useState(false);
   // Notificación independiente al/los administrador(es) del colegio seleccionado
   const [notifAdminColegio, setNotifAdminColegio] = useState<Record<string, boolean>>({});
+  // Cumplimiento: contactos externos marcados (por id) y Gerencia (va en CC)
+  const [notifExternos, setNotifExternos] = useState<Record<string, boolean>>({});
+  const [notifGerenciaCN, setNotifGerenciaCN] = useState(true);
+  const [showContactos, setShowContactos] = useState(false);
   // En edición: permite otorgar/quitar visibilidad al administrador sin reenviar correo
   const [visibleAdminColegio, setVisibleAdminColegio] = useState(false);
   // Filas de "Acuerdos y Compromisos" capturadas en el formulario (solo para tipo = 'minuta')
@@ -151,9 +212,9 @@ export default function Minutas() {
 
   // ── Data ────────────────────────────────────────────────────────────────
   const { data: minutas = [], isLoading } = useQuery({
-    queryKey: ['minutas', esAdminColegio, miColegio, esTerritorioScoped, miTerritorioAlcance],
+    queryKey: ['minutas', modulo, esAdminColegio, miColegio, esTerritorioScoped, miTerritorioAlcance],
     queryFn: async () => {
-      let query = supabase.from('minutas').select('*').order('fecha', { ascending: false });
+      let query = supabase.from('minutas').select('*').eq('modulo', modulo).order('fecha', { ascending: false });
       if (esAdminColegio) {
         // Solo minutas (nunca notas técnicas) de su colegio, y solo las marcadas para notificarle.
         // La política RLS en Supabase aplica esta misma regla como respaldo de seguridad.
@@ -175,18 +236,33 @@ export default function Minutas() {
   // Usuarios ligados (en Accesos) al colegio seleccionado en el formulario —
   // son los candidatos a "administrador exclusivo" a notificar.
   const { data: colegioAdmins = [] } = useQuery({
-    queryKey: ['colegioAdmins', form.colegio],
+    queryKey: ['colegioAdmins', modulo, form.colegio],
     queryFn: async () => {
       const { data, error } = await supabase
         .from('user_permissions')
         .select('user_email, nombre, colegio')
         .eq('colegio', form.colegio)
-        .eq('ver_minutas', true);
+        .eq(cfgModulo.perms.ver, true);
       if (error) throw error;
       return (data ?? []) as ColegioAdmin[];
     },
     enabled: !editItem && puedeCrear && !!form.colegio && form.colegio !== 'ECO',
   });
+
+  // Contactos externos (solo Cumplimiento): personas fuera de Mano Amiga que reciben el correo
+  const { data: contactosExternos = [] } = useQuery({
+    queryKey: ['contactos_notificacion', 'minutas_cn'],
+    queryFn: async () => {
+      const { data, error } = await supabase.from('contactos_notificacion')
+        .select('*').eq('modulo', 'minutas_cn').order('orden').order('nombre');
+      if (error) throw error;
+      return (data ?? []) as ContactoExterno[];
+    },
+    enabled: esCN && (puedeCrear || isAdmin),
+  });
+  const externosActivos = useMemo(() => contactosExternos.filter(c => c.activo), [contactosExternos]);
+  const externosDefault = () =>
+    Object.fromEntries(externosActivos.map(c => [c.id, c.marcado_default])) as Record<string, boolean>;
 
   // Mismos proyectos activos que ya usa NEXUS — comparten caché (misma queryKey)
   const { data: rawProyectos = [] } = useQuery({
@@ -196,6 +272,7 @@ export default function Minutas() {
         .in('status', ['en_proceso', 'pausado', 'en_espera']).order('name');
       return data ?? [];
     },
+    enabled: !esCN,
   });
 
   const colegiosDisponibles = useMemo(() => getColegiosByTerritorio(form.territorio), [form.territorio]);
@@ -205,6 +282,7 @@ export default function Minutas() {
     (!search ||
       m.asunto?.toLowerCase().includes(search.toLowerCase()) ||
       m.proyecto_nombre?.toLowerCase().includes(search.toLowerCase()) ||
+      m.tema?.toLowerCase().includes(search.toLowerCase()) ||
       m.colegio?.toLowerCase().includes(search.toLowerCase()))
   ), [minutas, search, filterTipo]);
 
@@ -235,11 +313,12 @@ export default function Minutas() {
 
   // Todos los acuerdos (para la pestaña "Seguimiento de Acuerdos"), con datos de su minuta origen
   const { data: acuerdosTodos = [], isLoading: cargandoAcuerdos } = useQuery({
-    queryKey: ['acuerdos_seguimiento', esAdminColegio, miColegio],
+    queryKey: ['acuerdos_seguimiento', modulo, esAdminColegio, miColegio],
     queryFn: async () => {
       const { data, error } = await supabase
         .from('minuta_acuerdos')
-        .select('*, minuta:minuta_id(id, asunto, fecha, territorio, colegio, tipo, onedrive_url)')
+        .select('*, minuta:minuta_id!inner(id, asunto, fecha, territorio, colegio, tipo, onedrive_url, modulo)')
+        .eq('minuta.modulo', modulo)
         .order('fecha_compromiso', { ascending: true, nullsFirst: false });
       if (error) throw error;
       return (data ?? []) as (Acuerdo & { minuta: { id: string; asunto: string; fecha: string; territorio: string | null; colegio: string | null; tipo: string; onedrive_url: string | null } | null })[];
@@ -256,9 +335,17 @@ export default function Minutas() {
     setNotifEnrique(false);
     setNotifCAR(false);
     setNotifAdminColegio({});
+    setNotifExternos(externosDefault());
+    setNotifGerenciaCN(true);
     setVisibleAdminColegio(false);
     setAcuerdosForm([]);
   };
+
+  // Al llegar la lista de contactos externos, se marcan los que van por defecto
+  useEffect(() => {
+    if (esCN && !editItem) setNotifExternos(prev => Object.keys(prev).length ? prev : externosDefault());
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [esCN, externosActivos]);
 
   const openEdit = (m: Minuta) => {
     setEditItem(m);
@@ -268,12 +355,57 @@ export default function Minutas() {
       asunto: m.asunto, fecha: m.fecha,
       proyecto_id: m.proyecto_id ?? '', proyecto_nombre: m.proyecto_nombre ?? '',
       territorio: m.territorio ?? '', colegio: m.colegio ?? '', notas: m.notas ?? '',
+      ...temaAForm(m.tema),
     });
     setVisibleAdminColegio(!!m.notificar_admin_colegio);
     setAcuerdosForm([]); // se precargan vía el useEffect cuando llegue la consulta
     setFile(null);
     setShowForm(true);
   };
+
+  // Tema guardado → selector + texto libre ("Otro")
+  function temaAForm(tema?: string | null) {
+    if (!tema) return { tema: '', temaOtro: '' };
+    return (TEMAS_CN as readonly string[]).includes(tema) && tema !== 'Otro'
+      ? { tema, temaOtro: '' } : { tema: 'Otro', temaOtro: tema === 'Otro' ? '' : tema };
+  }
+  const temaFinal = form.tema === 'Otro' ? form.temaOtro.trim() : form.tema;
+
+  // ── Destinatarios del correo (lo que se ve en el formulario y lo que se manda) ──
+  const destinatarios = useMemo(() => {
+    const adminEmails = colegioAdmins.filter(a => notifAdminColegio[a.user_email]).map(a => a.user_email);
+    const yo = 'rreyes@manoamiga.edu.mx';
+    let para: string | null = null;
+    let cc: string[] = [];
+    if (esCN) {
+      // Para: contacto(s) externo(s) marcados como "Para" (David). CC: Gerencia y los demás.
+      const ext = externosActivos.filter(c => notifExternos[c.id]);
+      const extPara = ext.filter(c => c.va_en === 'para').map(c => c.correo);
+      const extCC = ext.filter(c => c.va_en === 'cc').map(c => c.correo);
+      const resto: string[] = [];
+      if (notifGerenciaCN) resto.push(gerenteFMA.correo || 'arodriguez@manoamiga.edu.mx');
+      if (notifEnrique && directorNacional.correo) resto.push(directorNacional.correo);
+      if (notifCAR && form.colegio && carPorColegioMap[form.colegio]) resto.push(carPorColegioMap[form.colegio].email);
+      const todos = [...extPara, ...extCC, ...resto, ...adminEmails];
+      if (todos.length) { para = todos[0]; cc = [...todos.slice(1), yo]; }
+    } else if (notifAngel) {
+      // Un solo correo: Para Angel, con Enrique / CAR / administrador(es) de colegio en CC
+      cc = [yo];
+      if (notifEnrique && directorNacional.correo) cc.push(directorNacional.correo);
+      if (notifCAR && form.colegio && carPorColegioMap[form.colegio]) cc.push(carPorColegioMap[form.colegio].email);
+      cc.push(...adminEmails);
+      para = gerenteFMA.correo || 'arodriguez@manoamiga.edu.mx';
+    } else if (adminEmails.length > 0) {
+      // Angel no fue notificado esta vez: el administrador del colegio va como
+      // destinatario principal (el primero) y el resto, si hay más de uno, en CC.
+      para = adminEmails[0];
+      cc = [yo, ...adminEmails.slice(1)];
+    }
+    const vistos = new Set<string>(para ? [para.toLowerCase()] : []);
+    cc = cc.filter(c => { const k = c.toLowerCase(); if (!c || vistos.has(k)) return false; vistos.add(k); return true; });
+    return { para, cc, adminEmails, hayExterno: esCN && externosActivos.some(c => notifExternos[c.id]) };
+  }, [esCN, externosActivos, notifExternos, notifGerenciaCN, notifAngel, notifEnrique, notifCAR, notifAdminColegio,
+      colegioAdmins, form.colegio, gerenteFMA, directorNacional, carPorColegioMap]);
 
   const agregarFilaAcuerdo = () => setAcuerdosForm(prev => [...prev, { descripcion: '', responsable: '', fecha_compromiso: '' }]);
   const quitarFilaAcuerdo  = (idx: number) => setAcuerdosForm(prev => prev.filter((_, i) => i !== idx));
@@ -290,6 +422,10 @@ export default function Minutas() {
         if (!file) throw new Error('Selecciona el archivo PDF del documento.');
       }
       if (!form.asunto.trim()) throw new Error('Escribe el asunto de la reunión.');
+      if (esCN) {
+        if (!form.colegio) throw new Error('Selecciona el colegio.');
+        if (!temaFinal) throw new Error('Selecciona el tema de Cumplimiento.');
+      }
 
       let archivo_nombre = editItem?.archivo_nombre ?? '';
       let onedrive_url   = editItem?.onedrive_url ?? null;
@@ -298,7 +434,7 @@ export default function Minutas() {
       if (file) {
         const anio    = new Date(form.fecha).getFullYear();
         const temaCarpeta = form.asunto.trim().replace(/[/\\:*?"<>|]/g, '_').slice(0, 60);
-        const carpetaRaiz = TIPO_CFG[form.tipo]?.carpeta ?? 'Minutas';
+        const carpetaRaiz = cfgModulo.carpetaBase + (TIPO_CFG[form.tipo]?.carpeta ?? 'Minutas');
         const carpeta = `${carpetaRaiz}/${anio}/${form.territorio || 'GENERAL'}/${form.colegio || 'GENERAL'}/${temaCarpeta}`;
         const fecha   = format(new Date(), 'yyyy-MM-dd_HH-mm-ss');
         const nombre  = `${fecha}_${file.name}`;
@@ -313,8 +449,10 @@ export default function Minutas() {
         tipo:            form.tipo,
         asunto:          form.asunto.trim(),
         fecha:           form.fecha,
-        proyecto_id:     sinProyecto ? null : (form.proyecto_id || null),
-        proyecto_nombre: form.proyecto_nombre || null,
+        modulo,
+        tema:            esCN ? temaFinal : null,
+        proyecto_id:     esCN || sinProyecto ? null : (form.proyecto_id || null),
+        proyecto_nombre: esCN ? null : (form.proyecto_nombre || null),
         territorio:      form.territorio || null,
         colegio:         form.colegio || null,
         notas:           form.notas || null,
@@ -369,7 +507,7 @@ export default function Minutas() {
           .eq('id', editItem.id);
         if (error) throw error;
         await sincronizarAcuerdos(editItem.id);
-        logAudit({ accion: 'editar', modulo: 'minutas', registro_id: editItem.id, registro_ref: form.asunto });
+        logAudit({ accion: 'editar', modulo: cfgModulo.auditoria, registro_id: editItem.id, registro_ref: form.asunto });
       } else {
         const adminsSeleccionados = colegioAdmins.filter(a => notifAdminColegio[a.user_email]);
         const { data, error } = await supabase.from('minutas')
@@ -377,48 +515,41 @@ export default function Minutas() {
           .select('id').single();
         if (error) throw error;
         if (data?.id) await sincronizarAcuerdos(data.id);
-        logAudit({ accion: 'crear', modulo: 'minutas', registro_id: data?.id ?? null, registro_ref: form.asunto });
+        logAudit({
+          accion: 'crear', modulo: cfgModulo.auditoria, registro_id: data?.id ?? null, registro_ref: form.asunto,
+          detalle: destinatarios.para ? { para: destinatarios.para, cc: destinatarios.cc } : undefined,
+        });
 
-        const adminEmails = adminsSeleccionados.map(a => a.user_email);
-
-        const enviarCorreo = async (para: string, cc: string[]) => {
+        if (destinatarios.para) {
+          // El PDF va adjunto (para quien no tiene acceso al sistema o a OneDrive); si pesa mucho, solo el link
+          let adjunto: { nombre: string; base64: string } | null = null;
+          if (file && file.size <= MAX_ADJUNTO_BYTES) {
+            try { adjunto = { nombre: file.name, base64: await pdfABase64(file) }; } catch { adjunto = null; }
+          }
           try {
             const { error: notifError } = await supabase.functions.invoke('notify-minuta-subida', {
               body: {
-                para, cc,
+                para: destinatarios.para, cc: destinatarios.cc,
+                modulo, tema: esCN ? temaFinal : null,
                 tipo_label: TIPO_CFG[form.tipo]?.label ?? 'Minuta de Reunión',
                 asunto: form.asunto, fecha: form.fecha,
-                proyecto_nombre: form.proyecto_nombre || null,
+                proyecto_nombre: esCN ? null : (form.proyecto_nombre || null),
                 territorio: form.territorio || null, colegio: form.colegio || null,
                 subido_por: user?.email ?? null,
-                onedrive_url, siteUrl: window.location.origin,
+                onedrive_url, siteUrl: window.location.origin, ruta: cfgModulo.ruta,
+                adjunto,
               },
             });
             if (notifError) {
               console.error('Error al enviar notificación de minuta:', notifError);
               toast.warning('El documento se guardó, pero una notificación por correo no pudo enviarse.');
+            } else if (file && !adjunto) {
+              toast.info('El PDF pesa más de 4 MB: el correo se envió solo con el link de OneDrive.');
             }
           } catch (e) {
             console.error('Error al enviar notificación de minuta:', e);
             toast.warning('El documento se guardó, pero una notificación por correo no pudo enviarse.');
           }
-        };
-
-        if (notifAngel) {
-          // Un solo correo: Para Angel, con Enrique / CAR / administrador(es) de colegio en CC
-          // (antes se mandaba un correo aparte al administrador; ahora se une en este mismo).
-          const ccList: string[] = ['rreyes@manoamiga.edu.mx'];
-          if (notifEnrique && directorNacional.correo) ccList.push(directorNacional.correo);
-          if (notifCAR && form.colegio && carPorColegioMap[form.colegio]) {
-            ccList.push(carPorColegioMap[form.colegio].email);
-          }
-          ccList.push(...adminEmails);
-          await enviarCorreo(gerenteFMA.correo || 'arodriguez@manoamiga.edu.mx', ccList);
-        } else if (adminEmails.length > 0) {
-          // Angel no fue notificado esta vez: el administrador del colegio va como
-          // destinatario principal (el primero) y el resto, si hay más de uno, en CC.
-          const [paraAdmin, ...restoAdmins] = adminEmails;
-          await enviarCorreo(paraAdmin, ['rreyes@manoamiga.edu.mx', ...restoAdmins]);
         }
       }
     },
@@ -438,7 +569,7 @@ export default function Minutas() {
       if (!puedeEliminar) throw new Error('No tienes permiso para eliminar minutas.');
       const { error } = await supabase.from('minutas').delete().eq('id', m.id);
       if (error) throw error;
-      logAudit({ accion: 'eliminar', modulo: 'minutas', registro_id: m.id, registro_ref: m.asunto });
+      logAudit({ accion: 'eliminar', modulo: cfgModulo.auditoria, registro_id: m.id, registro_ref: m.asunto });
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['minutas'] });
@@ -451,12 +582,14 @@ export default function Minutas() {
     <div className="space-y-5">
       <PageHeader
         title={
-          esAdminColegio ? `Minutas — ${miColegio}` :
-          esTerritorioScoped ? `Minutas y Notas Técnicas — ${miTerritorioAlcance}` :
-          'Minutas y Notas Técnicas'
+          esAdminColegio ? `${esCN ? 'Minutas de Cumplimiento' : 'Minutas'} — ${miColegio}` :
+          esTerritorioScoped ? `${cfgModulo.titulo} — ${miTerritorioAlcance}` :
+          cfgModulo.titulo
         }
         subtitle={esAdminColegio
           ? 'Minutas de reunión de tu colegio compartidas contigo'
+          : esCN
+          ? 'Minutas y notas técnicas de Protección Civil y Cumplimiento Normativo, por colegio y tema'
           : 'Repositorio de minutas de reunión y notas técnicas de seguimiento'}
       />
 
@@ -501,13 +634,20 @@ export default function Minutas() {
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
           <input
             className="w-full pl-9 pr-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none"
-            placeholder="Buscar por asunto, proyecto o colegio..."
+            placeholder={esCN ? 'Buscar por asunto, tema o colegio...' : 'Buscar por asunto, proyecto o colegio...'}
             value={search} onChange={e => { setSearch(e.target.value); setVisibleCount(PAGE_SIZE); }} />
         </div>
         <span className="text-sm text-slate-400">{filtered.length} documento{filtered.length !== 1 ? 's' : ''}</span>
+        {esCN && isAdmin && (
+          <button onClick={() => setShowContactos(true)}
+            className="ml-auto flex items-center gap-2 px-3 py-2 bg-white border border-slate-300 text-slate-700 rounded-lg text-sm font-semibold hover:bg-slate-50 transition-colors"
+            title="Personas fuera de Mano Amiga que reciben el correo de las minutas">
+            <Users className="w-4 h-4" /> Contactos externos
+          </button>
+        )}
         {puedeCrear && (
           <button onClick={() => { resetForm(); setShowForm(true); }}
-            className="ml-auto flex items-center gap-2 px-4 py-2 bg-slate-900 text-white rounded-lg text-sm font-bold hover:bg-slate-800 transition-colors">
+            className={`${esCN && isAdmin ? '' : 'ml-auto '}flex items-center gap-2 px-4 py-2 bg-slate-900 text-white rounded-lg text-sm font-bold hover:bg-slate-800 transition-colors`}>
             <Plus className="w-4 h-4" /> Nuevo Documento
           </button>
         )}
@@ -539,6 +679,11 @@ export default function Minutas() {
                     <Calendar className="w-3 h-3" />
                     {format(new Date(m.fecha + 'T12:00:00'), "d 'de' MMMM yyyy", { locale: es })}
                   </span>
+                  {m.tema && (
+                    <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full">
+                      <ShieldCheck className="w-3 h-3" />{m.tema}
+                    </span>
+                  )}
                   {m.proyecto_nombre && (
                     <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-blue-700 bg-blue-50 border border-blue-200 px-2 py-0.5 rounded-full">
                       <ClipboardList className="w-3 h-3" />{m.proyecto_nombre}
@@ -626,7 +771,7 @@ export default function Minutas() {
                 <label className="block text-xs font-bold text-slate-500 uppercase mb-1">
                   {form.tipo === 'nota_tecnica' ? 'Tema de la Nota Técnica *' : 'Asunto / Tema de la Reunión *'}
                 </label>
-                <input className={inputCls} placeholder="Ej. Seguimiento Barda Perimetral MA TIJ"
+                <input className={inputCls} placeholder={esCN ? 'Ej. Revisión del Programa Interno de PC MA MTY' : 'Ej. Seguimiento Barda Perimetral MA TIJ'}
                   value={form.asunto} onChange={e => setForm(f => ({ ...f, asunto: e.target.value }))} />
               </div>
 
@@ -636,7 +781,24 @@ export default function Minutas() {
                   onChange={e => setForm(f => ({ ...f, fecha: e.target.value }))} />
               </div>
 
+              {/* Cumplimiento: la minuta se liga a colegio + tema (no a un proyecto de Obras) */}
+              {esCN && (
+                <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-3 space-y-2">
+                  <p className="text-xs font-bold text-emerald-700 uppercase">Tema de Cumplimiento *</p>
+                  <select className={inputCls} value={form.tema}
+                    onChange={e => setForm(f => ({ ...f, tema: e.target.value, temaOtro: e.target.value === 'Otro' ? f.temaOtro : '' }))}>
+                    <option value="">Selecciona el tema...</option>
+                    {TEMAS_CN.map(t => <option key={t} value={t}>{t}</option>)}
+                  </select>
+                  {form.tema === 'Otro' && (
+                    <input className={inputCls} placeholder="Escribe el tema..."
+                      value={form.temaOtro} onChange={e => setForm(f => ({ ...f, temaOtro: e.target.value }))} />
+                  )}
+                </div>
+              )}
+
               {/* Vinculación con Proyecto — mismo patrón que NEXUS */}
+              {!esCN && (
               <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 space-y-2">
                 <p className="text-xs font-bold text-blue-700 uppercase">Vinculación con Proyecto</p>
                 <div className="grid grid-cols-2 gap-2">
@@ -664,21 +826,22 @@ export default function Minutas() {
                     value={form.proyecto_nombre} onChange={e => setForm(f => ({ ...f, proyecto_nombre: e.target.value }))} />
                 )}
               </div>
+              )}
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Territorio</label>
                   <select className={inputCls} value={form.territorio}
                     onChange={e => setForm(f => ({ ...f, territorio: e.target.value, colegio: '' }))}>
-                    <option value="">Selecciona... (opcional)</option>
+                    <option value="">{esCN ? 'Selecciona...' : 'Selecciona... (opcional)'}</option>
                     {TERRITORIOS.map(t => <option key={t}>{t}</option>)}
                   </select>
                 </div>
                 <div>
-                  <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Colegio</label>
+                  <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Colegio{esCN ? ' *' : ''}</label>
                   <select className={inputCls} value={form.colegio}
                     onChange={e => setForm(f => ({ ...f, colegio: e.target.value }))}>
-                    <option value="">Selecciona... (opcional)</option>
+                    <option value="">{esCN ? (form.territorio ? 'Selecciona...' : 'Primero el territorio') : 'Selecciona... (opcional)'}</option>
                     {colegiosDisponibles.map((c: string) => <option key={c} value={c}>{c}</option>)}
                   </select>
                 </div>
@@ -735,7 +898,49 @@ export default function Minutas() {
                 </div>
               )}
 
-              {!editItem && (
+              {/* Cumplimiento: Para el contacto externo (ORS) y en CC Gerencia y los demás */}
+              {!editItem && esCN && (
+                <div className="bg-slate-50 border border-slate-200 rounded-lg p-3 space-y-2">
+                  <p className="text-xs font-bold text-slate-500 uppercase flex items-center gap-1.5"><Mail className="w-3.5 h-3.5" /> Notificar por correo</p>
+                  {externosActivos.length === 0 ? (
+                    <p className="text-[11px] text-slate-400">No hay contactos externos activos{isAdmin ? ' (dalos de alta en "Contactos externos")' : ''}.</p>
+                  ) : externosActivos.map(c => (
+                    <label key={c.id} className="flex items-start gap-2 text-sm cursor-pointer">
+                      <input type="checkbox" checked={!!notifExternos[c.id]}
+                        onChange={e => setNotifExternos(prev => ({ ...prev, [c.id]: e.target.checked }))} className="w-4 h-4 rounded mt-0.5" />
+                      <span>
+                        <span className="font-semibold text-slate-800">{c.nombre}</span>
+                        <span className="text-slate-500">{[c.organizacion, c.puesto].filter(Boolean).length ? ` — ${[c.organizacion, c.puesto].filter(Boolean).join(' · ')}` : ''}</span>
+                        <span className="ml-1 text-[10px] font-bold px-1.5 py-0.5 rounded bg-indigo-50 text-indigo-700 border border-indigo-200 align-middle">Externo</span>
+                      </span>
+                    </label>
+                  ))}
+                  <label className="flex items-center gap-2 text-sm cursor-pointer">
+                    <input type="checkbox" checked={notifGerenciaCN} onChange={e => setNotifGerenciaCN(e.target.checked)} className="w-4 h-4 rounded" />
+                    {gerenteFMA.nombre || 'Angel Rodríguez'} (Gerente)
+                  </label>
+                  <label className="flex items-center gap-2 text-sm cursor-pointer">
+                    <input type="checkbox" checked={notifEnrique} onChange={e => setNotifEnrique(e.target.checked)} className="w-4 h-4 rounded" />
+                    {directorNacional.nombre || 'Director Nacional'} (Director Nacional)
+                  </label>
+                  <label className={`flex items-center gap-2 text-sm ${form.colegio && carPorColegioMap[form.colegio] ? 'cursor-pointer' : 'text-slate-400 cursor-not-allowed'}`}>
+                    <input type="checkbox" checked={notifCAR} disabled={!form.colegio || !carPorColegioMap[form.colegio]}
+                      onChange={e => setNotifCAR(e.target.checked)} className="w-4 h-4 rounded" />
+                    {form.colegio && carPorColegioMap[form.colegio] ? carPorColegioMap[form.colegio].nombre + ' (CAR)' : 'CAR del Colegio (selecciona colegio primero)'}
+                  </label>
+                  {destinatarios.para ? (
+                    <div className="mt-1 rounded-md bg-white border border-slate-200 px-2.5 py-2 text-[11px] text-slate-600 space-y-0.5">
+                      <p><b>Para:</b> {destinatarios.para}</p>
+                      <p><b>CC:</b> {destinatarios.cc.join(', ')}</p>
+                      <p className="flex items-center gap-1 text-slate-500"><Paperclip className="w-3 h-3" /> El PDF de la minuta va adjunto al correo.</p>
+                    </div>
+                  ) : (
+                    <p className="text-[11px] text-slate-400">Sin destinatarios marcados: la minuta se guarda sin enviar correo.</p>
+                  )}
+                </div>
+              )}
+
+              {!editItem && !esCN && (
                 <div className="bg-slate-50 border border-slate-200 rounded-lg p-3 space-y-2">
                   <label className="flex items-center gap-2 text-sm font-bold text-slate-700 cursor-pointer">
                     <input type="checkbox" checked={notifAngel} onChange={e => setNotifAngel(e.target.checked)} className="w-4 h-4 rounded" />
@@ -746,7 +951,7 @@ export default function Minutas() {
                       <p className="text-[11px] text-slate-400">Con copia a ti automáticamente, y opcionalmente a:</p>
                       <label className="flex items-center gap-2 text-sm cursor-pointer">
                         <input type="checkbox" checked={notifEnrique} onChange={e => setNotifEnrique(e.target.checked)} className="w-4 h-4 rounded" />
-                        Enrique Castañeda
+                        {directorNacional.nombre || 'Director Nacional'}
                       </label>
                       <label className={`flex items-center gap-2 text-sm ${form.colegio && carPorColegioMap[form.colegio] ? 'cursor-pointer' : 'text-slate-400 cursor-not-allowed'}`}>
                         <input type="checkbox" checked={notifCAR} disabled={!form.colegio || !carPorColegioMap[form.colegio]}
@@ -832,6 +1037,10 @@ export default function Minutas() {
         </div>
       )}
 
+      {showContactos && esCN && isAdmin && (
+        <ContactosExternosModal contactos={contactosExternos} onClose={() => setShowContactos(false)} qc={qc} />
+      )}
+
       {/* ── Modal: Confirmar eliminación ─────────────────────────────────── */}
       {deleteItem && (
         <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/50 p-4">
@@ -853,6 +1062,126 @@ export default function Minutas() {
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+// ── Contactos externos (Cumplimiento) ───────────────────────────────────────
+// Personas fuera de Mano Amiga que reciben el correo de las minutas aunque no
+// tengan usuario. Si mañana cambia el líder de la ORS, se cambia aquí.
+const CONTACTO_VACIO = { nombre: '', correo: '', organizacion: '', puesto: '', va_en: 'para' as 'para' | 'cc', marcado_default: true, activo: true };
+
+function ContactosExternosModal({ contactos, onClose, qc }: {
+  contactos: ContactoExterno[]; onClose: () => void; qc: ReturnType<typeof useQueryClient>;
+}) {
+  const [editId, setEditId] = useState<string | 'nuevo' | null>(null);
+  const [f, setF] = useState({ ...CONTACTO_VACIO });
+
+  const abrir = (c?: ContactoExterno) => {
+    setEditId(c?.id ?? 'nuevo');
+    setF(c ? { nombre: c.nombre, correo: c.correo, organizacion: c.organizacion ?? '', puesto: c.puesto ?? '',
+               va_en: c.va_en, marcado_default: c.marcado_default, activo: c.activo } : { ...CONTACTO_VACIO });
+  };
+
+  const guardar = useMutation({
+    mutationFn: async () => {
+      const correo = f.correo.trim().toLowerCase();
+      if (!f.nombre.trim()) throw new Error('Escribe el nombre.');
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(correo)) throw new Error('El correo no es válido.');
+      const datos = {
+        nombre: f.nombre.trim(), correo, organizacion: f.organizacion.trim() || null, puesto: f.puesto.trim() || null,
+        va_en: f.va_en, marcado_default: f.marcado_default, activo: f.activo, modulo: 'minutas_cn',
+        updated_at: new Date().toISOString(),
+      };
+      if (editId === 'nuevo') {
+        const { error } = await supabase.from('contactos_notificacion').insert({ ...datos, orden: contactos.length + 1 });
+        if (error) throw new Error(error.code === '23505' ? 'Ese correo ya está dado de alta.' : error.message);
+        logAudit({ accion: 'crear', modulo: 'minutas_cn', registro_ref: `Contacto externo: ${datos.nombre} <${correo}>` });
+      } else {
+        const { error } = await supabase.from('contactos_notificacion').update(datos).eq('id', editId!);
+        if (error) throw new Error(error.message);
+        logAudit({ accion: 'editar', modulo: 'minutas_cn', registro_id: editId, registro_ref: `Contacto externo: ${datos.nombre} <${correo}>` });
+      }
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['contactos_notificacion'] });
+      toast.success('Contacto guardado');
+      setEditId(null);
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  return (
+    <div className="fixed inset-0 z-[110] flex items-start sm:items-center justify-center bg-black/50 p-4 overflow-y-auto">
+      <div className="bg-white rounded-xl shadow-xl max-w-lg w-full my-8">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100">
+          <div>
+            <h2 className="font-bold text-slate-900">Contactos externos</h2>
+            <p className="text-xs text-slate-500">Reciben el correo de las minutas de Cumplimiento con el PDF adjunto, aunque no tengan usuario en el sistema.</p>
+          </div>
+          <button onClick={onClose} className="text-slate-400 hover:text-slate-700"><X className="w-5 h-5" /></button>
+        </div>
+        <div className="p-5 space-y-3 max-h-[70vh] overflow-y-auto">
+          {contactos.length === 0 && editId === null && (
+            <p className="text-sm text-slate-400 text-center py-4">Sin contactos dados de alta.</p>
+          )}
+          {editId === null && contactos.map(c => (
+            <div key={c.id} className={`flex items-start gap-3 border rounded-lg px-3 py-2.5 ${c.activo ? 'border-slate-200' : 'border-slate-100 opacity-60'}`}>
+              <div className="flex-1 min-w-0 text-sm">
+                <p className="font-semibold text-slate-900">{c.nombre}{!c.activo && <span className="ml-2 text-[10px] font-bold text-slate-500">INACTIVO</span>}</p>
+                <p className="text-xs text-slate-500 truncate">{c.correo}{c.organizacion ? ` · ${c.organizacion}` : ''}{c.puesto ? ` · ${c.puesto}` : ''}</p>
+                <p className="text-[11px] text-slate-400 mt-0.5">Va en {c.va_en === 'para' ? 'Para' : 'CC'} · {c.marcado_default ? 'marcado por defecto' : 'sin marcar por defecto'}</p>
+              </div>
+              <button onClick={() => abrir(c)} className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-lg" title="Editar">
+                <Pencil className="w-4 h-4" />
+              </button>
+            </div>
+          ))}
+          {editId !== null && (
+            <div className="space-y-2.5">
+              <input className={inputCls} placeholder="Nombre *" value={f.nombre} onChange={e => setF(v => ({ ...v, nombre: e.target.value }))} />
+              <input className={inputCls} placeholder="Correo *" type="email" value={f.correo} onChange={e => setF(v => ({ ...v, correo: e.target.value }))} />
+              <div className="grid grid-cols-2 gap-2">
+                <input className={inputCls} placeholder="Organización (ej. ORS)" value={f.organizacion} onChange={e => setF(v => ({ ...v, organizacion: e.target.value }))} />
+                <input className={inputCls} placeholder="Puesto" value={f.puesto} onChange={e => setF(v => ({ ...v, puesto: e.target.value }))} />
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                {(['para', 'cc'] as const).map(v => (
+                  <label key={v} className={`flex items-center gap-2 px-3 py-2 rounded-lg border cursor-pointer text-sm ${f.va_en === v ? 'border-slate-900 bg-slate-50 font-semibold' : 'border-slate-200'}`}>
+                    <input type="radio" checked={f.va_en === v} onChange={() => setF(x => ({ ...x, va_en: v }))} /> Va en {v === 'para' ? 'Para' : 'CC'}
+                  </label>
+                ))}
+              </div>
+              <label className="flex items-center gap-2 text-sm cursor-pointer">
+                <input type="checkbox" checked={f.marcado_default} onChange={e => setF(v => ({ ...v, marcado_default: e.target.checked }))} className="w-4 h-4 rounded" />
+                Casilla marcada por defecto al crear una minuta
+              </label>
+              <label className="flex items-center gap-2 text-sm cursor-pointer">
+                <input type="checkbox" checked={f.activo} onChange={e => setF(v => ({ ...v, activo: e.target.checked }))} className="w-4 h-4 rounded" />
+                Activo (si lo desactivas ya no aparece en el formulario)
+              </label>
+            </div>
+          )}
+        </div>
+        <div className="flex justify-end gap-3 px-5 py-4 border-t border-slate-100">
+          {editId === null ? (
+            <>
+              <button onClick={onClose} className="px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100 rounded-lg">Cerrar</button>
+              <button onClick={() => abrir()} className="flex items-center gap-2 px-4 py-2 bg-slate-900 text-white rounded-lg text-sm font-bold hover:bg-slate-800">
+                <Plus className="w-4 h-4" /> Agregar contacto
+              </button>
+            </>
+          ) : (
+            <>
+              <button onClick={() => setEditId(null)} className="px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100 rounded-lg">Cancelar</button>
+              <button onClick={() => guardar.mutate()} disabled={guardar.isPending}
+                className="flex items-center gap-2 px-4 py-2 bg-slate-900 text-white rounded-lg text-sm font-bold hover:bg-slate-800 disabled:opacity-50">
+                {guardar.isPending && <Loader2 className="w-4 h-4 animate-spin" />} Guardar
+              </button>
+            </>
+          )}
+        </div>
+      </div>
     </div>
   );
 }

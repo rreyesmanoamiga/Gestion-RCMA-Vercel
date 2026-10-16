@@ -52,7 +52,7 @@ async function buscarGlobal(q: string): Promise<SearchResult[]> {
       .or(`titulo.ilike.${like},colegio.ilike.${like}`).limit(5),
     supabase.from('levantamiento_planteles').select('id,colegio_nombre,zona')
       .ilike('colegio_nombre', like).limit(5),
-    supabase.from('minutas').select('id,asunto,proyecto_nombre,colegio')
+    supabase.from('minutas').select('id,asunto,proyecto_nombre,colegio,modulo,tema')
       .or(`asunto.ilike.${like},proyecto_nombre.ilike.${like},colegio.ilike.${like}`).limit(5),
   ] as const;
 
@@ -89,7 +89,7 @@ async function buscarGlobal(q: string): Promise<SearchResult[]> {
     results.push({ id: p.id, titulo: p.colegio_nombre ?? 'Sin nombre', subtitulo: p.zona ?? 'Levantamiento Nacional', modulo: 'levantamiento', icon: meta('levantamiento').icon, color: meta('levantamiento').color, link: '/levantamiento' });
   });
   if (minutasRes.status === 'fulfilled') (minutasRes.value.data ?? []).forEach((m: any) => {
-    results.push({ id: m.id, titulo: m.asunto ?? 'Sin asunto', subtitulo: [m.proyecto_nombre, m.colegio].filter(Boolean).join(' — '), modulo: 'minutas', icon: meta('minutas').icon, color: meta('minutas').color, link: '/minutas' });
+    results.push({ id: m.id, titulo: m.asunto ?? 'Sin asunto', subtitulo: [m.proyecto_nombre ?? m.tema, m.colegio].filter(Boolean).join(' — '), modulo: 'minutas', icon: meta('minutas').icon, color: meta('minutas').color, link: m.modulo === 'cumplimiento' ? '/cumplimiento/minutas' : '/minutas' });
   });
 
   return results;
