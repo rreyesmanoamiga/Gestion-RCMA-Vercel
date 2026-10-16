@@ -114,7 +114,7 @@ export default function SolicitudesRecibidas() {
               nombre: 'Ricardo Joanathan Reyes Medina', puesto: 'Vo. Bo. Coordinación de Obras y Mantenimiento RCMA' }
           : { nombre: 'Vo. Bo. Coordinación RCMA', puesto: 'Coordinación de Obras y Mantenimiento' },
       ],
-      nota: 'Para iniciar el proyecto se deberá tener el visto bueno de la Gerencia y de la Coordinación de Obras y Mantenimiento RCMA.',
+      nota: 'Para iniciar el trámite, se deberá autorizar Ticket MAS por la Coordinación de Obras y Mantenimiento RCMA.',
       referencia: `Solicitud ${s.folio ?? ''}`.trim(),
     }));
   };

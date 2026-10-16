@@ -3,6 +3,8 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabaseClient';
 import { toast } from 'sonner';
 import { imprimirHTML } from '@/lib/imprimir';
+import { documentoInstitucional, tarjeta, grid, esc, val } from '@/lib/formatoInstitucional';
+import { FIRMA_RCMA } from '@/lib/firmaRcma';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { useAuth } from '@/lib/AuthContext';
@@ -114,69 +116,50 @@ function EstatusBadge({ estatus }: { estatus?: string }) {
 
 function generarHTMLTicketCN(t: TicketMASCN): string {
   const hoy = format(new Date(), "dd 'de' MMMM 'de' yyyy", { locale: es });
-  const fechaAuth = t.fecha_autorizacion ? format(new Date(t.fecha_autorizacion), "dd/MM/yyyy", { locale: es }) : hoy;
-  return `<!DOCTYPE html>
-<html lang="es"><head><meta charset="UTF-8"/><title>Ticket MAS CN — ${t.folio ?? ''}</title>
-<style>
-*{margin:0;padding:0;box-sizing:border-box;}
-body{font-family:Arial,sans-serif;font-size:10.5px;color:#3A4450;padding:18px;}
-.header{background:#272D35;color:white;padding:10px 16px;display:flex;align-items:center;justify-content:space-between;border-radius:4px 4px 0 0;}
-.header h1{font-size:13px;font-weight:900;text-transform:uppercase;letter-spacing:.05em;}
-.header h2{font-size:9px;color:#8F9DAE;margin-top:2px;text-transform:uppercase;}
-.header img{height:44px;width:auto;object-fit:contain;}
-.sub-header{background:#224167;color:white;padding:6px 16px;font-size:11px;font-weight:700;display:flex;justify-content:space-between;margin-bottom:10px;}
-.section{margin-bottom:10px;}
-.section-title{background:#D3D8DF;padding:4px 10px;font-size:9px;font-weight:900;text-transform:uppercase;letter-spacing:.05em;color:#5E6E82;border-bottom:1px solid #B2BCC7;border-top:1px solid #B2BCC7;}
-table{width:100%;border-collapse:collapse;}
-td{border:1px solid #B2BCC7;padding:4px 7px;font-size:10.5px;}
-.lbl{background:#F6F7F9;font-weight:700;color:#5E6E82;width:140px;text-transform:uppercase;font-size:9.5px;}
-.val{color:#3A4450;}
-.th{background:#3A4450;color:white;font-size:9.5px;font-weight:700;text-transform:uppercase;padding:5px 7px;text-align:center;}
-.num{text-align:right;font-family:monospace;}
-.footer{margin-top:14px;border-top:1px solid #D3D8DF;padding-top:8px;text-align:center;font-size:8.5px;color:#8F9DAE;}
-@media print{body{padding:8px;}}
-</style></head>
-<body>
-  <div class="header">
-    <div><h1>Red de Colegios Mano Amiga</h1><h2>Ticket MAS CN — Cumplimiento Normativo / Protección Civil</h2></div>
-    <img src="/colegio-mano-amiga.png" alt="Logo"/>
-  </div>
-  <div class="sub-header">
-    <span>Folio: ${t.folio ?? '—'}</span>
-    <span>Estatus: ${ESTATUS_STYLE[t.estatus ?? 'pendiente']?.label ?? 'Pendiente'}</span>
-    <span>Fecha: ${hoy}</span>
-  </div>
-  <div class="section">
-    <div class="section-title">1. Datos Generales</div>
-    <table>
-      <tr><td class="lbl">Colegio</td><td class="val">${t.colegio ?? '—'}</td><td class="lbl">Razón Social</td><td class="val">${t.razon_social ?? '—'}</td></tr>
-      <tr><td class="lbl">Centro Gestor</td><td class="val">${t.centro_gestor ?? '—'}</td><td class="lbl">Sociedad</td><td class="val">${t.sociedad ?? '—'}</td></tr>
-      <tr><td class="lbl">Territorio</td><td class="val">${t.territorio ?? '—'}</td><td class="lbl">Fecha Elaboración</td><td class="val">${t.fecha_elaboracion ?? '—'}</td></tr>
-      <tr><td class="lbl">Solicitante</td><td class="val">${t.nombre_solicitante ?? '—'}</td><td class="lbl">Puesto</td><td class="val">${t.puesto_solicitante ?? '—'}</td></tr>
-      <tr><td class="lbl">Correo</td><td class="val">${t.correo_solicitante ?? '—'}</td><td class="lbl">Contador</td><td class="val">${t.contador ?? '—'}</td></tr>
-      <tr><td class="lbl">Concepto Base</td><td class="val">${t.concepto_nombre ?? '—'}</td><td class="lbl">Especificación</td><td class="val">${t.especificacion ?? '—'}</td></tr>
-    </table>
-  </div>
-  <div class="section">
-    <div class="section-title">2. Descripción y Cotizaciones</div>
-    <table><tr><td class="lbl">Descripción</td><td class="val" colspan="3" style="white-space:pre-wrap;">${t.descripcion ?? '—'}</td></tr></table>
-    <table style="margin-top:4px;">
-      <tr><td class="th" style="width:20%;">Cotización</td><td class="th">Proveedor</td><td class="th" style="width:15%;">Importe</td></tr>
-      <tr><td class="lbl">Cotización No. 1</td><td class="val">${t.cot1_proveedor ?? '—'}</td><td class="num">${fmx(t.cot1_importe)}</td></tr>
-      <tr><td class="lbl">Cotización No. 2</td><td class="val">${t.cot2_proveedor ?? '—'}</td><td class="num">${fmx(t.cot2_importe)}</td></tr>
-      <tr><td class="lbl">Cotización No. 3</td><td class="val">${t.cot3_proveedor ?? '—'}</td><td class="num">${fmx(t.cot3_importe)}</td></tr>
-    </table>
-    <table style="margin-top:4px;">
-      <tr><td class="lbl">Motivo de Selección</td><td class="val">${t.motivo_seleccion ?? '—'}</td></tr>
-      <tr><td class="lbl">Forma de Financiamiento</td><td class="val">${t.forma_financiamiento ?? '—'}</td></tr>
-    </table>
-  </div>
-  <div class="section">
-    <div class="section-title">3. Autorización</div>
-    <table><tr><td class="lbl">Fecha Recepción</td><td class="val">${t.fecha_recepcion ?? '—'}</td><td class="lbl">Fecha Autorización</td><td class="val">${fechaAuth}</td></tr></table>
-  </div>
-  <div class="footer">Ticket autorizado el ${fechaAuth} · Sistema RCMA — Cumplimiento Normativo © ${new Date().getFullYear()}</div>
-</body></html>`;
+  const fechaAuth = t.fecha_autorizacion ? format(new Date(t.fecha_autorizacion), "dd/MM/yyyy", { locale: es }) : null;
+  const enviado = t.created_at ? format(new Date(t.created_at), "dd/MM/yyyy HH:mm", { locale: es }) : '—';
+  const autorizado = t.estatus === 'autorizado';
+  const cots = [
+    { n: 1, prov: t.cot1_proveedor, imp: t.cot1_importe },
+    { n: 2, prov: t.cot2_proveedor, imp: t.cot2_importe },
+    { n: 3, prov: t.cot3_proveedor, imp: t.cot3_importe },
+  ];
+  const cuerpo =
+    tarjeta('Datos generales', grid([
+      ['Colegio', val(t.colegio)], ['Razón social', val(t.razon_social)], ['Territorio', val(t.territorio)],
+      ['Centro gestor', val(t.centro_gestor)], ['Sociedad', val(t.sociedad)], ['Contador', val(t.contador)],
+      ['Solicitante', val(t.nombre_solicitante)], ['Puesto', val(t.puesto_solicitante)], ['Correo', val(t.correo_solicitante)],
+      ['Concepto base', val(t.concepto_nombre)], ['Especificación', val(t.especificacion)], ['Fecha de elaboración', val(t.fecha_elaboracion)],
+    ])) +
+    tarjeta('Descripción del trámite', `<div class="txt">${val(t.descripcion)}</div>`) +
+    tarjeta('Cotizaciones y financiamiento',
+      `<table><tr><th style="width:16%">Cotización</th><th>Proveedor</th><th class="num">Importe</th></tr>${
+        cots.map(c => `<tr><td>No. ${c.n}</td><td>${val(c.prov)}</td><td class="num">${fmx(c.imp)}</td></tr>`).join('')}</table>` +
+      grid([['Motivo de selección', val(t.motivo_seleccion)], ['Financiamiento', val(t.forma_financiamiento)]])) +
+    tarjeta('Autorización', grid([
+      ['Fecha recepción', val(t.fecha_recepcion)], ['Fecha autorización', val(fechaAuth)], ['Estatus', esc(ESTATUS_STYLE[t.estatus ?? 'pendiente']?.label ?? 'Pendiente')],
+    ]));
+
+  return documentoInstitucional({
+    tituloPestana: `Ticket MAS CN — ${t.folio ?? ''}`,
+    titulo: 'Ticket MAS CN',
+    subtitulo: 'Cumplimiento Normativo / Protección Civil',
+    kpis: [
+      { etiqueta: 'Folio', valor: val(t.folio), folio: true },
+      { etiqueta: 'Estatus', valor: esc(ESTATUS_STYLE[t.estatus ?? 'pendiente']?.label ?? 'Pendiente'), pill: true },
+      { etiqueta: 'Fecha', valor: esc(hoy) },
+      { etiqueta: 'Importe', valor: fmx(t.cot1_importe) },
+    ],
+    cuerpo,
+    firmas: [
+      { contenido: `<span class="d">Enviado en el sistema<br/>${esc(enviado)}</span>`, nombre: val(t.nombre_solicitante),
+        puesto: `Solicitante${t.puesto_solicitante ? ' · ' + esc(t.puesto_solicitante) : ''}` },
+      autorizado
+        ? { contenido: `<img src="data:image/png;base64,${FIRMA_RCMA}" alt="Firma RCMA"/>`, nombre: 'Ricardo Joanathan Reyes Medina', puesto: 'Coordinador de Obras y Mantenimiento RCMA' }
+        : { nombre: 'Vo. Bo. Coordinación RCMA', puesto: 'Coordinación de Obras y Mantenimiento' },
+    ],
+    referencia: `Ticket MAS CN ${t.folio ?? ''}${fechaAuth ? ` · Autorizado el ${fechaAuth}` : ''}`,
+  });
 }
 
 export default function TicketMASCN() {

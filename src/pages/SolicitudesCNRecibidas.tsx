@@ -4,7 +4,9 @@ import { supabase } from '@/lib/supabaseClient';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
-import { ChevronDown, CheckCircle, Eye, X, Building2, User, Mail, ShieldCheck, Ban, Trash2, FileSignature } from 'lucide-react';
+import { ChevronDown, CheckCircle, Eye, X, Building2, User, Mail, ShieldCheck, Ban, Trash2, FileSignature, Printer } from 'lucide-react';
+import { imprimirHTML } from '@/lib/imprimir';
+import { documentoInstitucional, tarjeta, grid, barraFinanciamiento, esc, val } from '@/lib/formatoInstitucional';
 import { logAudit } from '@/lib/audit';
 import { useScope } from '@/hooks/useScope';
 import PageHeader from '@/components/shared/PageHeader';
@@ -46,6 +48,64 @@ interface SolicitudCN {
 
 const fmx = (n?: number | null) =>
   n != null ? Number(n).toLocaleString('es-MX', { style: 'currency', currency: 'MXN' }) : '—';
+
+// Imprimir / guardar en PDF con el formato institucional (mismo que Solicitud de Proyecto)
+function imprimirSolicitudCN(s: SolicitudCN) {
+  const costo = Number(s.costo_estimado ?? 0);
+  const pct = (m?: number | null) => costo > 0 && m != null ? ((Number(m) / costo) * 100).toFixed(0) + '%' : '0%';
+  const fecha = (d?: string | null) => {
+    if (!d) return '—';
+    const f = new Date(d.length === 10 ? d + 'T12:00:00' : d);
+    return isNaN(f.getTime()) ? esc(d) : format(f, 'dd/MM/yyyy', { locale: es });
+  };
+  const fechaSolicitud = s.created_at ? format(new Date(s.created_at), "dd 'de' MMMM 'de' yyyy", { locale: es }) : '—';
+  const fuentes = [
+    { nombre: 'Operación', monto: Number(s.monto_operacion ?? 0) },
+    { nombre: 'FBC', monto: Number(s.monto_fbc ?? 0) },
+    { nombre: 'Donativos', monto: Number(s.monto_donativos ?? 0) },
+    { nombre: 'Otras fuentes', monto: Number(s.monto_otras ?? 0) },
+  ];
+  const otrasDetalle = (s.monto_otras ?? 0) > 0
+    ? `<tr><td>¿A qué se refiere "Otras fuentes"?</td><td colspan="2" class="${s.monto_otras_detalle ? '' : 'alerta'}">${s.monto_otras_detalle ? esc(s.monto_otras_detalle) : 'No especificado'}</td></tr>`
+    : '';
+  const cuerpo =
+    tarjeta('Identificación', grid([
+      ['Colegio', val(s.colegio)], ['Razón social', val(s.razon_social)], ['Sociedad / Centro gestor', `${val(s.sociedad)} · ${val(s.centro_gestor)}`],
+      ['Solicitante', val(s.nombre_solicitante)], ['Puesto', val(s.puesto_solicitante)], ['Correo', val(s.correo_solicitante)],
+    ])) +
+    tarjeta(val(s.concepto_nombre),
+      grid([['Territorio', val(s.territorio)], ['Especificación', val(s.especificacion)], ['Fecha requerida', fecha(s.fecha_requerida)]]) +
+      `<div class="txt" style="border-top:1px solid #eef2f7">${val(s.descripcion)}</div>`) +
+    tarjeta('Plan de financiamiento',
+      barraFinanciamiento(fuentes, costo) +
+      `<table><tr><th>Fuente</th><th class="num">Monto (MXN)</th><th class="num">% del total</th></tr>${
+        fuentes.map(f => `<tr><td>${f.nombre}</td><td class="num">${fmx(f.monto)}</td><td class="num">${pct(f.monto)}</td></tr>`).join('')}
+        ${otrasDetalle}
+        <tr class="tot"><td>Costo estimado total</td><td class="num">${fmx(s.costo_estimado)}</td><td class="num">100%</td></tr></table>`);
+
+  imprimirHTML(documentoInstitucional({
+    tituloPestana: `Solicitud CN — ${s.folio ?? ''} ${s.concepto_nombre ?? ''}`.trim(),
+    titulo: 'Solicitud CN',
+    subtitulo: 'Cumplimiento Normativo / Protección Civil',
+    kpis: [
+      { etiqueta: 'Folio', valor: val(s.folio), folio: true },
+      { etiqueta: 'Costo estimado', valor: fmx(s.costo_estimado) },
+      { etiqueta: 'Fecha', valor: esc(fechaSolicitud) },
+      { etiqueta: 'Territorio', valor: val(s.territorio) },
+    ],
+    cuerpo,
+    firmas: [
+      { nombre: val(s.nombre_solicitante), puesto: `Solicitante${s.puesto_solicitante ? ' · ' + esc(s.puesto_solicitante) : ''}` },
+      // Al marcarla como recibida, el Vo. Bo. de Coordinación se llena solo
+      s.recibida_at
+        ? { contenido: `<span class="d"><b>✓ Recibida</b> en el sistema<br/>${esc(format(new Date(s.recibida_at), 'dd/MM/yyyy HH:mm', { locale: es }))}</span>`,
+            nombre: 'Ricardo Joanathan Reyes Medina', puesto: 'Vo. Bo. Coordinación de Obras y Mantenimiento RCMA' }
+        : { nombre: 'Vo. Bo. Coordinación RCMA', puesto: 'Coordinación de Obras y Mantenimiento' },
+    ],
+    nota: 'Para iniciar el trámite, se deberá autorizar Ticket MAS por la Coordinación de Obras y Mantenimiento RCMA.',
+    referencia: `Solicitud CN ${s.folio ?? ''}`.trim(),
+  }));
+}
 
 export default function SolicitudesCNRecibidas() {
   const { isAdmin } = usePermissions();
@@ -233,6 +293,7 @@ export default function SolicitudesCNRecibidas() {
                 </div>
                 <div className="flex items-center gap-1 shrink-0">
                   <button onClick={() => setViewing(s)} title="Ver detalle" className="p-1.5 rounded hover:bg-blue-50 text-blue-600 transition"><Eye className="w-4 h-4" /></button>
+                  <button onClick={() => imprimirSolicitudCN(s)} title="Imprimir / PDF" className="p-1.5 rounded hover:bg-slate-100 text-slate-600 transition"><Printer className="w-4 h-4" /></button>
                   <BotonCorregir modulo="solicitudes_cn" estatus={s.estatus} compacto onClick={() => setCorrigiendo(s)} />
                   {s.estatus === 'pendiente' && (
                     <>
@@ -271,8 +332,11 @@ export default function SolicitudesCNRecibidas() {
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-xl shadow-2xl max-w-lg w-full max-h-[85vh] overflow-y-auto">
             <div className="flex items-center justify-between p-4 border-b border-slate-100 sticky top-0 bg-white">
-              <h2 className="font-bold text-slate-800">Detalle de Solicitud CN</h2>
-              <button onClick={() => setViewing(null)} className="p-1 rounded hover:bg-slate-100"><X className="w-5 h-5 text-slate-400" /></button>
+              <h2 className="font-bold text-slate-800">Detalle de Solicitud CN{viewing.folio ? <span className="ml-2 text-red-600">{viewing.folio}</span> : null}</h2>
+              <div className="flex items-center gap-1">
+                <button onClick={() => imprimirSolicitudCN(viewing)} title="Imprimir / PDF" className="p-1.5 rounded hover:bg-slate-100 text-slate-600"><Printer className="w-4 h-4" /></button>
+                <button onClick={() => setViewing(null)} className="p-1 rounded hover:bg-slate-100"><X className="w-5 h-5 text-slate-400" /></button>
+              </div>
             </div>
             <div className="p-4 space-y-2 text-sm">
               <p><strong>Colegio:</strong> {viewing.colegio} ({viewing.territorio})</p>
