@@ -8,7 +8,7 @@ import { toast } from 'sonner';
 import { supabase } from '@/lib/supabaseClient';
 import {
   generarPresentacionSemanal, semanaISO,
-  type ProyectoSemana, type PlantelSemana, type FotoSlide,
+  type ProyectoSemana, type PlantelSemana, type FotoSlide, type ActualizacionCN,
 } from '@/lib/presentacionSemanal';
 
 const PLANTILLA_URL = '/plantillas/Seguimiento_Semanal_RCMA.pptx';
@@ -115,7 +115,7 @@ async function cargarDatos(inicio: Date, fin: Date) {
 
   // Pendientes NEXUS marcados "Presentar en la semanal" (aún sin ticket)
   const { data: pends, error: e5 } = await supabase.from('nexus_pendientes')
-    .select('id, titulo, descripcion, prioridad, fecha_limite, estatus, colegio, minuta_id')
+    .select('id, titulo, descripcion, prioridad, fecha_limite, estatus, colegio')
     .eq('presentar_semanal', true).in('estatus', ['pendiente', 'en_proceso']);
   if (e5) throw new Error('No se pudieron leer los pendientes: ' + e5.message);
   const listaPend = (pends ?? []).filter((p: any) => p.colegio);
@@ -124,27 +124,76 @@ async function cargarDatos(inicio: Date, fin: Date) {
         .in('pendiente_id', listaPend.map((p: any) => p.id)).order('created_at', { ascending: true })
     : { data: [], error: null };
   if (e6) throw new Error('No se pudieron leer los comentarios de pendientes: ' + e6.message);
-  // Los que vienen de una Minuta de Cumplimiento van en la sección de Cumplimiento Normativo
-  const idsMinuta = [...new Set(listaPend.map((p: any) => p.minuta_id).filter(Boolean))] as string[];
-  const { data: minutasCN } = idsMinuta.length
-    ? await supabase.from('minutas').select('id').in('id', idsMinuta).eq('modulo', 'cumplimiento')
-    : { data: [] as { id: string }[] };
-  const esMinutaCN = new Set((minutasCN ?? []).map((m: any) => m.id));
   for (const p of listaPend as any[]) {
     proyectos.push({
       id: 'pend:' + p.id, colegio: p.colegio, nombre: p.titulo ?? 'Pendiente',
       estatus: p.estatus, esPendiente: true, prioridad: p.prioridad, fechaLimite: p.fecha_limite, descripcion: p.descripcion,
-      cumplimiento: !!p.minuta_id && esMinutaCN.has(p.minuta_id),
       comentarios: (comsPend ?? []).filter((c: any) => c.pendiente_id === p.id)
         .map((c: any) => ({ fecha: c.created_at, texto: c.contenido ?? '', autor: c.autor_nombre, fotos: (c.fotos ?? []).map((f: any) => f.id) })),
     });
+  }
+
+  // ── Cumplimiento Normativo: Seguimiento de Trámites ───────────────────────
+  // Pendientes marcados "Presentar en la semanal" → ficha después del slide de su colegio
+  const { data: pendsCN, error: e7 } = await supabase.from('compliance_pendientes')
+    .select('id, titulo, descripcion, prioridad, fecha_limite, estatus, colegio, origen, origen_numero, origen_asunto')
+    .eq('presentar_semanal', true).in('estatus', ['pendiente', 'en_proceso']);
+  if (e7) throw new Error('No se pudieron leer los pendientes de Cumplimiento: ' + e7.message);
+  const listaCN = (pendsCN ?? []).filter((p: any) => p.colegio);
+  // Seguimientos activos por colegio → "Actualización de esta semana"
+  const { data: segsCN, error: e8 } = await supabase.from('compliance_seguimientos')
+    .select('id, colegio').eq('estatus', 'activo');
+  if (e8) throw new Error('No se pudieron leer los seguimientos de Cumplimiento: ' + e8.message);
+  const idsPendCN = listaCN.map((p: any) => p.id);
+  const idsSegCN = (segsCN ?? []).map((x: any) => x.id);
+  const [{ data: comsPendCN }, { data: comsSegCN }] = await Promise.all([
+    idsPendCN.length
+      ? supabase.from('compliance_comentarios').select('pendiente_id, contenido, autor_nombre, created_at, fotos')
+          .in('pendiente_id', idsPendCN).order('created_at', { ascending: true })
+      : Promise.resolve({ data: [] as any[] }),
+    idsSegCN.length
+      ? supabase.from('compliance_comentarios').select('seguimiento_id, contenido, created_at, fotos')
+          .in('seguimiento_id', idsSegCN).gte('created_at', inicio.toISOString()).lte('created_at', fin.toISOString())
+          .order('created_at', { ascending: true })
+      : Promise.resolve({ data: [] as any[] }),
+  ]);
+  for (const p of listaCN as any[]) {
+    const etiqueta = p.origen === 'acuerdo' || p.origen === 'accion'
+      ? `${p.origen === 'accion' ? 'Acción' : 'Acuerdo'}${p.origen_numero ? ` #${p.origen_numero}` : ''}${p.origen_asunto ? ` de "${p.origen_asunto}"` : ''}`
+      : null;
+    proyectos.push({
+      id: 'cn:' + p.id, colegio: p.colegio, nombre: p.titulo ?? 'Pendiente',
+      estatus: p.estatus, esPendiente: true, cumplimiento: true, prioridad: p.prioridad, fechaLimite: p.fecha_limite,
+      descripcion: [p.descripcion && p.descripcion !== p.titulo ? p.descripcion : '', etiqueta ?? ''].filter(Boolean).join(' — ') || null,
+      comentarios: (comsPendCN ?? []).filter((c: any) => c.pendiente_id === p.id)
+        .map((c: any) => ({ fecha: c.created_at, texto: c.contenido ?? '', autor: c.autor_nombre, fotos: (c.fotos ?? []).map((f: any) => f.id) })),
+    });
+  }
+  const colegioDeSeg = new Map((segsCN ?? []).map((x: any) => [x.id, x.colegio as string]));
+  const actualizacionesCN: Record<string, ActualizacionCN> = {};
+  for (const c of (comsSegCN ?? []) as any[]) {          // en orden: el último de la semana gana
+    const col = colegioDeSeg.get(c.seguimiento_id);
+    if (!col || !(c.contenido ?? '').trim() && !(c.fotos ?? []).length) continue;
+    const previo = actualizacionesCN[col];
+    actualizacionesCN[col] = {
+      fecha: c.created_at,
+      texto: (c.contenido ?? '').trim() || previo?.texto || '',
+      fotoId: (c.fotos ?? []).slice(-1)[0]?.id ?? previo?.fotoId ?? null,
+    };
   }
 
   const planteles: PlantelSemana[] = (pls ?? []).map((p: any) => ({
     colegio_clave: p.colegio_clave ?? '', colegio_nombre: p.colegio_nombre ?? p.colegio_clave ?? '',
     fase: p.fase ?? '', fecha_inicio: p.fecha_inicio, fecha_termino: p.fecha_termino, notas: p.notas,
   }));
-  return { proyectos, planteles };
+  return { proyectos, planteles, actualizacionesCN };
+}
+
+/** Foto de la "Actualización de esta semana" de Cumplimiento (la última del seguimiento del colegio) */
+async function fotoCN(fotoId: string): Promise<FotoSlide | null> {
+  const { data } = await supabase.functions.invoke('nexus-fotos', { body: { accion: 'base64', ids: [fotoId] } });
+  const f = ((data?.fotos ?? []) as { id: string; tipo: string; base64: string }[])[0];
+  return f ? (await aFotosSlide([f]))[0] ?? null : null;
 }
 
 export default function PresentacionSemanal({ className }: { className?: string }) {
@@ -163,12 +212,13 @@ export default function PresentacionSemanal({ className }: { className?: string 
   const generar = async () => {
     setTrabajando(true); setError(''); setLinkOneDrive(null); setAvance('Leyendo datos del sistema…');
     try {
-      const [{ proyectos, planteles }, plantilla] = await Promise.all([
+      const [{ proyectos, planteles, actualizacionesCN }, plantilla] = await Promise.all([
         cargarDatos(semana.inicio, semana.fin),
         fetch(PLANTILLA_URL).then(r => { if (!r.ok) throw new Error('No se encontró la plantilla'); return r.arrayBuffer(); }),
       ]);
       const blob = await generarPresentacionSemanal({
-        plantilla, semana, proyectos, planteles,
+        plantilla, semana, proyectos, planteles, actualizacionesCN,
+        fotoActualizacionCN: conFotos ? fotoCN : undefined,
         incluirSinProyecto: sinProyecto,
         fotos: conFotos ? (id: string) => { const p = proyectos.find(x => x.id === id); return p ? fotosDeProyecto(p, semana.inicio, semana.fin) : Promise.resolve([]); } : undefined,
         progreso: setAvance,
@@ -223,7 +273,7 @@ export default function PresentacionSemanal({ className }: { className?: string 
                 </h3>
                 <p className="text-xs text-slate-500 mt-1">
                   Usa la plantilla institucional y la llena con los proyectos en Seguimiento NEXUS (activos y los concluidos en el corte) y el Levantamiento.
-                  Cumplimiento Normativo se queda como en la plantilla para llenarlo a mano; después de cada colegio se agregan los pendientes de sus Minutas de Cumplimiento marcados para la semanal.
+                  En Cumplimiento Normativo, el último comentario de la semana del Seguimiento de cada colegio llena "Actualización de esta semana", y los pendientes de Seguimiento de Trámites marcados para la semanal salen después de su colegio.
                   Se guarda en OneDrive: Presentaciones Semanales / año / mes.
                 </p>
               </div>

@@ -6,10 +6,14 @@ import { es } from 'date-fns/locale';
 import { supabase } from '@/lib/supabaseClient';
 import { useAuth } from '@/lib/AuthContext';
 import PageHeader from '@/components/shared/PageHeader';
+import { Link as RouterLink } from 'react-router-dom';
 import {
   Plus, Search, Pin, Pencil, Trash2, X, FileText, ListChecks, Users,
   ClipboardList, Clock, AlertCircle, CheckCircle2, MessageSquare, Loader2,
+  Handshake, Lightbulb, Lock, Presentation, Send,
 } from 'lucide-react';
+import { logAudit } from '@/lib/audit';
+import { useAdjuntos, SelectorFotos, subirFotos, useFotosNexus, FotosDeComentario, type FotoRef } from '@/components/nexus/FotosComentario';
 import { useComplianceDocs, LoadingBlock, ErrorBlock } from '@/lib/complianceShared';
 import { usePermissions } from '@/hooks/usePermissions';
 import AccesoRestringido from '@/components/shared/AccesoRestringido';
@@ -30,6 +34,10 @@ interface Pendiente {
   fecha_limite: string | null; estatus: 'pendiente' | 'en_proceso' | 'completado' | 'cancelado';
   colegio: string | null; territorio: string | null; documento_id: string | null;
   created_by: string | null; created_at: string; updated_at: string;
+  // Vínculo con Minutas de Cumplimiento (lo llenan los triggers de la base de datos)
+  acuerdo_id?: string | null; minuta_id?: string | null; origen?: 'acuerdo' | 'accion' | null; origen_numero?: number | null;
+  origen_asunto?: string | null; origen_fecha?: string | null; origen_responsable?: string | null; origen_url?: string | null;
+  presentar_semanal?: boolean | null; completado_at?: string | null;
 }
 interface Seguimiento {
   id: string; colegio: string; territorio: string | null; resumen: string;
@@ -38,6 +46,7 @@ interface Seguimiento {
 interface Comentario {
   id: string; pendiente_id: string | null; seguimiento_id: string | null;
   autor_email: string | null; autor_nombre: string | null; contenido: string; created_at: string;
+  fotos?: FotoRef[] | null;
 }
 interface SysUser { user_email: string; nombre: string | null; territorio: string | null; colegio: string | null; puesto: string | null; }
 
@@ -56,6 +65,14 @@ const EST_CFG: Record<string, { label: string; icon: React.ReactNode; cls: strin
   completado: { label: 'Completado', icon: <CheckCircle2 className="w-3 h-3" />, cls: 'bg-emerald-100 text-emerald-700 border-emerald-200' },
   cancelado:  { label: 'Cancelado',  icon: <X className="w-3 h-3" />,            cls: 'bg-slate-100 text-slate-500 border-slate-200' },
 };
+
+// Pendientes que vienen de Minutas de Cumplimiento (mismo patrón que NEXUS)
+const ORIGEN_CFG: Record<'acuerdo' | 'accion', { label: string; corto: string; doc: string; Icon: React.ElementType; band: string; soft: string; chip: string }> = {
+  acuerdo: { label: 'Acuerdo de minuta', corto: 'Acuerdo', doc: 'Minuta', Icon: Handshake, band: 'bg-indigo-600', soft: 'bg-indigo-50 border-indigo-200 text-indigo-900', chip: 'bg-indigo-50 text-indigo-700 border-indigo-200' },
+  accion:  { label: 'Acción de nota técnica', corto: 'Acción', doc: 'Nota técnica', Icon: Lightbulb, band: 'bg-violet-600', soft: 'bg-violet-50 border-violet-200 text-violet-900', chip: 'bg-violet-50 text-violet-700 border-violet-200' },
+};
+const origenDe = (p: { acuerdo_id?: string | null; origen?: string | null }) =>
+  p.acuerdo_id && (p.origen === 'acuerdo' || p.origen === 'accion') ? ORIGEN_CFG[p.origen] : null;
 
 const fmtDate = (d?: string | null) => d ? format(new Date(d.includes('T') ? d : d + 'T12:00:00'), "d MMM yyyy", { locale: es }) : '—';
 const fmtFull = (d?: string | null) => d ? format(new Date(d), "d MMM yyyy HH:mm", { locale: es }) : '—';
@@ -89,6 +106,7 @@ function Comentarios({ targetField, targetId }: { targetField: 'pendiente_id' | 
   const autorNombre = (user as any)?.user_metadata?.nombre || user?.email || 'Usuario';
   const queryClient = useQueryClient();
   const [texto, setTexto] = useState('');
+  const fotosAdj = useAdjuntos();
   const queryKey = ['compliance_comentarios', targetField, targetId];
 
   const { data: comentarios = [] } = useQuery({
@@ -100,15 +118,21 @@ function Comentarios({ targetField, targetId }: { targetField: 'pendiente_id' | 
     },
     refetchInterval: 15000,
   });
+  const mapaFotos = useFotosNexus(comentarios.flatMap(c => (c.fotos ?? []).map(f => f.id)));
+  const puedeEnviar = !!texto.trim() || fotosAdj.adjuntos.length > 0;
 
   const enviar = useMutation({
     mutationFn: async (contenido: string) => {
+      // Las fotos se suben al OneDrive (Cumplimiento Normativo/Seguimiento/…); aquí solo se guarda su id
+      const fotos = fotosAdj.adjuntos.length
+        ? await subirFotos(fotosAdj.adjuntos, targetField === 'pendiente_id' ? { cn_pendiente_id: targetId } : { cn_seguimiento_id: targetId })
+        : null;
       const { error } = await supabase.from('compliance_comentarios').insert({
-        [targetField]: targetId, autor_email: autorEmail, autor_nombre: autorNombre, contenido,
+        [targetField]: targetId, autor_email: autorEmail, autor_nombre: autorNombre, contenido, fotos,
       });
       if (error) throw error;
     },
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey }); setTexto(''); },
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey }); setTexto(''); fotosAdj.limpiar(); },
     onError: (err: any) => toast.error(err?.message ?? 'No se pudo enviar el comentario'),
   });
 
@@ -122,12 +146,13 @@ function Comentarios({ targetField, targetId }: { targetField: 'pendiente_id' | 
 
   return (
     <div>
-      <div className="space-y-2 max-h-56 overflow-y-auto mb-3 pr-1">
+      <div className="space-y-2 max-h-72 overflow-y-auto mb-3 pr-1">
         {comentarios.length === 0 && <p className="text-xs text-slate-400 text-center py-4">Sin comentarios aún.</p>}
         {comentarios.map(c => (
           <div key={c.id} className="group relative bg-slate-50 border border-slate-100 rounded-xl px-3 py-2">
             <p className="text-[10px] font-bold text-slate-500 mb-0.5">{c.autor_nombre}</p>
-            <p className="text-sm text-slate-800 whitespace-pre-wrap">{c.contenido}</p>
+            {c.contenido && <p className="text-sm text-slate-800 whitespace-pre-wrap">{c.contenido}</p>}
+            <FotosDeComentario fotos={c.fotos} mapa={mapaFotos} />
             <p className="text-[10px] text-slate-400 mt-1">{fmtFull(c.created_at)}</p>
             {c.autor_email === autorEmail && (
               <button onClick={() => { if (confirm('¿Eliminar este comentario?')) eliminar.mutate(c.id); }}
@@ -138,16 +163,17 @@ function Comentarios({ targetField, targetId }: { targetField: 'pendiente_id' | 
           </div>
         ))}
       </div>
-      <div className="flex gap-2">
+      <div className="flex flex-wrap gap-2" {...fotosAdj.alSoltar}>
+        <SelectorFotos adjuntos={fotosAdj.adjuntos} agregar={fotosAdj.agregar} quitar={fotosAdj.quitar} deshabilitado={enviar.isPending} />
         <textarea
-          value={texto} onChange={e => setTexto(e.target.value)}
-          onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); if (texto.trim()) enviar.mutate(texto.trim()); } }}
-          placeholder="Escribe una nota o actualización..." rows={2}
-          className="flex-1 text-sm border border-slate-200 rounded-lg px-3 py-2 resize-none focus:outline-none focus:ring-2 focus:ring-[#00295A]/20"
+          value={texto} onChange={e => setTexto(e.target.value)} onPaste={fotosAdj.alPegar}
+          onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); if (puedeEnviar && !enviar.isPending) enviar.mutate(texto.trim()); } }}
+          placeholder="Escribe una nota o actualización... (puedes pegar fotos con Ctrl+V)" rows={2}
+          className="flex-1 min-w-0 text-sm border border-slate-200 rounded-lg px-3 py-2 resize-none focus:outline-none focus:ring-2 focus:ring-[#00295A]/20"
         />
-        <button onClick={() => texto.trim() && enviar.mutate(texto.trim())} disabled={enviar.isPending || !texto.trim()}
-          className="px-3 rounded-lg bg-[#00295A] text-white text-xs font-bold disabled:opacity-40 hover:bg-[#003a7a]">
-          {enviar.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Enviar'}
+        <button onClick={() => puedeEnviar && enviar.mutate(texto.trim())} disabled={enviar.isPending || !puedeEnviar}
+          className="px-3 rounded-lg bg-[#00295A] text-white text-xs font-bold disabled:opacity-40 hover:bg-[#003a7a] shrink-0">
+          {enviar.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
         </button>
       </div>
     </div>
@@ -168,6 +194,7 @@ export default function CumplimientoSeguimiento() {
 
   const [tab, setTab] = useState<'notas' | 'personales' | 'compartidos' | 'seguimiento'>('notas');
   const [search, setSearch] = useState('');
+  const [filtroOrigen, setFiltroOrigen] = useState<'todos' | 'acuerdo' | 'accion' | 'otros'>('todos');
 
   // ── Queries ──────────────────────────────────────────────────────────
   const { data: notas = [], isLoading: lNotas, isError: eNotas, refetch: rNotas } = useQuery({
@@ -198,8 +225,16 @@ export default function CumplimientoSeguimiento() {
   });
 
   const filteredNotas = useMemo(() => notas.filter(n => !search || n.titulo.toLowerCase().includes(search.toLowerCase()) || (n.contenido ?? '').toLowerCase().includes(search.toLowerCase())), [notas, search]);
-  const pendPersonales = useMemo(() => pendientes.filter(p => p.tipo === 'personal'), [pendientes]);
-  const pendCompartidos = useMemo(() => pendientes.filter(p => p.tipo === 'compartido'), [pendientes]);
+  const pasaOrigen = (p: Pendiente) => filtroOrigen === 'todos'
+    || (filtroOrigen === 'otros' ? !origenDe(p) : !!origenDe(p) && p.origen === filtroOrigen);
+  const pendPersonales = useMemo(() => pendientes.filter(p => p.tipo === 'personal' && pasaOrigen(p)), [pendientes, filtroOrigen]); // eslint-disable-line react-hooks/exhaustive-deps
+  const pendCompartidos = useMemo(() => pendientes.filter(p => p.tipo === 'compartido' && pasaOrigen(p)), [pendientes, filtroOrigen]); // eslint-disable-line react-hooks/exhaustive-deps
+  const conteoOrigen = useMemo(() => {
+    const act = pendientes.filter(p => p.estatus !== 'completado' && p.estatus !== 'cancelado'
+      && p.tipo === (tab === 'compartidos' ? 'compartido' : 'personal'));
+    return { todos: act.length, acuerdo: act.filter(p => origenDe(p) && p.origen === 'acuerdo').length,
+      accion: act.filter(p => origenDe(p) && p.origen === 'accion').length, otros: act.filter(p => !origenDe(p)).length };
+  }, [pendientes, tab]);
   const seguimientosActivos = useMemo(() => seguimientos.filter(s => s.estatus === 'activo'), [seguimientos]);
 
   const kpis = useMemo(() => ({
@@ -261,6 +296,7 @@ export default function CumplimientoSeguimiento() {
     titulo: '', descripcion: '', tipo: 'personal' as 'personal' | 'compartido',
     asignado_a: '', asignado_nombre: '', prioridad: 'normal' as Pendiente['prioridad'],
     fecha_limite: '', estatus: 'pendiente' as Pendiente['estatus'], colegio: '', territorio: '',
+    presentar_semanal: false,
   });
 
   // Usuarios del sistema (para "Compartidos") — misma fuente que NEXUS.
@@ -292,8 +328,8 @@ export default function CumplimientoSeguimiento() {
   const openPend = (p?: Pendiente) => {
     setEditPend(p ?? null);
     setPendForm(p
-      ? { titulo: p.titulo, descripcion: p.descripcion ?? '', tipo: p.tipo, asignado_a: p.asignado_a ?? '', asignado_nombre: p.asignado_nombre ?? '', prioridad: p.prioridad, fecha_limite: p.fecha_limite ?? '', estatus: p.estatus, colegio: p.colegio ?? '', territorio: p.territorio ?? '' }
-      : { titulo: '', descripcion: '', tipo: tab === 'compartidos' ? 'compartido' : 'personal', asignado_a: '', asignado_nombre: '', prioridad: 'normal', fecha_limite: '', estatus: 'pendiente', colegio: '', territorio: '' });
+      ? { titulo: p.titulo, descripcion: p.descripcion ?? '', tipo: p.tipo, asignado_a: p.asignado_a ?? '', asignado_nombre: p.asignado_nombre ?? '', prioridad: p.prioridad, fecha_limite: p.fecha_limite ?? '', estatus: p.estatus, colegio: p.colegio ?? '', territorio: p.territorio ?? '', presentar_semanal: !!p.presentar_semanal }
+      : { titulo: '', descripcion: '', tipo: tab === 'compartidos' ? 'compartido' : 'personal', asignado_a: '', asignado_nombre: '', prioridad: 'normal', fecha_limite: '', estatus: 'pendiente', colegio: '', territorio: '', presentar_semanal: false });
     setShowPend(true);
   };
 
@@ -306,6 +342,7 @@ export default function CumplimientoSeguimiento() {
         tipo: pendForm.tipo, asignado_a: pendForm.asignado_a.trim() || null, asignado_nombre: pendForm.asignado_nombre.trim() || null,
         prioridad: pendForm.prioridad, fecha_limite: pendForm.fecha_limite || null, estatus: pendForm.estatus,
         colegio: pendForm.colegio || null, territorio: colegioObj?.territorio ?? (pendForm.territorio || null),
+        presentar_semanal: pendForm.presentar_semanal,
       };
       if (editPend) {
         const { error } = await supabase.from('compliance_pendientes').update(payload).eq('id', editPend.id);
@@ -319,17 +356,81 @@ export default function CumplimientoSeguimiento() {
     onError: (err: any) => toast.error(err?.message ?? 'No se pudo guardar'),
   });
 
+  const invalidarMinutas = () => {
+    queryClient.invalidateQueries({ queryKey: ['minuta_acuerdos'] });
+    queryClient.invalidateQueries({ queryKey: ['acuerdos_seguimiento'] });
+  };
+
   const eliminarPend = useMutation({
-    mutationFn: async (id: string) => { const { error } = await supabase.from('compliance_pendientes').delete().eq('id', id); if (error) throw error; },
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['compliance_pendientes'] }); toast.success('Pendiente eliminado'); },
+    mutationFn: async (p: Pendiente) => {
+      // La base de datos: si viene de una minuta y estaba abierto, el acuerdo queda Cancelado
+      await supabase.from('compliance_comentarios').delete().eq('pendiente_id', p.id);
+      const { error } = await supabase.from('compliance_pendientes').delete().eq('id', p.id);
+      if (error) throw error;
+      logAudit({ accion: 'eliminar', modulo: 'seguimiento_cn', registro_id: p.id, registro_ref: `Pendiente de Seguimiento: ${p.titulo}` });
+    },
+    onSuccess: (_d, p) => {
+      queryClient.invalidateQueries({ queryKey: ['compliance_pendientes'] });
+      if (origenDe(p)) invalidarMinutas();
+      toast.success('Pendiente eliminado');
+    },
   });
+  const confirmarEliminar = (p: Pendiente) => {
+    const o = origenDe(p);
+    const extra = o ? `\n\nViene de ${o.label.toLowerCase()}: en Minutas ${p.estatus === 'completado' ? 'se conserva como Cumplido' : 'quedará como Cancelado'}.` : '';
+    if (confirm(`¿Eliminar este pendiente?${extra}`)) { eliminarPend.mutate(p); setViewPend(null); }
+  };
 
   const cambiarEstatusPend = useMutation({
-    mutationFn: async ({ id, estatus }: { id: string; estatus: Pendiente['estatus'] }) => {
-      const { error } = await supabase.from('compliance_pendientes').update({ estatus }).eq('id', id);
+    mutationFn: async ({ p, estatus }: { p: Pendiente; estatus: Pendiente['estatus'] }) => {
+      const { error } = await supabase.from('compliance_pendientes').update({
+        estatus, completado_at: estatus === 'completado' ? new Date().toISOString() : null,
+      }).eq('id', p.id);
       if (error) throw error;
+      if (estatus === 'completado') logAudit({ accion: 'completar', modulo: 'seguimiento_cn', registro_id: p.id, registro_ref: `Pendiente de Seguimiento: ${p.titulo}` });
     },
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['compliance_pendientes'] }),
+    onSuccess: (_d, { p, estatus }) => {
+      queryClient.invalidateQueries({ queryKey: ['compliance_pendientes'] });
+      const o = origenDe(p);
+      if (o) {
+        invalidarMinutas();
+        if (estatus === 'completado') toast.success(`${o.corto} completado ✓ — también quedó Cumplido en Minutas`);
+        if (estatus === 'cancelado') toast.success(`${o.corto} cancelado — también en Minutas`);
+      }
+      setViewPend(v => (v && v.id === p.id ? { ...v, estatus } : v));
+    },
+  });
+
+  // ── Editar un pendiente que viene de una minuta: el texto y la fecha se cambian en el acuerdo ──
+  const [editAcuerdo, setEditAcuerdo] = useState<Pendiente | null>(null);
+  const [acForm, setAcForm] = useState({ descripcion: '', fecha: '', prioridad: 'normal' as Pendiente['prioridad'], presentar_semanal: false });
+  const abrirEditarAcuerdo = (p: Pendiente) => {
+    setAcForm({ descripcion: p.descripcion || p.titulo, fecha: p.fecha_limite ?? '', prioridad: p.prioridad || 'normal', presentar_semanal: !!p.presentar_semanal });
+    setEditAcuerdo(p);
+  };
+  const editar = (p: Pendiente) => { if (origenDe(p)) abrirEditarAcuerdo(p); else openPend(p); };
+  const saveAcuerdo = useMutation({
+    mutationFn: async (p: Pendiente) => {
+      if (!acForm.descripcion.trim()) throw new Error('El texto del acuerdo es obligatorio');
+      // 1) El acuerdo en Minutas: la base de datos actualiza el pendiente (título, descripción y fecha límite)
+      const { error: e1 } = await supabase.from('minuta_acuerdos')
+        .update({ descripcion: acForm.descripcion.trim(), fecha_compromiso: acForm.fecha || null })
+        .eq('id', p.acuerdo_id!);
+      if (e1) throw e1;
+      // 2) Lo que solo existe en Seguimiento
+      const { error: e2 } = await supabase.from('compliance_pendientes')
+        .update({ prioridad: acForm.prioridad, presentar_semanal: acForm.presentar_semanal })
+        .eq('id', p.id);
+      if (e2) throw e2;
+      logAudit({ accion: 'editar', modulo: 'seguimiento_cn', registro_id: p.id, registro_ref: `Acuerdo de minuta: ${p.titulo}` });
+    },
+    onSuccess: (_d, p) => {
+      queryClient.invalidateQueries({ queryKey: ['compliance_pendientes'] });
+      invalidarMinutas();
+      toast.success(`${origenDe(p)?.corto ?? 'Acuerdo'} actualizado — también en Minutas`);
+      setEditAcuerdo(null);
+    },
+    onError: (e: Error) => toast.error(e.message || 'No se pudo actualizar el acuerdo'),
   });
 
   // ── Mutaciones: Seguimiento ──────────────────────────────────────────
@@ -372,22 +473,31 @@ export default function CumplimientoSeguimiento() {
   const PendGrid = ({ items }: { items: Pendiente[] }) => (
     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
       {items.map(p => {
-        const pCfg = PRIO_CFG[p.prioridad];
-        const eCfg = EST_CFG[p.estatus];
+        const pCfg = PRIO_CFG[p.prioridad] ?? PRIO_CFG.normal;
+        const eCfg = EST_CFG[p.estatus] ?? EST_CFG.pendiente;
+        const org = origenDe(p);
         return (
           <div key={p.id} className={`bg-white rounded-xl border border-slate-200 border-l-4 ${pCfg.cardLeft} shadow-sm overflow-hidden cursor-pointer hover:shadow-md transition`} onClick={() => setViewPend(p)}>
             <div className="p-4">
               <div className="flex items-start justify-between mb-2">
                 <h3 className="font-bold text-slate-900 text-sm flex-1 min-w-0 truncate">{p.titulo}</h3>
                 <div className="flex gap-1 ml-2 shrink-0" onClick={e => e.stopPropagation()}>
-                  <button onClick={() => openPend(p)} className="p-1 text-slate-400 hover:text-slate-700 rounded"><Pencil className="w-3.5 h-3.5" /></button>
-                  <button onClick={() => { if (confirm('¿Eliminar este pendiente?')) eliminarPend.mutate(p.id); }} className="p-1 text-red-400 hover:text-red-600 rounded"><Trash2 className="w-3.5 h-3.5" /></button>
+                  <button onClick={() => editar(p)} title={org ? 'Editar acuerdo (también se actualiza en Minutas)' : 'Editar'} className="p-1 text-slate-400 hover:text-slate-700 rounded"><Pencil className="w-3.5 h-3.5" /></button>
+                  <button onClick={() => confirmarEliminar(p)} className="p-1 text-red-400 hover:text-red-600 rounded"><Trash2 className="w-3.5 h-3.5" /></button>
                 </div>
               </div>
-              {p.descripcion && <p className="text-xs text-slate-500 line-clamp-2 mb-2">{p.descripcion}</p>}
+              {org && (
+                <p className={`inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full border mb-2 max-w-full ${org.chip}`}>
+                  <org.Icon className="w-3 h-3 shrink-0" /><span className="truncate">{org.corto}{p.origen_numero ? ` #${p.origen_numero}` : ''} · {p.origen_asunto || org.doc}</span>
+                </p>
+              )}
+              {p.descripcion && !(org && p.descripcion === p.titulo) && <p className="text-xs text-slate-500 line-clamp-2 mb-2">{p.descripcion}</p>}
               <div className="flex gap-1.5 flex-wrap mb-2">
                 <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold border ${pCfg.cls}`}>{pCfg.label}</span>
                 <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold border ${eCfg.cls}`}>{eCfg.icon}{eCfg.label}</span>
+                {p.presentar_semanal && p.estatus !== 'completado' && (
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold border bg-orange-50 text-orange-700 border-orange-200"><Presentation className="w-3 h-3" />Semanal</span>
+                )}
               </div>
               <div className="flex items-center justify-between text-[10px] text-slate-400">
                 <span>{p.colegio ? p.colegio.replace('Mano Amiga ', '') : 'General'}</span>
@@ -415,7 +525,7 @@ export default function CumplimientoSeguimiento() {
   return (
     <div className="p-6 lg:p-8 max-w-[1700px] mx-auto">
       <div className="flex items-center justify-between mb-6">
-        <PageHeader title="Seguimiento" subtitle="Notas, pendientes y seguimiento de la documentación de Cumplimiento" />
+        <PageHeader title="Seguimiento de Trámites" subtitle="El NEXUS de Cumplimiento: notas, pendientes (incluye los acuerdos de las Minutas de Cumplimiento) y seguimiento por colegio" />
       </div>
 
       {isError ? <ErrorBlock onRetry={refetchAll} /> : isLoading ? <LoadingBlock /> : (
@@ -498,6 +608,21 @@ export default function CumplimientoSeguimiento() {
           )}
 
           {/* ── Pendientes (personales/compartidos) ── */}
+          {(tab === 'personales' || tab === 'compartidos') && (conteoOrigen.acuerdo + conteoOrigen.accion > 0 || filtroOrigen !== 'todos') && (
+            <div className="flex gap-2 flex-wrap">
+              {([
+                { k: 'todos', label: 'Todos', n: conteoOrigen.todos },
+                { k: 'acuerdo', label: 'Acuerdos de minuta', n: conteoOrigen.acuerdo },
+                { k: 'accion', label: 'Acciones de nota técnica', n: conteoOrigen.accion },
+                { k: 'otros', label: 'Otros', n: conteoOrigen.otros },
+              ] as const).map(f => (
+                <button key={f.k} onClick={() => setFiltroOrigen(f.k)}
+                  className={`px-3 py-1.5 rounded-full text-xs font-bold border transition ${filtroOrigen === f.k ? 'bg-slate-900 text-white border-slate-900' : 'bg-white text-slate-500 border-slate-200 hover:border-slate-400'}`}>
+                  {f.label} <span className="opacity-70">{f.n}</span>
+                </button>
+              ))}
+            </div>
+          )}
           {(tab === 'personales' || tab === 'compartidos') && (
             <div className="space-y-6">
               {(tab === 'personales' ? pendPersonales : pendCompartidos).filter(p => p.estatus !== 'completado').length === 0 && (
@@ -523,6 +648,8 @@ export default function CumplimientoSeguimiento() {
           {/* ── Seguimiento por colegio ── */}
           {tab === 'seguimiento' && (
             <div className="space-y-2">
+              <p className="text-xs text-slate-500 flex items-center gap-1.5"><Presentation className="w-3.5 h-3.5 text-orange-600" />
+                En la Presentación Semanal, el último comentario de la semana de cada seguimiento activo llena "Actualización de esta semana" de su colegio (con su foto, si tiene).</p>
               {seguimientos.length === 0 && <div className="text-center py-12"><ClipboardList className="w-10 h-10 text-slate-200 mx-auto mb-3" /><p className="text-sm font-semibold text-slate-500">Sin seguimientos registrados</p></div>}
               {seguimientos.map(s => (
                 <div key={s.id} onClick={() => setViewSeg(s)}
@@ -599,14 +726,35 @@ export default function CumplimientoSeguimiento() {
               <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold border ${EST_CFG[viewPend.estatus]?.cls}`}>{EST_CFG[viewPend.estatus]?.icon}{EST_CFG[viewPend.estatus]?.label}</span>
               {viewPend.colegio && <span className="text-xs bg-teal-50 text-teal-700 px-2 py-0.5 rounded-full">{viewPend.colegio.replace('Mano Amiga ', '')}</span>}
             </div>
-            {viewPend.descripcion && <p className="text-sm text-slate-700 bg-slate-50 rounded-lg p-3">{viewPend.descripcion}</p>}
+            {viewPend.presentar_semanal && viewPend.estatus !== 'completado' && (
+              <p className="inline-flex items-center gap-1.5 text-xs font-bold text-orange-700 bg-orange-50 border border-orange-200 rounded-full px-2.5 py-1"><Presentation className="w-3.5 h-3.5" />Se presenta en la semanal (sección Cumplimiento Normativo)</p>
+            )}
+            {(() => { const org = origenDe(viewPend); if (!org) return null; return (
+              <div className={`rounded-xl border overflow-hidden ${org.soft}`}>
+                <div className={`${org.band} text-white px-4 py-2 flex items-center gap-2`}>
+                  <org.Icon className="w-4 h-4" />
+                  <span className="text-xs font-black uppercase tracking-wider">{org.label}{viewPend.origen_numero ? ` #${viewPend.origen_numero}` : ''}</span>
+                </div>
+                <div className="px-4 py-3 grid grid-cols-2 gap-3 text-sm">
+                  <div className="col-span-2"><p className="text-[10px] font-bold uppercase opacity-60 mb-0.5">{org.doc} de Cumplimiento</p><p className="font-bold">{viewPend.origen_asunto || 'Sin asunto'}</p></div>
+                  {viewPend.origen_fecha && <div><p className="text-[10px] font-bold uppercase opacity-60 mb-0.5">Fecha de la {org.doc.toLowerCase()}</p><p className="font-semibold">{fmtDate(viewPend.origen_fecha)}</p></div>}
+                  <div><p className="text-[10px] font-bold uppercase opacity-60 mb-0.5">Responsable</p><p className="font-semibold">{viewPend.origen_responsable || '—'}</p></div>
+                </div>
+                <div className="px-4 pb-3 flex flex-wrap gap-2">
+                  {viewPend.origen_url && <a href={viewPend.origen_url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white border border-current/20 rounded-lg text-xs font-bold hover:shadow-sm transition"><FileText className="w-3.5 h-3.5" />Ver {org.doc.toLowerCase()} (PDF)</a>}
+                  <RouterLink to="/cumplimiento/minutas?vista=acuerdos" className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white border border-current/20 rounded-lg text-xs font-bold hover:shadow-sm transition"><FileText className="w-3.5 h-3.5" />Ir a Seguimiento de Acuerdos</RouterLink>
+                </div>
+                <p className="px-4 pb-3 text-[11px] opacity-75 flex items-start gap-1.5"><Lock className="w-3 h-3 mt-0.5 shrink-0" /><span>Sincronizado con Minutas: al completarlo aquí queda <b>Cumplido</b> allá. El texto y la fecha se editan con el lápiz y también cambian en la minuta.</span></p>
+              </div>
+            ); })()}
+            {viewPend.descripcion && !(origenDe(viewPend) && viewPend.descripcion === viewPend.titulo) && <p className="text-sm text-slate-700 bg-slate-50 rounded-lg p-3">{viewPend.descripcion}</p>}
             <div className="flex items-center gap-2 flex-wrap text-xs text-slate-500">
               {viewPend.fecha_limite && <span>📅 Fecha límite: {fmtDate(viewPend.fecha_limite)}</span>}
               {viewPend.tipo === 'compartido' && viewPend.asignado_nombre && <span>→ Asignado a: {viewPend.asignado_nombre}</span>}
             </div>
             <div className="flex gap-1.5 flex-wrap pt-1">
               {(['pendiente', 'en_proceso', 'completado', 'cancelado'] as const).map(est => (
-                <button key={est} onClick={() => cambiarEstatusPend.mutate({ id: viewPend.id, estatus: est })}
+                <button key={est} onClick={() => cambiarEstatusPend.mutate({ p: viewPend, estatus: est })}
                   className={`px-2.5 py-1 rounded-full text-[11px] font-bold border transition ${viewPend.estatus === est ? EST_CFG[est].cls : 'bg-white text-slate-400 border-slate-200 hover:bg-slate-50'}`}>
                   {EST_CFG[est].label}
                 </button>
@@ -618,8 +766,9 @@ export default function CumplimientoSeguimiento() {
             </div>
           </div>
           <div className="flex gap-3 mt-4">
+            <button onClick={() => confirmarEliminar(viewPend)} className="p-2 rounded-lg text-red-500 hover:bg-red-50" title="Eliminar"><Trash2 className="w-4 h-4" /></button>
             <button onClick={() => setViewPend(null)} className={btnOutline + " flex-1"}>Cerrar</button>
-            <button onClick={() => { const p = viewPend; setViewPend(null); openPend(p); }} className={btnPrimary + " flex-1 flex items-center justify-center gap-2"}><Pencil className="w-4 h-4" />Editar</button>
+            <button onClick={() => { const p = viewPend; setViewPend(null); editar(p); }} className={btnPrimary + " flex-1 flex items-center justify-center gap-2"}><Pencil className="w-4 h-4" />Editar</button>
           </div>
         </Modal>
       )}
@@ -656,6 +805,13 @@ export default function CumplimientoSeguimiento() {
                 <input type="date" className={inputCls} value={pendForm.fecha_limite} onChange={e => setPendForm(f => ({ ...f, fecha_limite: e.target.value }))} />
               </div>
             </div>
+            <label className="flex items-start gap-2 text-sm bg-orange-50 border border-orange-200 rounded-lg p-3 cursor-pointer">
+              <input type="checkbox" className="mt-0.5" checked={pendForm.presentar_semanal} onChange={e => setPendForm(f => ({ ...f, presentar_semanal: e.target.checked }))} />
+              <span><b className="text-orange-800">Presentar en la semanal</b>
+                <span className="block text-xs text-orange-700">Sale como diapositiva después de su colegio, en la sección Cumplimiento Normativo de la Presentación Semanal.</span>
+                {pendForm.presentar_semanal && !pendForm.colegio && <span className="block text-xs text-red-600 font-semibold mt-0.5">Selecciona un colegio para que pueda aparecer.</span>}
+              </span>
+            </label>
             {pendForm.tipo === 'compartido' && (
               <div className="bg-teal-50 border border-teal-200 rounded-lg p-3 space-y-2">
                 <p className="text-xs font-bold text-teal-700 uppercase">Asignar a usuario *</p>
@@ -694,6 +850,39 @@ export default function CumplimientoSeguimiento() {
           </div>
         </Modal>
       )}
+
+      {/* ── Modal: Editar pendiente que viene de una minuta ── */}
+      {editAcuerdo && (() => { const o = origenDe(editAcuerdo); return (
+        <Modal title={`Editar ${o?.corto.toLowerCase() ?? 'acuerdo'}`} onClose={() => setEditAcuerdo(null)}>
+          <div className="space-y-3">
+            <div className={`rounded-lg border p-3 text-xs ${o?.soft ?? ''}`}>
+              <p className="font-bold"><FileText className="w-3 h-3 inline mr-1 -mt-0.5" />{o?.doc ?? 'Minuta'}: {editAcuerdo.origen_asunto || 'Sin asunto'}{editAcuerdo.origen_fecha ? ` · ${fmtDate(editAcuerdo.origen_fecha)}` : ''}</p>
+              <p className="opacity-80">El texto y la fecha también se actualizan en Minutas{editAcuerdo.origen_responsable ? ` · Responsable: ${editAcuerdo.origen_responsable}` : ''}.</p>
+            </div>
+            <div><label className="block text-xs font-bold text-slate-500 uppercase mb-1">{o?.corto ?? 'Acuerdo'}</label>
+              <textarea rows={3} className={inputCls + ' resize-none'} value={acForm.descripcion} onChange={e => setAcForm(f => ({ ...f, descripcion: e.target.value }))} /></div>
+            <div className="grid grid-cols-2 gap-3">
+              <div><label className="block text-xs font-bold text-slate-500 uppercase mb-1">Fecha compromiso</label>
+                <input type="date" className={inputCls} value={acForm.fecha} onChange={e => setAcForm(f => ({ ...f, fecha: e.target.value }))} /></div>
+              <div><label className="block text-xs font-bold text-slate-500 uppercase mb-1">Prioridad</label>
+                <select className={inputCls} value={acForm.prioridad} onChange={e => setAcForm(f => ({ ...f, prioridad: e.target.value as Pendiente['prioridad'] }))}>
+                  <option value="urgente">Urgente</option><option value="alta">Alta</option><option value="normal">Normal</option><option value="baja">Baja</option>
+                </select></div>
+            </div>
+            <label className="flex items-start gap-2 text-sm bg-orange-50 border border-orange-200 rounded-lg p-3 cursor-pointer">
+              <input type="checkbox" className="mt-0.5" checked={acForm.presentar_semanal} onChange={e => setAcForm(f => ({ ...f, presentar_semanal: e.target.checked }))} />
+              <span><b className="text-orange-800">Presentar en la semanal</b>
+                <span className="block text-xs text-orange-700">Sale como diapositiva después de {editAcuerdo.colegio || 'su colegio'}, en la sección Cumplimiento Normativo.</span></span>
+            </label>
+          </div>
+          <div className="flex gap-3 mt-5">
+            <button onClick={() => setEditAcuerdo(null)} className={btnOutline + " flex-1"}>Cancelar</button>
+            <button onClick={() => saveAcuerdo.mutate(editAcuerdo)} disabled={saveAcuerdo.isPending} className={btnPrimary + " flex-1 flex items-center justify-center gap-2"}>
+              {saveAcuerdo.isPending && <Loader2 className="w-4 h-4 animate-spin" />}Guardar
+            </button>
+          </div>
+        </Modal>
+      ); })()}
 
       {/* ── Modal: Nuevo Seguimiento ── */}
       {showSeg && (

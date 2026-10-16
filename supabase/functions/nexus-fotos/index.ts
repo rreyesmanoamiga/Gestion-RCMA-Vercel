@@ -6,9 +6,11 @@
 //   · Seguimiento de proyecto → su Expediente: ECO/06 - Fotografías/Durante
 //     (si el proyecto no tiene Expediente: NEXUS/Seguimientos/<año>/<colegio>/<proyecto>)
 //   · Pendiente               → NEXUS/Pendientes/<año>/<colegio>/<título>
+//   · Seguimiento de Trámites (Cumplimiento), cn_pendiente_id / cn_seguimiento_id →
+//       Cumplimiento Normativo/Seguimiento/{Pendientes|Seguimientos}/<año>/<colegio>/…
 //
 // Body JSON:
-//   { accion: 'subir', seguimiento_id | pendiente_id, nombre, tipo, base64 }
+//   { accion: 'subir', seguimiento_id | pendiente_id | cn_pendiente_id | cn_seguimiento_id, nombre, tipo, base64 }
 //        → { id, nombre }
 //   { accion: 'ver', ids: string[] }
 //        → { fotos: { id, nombre, miniatura, grande, onedrive }[] }   (links ≈1 hora)
@@ -159,6 +161,26 @@ async function destinoPendiente(db: DB, pendienteId: string): Promise<{ destino:
   };
 }
 
+// Seguimiento de Trámites (Cumplimiento)
+async function destinoPendienteCN(db: DB, pendienteId: string): Promise<{ destino: Destino; pend: Record<string, unknown> }> {
+  const { data: p } = await db.from('compliance_pendientes')
+    .select('id, titulo, colegio, asignado_a, created_by, created_at').eq('id', pendienteId).maybeSingle();
+  if (!p) throw new Falla('Pendiente no encontrado', 404);
+  const anio = p.created_at ? new Date(p.created_at).getFullYear() : new Date().getFullYear();
+  return {
+    pend: p,
+    destino: { baseId: null, partes: [RAIZ, 'Cumplimiento Normativo', 'Seguimiento', 'Pendientes', String(anio),
+      limpiarNombre(String(p.colegio ?? 'SIN_COLEGIO')), limpiarNombre(`${String(p.titulo ?? 'Pendiente')} (${String(p.id).slice(0, 8)})`)] },
+  };
+}
+async function destinoSeguimientoCN(db: DB, segId: string): Promise<Destino> {
+  const { data: s } = await db.from('compliance_seguimientos').select('id, colegio, created_at').eq('id', segId).maybeSingle();
+  if (!s) throw new Falla('Seguimiento no encontrado', 404);
+  const anio = s.created_at ? new Date(s.created_at).getFullYear() : new Date().getFullYear();
+  return { baseId: null, partes: [RAIZ, 'Cumplimiento Normativo', 'Seguimiento', 'Seguimientos', String(anio),
+    limpiarNombre(String(s.colegio ?? 'SIN_COLEGIO'))] };
+}
+
 async function subir(token: string, destino: Destino, nombre: string, tipo: string, bytes: Uint8Array): Promise<Item> {
   const camino = ruta([...destino.partes, nombre]);
   const url = destino.baseId
@@ -205,6 +227,15 @@ serve(async (req) => {
         const participa = [p.asignado_a, p.asignado_cc, p.created_by].some(e => (e ?? '').toLowerCase() === email);
         if (!esAdmin && !participa) throw new Falla('No participas en este pendiente', 403);
         destino = r.destino;
+      } else if (body.cn_seguimiento_id) {
+        if (!esAdmin) throw new Falla('Solo el administrador puede agregar fotos al seguimiento', 403);
+        destino = await destinoSeguimientoCN(db, String(body.cn_seguimiento_id));
+      } else if (body.cn_pendiente_id) {
+        const r = await destinoPendienteCN(db, String(body.cn_pendiente_id));
+        const p = r.pend as Record<string, string | null>;
+        const participa = [p.asignado_a, p.created_by].some(e => (e ?? '').toLowerCase() === email);
+        if (!esAdmin && !participa) throw new Falla('No participas en este pendiente', 403);
+        destino = r.destino;
       } else throw new Falla('Falta el seguimiento o el pendiente');
 
       const item = await subir(token, destino, nombre, tipo, bytes);
@@ -222,6 +253,20 @@ serve(async (req) => {
       for (const c of coms ?? []) for (const f of (c.fotos ?? []) as { id: string }[]) {
         if (!ids.includes(f.id)) continue;
         if (esAdmin) permitidos.add(f.id); else if (c.pendiente_id) pendIds.add(`${c.pendiente_id}|${f.id}`);
+      }
+      // Fotos de Seguimiento de Trámites (Cumplimiento)
+      const { data: comsCN } = await db.from('compliance_comentarios').select('fotos, pendiente_id').not('fotos', 'is', null);
+      const pendCN = new Set<string>();
+      for (const c of comsCN ?? []) for (const f of (c.fotos ?? []) as { id: string }[]) {
+        if (!ids.includes(f.id)) continue;
+        if (esAdmin) permitidos.add(f.id); else if (c.pendiente_id) pendCN.add(`${c.pendiente_id}|${f.id}`);
+      }
+      if (!esAdmin && pendCN.size) {
+        const idsPend = [...new Set([...pendCN].map(x => x.split('|')[0]))];
+        const { data: ps } = await db.from('compliance_pendientes').select('id, asignado_a, created_by').in('id', idsPend);
+        const mios = new Set((ps ?? []).filter(p => [p.asignado_a, p.created_by]
+          .some(e => (e ?? '').toLowerCase() === email)).map(p => p.id));
+        for (const x of pendCN) { const [pid, fid] = x.split('|'); if (mios.has(pid)) permitidos.add(fid); }
       }
       if (!esAdmin && pendIds.size) {
         const idsPend = [...new Set([...pendIds].map(x => x.split('|')[0]))];

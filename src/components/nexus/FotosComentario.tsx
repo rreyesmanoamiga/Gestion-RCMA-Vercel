@@ -11,7 +11,10 @@ import { VisorFotos } from '@/components/projects/GaleriaEvidencia';
 
 export interface FotoRef { id: string; nombre: string }
 export interface Adjunto { file: File; preview: string }
-type Destino = { seguimiento_id: string } | { pendiente_id: string };
+type Destino =
+  | { seguimiento_id: string } | { pendiente_id: string }
+  // Seguimiento de Trámites (Cumplimiento)
+  | { cn_seguimiento_id: string } | { cn_pendiente_id: string };
 
 const MAX_LADO = 1600;
 const MAX_FOTOS = 6;

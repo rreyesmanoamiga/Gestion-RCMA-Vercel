@@ -173,6 +173,7 @@ const MODULO_LABEL: Record<string, string> = {
   calendario:    'Calendario de Mantenimiento',
   minutas:       'Minutas y Notas Técnicas',
   minutas_cn:    'Minutas de Cumplimiento',
+  seguimiento_cn: 'Seguimiento de Trámites',
   reportes_problema: 'Reportar Problema',
   sol:           'Programa SOL',
   solicitudes_cn: 'Solicitudes CN',

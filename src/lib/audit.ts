@@ -29,6 +29,7 @@ export type AuditModulo =
   | 'calendario'
   | 'minutas'
   | 'minutas_cn'
+  | 'seguimiento_cn'
   | 'reportes_problema'
   | 'solicitudes_cn'
   | 'tramites_cn'

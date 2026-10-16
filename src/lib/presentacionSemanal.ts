@@ -8,10 +8,11 @@
 //                    la semana y las 3 fotos más recientes del Expediente).
 //   · Levantamiento  un slide por plantel que no ha cerrado (Comunicado–Fase 4),
 //                    usando el slide de su fase.
-//   · Cumplimiento . los slides por colegio se dejan como vienen en la plantilla
-//                    (se llenan a mano); después del slide de cada colegio se
-//                    agregan los pendientes NEXUS que vienen de Minutas de
-//                    Cumplimiento y están marcados "Presentar en la semanal".
+//   · Cumplimiento . los slides por colegio vienen de la plantilla; si el
+//                    Seguimiento de Trámites del colegio tiene comentario en la
+//                    semana, ese llena "Actualización de esta semana" (con su
+//                    foto). Después del slide de cada colegio van los pendientes
+//                    de Seguimiento de Trámites marcados "Presentar en la semanal".
 // Todo se hace en el navegador: la plantilla es un ZIP de XML, aquí se copian
 // los slides de cada colegio y se cambian los textos y las fotos.
 // ============================================================================
@@ -48,9 +49,11 @@ export interface ProyectoSemana {
   prioridad?: string | null;
   fechaLimite?: string | null;
   descripcion?: string | null;
-  // Pendiente que viene de una Minuta de Cumplimiento: va en la sección de Cumplimiento Normativo
+  // Pendiente de Seguimiento de Trámites (Cumplimiento): va en la sección de Cumplimiento Normativo
   cumplimiento?: boolean;
 }
+/** Último comentario de la semana del Seguimiento de Trámites de un colegio */
+export interface ActualizacionCN { fecha: string; texto: string; fotoId?: string | null }
 export interface PlantelSemana {
   colegio_clave: string;
   colegio_nombre: string;
@@ -67,6 +70,8 @@ export interface OpcionesPresentacion {
   proyectos: ProyectoSemana[];
   planteles: PlantelSemana[];
   incluirSinProyecto: boolean;
+  actualizacionesCN?: Record<string, ActualizacionCN>;           // por clave de colegio
+  fotoActualizacionCN?: (fotoId: string) => Promise<FotoSlide | null>;
   fotos?: (proyectoId: string) => Promise<FotoSlide[]>;
   progreso?: (msg: string) => void;
 }
@@ -503,6 +508,50 @@ function llenarLevantamiento(doc: Document, pl: PlantelSemana, ubic: Ubicacion |
 
 interface Ubicacion { ciudad: string; pin: Element | null }
 
+// ── Slide de Cumplimiento por colegio: "Actualización de esta semana" ───────
+async function llenarActualizacionCN(doc: Document, rels: Document, act: ActualizacionCN, foto: FotoSlide | null, paquete: Paquete) {
+  if (act.texto) {
+    const cajaTexto = formas(doc).find(f => /^TextBox/.test(nombreForma(f)) && caja22(f));
+    const texto = `${fechaCorta(act.fecha)} — ${act.texto.replace(/\s+/g, ' ').trim()}`;
+    // Se conserva el color del texto de la plantilla (el slide de Cumplimiento es de fondo oscuro)
+    ponerTexto(cajaTexto ?? null, [recortar(texto, 420)], { italica: false });
+  }
+  if (!foto) return;
+  // Recuadro de evidencia (el rectángulo redondeado con "INSERTAR IMAGEN" adentro)
+  const marco = formas(doc).find(f => {
+    if (f.localName !== 'sp' || !/^Rounded Rectangle/.test(nombreForma(f))) return false;
+    const c = caja(f);
+    return formas(doc).some(o => o !== f && /INSERTAR IMAGEN/i.test(textoDe(o)) && dentro(o, c));
+  });
+  if (!marco) return;
+  const c = caja(marco);
+  formas(doc).filter(f => f !== marco && dentro(f, c)).forEach(f => f.remove());
+  let maxId = Math.max(0, ...hijosNS(doc, NS.p, 'cNvPr').map(x => Number(x.getAttribute('id')) || 0));
+  let maxRid = Math.max(0, ...hijosNS(rels, NS.rel, 'Relationship').map(r => Number((r.getAttribute('Id') ?? '').replace(/\D/g, '')) || 0));
+  const rid = `rId${++maxRid}`;
+  const r = rels.createElementNS(NS.rel, 'Relationship');
+  r.setAttribute('Id', rid); r.setAttribute('Type', T_IMAGE); r.setAttribute('Target', paquete.agregarMedia(foto.bytes, foto.ext));
+  rels.documentElement.appendChild(r);
+  const rc = c.cx / c.cy, ri = foto.ancho / foto.alto;
+  let l = 0, t = 0;
+  if (ri > rc) l = Math.round(((1 - rc / ri) / 2) * 100000); else t = Math.round(((1 - ri / rc) / 2) * 100000);
+  const xml =
+    `<p:pic xmlns:p="${NS.p}" xmlns:a="${NS.a}" xmlns:r="${NS.r}"><p:nvPicPr><p:cNvPr id="${++maxId}" name="Foto actualizacion CN"/>` +
+    `<p:cNvPicPr><a:picLocks noChangeAspect="1"/></p:cNvPicPr><p:nvPr/></p:nvPicPr>` +
+    `<p:blipFill><a:blip r:embed="${rid}"/><a:srcRect l="${l}" t="${t}" r="${l}" b="${t}"/><a:stretch><a:fillRect/></a:stretch></p:blipFill>` +
+    `<p:spPr><a:xfrm><a:off x="${c.x}" y="${c.y}"/><a:ext cx="${c.cx}" cy="${c.cy}"/></a:xfrm><a:prstGeom prst="roundRect"><a:avLst/></a:prstGeom>` +
+    `<a:ln w="12700"><a:solidFill><a:srgbClr val="A8C0D8"/></a:solidFill></a:ln></p:spPr></p:pic>`;
+  marco.parentNode!.insertBefore(doc.importNode(parsear(xml).documentElement, true), marco.nextSibling);
+}
+/** La caja de texto de "Actualización de esta semana": la que está justo debajo de ese título */
+function caja22(f: Element): boolean {
+  const doc = f.ownerDocument;
+  const titulo = formas(doc).find(x => /ACTUALIZACI[OÓ]N DE ESTA SEMANA/i.test(textoDe(x)));
+  if (!titulo || titulo === f) return false;
+  const t = caja(titulo), c = caja(f);
+  return c.y >= t.y + t.cy - 20000 && c.y <= t.y + t.cy + 400000 && c.cx > 3000000;
+}
+
 /** Ensancha una caja de texto (para que "1 DE 2" o las fechas no se partan) */
 function ensanchar(sp: Element | null, cx: number) {
   const ext = sp ? hijosNS(sp, NS.a, 'ext').find(e => e.parentElement?.localName === 'xfrm') : null;
@@ -700,7 +749,20 @@ export async function generarPresentacionSemanal(op: OpcionesPresentacion): Prom
     zip.file(ref.archivo, serializar(doc), SIN_CARPETAS);
     // El separador de Cumplimiento y lo que sigue ya no se quitan
     if (separador) separador = null;
-    final.push(ref.archivo);
+    if (tipo.tipo === 'cumplimiento' && tipo.colegio && op.actualizacionesCN?.[tipo.colegio]) {
+      // El slide de la plantilla trae la actualización a mano: se usa una copia con la de esta semana
+      const act = op.actualizacionesCN[tipo.colegio];
+      aviso(`Cumplimiento: actualización de ${tipo.colegio}`);
+      const nuevo = await paq.nuevoSlide(ref.archivo, doc);
+      const foto = act.fotoId && op.fotoActualizacionCN ? await op.fotoActualizacionCN(act.fotoId).catch(() => null) : null;
+      await llenarActualizacionCN(doc, nuevo.rels, act, foto, paq);
+      limpiarAnimaciones(doc);
+      zip.file(nuevo.archivo, serializar(doc), SIN_CARPETAS);
+      zip.file(paq.relsDe(nuevo.archivo), serializar(nuevo.rels), SIN_CARPETAS);
+      final.push(nuevo.archivo);
+    } else {
+      final.push(ref.archivo);
+    }
     if (tipo.tipo === 'cumplimiento') {
       if (tipo.colegio) await fichasCumplimiento(cnPorColegio.get(tipo.colegio) ?? []);
       if (ref.archivo === ultimoCN) await fichasCumplimiento(cnSueltos);

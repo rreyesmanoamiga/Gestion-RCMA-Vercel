@@ -15,8 +15,12 @@
 // nexus_calendario_eventos (no en nexus_pendientes, para no disparar el
 // trigger otra vez).
 //
+// También sincroniza los pendientes de Seguimiento de Trámites (Cumplimiento,
+// tabla compliance_pendientes): llegan con tabla = 'cumplimiento' y el evento
+// dice "Vence (CN): …" con liga a Seguimiento de Trámites.
+//
 // Body JSON (siempre con el header x-webhook-secret = NEXUS_CAL_SECRET):
-//   { pendiente_id }              → sincroniza ese pendiente
+//   { pendiente_id, tabla? }      → sincroniza ese pendiente (tabla: 'nexus' | 'cumplimiento')
 //   { accion: 'resincronizar' }   → sincroniza todos los pendientes abiertos
 //
 // Requiere el permiso de aplicación Calendars.ReadWrite de Microsoft Graph.
@@ -46,7 +50,10 @@ type Pendiente = {
   acuerdo_id: string | null; origen: string | null; origen_numero: number | null; origen_asunto: string | null;
   origen_fecha: string | null; origen_responsable: string | null; origen_url: string | null;
 };
+type Tabla = 'nexus' | 'cumplimiento';
+const COLS_CN = 'id,titulo,descripcion,tipo,asignado_a,asignado_nombre,created_by,prioridad,fecha_limite,estatus,colegio,territorio,created_at,updated_at,acuerdo_id,origen,origen_numero,origen_asunto,origen_fecha,origen_responsable,origen_url';
 type Mapa = {
+  tabla?: Tabla | null;
   pendiente_id: string; evento_3d: string | null; evento_dia: string | null;
   fecha_original?: string | null; ultima_fecha?: string | null; reprogramaciones?: number | null;
 };
@@ -98,12 +105,13 @@ function fila(etiqueta: string, valorHtml: string, i: number): string {
   return `<tr style="${fondo}"><td style="padding:10px 16px;font-size:11px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:0.03em;width:38%;border-bottom:1px solid #e2e8f0;vertical-align:top;font-family:Arial,sans-serif;">${etiqueta}</td><td style="padding:10px 16px;font-size:14px;color:#0f172a;border-bottom:1px solid #e2e8f0;font-family:Arial,sans-serif;">${valorHtml}</td></tr>`;
 }
 
-function cuerpoHtml(p: Pendiente, h: Historial): string {
+function cuerpoHtml(p: Pendiente, h: Historial, tabla: Tabla = 'nexus'): string {
+  const esCN = tabla === 'cumplimiento';
   const fechaLimite = p.fecha_limite!.slice(0, 10);
   const esMinuta = !!p.acuerdo_id && (p.origen === 'acuerdo' || p.origen === 'accion');
   const doc = p.origen === 'accion' ? 'Nota técnica' : 'Minuta';
-  const tipoTxt = !esMinuta ? 'Pendiente de NEXUS'
-    : `${p.origen === 'accion' ? 'Acción' : 'Acuerdo'}${p.origen_numero ? ` #${p.origen_numero}` : ''} de ${doc.toLowerCase()}`;
+  const tipoTxt = !esMinuta ? (esCN ? 'Pendiente de Seguimiento de Trámites' : 'Pendiente de NEXUS')
+    : `${p.origen === 'accion' ? 'Acción' : 'Acuerdo'}${p.origen_numero ? ` #${p.origen_numero}` : ''} de ${doc.toLowerCase()}${esCN ? ' de Cumplimiento' : ''}`;
   const prio = p.prioridad ?? 'normal';
   const prioHtml = `<span style="display:inline-block;padding:2px 10px;border-radius:10px;background:${PRIORIDAD_COLOR[prio] ?? '#2563EB'};color:#ffffff;font-size:12px;font-weight:700;">${esc(PRIORIDAD[prio] ?? prio)}</span>`;
   const reprogHtml = h.reprogramaciones > 0 && h.fechaOriginal
@@ -134,8 +142,8 @@ function cuerpoHtml(p: Pendiente, h: Historial): string {
   return `<table width="100%" cellpadding="0" cellspacing="0" style="background:#f1f5f9;padding:16px 0;"><tr><td align="center">
 <table width="600" cellpadding="0" cellspacing="0" style="max-width:600px;background:#ffffff;border-radius:12px;overflow:hidden;border:1px solid #e2e8f0;">
 <tr><td style="background:${AZUL};padding:22px 32px;border-bottom:3px solid ${NARANJA};">
-  <p style="margin:0;color:#ffffff;font-size:20px;font-weight:700;font-family:Arial,sans-serif;">Sistema RCMA · NEXUS</p>
-  <p style="margin:4px 0 0;color:#94a3b8;font-size:12px;font-family:Arial,sans-serif;">Coordinación de Obras — Colegios Mano Amiga</p>
+  <p style="margin:0;color:#ffffff;font-size:20px;font-weight:700;font-family:Arial,sans-serif;">Sistema RCMA · ${esCN ? 'Seguimiento de Trámites' : 'NEXUS'}</p>
+  <p style="margin:4px 0 0;color:#94a3b8;font-size:12px;font-family:Arial,sans-serif;">${esCN ? 'Cumplimiento Normativo' : 'Coordinación de Obras'} — Colegios Mano Amiga</p>
 </td></tr>
 <tr><td style="background:${NARANJA};padding:12px 32px;">
   <p style="margin:0;color:#ffffff;font-size:14px;font-weight:700;font-family:Arial,sans-serif;">Vence el ${esc(fechaLarga(fechaLimite))}</p>
@@ -147,7 +155,7 @@ function cuerpoHtml(p: Pendiente, h: Historial): string {
     <tr style="background:#FFF4EA;"><td colspan="2" style="padding:9px 16px;font-size:12px;font-weight:700;color:#C25A00;border-bottom:1px solid #FDDDBF;font-family:Arial,sans-serif;">Datos del pendiente</td></tr>
     ${filas.map(([k, v], i) => fila(k, v, i)).join('\n    ')}
   </table>
-  <p style="margin:0 0 24px;">${boton(`${SITE_URL}/nexus`, 'Abrir pendiente en NEXUS', NARANJA)}${esMinuta && p.origen_url ? `&nbsp;&nbsp;${boton(p.origen_url, `Ver ${doc.toLowerCase()}`, AZUL)}` : ''}</p>
+  <p style="margin:0 0 24px;">${esCN ? boton(`${SITE_URL}/cumplimiento/seguimiento`, 'Abrir en Seguimiento de Trámites', NARANJA) : boton(`${SITE_URL}/nexus`, 'Abrir pendiente en NEXUS', NARANJA)}${esMinuta && p.origen_url ? `&nbsp;&nbsp;${boton(p.origen_url, `Ver ${doc.toLowerCase()}`, AZUL)}` : ''}</p>
 </td></tr>
 <tr><td style="background:#f8fafc;padding:16px 32px;border-top:1px solid #e2e8f0;">
   <p style="margin:0;color:#94a3b8;font-size:11px;text-align:center;font-family:Arial,sans-serif;">Evento creado automáticamente por el Sistema RCMA. Se actualiza solo cuando cambias el pendiente${esMinuta ? ` o el acuerdo en la ${doc.toLowerCase()}` : ''}.<br/>Al completarlo, se elimina de tu calendario.</p>
@@ -155,13 +163,14 @@ function cuerpoHtml(p: Pendiente, h: Historial): string {
 </table></td></tr></table>`;
 }
 
-function evento(p: Pendiente, tipo: Tipo, h: Historial) {
+function evento(p: Pendiente, tipo: Tipo, h: Historial, tabla: Tabla = 'nexus') {
   const fechaLimite = p.fecha_limite!.slice(0, 10);
   const dia = tipo === '3d' ? sumarDias(fechaLimite, -3) : fechaLimite;
-  const asunto = tipo === '3d' ? `Vence en 3 días: ${p.titulo}` : `Vence: ${p.titulo}`;
+  const cn = tabla === 'cumplimiento' ? ' (CN)' : '';
+  const asunto = tipo === '3d' ? `Vence en 3 días${cn}: ${p.titulo}` : `Vence${cn}: ${p.titulo}`;
   return {
     subject: asunto,
-    body: { contentType: 'HTML', content: cuerpoHtml(p, h) },
+    body: { contentType: 'HTML', content: cuerpoHtml(p, h, tabla) },
     start: { dateTime: `${dia}T${HORA}`, timeZone: ZONA },
     end: { dateTime: `${dia}T09:15:00`, timeZone: ZONA },
     isReminderOn: true,
@@ -199,11 +208,14 @@ async function borrarEvento(token: string, id: string | null) {
   if (!r.ok && r.status !== 404) throw new Error(`Outlook ${r.status} al borrar: ${(await r.text()).slice(0, 200)}`);
 }
 
-async function sincronizar(db: DB, token: string, pendienteId: string): Promise<string> {
-  const { data: p } = await db.from('nexus_pendientes')
-    .select('id,titulo,descripcion,tipo,asignado_a,asignado_nombre,created_by,prioridad,fecha_limite,estatus,colegio,territorio,proyecto_nombre,ticket_folio,created_at,updated_at,acuerdo_id,origen,origen_numero,origen_asunto,origen_fecha,origen_responsable,origen_url')
-    .eq('id', pendienteId).maybeSingle() as { data: Pendiente | null };
+async function sincronizar(db: DB, token: string, pendienteId: string, tablaPedida?: Tabla): Promise<string> {
   const { data: mapa } = await db.from('nexus_calendario_eventos').select('*').eq('pendiente_id', pendienteId).maybeSingle() as { data: Mapa | null };
+  const tabla: Tabla = tablaPedida ?? (mapa?.tabla === 'cumplimiento' ? 'cumplimiento' : 'nexus');
+  const { data: p } = tabla === 'cumplimiento'
+    ? await db.from('compliance_pendientes').select(COLS_CN).eq('id', pendienteId).maybeSingle() as { data: Pendiente | null }
+    : await db.from('nexus_pendientes')
+        .select('id,titulo,descripcion,tipo,asignado_a,asignado_nombre,created_by,prioridad,fecha_limite,estatus,colegio,territorio,proyecto_nombre,ticket_folio,created_at,updated_at,acuerdo_id,origen,origen_numero,origen_asunto,origen_fecha,origen_responsable,origen_url')
+        .eq('id', pendienteId).maybeSingle() as { data: Pendiente | null };
 
   // Un solo evento: el día que vence, con recordatorio 3 días antes. Se
   // conserva aunque el pendiente ya haya vencido, mientras siga abierto,
@@ -211,7 +223,7 @@ async function sincronizar(db: DB, token: string, pendienteId: string): Promise<
   // se crea: si existe de la versión anterior, se borra.
   const quiero: Record<Tipo, boolean> = {
     '3d': false,
-    dia: !!(p && esMio(p) && p.fecha_limite && p.estatus !== 'completado'),
+    dia: !!(p && esMio(p) && p.fecha_limite && p.estatus !== 'completado' && p.estatus !== 'cancelado'),
   };
 
   // Historial de fechas: la primera fecha límite que vio el calendario y
@@ -228,7 +240,7 @@ async function sincronizar(db: DB, token: string, pendienteId: string): Promise<
   for (const tipo of ['3d', 'dia'] as Tipo[]) {
     try {
       if (quiero[tipo] && p) {
-        ids[tipo] = await guardarEvento(token, ids[tipo], evento(p, tipo, hist), `nexus-${p.id}-${tipo}2-${p.fecha_limite!.slice(0, 10)}`);
+        ids[tipo] = await guardarEvento(token, ids[tipo], evento(p, tipo, hist, tabla), `${tabla === 'cumplimiento' ? 'cn' : 'nexus'}-${p.id}-${tipo}2-${p.fecha_limite!.slice(0, 10)}`);
       } else if (ids[tipo]) {
         await borrarEvento(token, ids[tipo]);
         ids[tipo] = null;
@@ -241,7 +253,7 @@ async function sincronizar(db: DB, token: string, pendienteId: string): Promise<
 
   if (ids['3d'] || ids.dia || error) {
     const fila = {
-      pendiente_id: pendienteId, evento_3d: ids['3d'], evento_dia: ids.dia,
+      pendiente_id: pendienteId, tabla, evento_3d: ids['3d'], evento_dia: ids.dia,
       sincronizado_at: new Date().toISOString(), error,
     };
     const { error: e1 } = await db.from('nexus_calendario_eventos').upsert({
@@ -270,15 +282,24 @@ serve(async (req) => {
       const { data: abiertos } = await db.from('nexus_pendientes').select('id')
         .neq('estatus', 'completado').not('fecha_limite', 'is', null)
         .or(`asignado_a.ilike.${CAL_EMAIL},and(tipo.eq.personal,created_by.ilike.${CAL_EMAIL})`);
-      const { data: conEventos } = await db.from('nexus_calendario_eventos').select('pendiente_id');
-      const ids = [...new Set([...(abiertos ?? []).map((r: { id: string }) => r.id), ...(conEventos ?? []).map((r: { pendiente_id: string }) => r.pendiente_id)])];
+      const { data: abiertosCN } = await db.from('compliance_pendientes').select('id')
+        .not('estatus', 'in', '(completado,cancelado)').not('fecha_limite', 'is', null)
+        .or(`asignado_a.ilike.${CAL_EMAIL},and(tipo.eq.personal,created_by.ilike.${CAL_EMAIL})`);
+      const { data: conEventos } = await db.from('nexus_calendario_eventos').select('pendiente_id, tabla');
+      const tablaDe = new Map<string, Tabla>();
+      for (const r of (abiertos ?? []) as { id: string }[]) tablaDe.set(r.id, 'nexus');
+      for (const r of (abiertosCN ?? []) as { id: string }[]) tablaDe.set(r.id, 'cumplimiento');
+      for (const r of (conEventos ?? []) as { pendiente_id: string; tabla?: string }[]) {
+        if (!tablaDe.has(r.pendiente_id)) tablaDe.set(r.pendiente_id, r.tabla === 'cumplimiento' ? 'cumplimiento' : 'nexus');
+      }
       const resultados: Record<string, string> = {};
-      for (const id of ids) resultados[id] = await sincronizar(db, token, id);
-      return json({ total: ids.length, resultados });
+      for (const [id, t] of tablaDe) resultados[id] = await sincronizar(db, token, id, t);
+      return json({ total: tablaDe.size, resultados });
     }
 
     if (!body.pendiente_id) return json({ error: 'Falta pendiente_id' }, 400);
-    return json({ resultado: await sincronizar(db, token, String(body.pendiente_id)) });
+    const tabla: Tabla | undefined = body.tabla === 'cumplimiento' ? 'cumplimiento' : body.tabla === 'nexus' ? 'nexus' : undefined;
+    return json({ resultado: await sincronizar(db, token, String(body.pendiente_id), tabla) });
   } catch (e) {
     console.error('[nexus-calendario]', e);
     return json({ error: (e as Error).message }, 500);
