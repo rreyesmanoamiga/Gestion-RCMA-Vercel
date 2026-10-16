@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabaseClient';
 import { toast } from 'sonner';
 import { imprimirHTML } from '@/lib/imprimir';
+import { documentoInstitucional, tarjeta, grid, barraFinanciamiento, esc, val } from '@/lib/formatoInstitucional';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { ChevronDown, CheckCircle, Eye, X, Building2, User, Mail, Calendar, DollarSign, Printer, Trash2, Ban, Send } from 'lucide-react';
@@ -20,6 +21,7 @@ const PAGE_SIZE = 20;
 
 interface Solicitud {
   id:                    string;
+  folio?:                string | null;
   nombre_centro?:        string;
   razon_social?:         string;
   sociedad?:             string;
@@ -60,81 +62,61 @@ export default function SolicitudesRecibidas() {
   }, [directorioRows]);
 
   const handlePrint = (s: Solicitud) => {
-    const fmxP = (n?: number | null) =>
-      n != null ? Number(n).toLocaleString('es-MX', { style: 'currency', currency: 'MXN' }) : '—';
-    const costo = s.costo_aproximado ?? 0;
-    const pct = (m?: number | null) => costo > 0 && m != null ? ((m / costo) * 100).toFixed(0) + '%' : '0%';
+    const costo = Number(s.costo_aproximado ?? 0);
+    const pct = (m?: number | null) => costo > 0 && m != null ? ((Number(m) / costo) * 100).toFixed(0) + '%' : '0%';
+    const fecha = (d?: string | null) => {
+      if (!d) return '—';
+      const f = new Date(d.length === 10 ? d + 'T12:00:00' : d);
+      return isNaN(f.getTime()) ? esc(d) : format(f, 'dd/MM/yyyy', { locale: es });
+    };
+    const fechaSolicitud = s.created_at ? format(new Date(s.created_at), "dd 'de' MMMM 'de' yyyy", { locale: es }) : '—';
+    const fuentes = [
+      { nombre: 'Operación', monto: Number(s.monto_operacion ?? 0) },
+      { nombre: 'FBC', monto: Number(s.monto_fbc ?? 0) },
+      { nombre: 'Donativos', monto: Number(s.monto_donativos ?? 0) },
+      { nombre: 'Otras fuentes', monto: Number(s.monto_otras ?? 0) },
+    ];
+    const otrasDetalle = (s.monto_otras ?? 0) > 0
+      ? `<tr><td>¿A qué se refiere "Otras fuentes"?</td><td colspan="2" class="${s.monto_otras_detalle ? '' : 'alerta'}">${s.monto_otras_detalle ? esc(s.monto_otras_detalle) : 'No especificado'}</td></tr>`
+      : '';
 
-    const html = `<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="UTF-8"/>
-  <title>Solicitud — ${s.nombre_proyecto}</title>
-  <style>
-    * { margin:0; padding:0; box-sizing:border-box; }
-    body { font-family: Arial, sans-serif; font-size: 11px; color: #3A4450; padding: 20px; }
-    .header { background:#3A4450; color:white; padding:12px 16px; display:flex; align-items:center; justify-content:space-between; }
-    .header-text h1 { font-size:13px; font-weight:900; text-transform:uppercase; letter-spacing:0.05em; }
-    .header-text h2 { font-size:10px; color:#8F9DAE; text-transform:uppercase; margin-top:2px; }
-    .header img { height:48px; width:auto; object-fit:contain; }
-    .section-title { background:#D3D8DF; padding:5px 10px; font-size:10px; font-weight:900; text-transform:uppercase; letter-spacing:0.05em; color:#5E6E82; border-bottom:1px solid #B2BCC7; }
-    table { width:100%; border-collapse:collapse; }
-    td { border:1px solid #B2BCC7; padding:5px 8px; font-size:11px; }
-    .label { background:#F6F7F9; font-weight:700; color:#5E6E82; width:160px; text-transform:uppercase; font-size:10px; }
-    .value { color:#3A4450; }
-    .th { background:#3A4450; color:white; font-size:10px; font-weight:700; text-transform:uppercase; padding:6px 8px; text-align:center; }
-    .num { text-align:right; font-family:monospace; }
-    .total-row td { background:#EAEDF0; font-weight:900; }
-    .footer { margin-top:20px; border-top:1px solid #D3D8DF; padding-top:10px; text-align:center; font-size:9px; color:#8F9DAE; }
-    @media print { body { padding:10px; } }
-  </style>
-</head>
-<body>
-  <div class="header">
-    <div class="header-text">
-      <h1>Red de Colegios Mano Amiga</h1>
-      <h2>Solicitud de Inicio de Obra o Mantenimiento</h2>
-    </div>
-    <img src="/colegio-mano-amiga.png" alt="Logo" />
-  </div>
+    const cuerpo =
+      tarjeta('Identificación', grid([
+        ['Centro', val(s.nombre_centro)], ['Razón social', val(s.razon_social)], ['Sociedad / Centro gestor', `${val(s.sociedad)} · ${val(s.centro_gestor)}`],
+        ['Solicitante', val(s.nombre_solicitante)], ['Puesto', val(s.puesto_solicitante)], ['Correo', val(s.correo_solicitante)],
+      ])) +
+      tarjeta(val(s.nombre_proyecto),
+        grid([['Tipo de iniciativa', val(s.tipo_iniciativa)], ['Inicio propuesto', fecha(s.fecha_inicio_propuesta)], ['Conclusión propuesta', fecha(s.fecha_fin_propuesta)]]) +
+        `<div class="txt" style="border-top:1px solid #eef2f7">${val(s.resumen_proyecto)}</div>`) +
+      tarjeta('Plan de financiamiento',
+        barraFinanciamiento(fuentes, costo) +
+        `<table><tr><th>Fuente</th><th class="num">Monto (MXN)</th><th class="num">% del total</th></tr>${
+          fuentes.map(f => `<tr><td>${f.nombre}</td><td class="num">${fmx(f.monto)}</td><td class="num">${pct(f.monto)}</td></tr>`).join('')}
+          ${otrasDetalle}
+          <tr class="tot"><td>Costo aproximado total</td><td class="num">${fmx(s.costo_aproximado)}</td><td class="num">100%</td></tr></table>`);
 
-  <div class="section-title">I. Identificación</div>
-  <table>
-    <tr><td class="label">División</td><td class="value" colspan="3">Red de Colegios Mano Amiga</td></tr>
-    <tr><td class="label">Nombre del Centro</td><td class="value">${s.nombre_centro || '—'}</td><td class="label">Ciclo / Año Fiscal</td><td class="value">${s.ciclo_año_fiscal || '—'}</td></tr>
-    <tr><td class="label">Razón Social</td><td class="value">${s.razon_social || '—'}</td><td class="label">Sociedad</td><td class="value">${s.sociedad || '—'}</td></tr>
-    <tr><td class="label">Centro de Gestor</td><td class="value" colspan="3">${s.centro_gestor || '—'}</td></tr>
-    <tr><td class="label">Nombre del Proyecto</td><td class="value" colspan="3">${s.nombre_proyecto || '—'}</td></tr>
-    <tr><td class="label">Tipo de Iniciativa</td><td class="value" colspan="3">${s.tipo_iniciativa || '—'}</td></tr>
-    <tr><td class="label">Solicitante</td><td class="value">${s.nombre_solicitante || '—'}</td><td class="label">Puesto</td><td class="value">${s.puesto_solicitante || '—'}</td></tr>
-    <tr><td class="label">Correo</td><td class="value" colspan="3">${s.correo_solicitante || '—'}</td></tr>
-  </table>
-
-  <div class="section-title" style="margin-top:10px;">II. Resumen del Proyecto</div>
-  <table>
-    <tr><td class="label">Descripción / Justificación</td><td class="value" colspan="3" style="white-space:pre-wrap;">${s.resumen_proyecto || '—'}</td></tr>
-    <tr><td class="label">Fecha propuesta inicio</td><td class="value">${s.fecha_inicio_propuesta || '—'}</td><td class="label">Fecha conclusión</td><td class="value">${s.fecha_fin_propuesta || '—'}</td></tr>
-  </table>
-
-  <div class="section-title" style="margin-top:10px;">III. Plan de Financiamiento</div>
-  <table>
-    <tr><td class="th" style="width:200px;">Fuente</td><td class="th">Monto (MXN)</td><td class="th" style="width:80px;">% del Total</td></tr>
-    <tr><td class="label">Costo Aproximado Total</td><td class="num">${fmxP(s.costo_aproximado)}</td><td class="num" style="font-weight:900;">100%</td></tr>
-    <tr><td class="label">Operación</td><td class="num">${fmxP(s.monto_operacion)}</td><td class="num">${pct(s.monto_operacion)}</td></tr>
-    <tr><td class="label">FBC</td><td class="num">${fmxP(s.monto_fbc)}</td><td class="num">${pct(s.monto_fbc)}</td></tr>
-    <tr><td class="label">Donativos</td><td class="num">${fmxP(s.monto_donativos)}</td><td class="num">${pct(s.monto_donativos)}</td></tr>
-    <tr><td class="label">Otras Fuentes</td><td class="num">${fmxP(s.monto_otras)}</td><td class="num">${pct(s.monto_otras)}</td></tr>
-    ${(s.monto_otras ?? 0) > 0 ? `<tr><td class="label">¿A qué se refiere?</td><td class="value" colspan="2"${s.monto_otras_detalle ? '' : ' style="color:#dc2626;font-weight:700;"'}>${s.monto_otras_detalle || 'No especificado'}</td></tr>` : ''}
-  </table>
-
-  <div class="footer">
-    Para iniciar el proyecto se deberá tener el visto bueno de la Gerencia y de la Coordinación de Obras y Mantenimientos RCMA.<br/>
-    Sistema RCMA — Coordinación de Obras © ${new Date().getFullYear()}
-  </div>
-</body>
-</html>`;
-
-    imprimirHTML(html);
+    imprimirHTML(documentoInstitucional({
+      tituloPestana: `Solicitud — ${s.folio ? s.folio + ' ' : ''}${s.nombre_proyecto ?? ''}`,
+      titulo: 'Solicitud de Proyecto',
+      subtitulo: 'Construcciones, Mejoras y Mantenimiento',
+      kpis: [
+        { etiqueta: 'Folio', valor: val(s.folio), folio: true },
+        { etiqueta: 'Costo aproximado', valor: fmx(s.costo_aproximado) },
+        { etiqueta: 'Fecha', valor: esc(fechaSolicitud) },
+        { etiqueta: 'Ciclo', valor: val(s.ciclo_año_fiscal) },
+      ],
+      cuerpo,
+      firmas: [
+        { nombre: val(s.nombre_solicitante), puesto: `Solicitante${s.puesto_solicitante ? ' · ' + esc(s.puesto_solicitante) : ''}` },
+        // Al marcarla como recibida, el Vo. Bo. de Coordinación se llena solo
+        s.recibida_at
+          ? { contenido: `<span class="d"><b>✓ Recibida</b> en el sistema<br/>${esc(format(new Date(s.recibida_at), 'dd/MM/yyyy HH:mm', { locale: es }))}</span>`,
+              nombre: 'Ricardo Joanathan Reyes Medina', puesto: 'Vo. Bo. Coordinación de Obras y Mantenimiento RCMA' }
+          : { nombre: 'Vo. Bo. Coordinación RCMA', puesto: 'Coordinación de Obras y Mantenimiento' },
+      ],
+      nota: 'Para iniciar el proyecto se deberá tener el visto bueno de la Gerencia y de la Coordinación de Obras y Mantenimiento RCMA.',
+      referencia: `Solicitud ${s.folio ?? ''}`.trim(),
+    }));
   };
   const [filterEstatus, setFilterEstatus] = useState('all');
   const [visibleCount, setVisibleCount]   = useState(PAGE_SIZE);
