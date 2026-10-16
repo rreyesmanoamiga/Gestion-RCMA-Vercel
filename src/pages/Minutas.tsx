@@ -238,13 +238,16 @@ export default function Minutas({ modulo = 'obras' }: { modulo?: ModuloMinutas }
   const { data: colegioAdmins = [] } = useQuery({
     queryKey: ['colegioAdmins', modulo, form.colegio],
     queryFn: async () => {
+      // Obras: quien ve Minutas. Cumplimiento: también quien ya ve Minutas de Obras
+      // (administradores y auxiliares del colegio); el correo lleva el PDF adjunto.
       const { data, error } = await supabase
         .from('user_permissions')
-        .select('user_email, nombre, colegio')
-        .eq('colegio', form.colegio)
-        .eq(cfgModulo.perms.ver, true);
+        .select('*')
+        .eq('colegio', form.colegio);
       if (error) throw error;
-      return (data ?? []) as ColegioAdmin[];
+      return ((data ?? []) as any[])
+        .filter(r => r.ver_minutas === true || (esCN && r.ver_minutas_cn === true))
+        .map(r => ({ user_email: r.user_email, nombre: r.nombre ?? null, colegio: r.colegio ?? null })) as ColegioAdmin[];
     },
     enabled: !editItem && puedeCrear && !!form.colegio && form.colegio !== 'ECO',
   });
@@ -968,14 +971,16 @@ export default function Minutas({ modulo = 'obras' }: { modulo?: ModuloMinutas }
                   dentro del sistema — sin marcarla, no la verá aunque sea de su colegio. */}
               {!editItem && form.colegio && form.colegio !== 'ECO' && colegioAdmins.length > 0 && (
                 <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 space-y-2">
-                  <p className="text-xs font-bold text-amber-700 uppercase">Administrador de {form.colegio}</p>
+                  <p className="text-xs font-bold text-amber-700 uppercase">{esCN ? 'Administradores y auxiliares' : 'Administrador'} de {form.colegio}</p>
                   {colegioAdmins.map(admin => (
                     <label key={admin.user_email} className="flex items-center gap-2 text-sm font-medium text-slate-700 cursor-pointer">
                       <input type="checkbox"
                         checked={!!notifAdminColegio[admin.user_email]}
                         onChange={e => setNotifAdminColegio(prev => ({ ...prev, [admin.user_email]: e.target.checked }))}
                         className="w-4 h-4 rounded" />
-                      ¿Enviar y hacer visible esta minuta a {admin.nombre || admin.user_email}?
+                      {esCN
+                        ? <>Enviar esta minuta a {admin.nombre || admin.user_email} <span className="text-slate-500 font-normal">(con copia, PDF adjunto)</span></>
+                        : <>¿Enviar y hacer visible esta minuta a {admin.nombre || admin.user_email}?</>}
                     </label>
                   ))}
                 </div>
