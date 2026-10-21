@@ -1004,6 +1004,13 @@ function TicketMASPrincipal({ esAutorizadorFMA }: { esAutorizadorFMA: boolean })
               await supabase.from('projects')
                 .update({ status: 'cancelado' })
                 .eq('id', ticketReg.proyecto_id);
+              // 4. El Seguimiento NEXUS pasa a "Proyectos Cancelados" con la misma
+              //    fecha de la cancelación (así sale solo en esa semana de la presentación)
+              await supabase.from('nexus_seguimientos')
+                .update({ estatus: 'cancelado', cancelado_at: fechaCancelacion })
+                .eq('proyecto_id', ticketReg.proyecto_id)
+                .eq('estatus', 'activo');
+              qc.invalidateQueries({ queryKey: ['nexus_seguimientos'] });
             }
         }
 

@@ -44,6 +44,8 @@ export interface ProyectoSemana {
   folio?: string | null;
   comentarios: ComentarioSemana[]; // todos, en orden cronológico
   concluido?: string | null;     // fecha de cierre si se completó dentro del corte semanal
+  // Proyecto cancelado dentro del corte semanal: sale solo esa semana, con el motivo
+  cancelado?: { fecha: string; motivo?: string | null } | null;
   // Pendientes NEXUS marcados "Presentar en la semanal" (proyectos en preparación, sin ticket)
   esPendiente?: boolean;
   prioridad?: string | null;
@@ -120,6 +122,7 @@ const ESTATUS: Record<string, string> = {
 const COLOR_TITULO = '1B3A5C';
 const COLOR_ESTADO = 'EB6C01';
 const COLOR_TEXTO = '334155';
+const COLOR_CANCELADO = 'DC2626';
 
 // ── Utilidades XML ──────────────────────────────────────────────────────────
 const parsear = (xml: string) => new DOMParser().parseFromString(xml, 'application/xml');
@@ -417,6 +420,10 @@ function ponerFotos(doc: Document, rels: Document, fotos: FotoSlide[], paquete: 
 
 // ── Textos del slide de obra ────────────────────────────────────────────────
 function textoAvance(p: ProyectoSemana, inicio: Date, fin: Date): string[] {
+  if (p.cancelado) {
+    const motivo = (p.cancelado.motivo ?? '').replace(/\s+/g, ' ').trim();
+    return [recortar(`Motivo de la cancelación: ${motivo || 'sin motivo registrado.'}`, 420)];
+  }
   const deLaSemana = p.comentarios.filter(c => { const d = new Date(c.fecha); return d >= inicio && d <= fin && c.texto.trim(); });
   const lineas: string[] = [];
   if (deLaSemana.length) {
@@ -456,13 +463,15 @@ function llenarObra(doc: Document, p: ProyectoSemana | null, idx: number, de: nu
     return;
   }
   const etiqueta = p.cumplimiento ? 'PENDIENTE DE CUMPLIMIENTO'
+    : p.cancelado ? 'PROYECTO CANCELADO'
     : p.esPendiente ? 'PROYECTO EN PREPARACIÓN' : p.concluido ? 'PROYECTO CONCLUIDO' : 'PROYECTO ACTIVO';
   if (p.cumplimiento) {
     // Ficha de Cumplimiento: misma ficha del colegio, con la insignia de la sección
     ponerTexto(forma(doc, 'Text 3'), ['CUMPL. NORM.']);
     ponerTexto(forma(doc, 'Text 18'), ['EVIDENCIA FOTOGRÁFICA']);
   }
-  if (de > 1 || p.concluido || p.esPendiente) {
+  if (p.cancelado) ponerTexto(forma(doc, 'Text 18'), ['AVISO DE CANCELACIÓN']);
+  if (de > 1 || p.concluido || p.esPendiente || p.cancelado) {
     ensanchar(forma(doc, 'Text 10'), 3000000);
     ponerTexto(forma(doc, 'Text 10'), [de > 1 ? `${etiqueta}  ·  ${idx} DE ${de}` : etiqueta]);
   }
@@ -472,11 +481,13 @@ function llenarObra(doc: Document, p: ProyectoSemana | null, idx: number, de: nu
     ? [ESTATUS[p.estatus ?? ''] ?? (p.estatus ?? '').toUpperCase(),
        p.prioridad ? `PRIORIDAD ${PRIORIDAD[p.prioridad] ?? p.prioridad.toUpperCase()}` : '',
        p.fechaLimite ? `FECHA LÍMITE ${fechaLarga(p.fechaLimite)}` : ''].filter(Boolean).join('  ·  ')
+    : p.cancelado
+    ? `CANCELADO EL ${fechaLarga(p.cancelado.fecha)}${p.folio ? `  ·  ${p.folio}` : ''}`
     : p.concluido
     ? `COMPLETADO  ·  100%  ·  CERRADO EL ${fechaLarga(p.concluido)}`
     : [ESTATUS[p.estatus ?? ''] ?? (p.estatus ?? '').toUpperCase(),
        p.avance != null ? `${Math.round(p.avance)}% DE AVANCE` : ''].filter(Boolean).join('  ·  ');
-  ponerTexto(forma(doc, 'Text 15'), [estado || '—'], { color: COLOR_ESTADO });
+  ponerTexto(forma(doc, 'Text 15'), [estado || '—'], { color: p.cancelado ? COLOR_CANCELADO : COLOR_ESTADO });
   const lineas = textoAvance(p, semana.inicio, semana.fin);
   const largo = lineas.join(' ').length;
   ponerTexto(forma(doc, 'Text 17'), lineas, { color: COLOR_TEXTO, italica: false, tamano: largo > 260 ? 800 : 900 });

@@ -544,6 +544,11 @@ export default function Tickets() {
         const proyectoId = proyecto_id || ticket?.proyecto_id;
         if (proyectoId) {
           await supabase.from('projects').update({ status: 'cancelado' }).eq('id', proyectoId);
+          // El Seguimiento NEXUS pasa a "Proyectos Cancelados" (queda como historial)
+          await supabase.from('nexus_seguimientos')
+            .update({ estatus: 'cancelado', cancelado_at: new Date().toISOString() })
+            .eq('proyecto_id', proyectoId).eq('estatus', 'activo');
+          queryClient.invalidateQueries({ queryKey: ['nexus_seguimientos'] });
         }
       }
 

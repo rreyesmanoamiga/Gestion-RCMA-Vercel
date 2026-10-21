@@ -10,6 +10,7 @@ import {
   generarPresentacionSemanal, semanaISO,
   type ProyectoSemana, type PlantelSemana, type FotoSlide, type ActualizacionCN,
 } from '@/lib/presentacionSemanal';
+import { imagenAvisoCancelacion, type DatosAvisoCancelacion } from '@/lib/avisoCancelacion';
 
 const PLANTILLA_URL = '/plantillas/Seguimiento_Semanal_RCMA.pptx';
 
@@ -70,12 +71,25 @@ async function fotosDeProyecto(p: ProyectoSemana, inicio: Date, fin: Date): Prom
   return fotos.slice(0, 3);
 }
 
+type ProyectoConAviso = ProyectoSemana & { aviso?: DatosAvisoCancelacion };
+
+/** Fotos de un proyecto cancelado: el aviso de cancelación primero y, si se piden fotos, hasta 2 del Expediente */
+async function fotosCancelado(p: ProyectoConAviso, inicio: Date, fin: Date, conFotos: boolean): Promise<FotoSlide[]> {
+  const fotos: FotoSlide[] = [];
+  try {
+    const img = await imagenAvisoCancelacion(p.aviso ?? { folio: p.folio, proyecto: p.nombre, fecha: p.cancelado?.fecha, motivo: p.cancelado?.motivo });
+    fotos.push({ bytes: img.bytes, ext: 'png', ancho: img.ancho, alto: img.alto });
+  } catch { /* sin imagen del aviso */ }
+  if (conFotos) fotos.push(...(await fotosDeProyecto(p, inicio, fin).catch(() => [] as FotoSlide[])).slice(0, 2));
+  return fotos;
+}
+
 async function cargarDatos(inicio: Date, fin: Date) {
-  // Activos + los que se completaron dentro del corte (miércoles a miércoles)
+  // Activos + los que se completaron o cancelaron dentro del corte (miércoles a miércoles)
   const { data: segs, error: e1 } = await supabase.from('nexus_seguimientos')
-    .select('id, proyecto_id, proyecto_nombre, colegio, estatus, completado_at').in('estatus', ['activo', 'completado']);
+    .select('id, proyecto_id, proyecto_nombre, colegio, estatus, completado_at, cancelado_at').in('estatus', ['activo', 'completado', 'cancelado']);
   if (e1) throw new Error('No se pudieron leer los seguimientos: ' + e1.message);
-  type Seg = { id: string; proyecto_id: string | null; proyecto_nombre?: string; colegio?: string; estatus: string; completado_at?: string | null };
+  type Seg = { id: string; proyecto_id: string | null; proyecto_nombre?: string; colegio?: string; estatus: string; completado_at?: string | null; cancelado_at?: string | null };
   const todos = (segs ?? []) as Seg[];
   const idsProy = [...new Set(todos.map(s => s.proyecto_id).filter(Boolean))] as string[];
 
@@ -96,8 +110,26 @@ async function cargarDatos(inicio: Date, fin: Date) {
   const proyPorId = new Map((proys ?? []).map((p: any) => [p.id, p]));
   const enCorte = (f?: string | null) => { if (!f) return false; const d = new Date(f); return d >= inicio && d <= fin; };
   const fechaCierre = (s: Seg) => s.completado_at ?? (proyPorId.get(s.proyecto_id!) as any)?.completado_at ?? null;
-  const seguimientos = todos.filter(s => s.estatus === 'activo' || enCorte(fechaCierre(s)));
-  const proyectos: ProyectoSemana[] = seguimientos
+
+  // Cancelados: el seguimiento o el proyecto está cancelado. La fecha y el motivo
+  // salen del Ticket MAS (por folio); si no hay ticket, de la fecha del seguimiento.
+  const esCancelado = (s: Seg) => s.estatus === 'cancelado' || (proyPorId.get(s.proyecto_id!) as any)?.status === 'cancelado';
+  const foliosCancelados = [...new Set(todos.filter(esCancelado)
+    .map(s => (proyPorId.get(s.proyecto_id!) as any)?.folio).filter(Boolean))] as string[];
+  const { data: tmCanc } = foliosCancelados.length
+    ? await supabase.from('tickets_mas').select('folio, colegio, territorio, nombre_proyecto, motivo_cancelacion, fecha_cancelacion')
+        .in('folio', foliosCancelados)
+    : { data: [] as any[] };
+  const ticketPorFolio = new Map((tmCanc ?? []).map((t: any) => [t.folio, t]));
+  const cancelacion = (s: Seg) => {
+    const p: any = proyPorId.get(s.proyecto_id!);
+    const t: any = p?.folio ? ticketPorFolio.get(p.folio) : null;
+    return { fecha: (s.cancelado_at ?? t?.fecha_cancelacion ?? null) as string | null, motivo: (t?.motivo_cancelacion ?? null) as string | null, ticket: t };
+  };
+  const seguimientos = todos.filter(s => esCancelado(s)
+    ? enCorte(cancelacion(s).fecha)                    // solo la semana en que se canceló
+    : s.estatus === 'activo' || enCorte(fechaCierre(s)));
+  const proyectos: ProyectoConAviso[] = seguimientos
     .filter(s => s.proyecto_id && proyPorId.has(s.proyecto_id))
     .map(s => {
       const p: any = proyPorId.get(s.proyecto_id!);
@@ -107,11 +139,16 @@ async function cargarDatos(inicio: Date, fin: Date) {
         nombre: p.name ?? s.proyecto_nombre ?? 'Proyecto',
         estatus: p.status, avance: p.progress, folio: p.folio,
         concluido: s.estatus === 'completado' ? fechaCierre(s) : null,
+        cancelado: esCancelado(s) ? { fecha: cancelacion(s).fecha!, motivo: cancelacion(s).motivo } : null,
+        aviso: esCancelado(s) ? {
+          folio: p.folio, colegio: cancelacion(s).ticket?.colegio ?? p.colegio ?? s.colegio,
+          proyecto: cancelacion(s).ticket?.nombre_proyecto ?? p.name ?? s.proyecto_nombre,
+          territorio: cancelacion(s).ticket?.territorio, fecha: cancelacion(s).fecha, motivo: cancelacion(s).motivo,
+        } as DatosAvisoCancelacion : undefined,
         comentarios: (coms ?? []).filter((c: any) => c.seguimiento_id === s.id)
           .map((c: any) => ({ fecha: c.created_at, texto: c.contenido ?? '', autor: c.autor_nombre, fotos: (c.fotos ?? []).map((f: any) => f.id) })),
       };
-    })
-    .filter(p => p.estatus !== 'cancelado');
+    });
 
   // Pendientes NEXUS marcados "Presentar en la semanal" (aún sin ticket)
   const { data: pends, error: e5 } = await supabase.from('nexus_pendientes')
@@ -220,15 +257,23 @@ export default function PresentacionSemanal({ className }: { className?: string 
         plantilla, semana, proyectos, planteles, actualizacionesCN,
         fotoActualizacionCN: conFotos ? fotoCN : undefined,
         incluirSinProyecto: sinProyecto,
-        fotos: conFotos ? (id: string) => { const p = proyectos.find(x => x.id === id); return p ? fotosDeProyecto(p, semana.inicio, semana.fin) : Promise.resolve([]); } : undefined,
+        // Los cancelados siempre llevan la imagen del aviso de cancelación (aunque no se pidan fotos)
+        fotos: (id: string) => {
+          const p = proyectos.find(x => x.id === id);
+          if (!p) return Promise.resolve([]);
+          if (p.cancelado) return fotosCancelado(p, semana.inicio, semana.fin, conFotos);
+          return conFotos ? fotosDeProyecto(p, semana.inicio, semana.fin) : Promise.resolve([]);
+        },
         progreso: setAvance,
       });
       const nombre = `Seguimiento_Semanal_S${semana.numero}_${semana.anio}.pptx`;
       const carpeta = carpetaOneDrive(semana.fin);
       const cerrados = proyectos.filter(p => p.concluido).length;
+      const cancelados = proyectos.filter(p => p.cancelado).length;
       const deCN = proyectos.filter(p => p.cumplimiento).length;
       const enPrep = proyectos.filter(p => p.esPendiente).length - deCN;
-      const resumen = `${proyectos.length - cerrados - enPrep - deCN} activo(s), ${cerrados} concluido(s), ${enPrep} en preparación` +
+      const resumen = `${proyectos.length - cerrados - cancelados - enPrep - deCN} activo(s), ${cerrados} concluido(s), ` +
+        (cancelados ? `${cancelados} cancelado(s), ` : '') + `${enPrep} en preparación` +
         (deCN ? ` y ${deCN} pendiente(s) de Cumplimiento` : '');
 
       // Se guarda solo en OneDrive (si se vuelve a generar la misma semana, se reemplaza)
@@ -272,7 +317,7 @@ export default function PresentacionSemanal({ className }: { className?: string 
                   <Presentation className="w-5 h-5 text-orange-600" /> Presentación Semanal
                 </h3>
                 <p className="text-xs text-slate-500 mt-1">
-                  Usa la plantilla institucional y la llena con los proyectos en Seguimiento NEXUS (activos y los concluidos en el corte) y el Levantamiento.
+                  Usa la plantilla institucional y la llena con los proyectos en Seguimiento NEXUS (activos, y los concluidos o cancelados en el corte; los cancelados llevan su motivo y el aviso de cancelación) y el Levantamiento.
                   En Cumplimiento Normativo, el último comentario de la semana del Seguimiento de cada colegio llena "Actualización de esta semana", y los pendientes de Seguimiento de Trámites marcados para la semanal salen después de su colegio.
                   Se guarda en OneDrive: Presentaciones Semanales / año / mes.
                 </p>
