@@ -14,7 +14,7 @@ const encabezadoUTF8 = (t: string) => `=?UTF-8?B?${b64Texto(t)}?=`;
 
 interface Adjunto { nombre: string; base64: string }
 
-async function sendEmail(to: string, cc: string[], subject: string, html: string, adjunto: Adjunto | null) {
+async function sendEmail(to: string[], cc: string[], subject: string, html: string, adjunto: Adjunto | null) {
   const smtpHost = Deno.env.get('SMTP_HOST') ?? 'smtp.office365.com';
   const smtpPort = parseInt(Deno.env.get('SMTP_PORT') ?? '587');
   const smtpUser = Deno.env.get('SMTP_USER') ?? '';
@@ -35,13 +35,13 @@ async function sendEmail(to: string, cc: string[], subject: string, html: string
   await tw('EHLO outlook.com'); await tr(); await tw('AUTH LOGIN'); await tr();
   await tw(btoa(smtpUser)); await tr(); await tw(btoa(smtpPass)); await tr();
   await tw(`MAIL FROM:<${smtpUser}>`); await tr();
-  await tw(`RCPT TO:<${to}>`); await tr();
+  for (const addr of to) { await tw(`RCPT TO:<${addr}>`); await tr(); }
   for (const addr of cc) { if (addr) { await tw(`RCPT TO:<${addr}>`); await tr(); } }
   await tw('DATA'); await tr();
   const ccHeader = cc.filter(Boolean).join(', ');
   const cabeceras = [
     `From: Sistema RCMA <${smtpUser}>`,
-    `To: ${to}`,
+    `To: ${to.join(', ')}`,
     ...(ccHeader ? [`Cc: ${ccHeader}`] : []),
     `Subject: ${encabezadoUTF8(subject)}`,
     'MIME-Version: 1.0',
@@ -91,7 +91,9 @@ serve(async (req) => {
       adjunto && typeof adjunto.base64 === 'string' && adjunto.base64.length > 0 && adjunto.base64.length <= 6_000_000
         ? { nombre: String(adjunto.nombre || 'minuta.pdf'), base64: adjunto.base64 } : null;
 
-    if (!para) {
+    // "Para" puede ser uno o varios correos (texto o lista)
+    const paraLista = (Array.isArray(para) ? para : [para]).map(x => String(x ?? '').trim()).filter(Boolean);
+    if (!paraLista.length) {
       return new Response(JSON.stringify({ error: 'Falta el destinatario principal (Para)' }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     }
 
@@ -153,7 +155,9 @@ serve(async (req) => {
   </table>
 </body></html>`;
 
-    await sendEmail(para, Array.isArray(cc) ? cc : [], `📄 [RCMA${esCN ? ' · Cumplimiento' : ''}] Nueva ${tipo_label ?? 'Minuta'}: ${asunto ?? 'Reunión'}`, html, pdf);
+    const paraSet = new Set(paraLista.map(x => x.toLowerCase()));
+    const ccLista = (Array.isArray(cc) ? cc : []).filter((x: string) => x && !paraSet.has(String(x).toLowerCase()));
+    await sendEmail(paraLista, ccLista, `📄 [RCMA${esCN ? ' · Cumplimiento' : ''}] Nueva ${tipo_label ?? 'Minuta'}: ${asunto ?? 'Reunión'}`, html, pdf);
 
     return new Response(
       JSON.stringify({ success: true, adjunto: !!pdf }),
