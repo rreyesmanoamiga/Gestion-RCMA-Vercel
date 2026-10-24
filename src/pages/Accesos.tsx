@@ -188,6 +188,21 @@ const perfilDeArea = (area: string, perms: Record<string, boolean>) => {
   return p ? { perms: aplicarPerfilObras(perms, p.activos), etiqueta: p.etiqueta } : null;
 };
 
+/** "Último ingreso": verde si entró en la última semana, ámbar si pasó más de un mes, gris si nunca. */
+function UltimoIngreso({ fecha }: { fecha?: string }) {
+  if (!fecha) return <p className="text-[11px] text-slate-400 mt-0.5">Nunca ha entrado</p>;
+  const d = new Date(fecha);
+  const dias = Math.floor((Date.now() - d.getTime()) / 86_400_000);
+  const texto = dias <= 0 ? 'hoy' : dias === 1 ? 'ayer' : `hace ${dias} días`;
+  const color = dias <= 7 ? 'text-emerald-700' : dias > 30 ? 'text-amber-700 font-semibold' : 'text-slate-500';
+  return (
+    <p className={`text-[11px] mt-0.5 ${color}`}
+      title={d.toLocaleString('es-MX', { dateStyle: 'long', timeStyle: 'short' })}>
+      Último ingreso: {texto}
+    </p>
+  );
+}
+
 /** Línea "Ve: …" del listado, con aviso si algo no cuadra. */
 function LineaAlcance({ u }: { u: Record<string, unknown> }) {
   const { texto, avisos } = resumenAlcance(
@@ -316,6 +331,26 @@ export default function Accesos() {
       if (error) throw error;
       return data;
     },
+  });
+
+  // Último ingreso de cada usuario, tomado de Auditoría (cada inicio de sesión queda registrado)
+  const { data: ultimosIngresos = {} } = useQuery({
+    queryKey: ['ultimosIngresos'],
+    queryFn: async () => {
+      const { data, error } = await supabase.from('auditoria_sistema')
+        .select('usuario_email, created_at')
+        .eq('accion', 'login')
+        .order('created_at', { ascending: false })
+        .limit(10000);
+      if (error) throw error;
+      const m: Record<string, string> = {};
+      (data ?? []).forEach((r: { usuario_email: string | null; created_at: string }) => {
+        const k = (r.usuario_email ?? '').toLowerCase();
+        if (k && !m[k]) m[k] = r.created_at;
+      });
+      return m;
+    },
+    staleTime: 60_000,
   });
 
   const allPerms     = rawPerms as unknown as PermRecord[];
@@ -511,7 +546,7 @@ export default function Accesos() {
             {/* Header tabla */}
             <div className="hidden md:grid grid-cols-12 gap-3 px-5 py-3 bg-slate-50 border-b border-slate-100">
               <div className="col-span-3 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Nombre / Correo</div>
-              <div className="col-span-2 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Puesto</div>
+              <div className="col-span-2 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Puesto / Último ingreso</div>
               <div className="col-span-2 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Territorio / Colegio</div>
               <div className="col-span-3 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Permisos Activos</div>
               <div className="col-span-2 text-[10px] font-bold text-slate-400 uppercase tracking-widest text-right">Acciones</div>
@@ -560,6 +595,7 @@ export default function Accesos() {
                           {u.colegio && <span className="flex items-center gap-1"><Building2 className="w-3 h-3" />{String(u.colegio)}</span>}
                         </div>
                         <LineaAlcance u={u} />
+                        <UltimoIngreso fecha={ultimosIngresos[String(u.user_email).toLowerCase()]} />
                         <p className="text-[10px] font-bold text-blue-600 uppercase tracking-tighter">
                           {activePerms.length} permiso{activePerms.length !== 1 ? 's' : ''} activo{activePerms.length !== 1 ? 's' : ''}
                         </p>
@@ -583,6 +619,7 @@ export default function Accesos() {
                         {/* Puesto */}
                         <div className="col-span-2">
                           <p className="text-sm text-slate-700 truncate">{String(u.puesto || '—')}</p>
+                          <UltimoIngreso fecha={ultimosIngresos[String(u.user_email).toLowerCase()]} />
                         </div>
                         {/* Territorio / Colegio */}
                         <div className="col-span-2">
