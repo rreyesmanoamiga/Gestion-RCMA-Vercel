@@ -11,8 +11,8 @@ import { usePermissions } from './usePermissions';
  *   solo ve filas de ESE colegio.
  * - Un usuario de Colegio marcado como "ECO" (cubre varios colegios) o un usuario
  *   ORSER/Coordinación con territorio (Norte/México) ve TODO ese territorio.
- * - Oficinas FMA: colegio "OF. MTY" ve todo el territorio NORTE y "OF. CDMX" todo
- *   MÉXICO (sin importar el área). Colegio "GENERAL" ve todo.
+ * - Colegio "GENERAL" ve todo. (OF. MTY / OF. CDMX ya no dan alcance: son lugares
+ *   para tickets y solicitudes, no se asignan a usuarios.)
  * - Usuarios antiguos sin `area`/`territorio` capturados (de antes de esta función)
  *   se tratan como generales, para no ocultarles de golpe algo que ya veían.
  *
@@ -20,14 +20,11 @@ import { usePermissions } from './usePermissions';
  * de cada fila y filtra el arreglo — no toca la consulta a Supabase, funciona
  * sobre datos ya traídos (igual que el resto de los filtros del sistema).
  */
-// Oficinas FMA que equivalen a un territorio completo.
-export const OFICINA_TERRITORIO: Record<string, string> = {
-  'OF. MTY':  'NORTE',
-  'OF. CDMX': 'MEXICO',
-};
+// Oficinas FMA: son lugares (tickets, solicitudes), no un colegio real.
+const OFICINAS_FMA = ['OF. MTY', 'OF. CDMX'];
 /** true si el colegio asignado NO es un colegio real (oficina FMA o GENERAL). */
 export const esColegioDeOficina = (c?: string | null) =>
-  !!c && (c === 'GENERAL' || c in OFICINA_TERRITORIO);
+  !!c && (c === 'GENERAL' || OFICINAS_FMA.includes(c));
 
 export function useScope() {
   const { isAdmin, permsRecord } = usePermissions();
@@ -35,9 +32,7 @@ export function useScope() {
   const area       = (permsRecord as Record<string, unknown> | null)?.area as string | undefined;
   const colegio    = (permsRecord as Record<string, unknown> | null)?.colegio as string | undefined;
   const territorioCapturado = (permsRecord as Record<string, unknown> | null)?.territorio as string | undefined;
-  // Territorio efectivo: la oficina manda sobre lo capturado (FMA → NORTE / MEXICO).
-  const oficinaTerritorio = colegio ? OFICINA_TERRITORIO[colegio] : undefined;
-  const territorio = oficinaTerritorio ?? territorioCapturado;
+  const territorio = territorioCapturado;
 
   const esGeneral = isAdmin
     || !territorio

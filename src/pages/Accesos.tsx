@@ -9,6 +9,13 @@ import { usePermissions } from '@/hooks/usePermissions';
 import AccesoRestringido from '@/components/shared/AccesoRestringido';
 import { COLEGIOS, TERRITORIOS, getColegiosByTerritorio } from '@/lib/colegios';
 
+// OF. MTY y OF. CDMX siguen existiendo como lugar (Ticket MAS, Solicitudes,
+// Presentación Semanal), pero ya no se asignan a usuarios: lo que ve cada quien
+// lo deciden su área y su territorio / alcance.
+const OFICINAS_NO_ASIGNABLES = ['OF. MTY', 'OF. CDMX'];
+const colegiosAsignables = (territorio: string) =>
+  getColegiosByTerritorio(territorio).filter(c => !OFICINAS_NO_ASIGNABLES.includes(c));
+
 const cardClass  = 'bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden';
 const btnPrimary = 'px-4 py-2 bg-slate-900 text-white rounded-md text-sm font-medium hover:bg-slate-800 disabled:opacity-50 transition-colors';
 const btnDanger  = 'px-4 py-2 border border-red-200 rounded-md text-sm font-medium text-red-600 hover:bg-red-50 transition-colors flex items-center gap-2';
@@ -702,7 +709,7 @@ export default function Accesos() {
                             value={inviteColegio} onChange={e => setInviteColegio(e.target.value)}>
                             <option value="">{inviteTerritorio ? 'Seleccionar colegio...' : 'Primero selecciona territorio'}</option>
                             {inviteTerritorio && <option value="ECO">── ECO (cubre varios colegios) ──</option>}
-                            {inviteTerritorio && getColegiosByTerritorio(inviteTerritorio).map(c => <option key={c} value={c}>{c}</option>)}
+                            {inviteTerritorio && colegiosAsignables(inviteTerritorio).map(c => <option key={c} value={c}>{c}</option>)}
                           </select>
                         </div>
                         {inviteColegio && inviteColegio !== 'ECO' && (
@@ -827,7 +834,7 @@ export default function Accesos() {
                           onChange={e => setEditingUser(prev => prev ? { ...prev, colegio: e.target.value } : null)}>
                           <option value="">{editingUser.territorio ? 'Seleccionar colegio...' : 'Primero selecciona territorio'}</option>
                           {editingUser.territorio && <option value="ECO">── ECO (cubre varios colegios) ──</option>}
-                          {editingUser.territorio && getColegiosByTerritorio(editingUser.territorio).map(c => <option key={c} value={c}>{c}</option>)}
+                          {editingUser.territorio && colegiosAsignables(editingUser.territorio).map(c => <option key={c} value={c}>{c}</option>)}
                         </select>
                       </div>
                       {editingUser.colegio && editingUser.colegio !== 'ECO' && (
