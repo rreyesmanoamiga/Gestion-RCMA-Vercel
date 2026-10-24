@@ -8,7 +8,7 @@ import {
 } from 'lucide-react';
 import PageHeader from '@/components/shared/PageHeader';
 import { mergeActividadesConCustom, calcularFechasEnMes } from './CalendarioMantenimiento';
-import { COLEGIOS } from '@/lib/colegios';
+import { COLEGIOS, normalizarColegio } from '@/lib/colegios';
 import { useComplianceDocs, esRetraso, type ComplianceDoc } from '@/lib/complianceShared';
 import { logoCuadradoDataURL } from '@/lib/logoPdf';
 import PresentacionSemanal from '@/components/reports/PresentacionSemanal';
@@ -1514,7 +1514,7 @@ export default function Reports() {
     return m;
   }, []);
   const alc = <T,>(rows: T[]): T[] => filtrarPorAlcance(rows as any[],
-    (r: any) => r.territorio ?? r.zona ?? terrDe[r.colegio ?? r.nombre_centro ?? r.colegio_nombre ?? ''],
+    (r: any) => r.territorio ?? r.zona ?? terrDe[normalizarColegio(r.colegio ?? r.nombre_centro ?? r.colegio_nombre ?? '')],
     (r: any) => r.colegio ?? r.nombre_centro) as T[];
   const rawProjects       = useMemo(() => alc(rawProjects_), [rawProjects_, filtrarPorAlcance]);
   const rawChecklists     = useMemo(() => alc(rawChecklists_), [rawChecklists_, filtrarPorAlcance]);

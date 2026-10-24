@@ -12,7 +12,7 @@ import { useAuth } from '@/lib/AuthContext';
 import { useScope } from '@/hooks/useScope';
 import { usePermissions } from '@/hooks/usePermissions';
 import StatusBadge from '@/components/shared/StatusBadge';
-import { COLEGIOS, type Colegio } from '@/lib/colegios';
+import { COLEGIOS, variantesColegio, type Colegio } from '@/lib/colegios';
 import {
   PieChart, Pie, Cell, Tooltip, ResponsiveContainer, Legend,
   BarChart, Bar, XAxis, YAxis, CartesianGrid, LineChart, Line
@@ -132,7 +132,7 @@ export default function Dashboard() {
   // relevantes por filtrar después de recortar.
   const aplicarAlcanceQuery = (q: any) => {
     if (esGeneral) return q;
-    if (miColegio) return q.eq('colegio', miColegio);
+    if (miColegio) return q.in('colegio', variantesColegio(miColegio));
     if (miTerritorio) return q.eq('territorio', miTerritorio);
     return q;
   };

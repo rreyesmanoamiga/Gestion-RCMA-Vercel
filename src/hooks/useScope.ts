@@ -1,5 +1,6 @@
 import { useMemo } from 'react';
 import { usePermissions } from './usePermissions';
+import { normalizarColegio } from '@/lib/colegios';
 
 /**
  * useScope — filtro de visibilidad por Área / Territorio / Colegio.
@@ -54,7 +55,8 @@ export function useScope() {
         const filaColegio = getColegio ? getColegio(row) : undefined;
         // 1) Usuario con colegio específico asignado: coincidencia exacta si la fila trae colegio.
         if (colegioEspecifico && getColegio) {
-          if (filaColegio) return filaColegio === colegioEspecifico;
+          // Compara por código: algunas tablas guardan el nombre completo del colegio
+          if (filaColegio) return normalizarColegio(filaColegio) === colegioEspecifico;
         }
         // 2) Resto (ECO, ORSER, Coordinación con territorio): todo el territorio.
         const filaTerritorio = getTerritorio(row);
