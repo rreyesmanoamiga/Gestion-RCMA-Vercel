@@ -1,4 +1,4 @@
-import { supabase } from './supabaseClient';
+import { supabase, esSoloLectura } from './supabaseClient';
 import { savePendingChange, getCachedData, cacheData } from './offlineDB';
 
 interface ParsedOrder {
@@ -87,6 +87,8 @@ function createEntityClient(tableName: string) {
         if (error) throw error;
         return result;
       } catch {
+        // En "Ver como" (solo lectura) NO se encola para después: no se guarda nada.
+        if (esSoloLectura()) throw new Error('Modo "Ver como": solo lectura, no se guardó nada.');
         // Sin internet — guardar como pendiente y devolver objeto temporal
         const offlineRecord = {
           ...data,
@@ -110,6 +112,8 @@ function createEntityClient(tableName: string) {
         if (error) throw error;
         return result;
       } catch {
+        // En "Ver como" (solo lectura) NO se encola para después: no se guarda nada.
+        if (esSoloLectura()) throw new Error('Modo "Ver como": solo lectura, no se guardó nada.');
         // Sin internet — guardar como pendiente y devolver objeto actualizado
         const offlineRecord = {
           ...data,
@@ -131,6 +135,8 @@ function createEntityClient(tableName: string) {
         if (error) throw error;
         return true;
       } catch {
+        // En "Ver como" (solo lectura) NO se encola para después: no se guarda nada.
+        if (esSoloLectura()) throw new Error('Modo "Ver como": solo lectura, no se guardó nada.');
         // Sin internet — guardar como pendiente
         await savePendingChange(tableName, 'delete', { id }, id);
         return true;

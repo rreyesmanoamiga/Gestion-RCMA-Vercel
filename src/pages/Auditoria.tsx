@@ -4,7 +4,7 @@ import { supabase } from '@/lib/supabaseClient';
 import { usePermissions } from '@/hooks/usePermissions';
 import {
   ShieldAlert, Filter, LogIn, LogOut, UserPlus, CheckCircle2, PlusCircle,
-  Pencil, Ban, Trash2, Award, ChevronDown, User as UserIcon,
+  Pencil, Ban, Trash2, Award, ChevronDown, User as UserIcon, Eye,
   FileDown, FileSpreadsheet, Calendar,
 } from 'lucide-react';
 import PageHeader from '@/components/shared/PageHeader';
@@ -146,6 +146,9 @@ const ACCION_META: Record<string, { label: string; icon: React.ElementType; colo
 // con detalle.tipo = "Corrección", motivo y la lista de cambios (antes → después).
 const esCorreccion = (r: { detalle: Record<string, unknown> | null }) => r.detalle?.tipo === 'Corrección';
 const META_CORRECCION = { label: 'Corrección', icon: Pencil, color: 'bg-amber-100 text-amber-700' };
+// "Ver como": el administrador entró a ver el sistema como otro usuario (solo lectura).
+const esVerComo = (r: { detalle: Record<string, unknown> | null }) => r.detalle?.tipo === 'Ver como';
+const META_VER_COMO = { label: 'Ver como', icon: Eye, color: 'bg-amber-50 text-amber-700' };
 type CambioAud = { campo?: string; antes?: string; despues?: string };
 /** Detalle en una línea de texto (listas y objetos legibles, no "[object Object]"). */
 function detalleTexto(d: Record<string, unknown> | null, sep = ' | '): string {
@@ -194,7 +197,7 @@ async function exportAuditoriaPDF(rows: AuditRow[], desde: string, hasta: string
 
   const rowsData = rows.map(r => [
     new Date(r.created_at).toLocaleString('es-MX', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }),
-    esCorreccion(r) ? 'Corrección' : ACCION_META[r.accion]?.label ?? r.accion,
+    esCorreccion(r) ? 'Corrección' : esVerComo(r) ? 'Ver como' : ACCION_META[r.accion]?.label ?? r.accion,
     MODULO_LABEL[r.modulo] ?? r.modulo,
     r.usuario_nombre ?? r.usuario_email ?? '—',
     r.registro_ref ?? '—',
@@ -238,7 +241,7 @@ async function exportAuditoriaExcel(rows: AuditRow[], desde: string, hasta: stri
   const headers = ['Fecha y Hora', 'Acción', 'Módulo', 'Usuario', 'Correo', 'Registro Afectado', 'A Nombre De', 'Detalle'];
   const dataRows = rows.map(r => [
     new Date(r.created_at).toLocaleString('es-MX'),
-    esCorreccion(r) ? 'Corrección' : ACCION_META[r.accion]?.label ?? r.accion,
+    esCorreccion(r) ? 'Corrección' : esVerComo(r) ? 'Ver como' : ACCION_META[r.accion]?.label ?? r.accion,
     MODULO_LABEL[r.modulo] ?? r.modulo,
     r.usuario_nombre ?? '—',
     r.usuario_email ?? '—',
@@ -435,7 +438,7 @@ export default function Auditoria() {
           <div className="divide-y divide-slate-100">
             {visible.map(r => {
               const corr = esCorreccion(r);
-              const meta = corr ? META_CORRECCION : ACCION_META[r.accion] ?? { label: r.accion, icon: Pencil, color: 'bg-slate-100 text-slate-600' };
+              const meta = corr ? META_CORRECCION : esVerComo(r) ? META_VER_COMO : ACCION_META[r.accion] ?? { label: r.accion, icon: Pencil, color: 'bg-slate-100 text-slate-600' };
               const Icon = meta.icon;
               return (
                 <div key={r.id} className="flex items-start gap-3 p-4 hover:bg-slate-50 transition-colors">

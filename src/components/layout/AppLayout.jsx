@@ -5,6 +5,7 @@ import NotificationBell from './NotificationBell';
 import GlobalSearch from './GlobalSearch';
 import UserMenu from './UserMenu';
 import OfflineBanner from '@/components/shared/OfflineBanner';
+import VerComoBanner from './VerComoBanner';
 import { useLimpiarFiltrosAlSalir } from '@/lib/filtrosPersistentes';
 
 export default function AppLayout() {
@@ -27,6 +28,7 @@ export default function AppLayout() {
     >
       <Sidebar isOpen={sidebarOpen} onToggle={handleToggle} />
       <main className="lg:ml-64 min-h-screen">
+        <VerComoBanner />
         <div className="flex justify-between items-center gap-4 px-4 md:px-6 lg:px-8 pt-16 lg:pt-6 pb-0">
           <GlobalSearch />
           <div className="flex items-center gap-3 shrink-0">
