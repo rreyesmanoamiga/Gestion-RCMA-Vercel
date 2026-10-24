@@ -17,15 +17,21 @@ const inputClass = 'w-full px-3 py-2 border border-slate-300 rounded-md text-sm 
 // ─── Áreas / Organización ───────────────────────────────────────────────────
 // Identifica a QUÉ pertenece el usuario. Separado del alcance (qué tanto ve).
 const AREAS: { value: string; label: string; color: string }[] = [
-  { value: 'colegio',           label: 'Colegio (Mano Amiga)',   color: 'bg-blue-50 text-blue-700 border-blue-200' },
-  { value: 'director_colegio',  label: 'Director de Colegio',    color: 'bg-indigo-50 text-indigo-700 border-indigo-200' },
-  { value: 'car',               label: 'CAR (Coord. Administrativa Regional)', color: 'bg-sky-50 text-sky-700 border-sky-200' },
-  { value: 'coordinacion_rcma', label: 'Coordinación RCMA',      color: 'bg-orange-50 text-orange-700 border-orange-200' },
-  { value: 'orser_finanzas',    label: 'Finanzas (ORSER)',       color: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
-  { value: 'orser_juridico',    label: 'Jurídico (ORSER)',       color: 'bg-purple-50 text-purple-700 border-purple-200' },
-  { value: 'orser_fiscal',      label: 'Fiscal (ORSER)',         color: 'bg-amber-50 text-amber-700 border-amber-200' },
-  { value: 'orser_eco',         label: 'ECO (ORSER)',            color: 'bg-teal-50 text-teal-700 border-teal-200' },
-  { value: 'orser_pc',          label: 'Protección Civil (ORSER)', color: 'bg-red-50 text-red-700 border-red-200' },
+  { value: 'fma_direccion_nacional', label: 'Director Nacional (FMA)',   color: 'bg-slate-100 text-slate-800 border-slate-300' },
+  { value: 'fma_gerencia',      label: 'Gerencia (FMA)',                 color: 'bg-slate-50 text-slate-700 border-slate-200' },
+  { value: 'car',               label: 'Coord. Admin. Regional (FMA)',   color: 'bg-sky-50 text-sky-700 border-sky-200' },
+  { value: 'colegio',           label: 'Colegios (MA)',                  color: 'bg-blue-50 text-blue-700 border-blue-200' },
+  { value: 'fma_admisiones',    label: 'Admisiones (FMA)',               color: 'bg-cyan-50 text-cyan-700 border-cyan-200' },
+  { value: 'fma_becas',         label: 'Becas (FMA)',                    color: 'bg-pink-50 text-pink-700 border-pink-200' },
+  { value: 'fma_aux_contable',  label: 'Aux. Cont. (FMA)',               color: 'bg-lime-50 text-lime-700 border-lime-200' },
+  { value: 'orser_inmobiliaria', label: 'Inmobiliaria (ORS-SER)',        color: 'bg-stone-50 text-stone-700 border-stone-200' },
+  { value: 'director_colegio',  label: 'Director de Colegio',            color: 'bg-indigo-50 text-indigo-700 border-indigo-200' },
+  { value: 'coordinacion_rcma', label: 'Informática (FMA)',              color: 'bg-orange-50 text-orange-700 border-orange-200' },
+  { value: 'orser_finanzas',    label: 'Finanzas (ORS-SER)',             color: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
+  { value: 'orser_juridico',    label: 'Jurídico (ORS-SER)',             color: 'bg-purple-50 text-purple-700 border-purple-200' },
+  { value: 'orser_fiscal',      label: 'Fiscal (ORS-SER)',               color: 'bg-amber-50 text-amber-700 border-amber-200' },
+  { value: 'orser_eco',         label: 'ECO (ORS-SER)',                  color: 'bg-teal-50 text-teal-700 border-teal-200' },
+  { value: 'orser_pc',          label: 'Protección Civil (ORS-SER)',     color: 'bg-red-50 text-red-700 border-red-200' },
 ];
 const getAreaInfo = (value?: string) => AREAS.find(a => a.value === value) ?? null;
 
@@ -35,6 +41,12 @@ const getAreaInfo = (value?: string) => AREAS.find(a => a.value === value) ?? nu
 const AREA_GRUPOS_RELEVANTES: Record<string, string[]> = {
   colegio:            ['Dashboard', 'Solicitud de Proyecto', 'Trámites CN', 'Calendario', 'Checklists', 'Minutas', 'NEXUS', 'Programa SOL', 'Expediente de Cumplimiento (colegio)'],
   director_colegio:   ['Dashboard', 'Solicitud de Proyecto', 'Trámites CN', 'Calendario', 'Checklists', 'Minutas', 'Reportes', 'NEXUS', 'Programa SOL', 'Expediente de Cumplimiento (colegio)'],
+  fma_direccion_nacional: ['Dashboard', 'Proyectos', 'Tickets', 'Ticket MAS', 'Anteproyectos', 'Minutas', 'Reportes', 'Cumplimiento'],
+  fma_gerencia:       ['Dashboard', 'Proyectos', 'Tickets', 'Ticket MAS', 'Anteproyectos', 'Minutas', 'Reportes', 'Cumplimiento'],
+  fma_admisiones:     ['Dashboard', 'Reportes'],
+  fma_becas:          ['Dashboard', 'Reportes'],
+  fma_aux_contable:   ['Insumos', 'Proyectos', 'Reportes'],
+  orser_inmobiliaria: ['Cumplimiento', 'Anteproyectos', 'Proyectos', 'Reportes'],
   car:                ['Dashboard', 'Solicitud de Proyecto', 'Anteproyectos', 'Ticket MAS', 'Tickets', 'Proyectos', 'Minutas', 'Calendario', 'Levantamiento Nacional', 'Reportes'],
   coordinacion_rcma:  ['Dashboard', 'Proyectos', 'Tickets', 'Ticket MAS', 'Trámites CN', 'Reportes', 'Calendario', 'Checklists', 'Cumplimiento'],
   orser_finanzas:     ['Reportes', 'Insumos', 'Proyectos', 'Dashboard'],
@@ -45,7 +57,7 @@ const AREA_GRUPOS_RELEVANTES: Record<string, string[]> = {
 };
 
 // Áreas que se ubican en un colegio específico (Territorio → Colegio, como hoy).
-// El resto (Coordinación RCMA y las áreas ORSER) se manejan por Alcance: Norte / México / General.
+// El resto (áreas FMA, CAR y ORS-SER) se manejan por Alcance: Norte / México / General.
 const AREAS_CON_COLEGIO = ['colegio', 'director_colegio'];
 const ALCANCES = ['NORTE', 'MEXICO', 'GENERAL'];
 
