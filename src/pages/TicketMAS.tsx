@@ -897,8 +897,9 @@ function TicketMASPrincipal({ esAutorizadorFMA }: { esAutorizadorFMA: boolean })
 
   // ── Abrir para revisión ───────────────────────────────────────────────────────
   const handleVerTicket = async (t: TicketMAS) => {
-    // Auto-cambiar a 'en_revision' al abrir el ticket (solo si está pendiente)
-    if (t.estatus === 'pendiente') {
+    // Auto-cambiar a 'en_revision' al abrir el ticket (solo si está pendiente y
+    // quien lo abre es quien autoriza — un perfil de consulta solo lo mira)
+    if (t.estatus === 'pendiente' && puedeAutorizar) {
       await supabase.from('tickets_mas').update({ estatus: 'en_revision' }).eq('id', t.id);
       qc.invalidateQueries({ queryKey: ['tickets_mas'] });
       t = { ...t, estatus: 'en_revision' };
@@ -1332,12 +1333,15 @@ function TicketMASPrincipal({ esAutorizadorFMA }: { esAutorizadorFMA: boolean })
       <div className="w-full p-4 space-y-4">
         <div className="flex items-center justify-between mb-2">
           <PageHeader title="Ticket MAS" subtitle="Revisión y autorización de tickets" icon={<ClipboardList className="w-5 h-5"/>} />
-          <button
-            onClick={() => { setForm({ ...FORM_INIT }); setVista('form'); }}
-            className="flex items-center gap-2 px-4 py-2 bg-slate-900 text-white text-sm font-semibold rounded-lg hover:bg-slate-700 transition"
-          >
-            <Send className="w-4 h-4" /> Nuevo Ticket
-          </button>
+          {/* Solo si puede llenar ticket (el Coordinador lo habilita desde Solicitudes Recibidas) */}
+          {puedeCrear && (
+            <button
+              onClick={() => { setForm({ ...FORM_INIT }); setVista('form'); }}
+              className="flex items-center gap-2 px-4 py-2 bg-slate-900 text-white text-sm font-semibold rounded-lg hover:bg-slate-700 transition"
+            >
+              <Send className="w-4 h-4" /> Nuevo Ticket
+            </button>
+          )}
         </div>
 
         <div className="flex items-center gap-3 flex-wrap">
@@ -1657,8 +1661,8 @@ function TicketMASPrincipal({ esAutorizadorFMA }: { esAutorizadorFMA: boolean })
         )}
         {viewing.territorio === 'FMA' && viewing.estatus === 'autorizado' && <EstadoVoBoFMA ticket={viewing} />}
 
-        {/* Campos del coordinador */}
-        {viewing.estatus !== 'autorizado' && viewing.estatus !== 'cancelado' && (
+        {/* Campos del coordinador — solo quien autoriza */}
+        {puedeAutorizar && viewing.estatus !== 'autorizado' && viewing.estatus !== 'cancelado' && (
           <section className="bg-white rounded-xl border border-blue-200 shadow-sm overflow-hidden">
             <div className="bg-blue-700 text-white px-4 py-2.5 text-xs font-bold uppercase tracking-wider flex items-center gap-2">
               <FileCheck className="w-4 h-4" /> Campos del Coordinador (Ventanilla Única)

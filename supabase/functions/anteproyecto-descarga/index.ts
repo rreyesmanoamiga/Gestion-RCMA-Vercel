@@ -4,7 +4,7 @@
 // Los ZIP viven en el OneDrive de la Coordinación (rreyes@manoamiga.edu.mx).
 // Quien no es dueño de esa carpeta no puede abrir el link de OneDrive, así que
 // esta función:
-//   1. revisa que el usuario tenga "Ver Anteproyectos" y que el anteproyecto
+//   1. revisa que el usuario tenga "Ver Anteproyectos" y "Descargar Anteproyectos", y que el anteproyecto
 //      esté dentro de su alcance (GENERAL = todo, OF. MTY = Norte, OF. CDMX =
 //      México, territorio o colegio según Accesos);
 //   2. localiza el archivo en OneDrive;
@@ -111,8 +111,9 @@ serve(async (req) => {
     // ── Permiso y alcance (mismas reglas que la pantalla) ───────────────────
     if (!esAdmin) {
       const { data: p } = await db.from('user_permissions')
-        .select('ver_anteproyectos, area, territorio, colegio').ilike('user_email', patronCorreo(email)).limit(1).maybeSingle();
+        .select('ver_anteproyectos, descargar_anteproyectos, area, territorio, colegio').ilike('user_email', patronCorreo(email)).limit(1).maybeSingle();
       if (!p?.ver_anteproyectos) throw new Falla('No tienes permiso para ver anteproyectos', 403);
+      if (!p?.descargar_anteproyectos) throw new Falla('Tu usuario puede consultar anteproyectos, pero no descargarlos', 403);
 
       const colegio = p.colegio as string | null;
       const oficina = colegio ? OFICINA_TERRITORIO[colegio] : undefined;

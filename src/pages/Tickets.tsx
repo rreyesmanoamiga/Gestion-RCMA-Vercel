@@ -846,7 +846,7 @@ export default function Tickets() {
                           className="p-1.5 rounded-md border border-emerald-200 text-emerald-600 hover:bg-emerald-50 transition-colors" title="Ver Expediente en OneDrive">
                           <FolderPlus className="w-3.5 h-3.5" />
                         </a>
-                      ) : (
+                      ) : puedeEditar && (
                         <button onClick={() => { setExpModal(t); setExpFiles({ solicitud: null, ticket: null, cotizaciones: null, autorizacion: null }); }}
                           className="p-1.5 rounded-md border border-blue-200 text-blue-500 hover:bg-blue-50 transition-colors" title="Crear Expediente en OneDrive">
                           <FolderPlus className="w-3.5 h-3.5" />

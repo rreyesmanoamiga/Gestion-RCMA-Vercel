@@ -13,6 +13,7 @@ import { useComplianceDocs, esRetraso, type ComplianceDoc } from '@/lib/complian
 import { logoCuadradoDataURL } from '@/lib/logoPdf';
 import PresentacionSemanal from '@/components/reports/PresentacionSemanal';
 import { usePermissions } from '@/hooks/usePermissions';
+import { useScope } from '@/hooks/useScope';
 
 const btnOutline = "flex items-center gap-2 px-4 py-2.5 border border-slate-300 rounded-lg text-sm font-bold text-slate-700 hover:bg-slate-50 transition-all shadow-sm disabled:opacity-40 disabled:cursor-not-allowed";
 const cardClass  = "bg-white p-6 rounded-xl border border-slate-200 shadow-sm";
@@ -1392,10 +1393,10 @@ async function exportMatrizExcel(data: {
 
 // ─── Componente ───────────────────────────────────────────────────────────────
 export default function Reports() {
-  const { isAdmin } = usePermissions();
-  const { data: rawProjects    = [] } = useQuery({ queryKey: ['projects'],    queryFn: () => db.Project.list('-created_at', 500) });
-  const { data: rawChecklists  = [] } = useQuery({ queryKey: ['checklists'],  queryFn: () => db.Checklist.list('-created_at', 500) });
-  const { data: rawMinimos = [] } = useQuery({
+  const { isAdmin, can } = usePermissions();
+  const { data: rawProjects_    = [] } = useQuery({ queryKey: ['projects'],    queryFn: () => db.Project.list('-created_at', 500) });
+  const { data: rawChecklists_  = [] } = useQuery({ queryKey: ['checklists'],  queryFn: () => db.Checklist.list('-created_at', 500) });
+  const { data: rawMinimos_ = [] } = useQuery({
     queryKey: ['minimos_indispensables_report'],
     queryFn: async () => {
       const { data, error } = await supabase
@@ -1407,29 +1408,29 @@ export default function Reports() {
       return data ?? [];
     },
   });
-  const { data: rawSolicitudes = [] } = useQuery({
+  const { data: rawSolicitudes_ = [] } = useQuery({
     queryKey: ['solicitudes'],
     queryFn: async () => { const { data, error } = await supabase.from('solicitudes').select('id,nombre_centro,nombre_proyecto,estatus,created_at').order('created_at', { ascending: false }).limit(500); if (error) throw error; return data ?? []; },
   });
-  const { data: rawTickets = [] } = useQuery({
+  const { data: rawTickets_ = [] } = useQuery({
     queryKey: ['tickets'],
     queryFn: async () => { const { data, error } = await supabase.from('tickets').select('id,folio,territorio,proyecto_id').order('created_at', { ascending: false }).limit(500); if (error) throw error; return data ?? []; },
   });
-  const { data: rawTicketsFull = [] } = useQuery({
+  const { data: rawTicketsFull_ = [] } = useQuery({
     queryKey: ['tickets-full-report'],
     queryFn: async () => { const { data, error } = await supabase.from('tickets').select('*').order('created_at', { ascending: false }).limit(500); if (error) throw error; return data ?? []; },
   });
-  const { data: rawPendientes = [] } = useQuery({ queryKey: ['pendientes-report'], queryFn: () => db.Pendiente.list('-created_at', 500) });
-  const { data: rawAnteproyectos = [] } = useQuery({
+  const { data: rawPendientes_ = [] } = useQuery({ queryKey: ['pendientes-report'], queryFn: () => db.Pendiente.list('-created_at', 500) });
+  const { data: rawAnteproyectos_ = [] } = useQuery({
     queryKey: ['anteproyectos-report'],
     queryFn: async () => { const { data, error } = await supabase.from('anteproyectos').select('*').order('created_at', { ascending: false }).limit(500); if (error) throw error; return data ?? []; },
   });
-  const { data: rawSolicitudesAll = [] } = useQuery({
+  const { data: rawSolicitudesAll_ = [] } = useQuery({
     queryKey: ['solicitudes-all-report'],
     queryFn: async () => { const { data, error } = await supabase.from('solicitudes').select('*').order('created_at', { ascending: false }).limit(500); if (error) throw error; return data ?? []; },
   });
 
-  const { data: rawTicketsMas = [] } = useQuery({
+  const { data: rawTicketsMas_ = [] } = useQuery({
     queryKey: ['tickets_mas_pdf_report'],
     queryFn: async () => { const { data, error } = await supabase.from('tickets_mas').select('*').order('created_at', { ascending: false }).limit(500); if (error) throw error; return data ?? []; },
   });
@@ -1437,14 +1438,14 @@ export default function Reports() {
   // Cumplimiento de mantenimiento (mes actual) — mismo cálculo que la pestaña
   // "Cumplimiento" de Calendario: catálogo nacional de actividades vs. lo que
   // cada colegio marcó como realizado.
-  const { data: rawCustomMaintenance = [] } = useQuery({
+  const { data: rawCustomMaintenance_ = [] } = useQuery({
     queryKey: ['custom_maintenance-report'],
     queryFn: async () => { const { data, error } = await supabase.from('custom_maintenance').select('*'); if (error) throw error; return data ?? []; },
   });
   const hoyReport = new Date();
   const inicioMesReport = `${hoyReport.getFullYear()}-${String(hoyReport.getMonth()+1).padStart(2,'0')}-01`;
   const finMesReport = `${hoyReport.getFullYear()}-${String(hoyReport.getMonth()+1).padStart(2,'0')}-${String(new Date(hoyReport.getFullYear(), hoyReport.getMonth()+1, 0).getDate()).padStart(2,'0')}`;
-  const { data: rawCompletions = [] } = useQuery({
+  const { data: rawCompletions_ = [] } = useQuery({
     queryKey: ['maintenance_completions-report', inicioMesReport],
     queryFn: async () => {
       const { data, error } = await supabase.from('maintenance_completions').select('colegio')
@@ -1453,49 +1454,94 @@ export default function Reports() {
       return data ?? [];
     },
   });
-  const { data: rawRequisiciones = [] } = useQuery({
+  const { data: rawRequisiciones_ = [] } = useQuery({
     queryKey: ['insumos_requisiciones-report'],
     queryFn: async () => { const { data, error } = await supabase.from('insumos_requisiciones').select('*').order('created_at', { ascending: false }).limit(500); if (error) throw error; return data ?? []; },
   });
-  const { data: rawPlanteles = [] } = useQuery({
+  const { data: rawPlanteles_ = [] } = useQuery({
     queryKey: ['lev_planteles-report'],
     queryFn: async () => { const { data, error } = await supabase.from('levantamiento_planteles').select('*').order('colegio_nombre'); if (error) throw error; return data ?? []; },
   });
-  const { data: rawPagosLev = [] } = useQuery({
+  const { data: rawPagosLev_ = [] } = useQuery({
     queryKey: ['lev_pagos-report'],
     queryFn: async () => { const { data, error } = await supabase.from('levantamiento_pagos').select('*'); if (error) throw error; return data ?? []; },
   });
-  const { data: rawEntregablesLev = [] } = useQuery({
+  const { data: rawEntregablesLev_ = [] } = useQuery({
     queryKey: ['lev_entregables-report'],
     queryFn: async () => { const { data, error } = await supabase.from('levantamiento_entregables').select('*'); if (error) throw error; return data ?? []; },
   });
-  const { data: rawReportesLev = [] } = useQuery({
+  const { data: rawReportesLev_ = [] } = useQuery({
     queryKey: ['lev_reportes-report'],
     queryFn: async () => { const { data, error } = await supabase.from('levantamiento_reportes').select('*').order('fecha_reporte', { ascending: false }); if (error) throw error; return data ?? []; },
   });
-  const { data: rawNexusNotas = [] } = useQuery({
+  const { data: rawNexusNotas_ = [] } = useQuery({
     queryKey: ['nexus_notas-report'],
     queryFn: async () => { const { data, error } = await supabase.from('nexus_notas').select('*').order('updated_at', { ascending: false }); if (error) throw error; return data ?? []; },
   });
-  const { data: rawNexusPendientes = [] } = useQuery({
+  const { data: rawNexusPendientes_ = [] } = useQuery({
     queryKey: ['nexus_pendientes-report'],
     queryFn: async () => { const { data, error } = await supabase.from('nexus_pendientes').select('*').order('created_at', { ascending: false }); if (error) throw error; return data ?? []; },
   });
 
   // ── Cumplimiento Normativo — reusa el mismo hook que usan sus propias páginas ──
-  const { data: rawComplianceDocs = [] } = useComplianceDocs();
-  const { data: rawCompliancePendientes = [] } = useQuery({
+  const { data: rawComplianceDocs_ = [] } = useComplianceDocs();
+  const { data: rawCompliancePendientes_ = [] } = useQuery({
     queryKey: ['compliance_pendientes-report'],
     queryFn: async () => { const { data, error } = await supabase.from('compliance_pendientes').select('*').order('created_at', { ascending: false }); if (error) throw error; return data ?? []; },
   });
-  const { data: rawComplianceNotas = [] } = useQuery({
+  const { data: rawComplianceNotas_ = [] } = useQuery({
     queryKey: ['compliance_notas-report'],
     queryFn: async () => { const { data, error } = await supabase.from('compliance_notas').select('*').order('updated_at', { ascending: false }); if (error) throw error; return data ?? []; },
   });
-  const { data: rawComplianceSeguimientos = [] } = useQuery({
+  const { data: rawComplianceSeguimientos_ = [] } = useQuery({
     queryKey: ['compliance_seguimientos-report'],
     queryFn: async () => { const { data, error } = await supabase.from('compliance_seguimientos').select('*').order('created_at', { ascending: false }); if (error) throw error; return data ?? []; },
   });
+
+
+  // ── Alcance del usuario ────────────────────────────────────────────────────
+  // Admin/generales ven todo. Un CAR (o cualquier usuario con territorio/colegio)
+  // ve solo lo suyo, y los módulos que no tiene (NEXUS, Insumos, Cumplimiento
+  // Normativo, Levantamiento) no entran ni a la pantalla ni a las exportaciones.
+  const { filtrarPorAlcance } = useScope();
+  const verNexus   = isAdmin || can('ver_nexus');
+  const verInsumos = isAdmin || can('ver_insumos');
+  const verCumplN  = isAdmin || can('ver_cumplimiento');
+  const verLev     = isAdmin || can('ver_levantamiento');
+  const terrDe = useMemo(() => {
+    const m: Record<string, string> = {};
+    COLEGIOS.forEach(c => { m[c.colegio] = c.territorio; });
+    return m;
+  }, []);
+  const alc = <T,>(rows: T[]): T[] => filtrarPorAlcance(rows as any[],
+    (r: any) => r.territorio ?? r.zona ?? terrDe[r.colegio ?? r.nombre_centro ?? r.colegio_nombre ?? ''],
+    (r: any) => r.colegio ?? r.nombre_centro) as T[];
+  const rawProjects       = useMemo(() => alc(rawProjects_), [rawProjects_, filtrarPorAlcance]);
+  const rawChecklists     = useMemo(() => alc(rawChecklists_), [rawChecklists_, filtrarPorAlcance]);
+  const rawMinimos        = useMemo(() => alc(rawMinimos_), [rawMinimos_, filtrarPorAlcance]);
+  const rawSolicitudes    = useMemo(() => alc(rawSolicitudes_), [rawSolicitudes_, filtrarPorAlcance]);
+  const rawSolicitudesAll = useMemo(() => alc(rawSolicitudesAll_), [rawSolicitudesAll_, filtrarPorAlcance]);
+  const rawTickets        = useMemo(() => alc(rawTickets_), [rawTickets_, filtrarPorAlcance]);
+  const rawTicketsFull    = useMemo(() => alc(rawTicketsFull_), [rawTicketsFull_, filtrarPorAlcance]);
+  const rawPendientes     = useMemo(() => alc(rawPendientes_), [rawPendientes_, filtrarPorAlcance]);
+  const rawAnteproyectos  = useMemo(() => alc(rawAnteproyectos_), [rawAnteproyectos_, filtrarPorAlcance]);
+  const rawTicketsMas     = useMemo(() => alc(rawTicketsMas_), [rawTicketsMas_, filtrarPorAlcance]);
+  const rawCustomMaintenance = rawCustomMaintenance_;
+  const rawCompletions    = useMemo(() => alc(rawCompletions_), [rawCompletions_, filtrarPorAlcance]);
+  const rawRequisiciones  = useMemo(() => verInsumos ? alc(rawRequisiciones_) : [], [rawRequisiciones_, verInsumos, filtrarPorAlcance]);
+  const rawPlanteles      = useMemo(() => verLev ? alc(rawPlanteles_) : [], [rawPlanteles_, verLev, filtrarPorAlcance]);
+  const idsPlanteles      = useMemo(() => new Set((rawPlanteles as any[]).map(p => p.id)), [rawPlanteles]);
+  const todosPlanteles    = rawPlanteles.length === rawPlanteles_.length;
+  const dePlantel = (r: any) => todosPlanteles || !r.plantel_id || idsPlanteles.has(r.plantel_id);
+  const rawPagosLev       = useMemo(() => verLev ? (rawPagosLev_ as any[]).filter(dePlantel) : [], [rawPagosLev_, verLev, idsPlanteles, todosPlanteles]);
+  const rawEntregablesLev = useMemo(() => verLev ? (rawEntregablesLev_ as any[]).filter(dePlantel) : [], [rawEntregablesLev_, verLev, idsPlanteles, todosPlanteles]);
+  const rawReportesLev    = useMemo(() => verLev ? (rawReportesLev_ as any[]).filter(dePlantel) : [], [rawReportesLev_, verLev, idsPlanteles, todosPlanteles]);
+  const rawNexusNotas     = verNexus ? rawNexusNotas_ : [];
+  const rawNexusPendientes = useMemo(() => verNexus ? alc(rawNexusPendientes_) : [], [rawNexusPendientes_, verNexus, filtrarPorAlcance]);
+  const rawComplianceDocs = useMemo(() => verCumplN ? alc(rawComplianceDocs_ as any[]) : [], [rawComplianceDocs_, verCumplN, filtrarPorAlcance]);
+  const rawCompliancePendientes = useMemo(() => verCumplN ? alc(rawCompliancePendientes_) : [], [rawCompliancePendientes_, verCumplN, filtrarPorAlcance]);
+  const rawComplianceNotas = verCumplN ? rawComplianceNotas_ : [];
+  const rawComplianceSeguimientos = useMemo(() => verCumplN ? alc(rawComplianceSeguimientos_) : [], [rawComplianceSeguimientos_, verCumplN, filtrarPorAlcance]);
 
   const projects    = rawProjects    as unknown as Project[];
   const checklists  = rawChecklists  as unknown[];
@@ -1511,12 +1557,12 @@ export default function Reports() {
     const { todasActividades } = mergeActividadesConCustom(rawCustomMaintenance as any[]);
     let totalInstancias = 0;
     todasActividades.forEach(act => { totalInstancias += calcularFechasEnMes(act, hoyReport.getFullYear(), hoyReport.getMonth()).length; });
-    return COLEGIOS.map(c => {
+    return alc(COLEGIOS).map(c => {
       const completados = (rawCompletions as { colegio: string }[]).filter(r => r.colegio === c.colegio).length;
       const pct = totalInstancias > 0 ? Math.round((completados / totalInstancias) * 100) : 0;
       return { colegio: c.colegio, territorio: c.territorio, completados, total: totalInstancias, pct };
     });
-  }, [rawCustomMaintenance, rawCompletions]);
+  }, [rawCustomMaintenance, rawCompletions, filtrarPorAlcance]);
 
   const stats = useMemo((): Stats => ({
     total:       projects.length,
@@ -1624,6 +1670,7 @@ export default function Reports() {
           </div>
           <p className="text-xs text-slate-400 mt-1">{cumplimiento.filter(c => c.pct < 40).length} colegio(s) rezagado(s)</p>
         </div>
+        {verInsumos && (
         <div className={`${cardClass} border-l-4 border-l-teal-500`}>
           <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Requisiciones (Insumos)</p>
           <div className="flex items-center justify-between">
@@ -1632,6 +1679,8 @@ export default function Reports() {
           </div>
           <p className="text-xs text-slate-400 mt-1">{requisiciones.length} registradas en total</p>
         </div>
+        )}
+        {verLev && (
         <div className={`${cardClass} border-l-4 border-l-indigo-500`}>
           <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Planteles Levantamiento</p>
           <div className="flex items-center justify-between">
@@ -1640,6 +1689,8 @@ export default function Reports() {
           </div>
           <p className="text-xs text-slate-400 mt-1">Levantamiento Nacional</p>
         </div>
+        )}
+        {verLev && (
         <div className={`${cardClass} border-l-4 border-l-red-500`}>
           <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Pagos Pendientes (Lev.)</p>
           <div className="flex items-center justify-between">
@@ -1648,9 +1699,11 @@ export default function Reports() {
           </div>
           <p className="text-xs text-slate-400 mt-1">{pagosLev.length} pagos en total</p>
         </div>
+        )}
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        {verCumplN && (
         <div className={`${cardClass} border-l-4 border-l-sky-500`}>
           <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Cumplimiento Normativo</p>
           <div className="flex items-center justify-between">
@@ -1661,6 +1714,7 @@ export default function Reports() {
             {(rawComplianceDocs as ComplianceDoc[]).filter(d => esRetraso(d, new Date())).length} en retraso
           </p>
         </div>
+        )}
       </div>
 
       {terData.length > 0 && (

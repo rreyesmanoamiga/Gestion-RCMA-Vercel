@@ -5,6 +5,7 @@ import { supabase } from '@/lib/supabaseClient';
 import { COLEGIOS } from '@/lib/colegios';
 import { useAuth } from '@/lib/AuthContext';
 import { usePermissions } from '@/hooks/usePermissions';
+import { useScope, esColegioDeOficina } from '@/hooks/useScope';
 import { toast } from 'sonner';
 import { logAudit } from '@/lib/audit';
 import { generarReporteIndividualExcel, generarReporteGeneralPDF, generarReporteIndividualPDFFirma, type CumplimientoColegioPC } from '@/lib/reportesProteccionCivil';
@@ -224,7 +225,14 @@ export default function CalendarioMantenimiento() {
   // Colegio del usuario actual (si tiene uno asignado específico en Accesos) —
   // determina para qué colegio puede marcar mantenimientos como realizados.
   const miColegio      = String((permsRecord as any)?.colegio ?? '');
-  const esAdminColegio = !isAdmin && !!miColegio && miColegio !== 'ECO';
+  const { territorio: territorioAlcance, esGeneral, area } = useScope();
+  // Solo un colegio real marca "realizado" (no ECO, ni oficinas FMA, ni el CAR).
+  const esAdminColegio = !isAdmin && !!miColegio && miColegio !== 'ECO'
+    && !esColegioDeOficina(miColegio) && area !== 'car';
+  // CAR / usuarios con territorio: consultan el avance de los colegios de su
+  // territorio (pestaña Cumplimiento), sin marcar ni editar nada.
+  const esConsultaTerritorio = !isAdmin && !esAdminColegio && !esGeneral && !!territorioAlcance;
+  const verCumplimiento = isAdmin || esConsultaTerritorio;
   const miTerritorio   = COLEGIOS.find(c => c.colegio === miColegio)?.territorio ?? '';
 
   // ── Evidencia fotográfica obligatoria al marcar una actividad realizada ──
@@ -883,7 +891,7 @@ export default function CalendarioMantenimiento() {
             className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${vistaActiva === 'lista' ? 'bg-slate-900 text-white' : 'border border-slate-300 text-slate-700 hover:bg-slate-50'}`}>
             Lista
           </button>
-          {isAdmin && (
+          {verCumplimiento && (
             <button onClick={() => setVistaActiva('cumplimiento')}
               className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${vistaActiva === 'cumplimiento' ? 'bg-slate-900 text-white' : 'border border-slate-300 text-slate-700 hover:bg-slate-50'}`}>
               Cumplimiento
@@ -1038,7 +1046,7 @@ export default function CalendarioMantenimiento() {
         </div>
       )}
 
-      {vistaActiva === 'cumplimiento' && isAdmin && (
+      {vistaActiva === 'cumplimiento' && verCumplimiento && (
         <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
           <div className="px-5 py-4 border-b border-slate-100 bg-slate-50 flex items-center justify-between">
             <div>
@@ -1053,6 +1061,7 @@ export default function CalendarioMantenimiento() {
 
           <div className="divide-y divide-slate-100">
             {COLEGIOS
+              .filter(c => isAdmin || c.territorio === territorioAlcance)
               .map(c => {
                 const completados = completions.filter(comp => comp.colegio === c.colegio).length;
                 const pct = totalInstanciasMes > 0 ? Math.round((completados / totalInstanciasMes) * 100) : 0;

@@ -85,6 +85,7 @@ import SolReconocimientos from '@/pages/SolReconocimientos';
 import SolCatalogo from '@/pages/SolCatalogo';
 import SolVoluntariado from '@/pages/SolVoluntariado';
 import PWAUpdatePrompt from '@/components/PWAUpdatePrompt';
+import AccesoRestringido from '@/components/shared/AccesoRestringido';
 
 const inputClass = "w-full px-3 py-2 border border-slate-300 rounded-md text-sm focus:ring-2 focus:ring-slate-900 focus:outline-none bg-white";
 
@@ -416,6 +417,21 @@ function AuthHashHandler() {
   return null;
 }
 
+// Bloquea una sección para quien no tiene el permiso (aunque entre con el link directo)
+function ConPermiso({ permiso, soloAdmin = false, children }) {
+  const { can, isAdmin, permsRecord } = usePermissions();
+  if (isAdmin) return children;
+  if (permsRecord === undefined) {
+    return (
+      <div className="flex items-center justify-center py-24">
+        <div className="w-8 h-8 border-4 border-slate-200 border-t-slate-800 rounded-full animate-spin" />
+      </div>
+    );
+  }
+  if (!soloAdmin && can(permiso)) return children;
+  return <AccesoRestringido />;
+}
+
 function ProtectedDashboard() {
   const { can, isAdmin, permsRecord } = usePermissions();
   if (isAdmin || can('ver_dashboard')) return <Dashboard />;
@@ -443,18 +459,18 @@ function AuthenticatedApp() {
       ) : (
         <Route element={<AppLayout />}>
           <Route path="/"                   element={<ProtectedDashboard />} />
-          <Route path="/tickets"            element={<Tickets />} />
-          <Route path="/proyectos"          element={<Projects />} />
-          <Route path="/proyectos/:id"      element={<ProjectDetail />} />
-          <Route path="/anteproyectos"      element={<Anteproyectos />} />
-          <Route path="/checklists"         element={<Checklists />} />
-          <Route path="/checklists/:id"     element={<ChecklistDetail />} />
-          <Route path="/solicitud"           element={<SolicitudProyecto />} />
+          <Route path="/tickets"            element={<ConPermiso permiso="ver_tickets"><Tickets /></ConPermiso>} />
+          <Route path="/proyectos"          element={<ConPermiso permiso="ver_proyectos"><Projects /></ConPermiso>} />
+          <Route path="/proyectos/:id"      element={<ConPermiso permiso="ver_proyectos"><ProjectDetail /></ConPermiso>} />
+          <Route path="/anteproyectos"      element={<ConPermiso permiso="ver_anteproyectos"><Anteproyectos /></ConPermiso>} />
+          <Route path="/checklists"         element={<ConPermiso permiso="ver_checklists"><Checklists /></ConPermiso>} />
+          <Route path="/checklists/:id"     element={<ConPermiso permiso="ver_checklists"><ChecklistDetail /></ConPermiso>} />
+          <Route path="/solicitud"           element={<ConPermiso permiso="ver_solicitud_proyecto"><SolicitudProyecto /></ConPermiso>} />
           <Route path="/protocolo"           element={<ProtocoloProyectos />} />
           <Route path="/ticket-mas"          element={<TicketMAS />} />
-          <Route path="/solicitudes"         element={<SolicitudesRecibidas />} />
-          <Route path="/reportes"            element={<Reports />} />
-          <Route path="/usuarios"           element={<UserManagement />} />
+          <Route path="/solicitudes"         element={<ConPermiso permiso="ver_solicitudes_recibidas"><SolicitudesRecibidas /></ConPermiso>} />
+          <Route path="/reportes"            element={<ConPermiso permiso="ver_reportes"><Reports /></ConPermiso>} />
+          <Route path="/usuarios"           element={<ConPermiso soloAdmin><UserManagement /></ConPermiso>} />
           <Route path="/accesos"            element={<Accesos />} />
           <Route path="/auditoria"          element={<Auditoria />} />
           <Route path="/cumplimiento"              element={<CumplimientoDashboard />} />
@@ -474,15 +490,15 @@ function AuthenticatedApp() {
           <Route path="/cumplimiento/tramites/:id"    element={<TramiteCNDetail />} />
           <Route path="/cumplimiento/ticket-mas-cn"    element={<TicketMASCN />} />
           <Route path="/reportar-problema"  element={<ReportarProblema />} />
-          <Route path="/minutas"            element={<Minutas />} />
-          <Route path="/calendario"         element={<CalendarioMantenimiento />} />
-          <Route path="/presupuestos"       element={<Presupuestos />} />
+          <Route path="/minutas"            element={<ConPermiso permiso="ver_minutas"><Minutas /></ConPermiso>} />
+          <Route path="/calendario"         element={<ConPermiso permiso="ver_calendario"><CalendarioMantenimiento /></ConPermiso>} />
+          <Route path="/presupuestos"       element={<ConPermiso permiso="ver_presupuestos"><Presupuestos /></ConPermiso>} />
           
           {/* --- RUTA DE DIRECTORIO AGREGADA --- */}
           <Route path="/directorio"         element={<Directorio />} />
-          <Route path="/insumos"             element={<Insumos />} />
-          <Route path="/nexus"               element={<Nexus />} />
-          <Route path="/levantamiento"       element={<LevantamientoNacional />} />
+          <Route path="/insumos"             element={<ConPermiso permiso="ver_insumos"><Insumos /></ConPermiso>} />
+          <Route path="/nexus"               element={<ConPermiso permiso="ver_nexus"><Nexus /></ConPermiso>} />
+          <Route path="/levantamiento"       element={<ConPermiso permiso="ver_levantamiento"><LevantamientoNacional /></ConPermiso>} />
           <Route path="/sol"                      element={<SolDashboard />} />
           <Route path="/sol/inspecciones"         element={<SolInspecciones />} />
           <Route path="/sol/inspecciones/:id"     element={<SolInspeccionDetail />} />

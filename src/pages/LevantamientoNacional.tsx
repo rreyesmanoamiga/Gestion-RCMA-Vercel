@@ -46,6 +46,7 @@ import {
 } from 'lucide-react';
 import PageHeader from '@/components/shared/PageHeader';
 import { usePermissions } from '@/hooks/usePermissions';
+import { useScope } from '@/hooks/useScope';
 import { logAudit } from '@/lib/audit';
 
 const REPORTES_PAGE_SIZE = 20;
@@ -245,13 +246,14 @@ Este proyecto es fundamental para el desarrollo de futuras iniciativas de mejora
 // ══════════════════════════════════════════════════════════════════════════════
 // COMPONENTE PRINCIPAL
 // ══════════════════════════════════════════════════════════════════════════════
-function TabReporteGeneral({ reportesGenerales, planteles, pagos, comunicados, entregables, puedeEliminar }: {
+function TabReporteGeneral({ reportesGenerales, planteles, pagos, comunicados, entregables, puedeEliminar, puedeCrear = true }: {
   reportesGenerales: ReporteGeneral[];
   planteles: Plantel[];
   pagos: Pago[];
   comunicados: Comunicado[];
   entregables: Entregable[];
   puedeEliminar: boolean;
+  puedeCrear?: boolean;
 }) {
   const qc = useQueryClient();
   const [generating, setGenerating] = useState(false);
@@ -540,10 +542,12 @@ function TabReporteGeneral({ reportesGenerales, planteles, pagos, comunicados, e
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <p className="text-sm text-slate-500">Genera un reporte PDF con el estado actual de planteles, pagos, comunicados y entregables.</p>
-        <button onClick={generarReporte} disabled={generating} className={btnPrimary}>
-          {generating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
-          {generating ? 'Generando…' : 'Generar Reporte'}
-        </button>
+        {puedeCrear && (
+          <button onClick={generarReporte} disabled={generating} className={btnPrimary}>
+            {generating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
+            {generating ? 'Generando…' : 'Generar Reporte'}
+          </button>
+        )}
       </div>
 
 
@@ -618,7 +622,7 @@ export default function LevantamientoNacional() {
   const puedeDescargar  = isAdmin || can('descargar_levantamiento');
 
   // ─── Queries ──────────────────────────────────────────────────────────────
-  const { data: planteles = [], isLoading: loadingP } = useQuery<Plantel[]>({
+  const { data: plantelesRaw = [], isLoading: loadingP } = useQuery<Plantel[]>({
     queryKey: ['lev_planteles'],
     queryFn: async () => {
       const { data, error } = await supabase.from('levantamiento_planteles').select('*').order('colegio_nombre');
@@ -627,7 +631,7 @@ export default function LevantamientoNacional() {
     },
   });
 
-  const { data: entregables = [] } = useQuery<Entregable[]>({
+  const { data: entregablesRaw = [] } = useQuery<Entregable[]>({
     queryKey: ['lev_entregables'],
     queryFn: async () => {
       const { data, error } = await supabase.from('levantamiento_entregables').select('*');
@@ -636,7 +640,7 @@ export default function LevantamientoNacional() {
     },
   });
 
-  const { data: pagos = [] } = useQuery<Pago[]>({
+  const { data: pagosRaw = [] } = useQuery<Pago[]>({
     queryKey: ['lev_pagos'],
     queryFn: async () => {
       const { data, error } = await supabase.from('levantamiento_pagos').select('*').order('mes_numero');
@@ -645,7 +649,7 @@ export default function LevantamientoNacional() {
     },
   });
 
-  const { data: comunicados = [] } = useQuery<Comunicado[]>({
+  const { data: comunicadosRaw = [] } = useQuery<Comunicado[]>({
     queryKey: ['lev_comunicados'],
     queryFn: async () => {
       const { data, error } = await supabase.from('levantamiento_comunicados').select('*').order('created_at', { ascending: false });
@@ -663,7 +667,7 @@ export default function LevantamientoNacional() {
     },
   });
 
-  const { data: reportes = [] } = useQuery<Reporte[]>({
+  const { data: reportesRaw = [] } = useQuery<Reporte[]>({
     queryKey: ['lev_reportes'],
     queryFn: async () => {
       const { data, error } = await supabase.from('levantamiento_reportes').select('*').order('fecha_reporte', { ascending: false });
@@ -680,6 +684,18 @@ export default function LevantamientoNacional() {
       return data;
     },
   });
+
+  // ─── Alcance: un usuario con territorio (CAR) solo ve los planteles de su
+  // territorio (zona) y lo que cuelga de ellos; admin/generales ven todo.
+  const { filtrarPorAlcance } = useScope();
+  const planteles = useMemo(() => filtrarPorAlcance(plantelesRaw, p => p.zona), [plantelesRaw, filtrarPorAlcance]);
+  const plantelesVisibles = useMemo(() => new Set(planteles.map(p => p.id)), [planteles]);
+  const esTodo = planteles.length === plantelesRaw.length;
+  const dePlantel = (id?: string | null) => esTodo || !id || plantelesVisibles.has(id);
+  const entregables = useMemo(() => entregablesRaw.filter(e => dePlantel(e.plantel_id)), [entregablesRaw, plantelesVisibles, esTodo]);
+  const pagos       = useMemo(() => pagosRaw.filter(e => dePlantel(e.plantel_id)), [pagosRaw, plantelesVisibles, esTodo]);
+  const comunicados = useMemo(() => comunicadosRaw.filter(e => dePlantel(e.plantel_id)), [comunicadosRaw, plantelesVisibles, esTodo]);
+  const reportes    = useMemo(() => reportesRaw.filter(e => dePlantel(e.plantel_id) || (!!e.plantel_id_2 && dePlantel(e.plantel_id_2))), [reportesRaw, plantelesVisibles, esTodo]);
 
   // ─── Stats ────────────────────────────────────────────────────────────────
   const totalContrato = 10342976.48;
@@ -728,7 +744,7 @@ export default function LevantamientoNacional() {
       {tab === 'comunicados' && <TabComunicados comunicados={comunicados} planteles={planteles} directorio={directorio} qc={qc} puedeCrear={puedeCrear} puedeEliminar={puedeEliminar} puedeDescargar={puedeDescargar} />}
       {tab === 'reportes'    && <TabReportes reportes={reportes} planteles={planteles} qc={qc} puedeCrear={puedeCrear} puedeEliminar={puedeEliminar} puedeDescargar={puedeDescargar} />}
       {tab === 'entregables' && <TabEntregables entregables={entregables} planteles={planteles} qc={qc} puedeCrear={puedeCrear} />}
-      {tab === 'reporte'      && <TabReporteGeneral reportesGenerales={reportesGenerales} planteles={planteles} pagos={pagos} comunicados={comunicados} entregables={entregables} puedeEliminar={puedeEliminar} />}
+      {tab === 'reporte'      && <TabReporteGeneral reportesGenerales={reportesGenerales} planteles={planteles} pagos={pagos} comunicados={comunicados} entregables={entregables} puedeEliminar={puedeEliminar} puedeCrear={puedeCrear} />}
     </div>
   );
 }

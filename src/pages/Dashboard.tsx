@@ -10,6 +10,7 @@ import { es } from 'date-fns/locale';
 import { supabase } from '@/lib/supabaseClient';
 import { useAuth } from '@/lib/AuthContext';
 import { useScope } from '@/hooks/useScope';
+import { usePermissions } from '@/hooks/usePermissions';
 import StatusBadge from '@/components/shared/StatusBadge';
 import { COLEGIOS, type Colegio } from '@/lib/colegios';
 import {
@@ -106,11 +107,25 @@ const CustomTooltip = ({ active, payload }: { active?: boolean; payload?: { name
   return null;
 };
 
+// Columnas del renglón de KPIs según cuántas tarjetas ve el usuario (clases fijas para Tailwind)
+const KPI_COLS: Record<number, string> = {
+  4: 'lg:grid-cols-4', 5: 'lg:grid-cols-5', 6: 'lg:grid-cols-6', 7: 'lg:grid-cols-7',
+};
+
 // ─── Componente principal ─────────────────────────────────────────────────────
 export default function Dashboard() {
   const { user } = useAuth();
   const { territorio: miTerritorio, colegioEspecifico: miColegio, esGeneral, filtrarPorAlcance } = useScope();
   const nombreUsuario = user?.user_metadata?.nombre || user?.email || 'Usuario';
+
+  // Qué secciones del tablero le tocan a este usuario (perfiles de consulta:
+  // administradores/auxiliares de colegio y CAR no ven NEXUS, etc.)
+  const { can, isAdmin } = usePermissions();
+  const verNexus       = isAdmin || can('ver_nexus');
+  const verLev         = isAdmin || can('ver_levantamiento');
+  const verChecklists  = isAdmin || can('ver_checklists');
+  const verCumpl       = isAdmin || can('ver_cumplimiento');
+  const verPresupuesto = isAdmin || can('ver_presupuestos');
 
   // Aplica el alcance del usuario directo en la consulta a Supabase — usado en
   // los conteos/listas que traen pocos registros (limit) para no perder resultados
@@ -188,6 +203,7 @@ export default function Dashboard() {
       ]);
       return { vencidos: vencidos ?? 0, porExpirar: porExpirar ?? 0 };
     },
+    enabled: verCumpl,
     refetchInterval: 60000,
   });
 
@@ -200,6 +216,7 @@ export default function Dashboard() {
       );
       return count ?? 0;
     },
+    enabled: verNexus,
     refetchInterval: 60000,
   });
 
@@ -214,6 +231,7 @@ export default function Dashboard() {
       ).limit(5);
       return data ?? [];
     },
+    enabled: verNexus,
     refetchInterval: 60000,
   });
 
@@ -245,6 +263,7 @@ export default function Dashboard() {
         .limit(10);
       return data ?? [];
     },
+    enabled: verLev,
     refetchInterval: 300000,
   });
 
@@ -327,8 +346,9 @@ export default function Dashboard() {
 
   // ─── Resumen por territorio ────────────────────────────────────────────────
   const territorySummary = useMemo(() =>
-    ['NORTE', 'MEXICO'].map(territorio => {
-      const colegios  = COLEGIOS.filter((c: Colegio) => c.territorio === territorio);
+    // Solo los territorios/colegios del alcance del usuario (CAR: su territorio; colegio: el suyo)
+    ['NORTE', 'MEXICO'].filter(t => esGeneral || t === miTerritorio).map(territorio => {
+      const colegios  = COLEGIOS.filter((c: Colegio) => c.territorio === territorio && (esGeneral || !miColegio || c.colegio === miColegio));
       const tProjects = projects.filter(p => p.territorio === territorio);
       const tCheck    = checklists.filter(c => c.territorio === territorio);
       const tSinMtto  = colegiosSinMtto.filter(colegio => colegios.some(c => c.colegio === colegio)).length;
@@ -336,7 +356,7 @@ export default function Dashboard() {
       const pct        = colegios.length > 0 ? Math.round((sinAlertas / colegios.length) * 100) : 100;
       return { territorio, colegios, tProjects, tCheck, tSinMtto, sinAlertas, pct };
     }),
-    [projects, checklists, urgentColegios, colegiosSinMtto]
+    [projects, checklists, urgentColegios, colegiosSinMtto, esGeneral, miTerritorio, miColegio]
   );
 
   // ─── Feed de actividad reciente ────────────────────────────────────────────
@@ -455,12 +475,12 @@ export default function Dashboard() {
       </div>
 
       {/* ─── Resumen rápido (4 tarjetas) ─────────────────────────────────────── */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+      <div className={`grid grid-cols-2 ${verCumpl ? 'lg:grid-cols-4' : 'lg:grid-cols-3'} gap-3`}>
         {[
           { label: 'Obras Activas',           value: stats.activeProjects,                                  to: '/proyectos' },
           { label: 'Mantenimientos Pendientes', value: colegiosSinMtto.length,                              to: '/calendario' },
           { label: 'Tickets Abiertos',         value: stats.openTickets,                                     to: '/tickets' },
-          { label: 'Alertas de PC',            value: cumplimientoStats.vencidos + cumplimientoStats.porExpirar, to: '/cumplimiento' },
+          ...(verCumpl ? [{ label: 'Alertas de PC', value: cumplimientoStats.vencidos + cumplimientoStats.porExpirar, to: '/cumplimiento' }] : []),
         ].map(({ label, value, to }) => (
           <Link key={label} to={to} className="bg-white rounded-xl border border-slate-200 p-5 hover:shadow-md hover:border-slate-300 transition-all duration-200">
             <p className="text-3xl font-display font-semibold text-slate-900 leading-none mb-2">{value}</p>
@@ -528,7 +548,7 @@ export default function Dashboard() {
           <h2 className="text-sm font-bold text-slate-800 uppercase tracking-tight mb-4 shrink-0">Cronograma — Proyectos Recientes</h2>
 
           {/* Alerta flotante de Protección Civil — usa cumplimientoStats ya calculado */}
-          {cumplimientoStats.porExpirar > 0 && (
+          {verCumpl && cumplimientoStats.porExpirar > 0 && (
             <Link to="/cumplimiento/documentos"
               className="absolute top-4 right-4 z-10 bg-white border border-red-200 rounded-lg shadow-sm px-3 py-2 flex items-start gap-2 max-w-[190px] hover:shadow-md transition-shadow">
               <ShieldAlert className="w-4 h-4 text-red-600 shrink-0 mt-0.5" />
@@ -633,7 +653,7 @@ export default function Dashboard() {
       )}
 
       {/* ─── KPIs ────────────────────────────────────────────────────────────── */}
-      <div className="grid grid-cols-2 lg:grid-cols-7 gap-3">
+      <div className={`grid grid-cols-2 ${KPI_COLS[4 + (verNexus ? 1 : 0) + (verChecklists ? 1 : 0) + (verCumpl ? 1 : 0)]} gap-3`}>
         <KPICard title="Proyectos Activos" value={stats.activeProjects}
           subtitle={`${stats.completedProjects} completados`}
           icon={FolderKanban} color="blue" to="/proyectos"
@@ -642,22 +662,22 @@ export default function Dashboard() {
           subtitle={`${tickets.length} tickets totales`}
           icon={TicketCheck} color="red" to="/tickets"
           trend={stats.openTickets > 5 ? 'down' : 'neutral'} trendLabel={`${tickets.length} total`} />
-        <KPICard title="Pendientes Activos" value={nexusPendientesActivos}
+        {verNexus && <KPICard title="Pendientes Activos" value={nexusPendientesActivos}
           subtitle="Ver todos en NEXUS"
           icon={ClockAlert} color={nexusPendientesActivos > 0 ? 'orange' : 'green'} to="/nexus"
-          trend={nexusPendientesActivos > 0 ? 'down' : 'up'} trendLabel={`${nexusPendientesActivos} activos`} />
-        <KPICard title="Inspecciones" value={stats.criticalChecklists > 0 ? stats.criticalChecklists : checklists.length}
+          trend={nexusPendientesActivos > 0 ? 'down' : 'up'} trendLabel={`${nexusPendientesActivos} activos`} />}
+        {verChecklists && <KPICard title="Inspecciones" value={stats.criticalChecklists > 0 ? stats.criticalChecklists : checklists.length}
           subtitle={stats.criticalChecklists > 0 ? 'requieren atención' : 'sin alertas críticas'}
           icon={ClipboardCheck} color={stats.criticalChecklists > 0 ? 'red' : 'green'} to="/checklists"
-          trend={stats.criticalChecklists > 0 ? 'down' : 'up'} trendLabel={`${checklists.length} total`} />
+          trend={stats.criticalChecklists > 0 ? 'down' : 'up'} trendLabel={`${checklists.length} total`} />}
         <KPICard title="Mantenimiento" value={`${totalColegiosRed - colegiosSinMtto.length}/${totalColegiosRed}`}
           subtitle="Colegios con registro este mes"
           icon={Wrench} color={colegiosSinMtto.length === 0 ? 'green' : 'orange'} to="/calendario"
           trend={colegiosSinMtto.length === 0 ? 'up' : 'down'} trendLabel={`${colegiosSinMtto.length} sin registro`} />
-        <KPICard title="Cumplimiento Norm." value={cumplimientoStats.vencidos}
+        {verCumpl && <KPICard title="Cumplimiento Norm." value={cumplimientoStats.vencidos}
           subtitle={`${cumplimientoStats.porExpirar} por expirar`}
           icon={BarChart3} color={cumplimientoStats.vencidos > 0 ? 'red' : 'green'} to="/cumplimiento"
-          trend={cumplimientoStats.vencidos > 0 ? 'down' : 'up'} trendLabel="vencidos" />
+          trend={cumplimientoStats.vencidos > 0 ? 'down' : 'up'} trendLabel="vencidos" />}
         <KPICard title="Urgentes" value={stats.urgentItems}
           subtitle="Acción inmediata"
           icon={AlertTriangle} color={stats.urgentItems > 0 ? 'red' : 'green'}
@@ -723,7 +743,7 @@ export default function Dashboard() {
       </div>
 
       {/* ─── Tendencias históricas (últimos 6 meses) ─────────────────────────── */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+      <div className={`grid grid-cols-1 ${verPresupuesto ? 'lg:grid-cols-2' : ''} gap-4`}>
         {/* Línea — proyectos completados por mes */}
         <div className="bg-white rounded-xl border border-slate-200 p-5">
           <div className="flex items-center gap-2 mb-4">
@@ -747,7 +767,7 @@ export default function Dashboard() {
         </div>
 
         {/* Barras — presupuesto planeado vs costo real por mes */}
-        <div className="bg-white rounded-xl border border-slate-200 p-5">
+        {verPresupuesto && <div className="bg-white rounded-xl border border-slate-200 p-5">
           <div className="flex items-center gap-2 mb-4">
             <div className="w-7 h-7 rounded-lg bg-indigo-50 flex items-center justify-center">
               <BarChart3 className="w-4 h-4 text-indigo-600" />
@@ -768,7 +788,7 @@ export default function Dashboard() {
               <Bar dataKey="Costo Real" fill="#f59e0b" radius={[3, 3, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>
-        </div>
+        </div>}
       </div>
 
       {/* ─── Territorios ──────────────────────────────────────────────────────── */}
@@ -831,7 +851,7 @@ export default function Dashboard() {
       </div>
 
       {/* ─── NEXUS Widget ──────────────────────────────────────────────────────── */}
-      <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+      {verNexus && <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
         <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100">
           <h2 className="text-sm font-bold text-slate-800 uppercase tracking-tight flex items-center gap-2">
             <BookOpen className="w-4 h-4 text-teal-600" /> NEXUS — Pendientes Activos
@@ -871,7 +891,7 @@ export default function Dashboard() {
             })}
           </div>
         )}
-      </div>
+      </div>}
 
       {/* ─── Actividad Reciente (feed) ────────────────────────────────────────── */}
       <div className="bg-white rounded-xl border border-slate-200">
@@ -919,7 +939,15 @@ export default function Dashboard() {
             { label: 'Checklists',    path: '/checklists',    icon: ClipboardCheck, color: 'bg-emerald-50 text-emerald-600 border-emerald-100',  count: checklists.length },
             { label: 'NEXUS',         path: '/nexus',          icon: ClockAlert,     color: 'bg-teal-50 text-teal-600 border-teal-100',           count: 0 },
             { label: 'Calendario',    path: '/calendario',    icon: CalendarDays,   color: 'bg-purple-50 text-purple-600 border-purple-100',     count: null },
-          ] as { label: string; path: string; icon: LucideIcon; color: string; count: number | null }[]).map(
+          ] as { label: string; path: string; icon: LucideIcon; color: string; count: number | null }[])
+            .filter(({ path }) => path !== '/nexus' ? (
+              path === '/checklists' ? verChecklists :
+              path === '/tickets' ? can('ver_tickets') :
+              path === '/proyectos' ? can('ver_proyectos') :
+              path === '/anteproyectos' ? can('ver_anteproyectos') :
+              path === '/calendario' ? can('ver_calendario') : true
+            ) : verNexus)
+            .map(
             ({ label, path, icon: Icon, color, count }) => (
               <Link key={path} to={path}
                 className={`flex flex-col items-center gap-2 p-4 rounded-xl border ${color} hover:shadow-md transition-all duration-200 group relative`}>

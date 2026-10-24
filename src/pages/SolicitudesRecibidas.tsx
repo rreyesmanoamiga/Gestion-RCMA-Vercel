@@ -51,7 +51,10 @@ const fmx = (n?: number | null) =>
   n != null ? Number(n).toLocaleString('es-MX', { style: 'currency', currency: 'MXN' }) : '—';
 
 export default function SolicitudesRecibidas() {
-  const { isAdmin } = usePermissions();
+  const { isAdmin, can } = usePermissions();
+  // Perfiles de consulta (administradores/auxiliares de colegio, CAR): ven el
+  // estatus de las solicitudes de su alcance, sin recibir/cancelar/habilitar/subir.
+  const puedeVer = isAdmin || can('ver_solicitudes_recibidas');
   // Fuente única de verdad: territorio de cada colegio en vivo desde Directorio.
   const { data: directorioRows = [] } = useDirectorio();
   const { filtrarPorAlcance } = useScope();
@@ -154,7 +157,7 @@ export default function SolicitudesRecibidas() {
 
   const solicitudesAlcance = raw as Solicitud[];
   const solicitudes = useMemo(
-    () => filtrarPorAlcance(solicitudesAlcance, s => colegioTerritorioMap[s.nombre_centro ?? '']),
+    () => filtrarPorAlcance(solicitudesAlcance, s => colegioTerritorioMap[s.nombre_centro ?? ''], s => s.nombre_centro),
     [solicitudesAlcance, colegioTerritorioMap, filtrarPorAlcance]
   );
 
@@ -367,7 +370,7 @@ export default function SolicitudesRecibidas() {
     canceladas: solicitudes.filter(s => s.estatus === 'cancelada').length,
   }), [solicitudes]);
 
-  if (!isAdmin) {
+  if (!puedeVer) {
     return (
       <div className="max-w-6xl mx-auto p-4 sm:p-6">
         <PageHeader title="Solicitudes Recibidas" subtitle="Gestión de solicitudes de inicio de obra o mantenimiento" />
@@ -485,14 +488,14 @@ export default function SolicitudesRecibidas() {
                     className="flex items-center gap-1.5 px-3 py-2 border border-teal-300 text-teal-700 rounded-md text-sm font-medium hover:bg-teal-50 transition-colors">
                     📎 Cotizaciones
                   </button>
-                  {s.estatus === 'pendiente' && (
+                  {isAdmin && s.estatus === 'pendiente' && (
                     <button onClick={() => recibirMutation.mutate(s.id)}
                       disabled={recibirMutation.isPending}
                       className="flex items-center gap-1.5 px-3 py-2 bg-emerald-600 text-white rounded-md text-sm font-bold hover:bg-emerald-700 transition-colors disabled:opacity-50">
                       <CheckCircle className="w-4 h-4" /> Recibida
                     </button>
                   )}
-                  {s.estatus === 'recibida' && !s.ticket_mas_habilitado_at && (
+                  {isAdmin && s.estatus === 'recibida' && !s.ticket_mas_habilitado_at && (
                     <button onClick={() => habilitarTicketMasMutation.mutate(s.id)}
                       disabled={habilitarTicketMasMutation.isPending}
                       title="Activa el acceso a Ticket MAS del solicitante y le avisa por correo"
@@ -507,16 +510,18 @@ export default function SolicitudesRecibidas() {
                     </span>
                   )}
                   <BotonCorregir modulo="solicitudes" estatus={s.estatus} onClick={() => setCorrigiendo(s)} />
-                  {s.estatus !== 'cancelada' && (
+                  {isAdmin && s.estatus !== 'cancelada' && (
                     <button onClick={() => setCancelandoId(s)}
                       className="flex items-center gap-1.5 px-3 py-2 border border-red-200 text-red-600 rounded-md text-sm font-medium hover:bg-red-50 transition-colors">
                       <Ban className="w-4 h-4" /> Cancelar
                     </button>
                   )}
-                  <button onClick={() => setDeletingId(s.id)}
-                    className="p-2 border border-red-200 rounded-md text-red-500 hover:bg-red-50 transition-colors">
-                    <Trash2 className="w-4 h-4" />
-                  </button>
+                  {isAdmin && (
+                    <button onClick={() => setDeletingId(s.id)}
+                      className="p-2 border border-red-200 rounded-md text-red-500 hover:bg-red-50 transition-colors">
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  )}
                 </div>
               </div>
             </div>
@@ -644,13 +649,13 @@ export default function SolicitudesRecibidas() {
                   className="px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-200 rounded-md transition-colors">
                   Cerrar
                 </button>
-                {viewing.estatus !== 'cancelada' && (
+                {isAdmin && viewing.estatus !== 'cancelada' && (
                   <button onClick={() => { setCancelandoId(viewing); setViewing(null); }}
                     className="flex items-center gap-2 px-4 py-2 border border-red-300 text-red-600 rounded-md text-sm font-medium hover:bg-red-50 transition-colors">
                     <Ban className="w-4 h-4" /> Cancelar solicitud
                   </button>
                 )}
-                {viewing.estatus === 'pendiente' && (
+                {isAdmin && viewing.estatus === 'pendiente' && (
                   <button onClick={() => recibirMutation.mutate(viewing.id)}
                     disabled={recibirMutation.isPending}
                     className="flex items-center gap-2 px-5 py-2 bg-emerald-600 text-white rounded-md text-sm font-bold hover:bg-emerald-700 transition-colors disabled:opacity-50">
@@ -658,7 +663,7 @@ export default function SolicitudesRecibidas() {
                     {recibirMutation.isPending ? 'Procesando...' : 'Marcar como Recibida'}
                   </button>
                 )}
-                {viewing.estatus === 'recibida' && !viewing.ticket_mas_habilitado_at && (
+                {isAdmin && viewing.estatus === 'recibida' && !viewing.ticket_mas_habilitado_at && (
                   <button onClick={() => habilitarTicketMasMutation.mutate(viewing.id)}
                     disabled={habilitarTicketMasMutation.isPending}
                     title="Activa el acceso a Ticket MAS del solicitante y le avisa por correo"
@@ -770,7 +775,10 @@ export default function SolicitudesRecibidas() {
                 </div>
               </div>
             )}
-            <div>
+            {!isAdmin && cotizaciones.length === 0 && (
+              <p className="text-sm text-slate-400 text-center py-4">Aún no hay cotizaciones para esta solicitud.</p>
+            )}
+            {isAdmin && <div>
               <p className="text-xs font-bold text-slate-500 uppercase mb-2">Subir cotizaciones:</p>
               <label className={`flex items-center gap-2 cursor-pointer border-2 border-dashed rounded-lg px-4 py-3 transition ${spUploading ? 'opacity-50 pointer-events-none bg-slate-50' : 'border-teal-300 hover:bg-teal-50 bg-white'}`}>
                 <span className="text-xl">📎</span>
@@ -788,18 +796,20 @@ export default function SolicitudesRecibidas() {
                   ))}
                 </div>
               )}
-            </div>
+            </div>}
           </div>
           <div className="px-5 py-4 border-t border-slate-100 flex gap-3">
             <button onClick={() => setCotModal(null)}
               className="flex-1 px-4 py-2 border border-slate-300 rounded-lg text-sm font-semibold text-slate-700 hover:bg-slate-100">
               Cerrar
             </button>
-            <button disabled={cotFiles.length === 0 || spUploading || uploadCotMutation.isPending}
-              onClick={() => uploadCotMutation.mutate(cotModal)}
-              className="flex-1 px-4 py-2 bg-teal-600 text-white rounded-lg text-sm font-semibold hover:bg-teal-700 disabled:opacity-40">
-              {uploadCotMutation.isPending ? 'Subiendo...' : 'Subir y Notificar'}
-            </button>
+            {isAdmin && (
+              <button disabled={cotFiles.length === 0 || spUploading || uploadCotMutation.isPending}
+                onClick={() => uploadCotMutation.mutate(cotModal)}
+                className="flex-1 px-4 py-2 bg-teal-600 text-white rounded-lg text-sm font-semibold hover:bg-teal-700 disabled:opacity-40">
+                {uploadCotMutation.isPending ? 'Subiendo...' : 'Subir y Notificar'}
+              </button>
+            )}
           </div>
         </div>
       </div>

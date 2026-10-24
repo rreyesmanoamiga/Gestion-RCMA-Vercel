@@ -49,6 +49,7 @@ export default function ProjectDetail() {
   const puedeEditar   = isAdmin || can('editar_proyectos');
   const { data: directorioRows = [] } = useDirectorio();
   const puedeEliminar = isAdmin || can('eliminar_proyectos');
+  const verPresupuesto = isAdmin || can('ver_presupuestos');
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [showEdit, setShowEdit] = useState(false);
   const [showCostoReal, setShowCostoReal] = useState(false);
@@ -447,14 +448,14 @@ export default function ProjectDetail() {
       </div>
 
       {/* ─── Sección Presupuesto vs Real ─────────────────────────────────── */}
-      {esCompletado && (
+      {esCompletado && verPresupuesto && (
         <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
           <div className="px-6 py-4 border-b border-slate-100 bg-slate-50 flex items-center justify-between">
             <h3 className="text-sm font-bold text-slate-900 uppercase tracking-tight flex items-center gap-2">
               <DollarSign className="w-4 h-4 text-emerald-600" />
               Presupuesto vs Costo Real
             </h3>
-            {!showCostoReal && (
+            {puedeEditar && !showCostoReal && (
               <button onClick={() => { setShowCostoReal(true); setCostoRealInput(project.costo_real ? String(project.costo_real) : ''); setMotivoSobrecostoInput(project.motivo_sobrecosto ?? ''); }}
                 className="text-xs font-bold text-blue-600 hover:underline flex items-center gap-1">
                 <Pencil className="w-3 h-3" />
@@ -597,7 +598,7 @@ export default function ProjectDetail() {
               <Camera className="w-4 h-4 text-[#ED7102]" />
               Evidencia Fotográfica
             </h3>
-            {!showEvidencia && (
+            {puedeEditar && !showEvidencia && (
               <button onClick={() => setShowEvidencia(true)}
                 className="text-xs font-bold text-blue-600 hover:underline flex items-center gap-1">
                 <ImagePlus className="w-3 h-3" /> Agregar fotos

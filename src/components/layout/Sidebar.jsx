@@ -140,7 +140,7 @@ export default function Sidebar({ isOpen, onToggle }) {
   const gGestionProyectos = [
     { to: '/protocolo',    icon: BookOpen,      label: 'Protocolo de Proyectos', visible: true },
     { to: '/solicitud',    icon: ClipboardEdit, label: 'Solicitud de Proyecto',  visible: can('ver_solicitud_proyecto') },
-    { to: '/solicitudes',  icon: Inbox,         label: 'Solicitudes Recibidas',  visible: isAdmin },
+    { to: '/solicitudes',  icon: Inbox,         label: 'Solicitudes Recibidas',  visible: isAdmin || can('ver_solicitudes_recibidas') },
     { to: '/anteproyectos',icon: FolderOpen,    label: 'Anteproyectos',          visible: can('ver_anteproyectos') },
     { to: '/ticket-mas',   icon: FileSignature, label: 'Ticket MAS',             visible: isAdmin || can('ver_ticket_mas') || can('enviar_ticket_mas') || can('autorizar_ticket_mas_fma') },
   ].filter(i => i.visible);
@@ -154,7 +154,7 @@ export default function Sidebar({ isOpen, onToggle }) {
   ].filter(i => i.visible);
 
   const gFinanciero = [
-    { to: '/presupuestos', icon: BarChart3, label: 'Presupuesto vs Real', visible: isAdmin || can('ver_reportes') },
+    { to: '/presupuestos', icon: BarChart3, label: 'Presupuesto vs Real', visible: isAdmin || can('ver_presupuestos') },
     { to: '/insumos',      icon: Package,   label: 'Insumos',             visible: isAdmin || can('ver_insumos') },
   ].filter(i => i.visible);
 

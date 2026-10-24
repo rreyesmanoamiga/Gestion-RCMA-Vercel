@@ -350,6 +350,8 @@ export default function Anteproyectos() {
   const puedeCrear    = isAdmin || can('crear_anteproyectos');
   const puedeEditar   = isAdmin || can('editar_anteproyectos');
   const puedeEliminar = isAdmin || can('eliminar_anteproyectos');
+  // Perfiles de consulta ven que el ZIP existe, pero no lo descargan (también lo valida la función)
+  const puedeDescargar = isAdmin || can('descargar_anteproyectos');
   const [showForm, setShowForm]                       = useState(false);
   const [editingAnteproyecto, setEditingAnteproyecto] = useState<Anteproyecto | null>(null);
   const [deletingId, setDeletingId]                   = useState<string | null>(null);
@@ -615,6 +617,13 @@ export default function Anteproyectos() {
         : ant.zip_url.substring(0, ant.zip_url.lastIndexOf('/')); // Abrir carpeta padre
       return (
         <div className="flex items-center gap-1.5 mt-1.5">
+          {!puedeDescargar ? (
+            <span title="Paquete cargado (solo consulta)"
+              className="flex items-center gap-1.5 bg-slate-50 border border-slate-200 rounded-lg px-2 py-1 min-w-0">
+              <FolderOpen className="w-3 h-3 text-slate-400 shrink-0" />
+              <span className="text-[10px] text-slate-500 font-semibold truncate max-w-[140px]">ZIP cargado</span>
+            </span>
+          ) : (
           <button type="button" onClick={() => descargarZip(ant)} disabled={descargando === ant.id}
             title="Descargar ZIP"
             className="flex items-center gap-1.5 bg-blue-50 border border-blue-200 rounded-lg px-2 py-1 hover:bg-blue-100 transition disabled:opacity-50 min-w-0">
@@ -623,6 +632,7 @@ export default function Anteproyectos() {
               : <Download className="w-3 h-3 text-blue-500 shrink-0" />}
             <span className="text-[10px] text-blue-700 font-semibold truncate max-w-[140px]">{ant.zip_nombre ?? 'Descargar ZIP'}</span>
           </button>
+          )}
           {isAdmin && openUrl && (
             <a href={openUrl} target="_blank" rel="noreferrer" title="Abrir carpeta en OneDrive"
               className="p-1 rounded-md border border-slate-200 text-slate-400 hover:text-blue-600 hover:bg-slate-50 transition shrink-0">

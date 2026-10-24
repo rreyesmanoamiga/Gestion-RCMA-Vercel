@@ -19,6 +19,7 @@ const inputClass = 'w-full px-3 py-2 border border-slate-300 rounded-md text-sm 
 const AREAS: { value: string; label: string; color: string }[] = [
   { value: 'colegio',           label: 'Colegio (Mano Amiga)',   color: 'bg-blue-50 text-blue-700 border-blue-200' },
   { value: 'director_colegio',  label: 'Director de Colegio',    color: 'bg-indigo-50 text-indigo-700 border-indigo-200' },
+  { value: 'car',               label: 'CAR (Coord. Administrativa Regional)', color: 'bg-sky-50 text-sky-700 border-sky-200' },
   { value: 'coordinacion_rcma', label: 'Coordinación RCMA',      color: 'bg-orange-50 text-orange-700 border-orange-200' },
   { value: 'orser_finanzas',    label: 'Finanzas (ORSER)',       color: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
   { value: 'orser_juridico',    label: 'Jurídico (ORSER)',       color: 'bg-purple-50 text-purple-700 border-purple-200' },
@@ -34,6 +35,7 @@ const getAreaInfo = (value?: string) => AREAS.find(a => a.value === value) ?? nu
 const AREA_GRUPOS_RELEVANTES: Record<string, string[]> = {
   colegio:            ['Dashboard', 'Solicitud de Proyecto', 'Trámites CN', 'Calendario', 'Checklists', 'Minutas', 'NEXUS', 'Programa SOL', 'Expediente de Cumplimiento (colegio)'],
   director_colegio:   ['Dashboard', 'Solicitud de Proyecto', 'Trámites CN', 'Calendario', 'Checklists', 'Minutas', 'Reportes', 'NEXUS', 'Programa SOL', 'Expediente de Cumplimiento (colegio)'],
+  car:                ['Dashboard', 'Solicitud de Proyecto', 'Anteproyectos', 'Ticket MAS', 'Tickets', 'Proyectos', 'Minutas', 'Calendario', 'Levantamiento Nacional', 'Reportes'],
   coordinacion_rcma:  ['Dashboard', 'Proyectos', 'Tickets', 'Ticket MAS', 'Trámites CN', 'Reportes', 'Calendario', 'Checklists', 'Cumplimiento'],
   orser_finanzas:     ['Reportes', 'Insumos', 'Proyectos', 'Dashboard'],
   orser_juridico:     ['Reportes', 'Ticket MAS', 'Anteproyectos', 'Minutas', 'Cumplimiento'],
@@ -139,6 +141,44 @@ interface PermissionEditorProps {
   area?:    string;
 }
 
+// ─── Perfiles de consulta del módulo de Obras ──────────────────────────────
+// Un clic deja listos los permisos de Obras; los de Cumplimiento y SOL no se tocan.
+// Lo que ve cada uno lo limita su colegio (Admin/Auxiliar) o su territorio (CAR).
+const PERMISOS_OBRAS = [
+  'ver_dashboard',
+  'ver_proyectos', 'crear_proyectos', 'editar_proyectos', 'eliminar_proyectos',
+  'ver_tickets', 'crear_tickets', 'editar_tickets', 'eliminar_tickets',
+  'ver_ticket_mas', 'enviar_ticket_mas', 'autorizar_ticket_mas', 'cancelar_ticket_mas', 'autorizar_ticket_mas_fma',
+  'ver_anteproyectos', 'descargar_anteproyectos', 'crear_anteproyectos', 'editar_anteproyectos', 'eliminar_anteproyectos',
+  'ver_checklists', 'crear_checklists', 'editar_checklists', 'eliminar_checklists',
+  'ver_calendario', 'crear_calendario', 'editar_calendario', 'eliminar_calendario',
+  'ver_solicitud_proyecto', 'enviar_solicitud_proyecto', 'ver_solicitudes_recibidas',
+  'ver_reportes', 'crear_reportes', 'editar_reportes', 'eliminar_reportes', 'ver_presupuestos',
+  'ver_insumos', 'crear_insumos', 'vobo_insumos', 'eliminar_insumos',
+  'ver_nexus',
+  'ver_levantamiento', 'descargar_levantamiento', 'crear_levantamiento', 'eliminar_levantamiento',
+  'ver_minutas', 'crear_minutas', 'editar_minutas', 'eliminar_minutas',
+];
+const PERFILES_OBRAS: { clave: string; etiqueta: string; descripcion: string; activos: string[] }[] = [
+  {
+    clave: 'colegio', etiqueta: 'Administrador / Auxiliar de colegio',
+    descripcion: 'Solo su colegio. Consulta Dashboard, Solicitudes, Anteproyectos (sin descargar), Ticket MAS, Tickets, Proyectos y Minutas marcadas; envía Solicitudes y marca el Calendario.',
+    activos: ['ver_dashboard', 'ver_proyectos', 'ver_tickets', 'ver_ticket_mas', 'ver_anteproyectos', 'ver_calendario',
+      'ver_solicitud_proyecto', 'enviar_solicitud_proyecto', 'ver_solicitudes_recibidas', 'ver_minutas'],
+  },
+  {
+    clave: 'car', etiqueta: 'CAR',
+    descripcion: 'Todo su territorio. Lo mismo que el administrador de colegio, más Levantamiento, Reportes y Presupuesto vs Real. Solo consulta.',
+    activos: ['ver_dashboard', 'ver_proyectos', 'ver_tickets', 'ver_ticket_mas', 'ver_anteproyectos', 'ver_calendario',
+      'ver_solicitud_proyecto', 'ver_solicitudes_recibidas', 'ver_minutas', 'ver_levantamiento', 'ver_reportes', 'ver_presupuestos'],
+  },
+];
+const aplicarPerfilObras = (perms: Record<string, boolean>, activos: string[]) => {
+  const out = { ...perms };
+  for (const k of PERMISOS_OBRAS) out[k] = activos.includes(k);
+  return out;
+};
+
 function PermissionEditor({ perms, onChange, area }: PermissionEditorProps) {
   const relevantes = area ? (AREA_GRUPOS_RELEVANTES[area] ?? []) : [];
   const gruposOrdenados = useMemo(() => {
@@ -175,6 +215,21 @@ function PermissionEditor({ perms, onChange, area }: PermissionEditorProps) {
 
   return (
     <div className="space-y-4">
+      <div className="p-4 rounded-lg border border-orange-200 bg-orange-50/60">
+        <p className="text-xs font-bold uppercase tracking-widest text-orange-700 mb-2">Perfil rápido · Obras y Mantenimiento</p>
+        <div className="flex flex-wrap gap-2">
+          {PERFILES_OBRAS.map(p => (
+            <button key={p.clave} type="button" title={p.descripcion}
+              onClick={() => onChange(aplicarPerfilObras(perms, p.activos))}
+              className="px-3 py-1.5 rounded-md border border-orange-300 bg-white text-xs font-bold text-orange-800 hover:bg-orange-100 transition">
+              {p.etiqueta}
+            </button>
+          ))}
+        </div>
+        <p className="text-[11px] text-slate-500 mt-2">
+          Deja listos los permisos de Obras en solo consulta (Cumplimiento y SOL no se tocan). Lo que ve depende del colegio o territorio que le asignes. Después puedes ajustar cualquier casilla.
+        </p>
+      </div>
       {gruposOrdenados.destacados.map(g => renderGrupo(g, true))}
       {gruposOrdenados.resto.length > 0 && gruposOrdenados.destacados.length > 0 && (
         <p className="text-[10px] font-bold text-slate-300 uppercase tracking-widest pt-1">Otros módulos</p>

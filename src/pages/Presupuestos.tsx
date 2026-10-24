@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { db } from '@/lib/db';
 import { supabase } from '@/lib/supabaseClient';
 import { useAuth } from '@/lib/AuthContext';
+import { useScope } from '@/hooks/useScope';
 import { toast } from 'sonner';
 import { Link } from 'react-router-dom';
 import {
@@ -41,7 +42,10 @@ export default function Presupuestos() {
     queryFn: () => db.Project.list('-created_at', 500),
   });
 
-  const projects = (raw as unknown as Project[]).filter(p => p.budget != null && p.budget > 0 && p.status !== 'cancelado');
+  // Alcance del usuario: un CAR solo ve los proyectos de su territorio.
+  const { filtrarPorAlcance } = useScope();
+  const projects = filtrarPorAlcance(raw as unknown as Project[], p => p.territorio, p => p.colegio)
+    .filter(p => p.budget != null && p.budget > 0 && p.status !== 'cancelado');
 
   // Mapa proyecto_id → folio del ticket vinculado (para proyectos TMAS sin folio en project.folio)
   const { data: rawTickets = [] } = useQuery({
