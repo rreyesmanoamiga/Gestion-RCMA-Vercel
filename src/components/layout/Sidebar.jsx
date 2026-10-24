@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import {
   LayoutDashboard,
@@ -21,7 +21,7 @@ import {
   BookUser, Package, Layers, ShieldAlert, ShieldCheck, ListTodo,
   Network, Clock3,
   Gauge, Flag, Users, Star, Award, ListChecks, ClipboardList, Settings2,
-  HeartHandshake,
+  HeartHandshake, ChevronDown, Check,
 } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import SidebarAccordionGroup from './SidebarAccordionGroup';
@@ -95,6 +95,26 @@ export default function Sidebar({ isOpen, onToggle }) {
   const modoSOL = puedeVerSOL && (location.pathname === '/sol' || location.pathname.startsWith('/sol/'));
   const esAdminSOL = isAdmin && (user?.email ?? '').toLowerCase() === 'rreyes@manoamiga.edu.mx';
   const hayOtrosModulos = puedeVerCumplimiento || puedeVerSOL;
+
+  // Selector de módulo: un botón con el módulo actual que despliega la lista
+  // de módulos a los que el usuario tiene acceso.
+  const MODULOS = [
+    { key: 'obras',        label: 'Obras y Mantenimiento', corto: 'Obras',        icon: Wrench,      to: '/',             visible: true },
+    { key: 'cumplimiento', label: 'Cumplimiento Normativo', corto: 'Cumplimiento', icon: ShieldCheck, to: '/cumplimiento', visible: puedeVerCumplimiento },
+    { key: 'sol',          label: 'Programa SOL',           corto: 'SOL',          icon: Star,        to: '/sol',          visible: puedeVerSOL },
+  ].filter(m => m.visible);
+  const moduloActual = MODULOS.find(m => m.key === (modoCompliance ? 'cumplimiento' : modoSOL ? 'sol' : 'obras')) ?? MODULOS[0];
+  const [selectorAbierto, setSelectorAbierto] = useState(false);
+  const selectorRef = useRef(null);
+  useEffect(() => {
+    if (!selectorAbierto) return;
+    const cerrar = (e) => { if (selectorRef.current && !selectorRef.current.contains(e.target)) setSelectorAbierto(false); };
+    const esc = (e) => { if (e.key === 'Escape') setSelectorAbierto(false); };
+    document.addEventListener('mousedown', cerrar);
+    document.addEventListener('keydown', esc);
+    return () => { document.removeEventListener('mousedown', cerrar); document.removeEventListener('keydown', esc); };
+  }, [selectorAbierto]);
+  useEffect(() => { setSelectorAbierto(false); }, [location.pathname]);
   // Administrador de colegio: sube los documentos de Cumplimiento de SU colegio
   const puedeSubirCumplimiento = !isAdmin && can('subir_cumplimiento');
   // El administrador ve todo: también el expediente de cada colegio
@@ -268,37 +288,45 @@ export default function Sidebar({ isOpen, onToggle }) {
                 Sistema RCMA
               </h1>
               {hayOtrosModulos ? (
-                <div className="flex bg-white/[0.07] rounded-md p-[2px] mt-1.5">
+                <div ref={selectorRef} className="relative mt-1.5">
                   <button
-                    onClick={() => navigate('/')}
+                    type="button"
+                    onClick={() => setSelectorAbierto(a => !a)}
+                    aria-haspopup="listbox"
+                    aria-expanded={selectorAbierto}
+                    title="Cambiar de módulo"
                     className={cn(
-                      'flex-auto text-center px-1 py-[5px] rounded text-[9.5px] font-bold whitespace-nowrap transition-colors duration-200',
-                      !modoCompliance && !modoSOL ? 'bg-[#ED7102] text-white' : 'text-sidebar-foreground/50 hover:text-sidebar-foreground/80'
+                      'w-full flex items-center gap-1.5 pl-2 pr-1.5 py-[5px] rounded-md text-[11px] font-bold transition-colors duration-200',
+                      'bg-[#ED7102] text-white hover:bg-[#d96600]'
                     )}
                   >
-                    Obras
+                    <moduloActual.icon className="w-3.5 h-3.5 shrink-0" />
+                    <span className="flex-1 text-left truncate">{moduloActual.corto}</span>
+                    <ChevronDown className={cn('w-3.5 h-3.5 shrink-0 transition-transform duration-200', selectorAbierto && 'rotate-180')} />
                   </button>
-                  {puedeVerCumplimiento && (
-                    <button
-                      onClick={() => navigate('/cumplimiento')}
-                      className={cn(
-                        'flex-auto text-center px-1 py-[5px] rounded text-[9.5px] font-bold whitespace-nowrap transition-colors duration-200',
-                        modoCompliance ? 'bg-[#ED7102] text-white' : 'text-sidebar-foreground/50 hover:text-sidebar-foreground/80'
-                      )}
-                    >
-                      Cumplimiento
-                    </button>
-                  )}
-                  {puedeVerSOL && (
-                    <button
-                      onClick={() => navigate('/sol')}
-                      className={cn(
-                        'flex-auto text-center px-1 py-[5px] rounded text-[9.5px] font-bold whitespace-nowrap transition-colors duration-200',
-                        modoSOL ? 'bg-[#ED7102] text-white' : 'text-sidebar-foreground/50 hover:text-sidebar-foreground/80'
-                      )}
-                    >
-                      SOL
-                    </button>
+                  {selectorAbierto && (
+                    <div role="listbox" aria-label="Módulos"
+                      className="absolute left-0 top-full mt-1.5 w-[13.5rem] z-50 rounded-lg bg-white shadow-xl ring-1 ring-black/10 py-1.5 overflow-hidden">
+                      <p className="px-3 pt-0.5 pb-1.5 text-[9.5px] font-bold uppercase tracking-widest text-slate-400">Módulos</p>
+                      {MODULOS.map(m => {
+                        const activo = m.key === moduloActual.key;
+                        return (
+                          <button key={m.key} type="button" role="option" aria-selected={activo}
+                            onClick={() => { setSelectorAbierto(false); if (!activo) navigate(m.to); }}
+                            className={cn(
+                              'w-full flex items-center gap-2.5 px-3 py-2 text-left text-[13px] transition-colors',
+                              activo ? 'bg-orange-50 text-[#00295A] font-semibold' : 'text-slate-700 hover:bg-slate-50'
+                            )}>
+                            <span className={cn('w-7 h-7 rounded-md flex items-center justify-center shrink-0',
+                              activo ? 'bg-[#ED7102] text-white' : 'bg-slate-100 text-slate-500')}>
+                              <m.icon className="w-4 h-4" />
+                            </span>
+                            <span className="flex-1 leading-tight">{m.label}</span>
+                            {activo && <Check className="w-4 h-4 text-[#ED7102] shrink-0" />}
+                          </button>
+                        );
+                      })}
+                    </div>
                   )}
                 </div>
               ) : (
