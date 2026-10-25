@@ -435,6 +435,14 @@ function ConPermiso({ permiso, soloAdmin = false, children }) {
 function ProtectedDashboard() {
   const { can, isAdmin, permsRecord } = usePermissions();
   if (isAdmin || can('ver_dashboard')) return <Dashboard />;
+  // Mientras cargan los permisos no se redirige (antes mandaba a /solicitud por error al iniciar sesión)
+  if (permsRecord === undefined) {
+    return (
+      <div className="flex items-center justify-center py-20">
+        <div className="w-8 h-8 border-4 border-slate-200 border-t-slate-800 rounded-full animate-spin" />
+      </div>
+    );
+  }
   const target = getFirstRoute(permsRecord, isAdmin);
   return <Navigate to={target} replace />;
 }
