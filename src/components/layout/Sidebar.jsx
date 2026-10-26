@@ -355,10 +355,10 @@ export default function Sidebar({ isOpen, onToggle }) {
               {esAdminSOL && (
                 <>
                   <div className="pt-2" />
-                  <SidebarAccordionGroup label="Inspección" icon={ClipboardList} defaultOpen={true}>
+                  <SidebarAccordionGroup label="Inspección" icon={ClipboardList} defaultOpen={solInspeccion.some(i => isActive(i.to))}>
                     {solInspeccion.map(renderLink)}
                   </SidebarAccordionGroup>
-                  <SidebarAccordionGroup label="Seguimiento" icon={ListChecks} defaultOpen={true}>
+                  <SidebarAccordionGroup label="Seguimiento" icon={ListChecks} defaultOpen={solSeguimiento.some(i => isActive(i.to))}>
                     {solSeguimiento.map(renderLink)}
                   </SidebarAccordionGroup>
                   <SidebarAccordionGroup label="Organización" icon={Users} defaultOpen={solOrganizacion.some(i => isActive(i.to))}>
