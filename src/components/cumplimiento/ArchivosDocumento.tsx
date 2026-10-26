@@ -1,11 +1,11 @@
 // Panel de archivos de un documento de Cumplimiento: lista, subir (varios a la
 // vez), quitar, y —para la Coordinación— Verificar / Rechazar.
-import React, { useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
-import { Paperclip, Upload, Trash2, ExternalLink, Loader2, CheckCircle2, XCircle, AlertTriangle, FileText } from 'lucide-react';
+import { Paperclip, Upload, Trash2, ExternalLink, Loader2, CheckCircle2, XCircle, AlertTriangle, FileText, ChevronDown } from 'lucide-react';
 import {
   useArchivosDocumento, subirArchivos, accionCumplimiento, useRefrescarExpediente,
-  REVISION_CFG, fmtTamano, type Revision,
+  REVISION_CFG, fmtTamano, type Revision, type ArchivoBreve,
 } from '@/lib/cumplimientoArchivos';
 
 const fmtFechaHora = (iso: string) =>
@@ -15,6 +15,48 @@ export function RevisionBadge({ revision }: { revision: Revision | string | null
   if (!revision || !REVISION_CFG[revision]) return null;
   const c = REVISION_CFG[revision];
   return <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold border ${c.cls}`}>{c.label}</span>;
+}
+
+/** Botón para abrir el/los archivo(s) de un documento en OneDrive, directo desde una tabla.
+ *  Un archivo → abre directo. Varios → lista para elegir. Desde OneDrive se puede ver y descargar. */
+export function VerArchivosBoton({ archivos }: { archivos: ArchivoBreve[] | undefined }) {
+  const [abierto, setAbierto] = useState(false);
+  const ref = useRef<HTMLSpanElement>(null);
+  useEffect(() => {
+    if (!abierto) return;
+    const fuera = (e: MouseEvent) => { if (ref.current && !ref.current.contains(e.target as Node)) setAbierto(false); };
+    const esc = (e: KeyboardEvent) => { if (e.key === 'Escape') setAbierto(false); };
+    document.addEventListener('mousedown', fuera); document.addEventListener('keydown', esc);
+    return () => { document.removeEventListener('mousedown', fuera); document.removeEventListener('keydown', esc); };
+  }, [abierto]);
+  if (!archivos?.length) return null;
+  const cls = 'inline-flex items-center gap-1 px-2 py-0.5 rounded-md border border-[#00295A]/20 bg-[#00295A]/5 text-[10px] font-bold text-[#00295A] hover:bg-[#00295A]/10 transition';
+  if (archivos.length === 1) {
+    return (
+      <a href={archivos[0].url} target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()}
+        className={cls} title={`Abrir en OneDrive: ${archivos[0].nombre_original}`}>
+        <Paperclip className="w-3 h-3" />Ver archivo<ExternalLink className="w-3 h-3" />
+      </a>
+    );
+  }
+  return (
+    <span ref={ref} className="relative inline-block" onClick={e => e.stopPropagation()}>
+      <button type="button" onClick={() => setAbierto(v => !v)} className={cls} title="Abrir en OneDrive">
+        <Paperclip className="w-3 h-3" />{archivos.length} archivos<ChevronDown className="w-3 h-3" />
+      </button>
+      {abierto && (
+        <span className="absolute left-0 top-full mt-1 z-30 w-72 bg-white border border-slate-200 rounded-lg shadow-lg py-1 block">
+          {archivos.map(a => (
+            <a key={a.id} href={a.url} target="_blank" rel="noopener noreferrer" onClick={() => setAbierto(false)}
+              className="flex items-center gap-2 px-3 py-1.5 text-xs text-slate-700 hover:bg-slate-50">
+              <FileText className="w-3.5 h-3.5 text-slate-400 shrink-0" /><span className="truncate flex-1">{a.nombre_original}</span>
+              <ExternalLink className="w-3 h-3 text-slate-400 shrink-0" />
+            </a>
+          ))}
+        </span>
+      )}
+    </span>
+  );
 }
 
 export default function ArchivosDocumento({
@@ -121,7 +163,9 @@ export default function ArchivosDocumento({
                 {a.origen === 'colegio' ? 'Colegio' : 'RCMA'} · {a.subido_por_nombre || a.subido_por_email} · {fmtFechaHora(a.created_at)}{a.tamano ? ` · ${fmtTamano(a.tamano)}` : ''}
               </p>
             </div>
-            <a href={a.url} target="_blank" rel="noopener noreferrer" className="p-1.5 text-slate-400 hover:text-[#00295A]" title="Abrir"><ExternalLink className="w-4 h-4" /></a>
+            <a href={a.url} target="_blank" rel="noopener noreferrer" title="Abrir en OneDrive (ver o descargar)"
+              className="shrink-0 inline-flex items-center gap-1 px-2 py-1 rounded-md border border-slate-200 text-[11px] font-semibold text-[#00295A] hover:bg-[#00295A]/5">
+              <ExternalLink className="w-3.5 h-3.5" />Abrir en OneDrive</a>
             {puedeSubir && (esAdmin || (!bloqueadoColegio && a.origen === 'colegio' && revision === 'por_revisar')) && (
               <button type="button" onClick={() => quitar(a.id, a.nombre_original)} disabled={!!trabajando || !!subiendo}
                 className="p-1.5 text-slate-300 hover:text-red-600 disabled:opacity-40" title="Quitar">

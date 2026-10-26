@@ -114,11 +114,35 @@ export function useConteoArchivos(enabled = true) {
   });
 }
 
+// Archivos de todos los documentos, agrupados por documento (para ver/abrir
+// el archivo directo desde las tablas, sin entrar al detalle)
+export type ArchivoBreve = Pick<ArchivoCumplimiento, 'id' | 'documento_id' | 'nombre_original' | 'url' | 'created_at'>;
+export function useArchivosPorDocumento(enabled = true) {
+  return useQuery({
+    queryKey: ['compliance_archivos_lista'],
+    enabled,
+    queryFn: async () => {
+      const mapa: Record<string, ArchivoBreve[]> = {};
+      let desde = 0;
+      while (true) {
+        const { data, error } = await supabase.from('compliance_archivos')
+          .select('id, documento_id, nombre_original, url, created_at').order('created_at').range(desde, desde + 999);
+        if (error) throw error;
+        (data ?? []).forEach((a: any) => { (mapa[a.documento_id] ??= []).push(a); });
+        if (!data || data.length < 1000) break;
+        desde += 1000;
+      }
+      return mapa;
+    },
+  });
+}
+
 export function useRefrescarExpediente() {
   const qc = useQueryClient();
   return () => {
     qc.invalidateQueries({ queryKey: ['compliance_archivos'] });
     qc.invalidateQueries({ queryKey: ['compliance_archivos_conteo'] });
+    qc.invalidateQueries({ queryKey: ['compliance_archivos_lista'] });
     qc.invalidateQueries({ queryKey: ['compliance_documentos'] });
     qc.invalidateQueries({ queryKey: ['cumplimiento_mis_documentos'] });
   };

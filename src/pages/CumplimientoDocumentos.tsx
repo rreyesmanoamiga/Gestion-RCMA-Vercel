@@ -9,8 +9,8 @@ import {
   Search, ChevronLeft, ChevronRight, Loader2, X, Download,
   FileSpreadsheet, FileBarChart, Paperclip, Send,
 } from 'lucide-react';
-import { RevisionBadge } from '@/components/cumplimiento/ArchivosDocumento';
-import { useConteoArchivos, accionCumplimiento } from '@/lib/cumplimientoArchivos';
+import { RevisionBadge, VerArchivosBoton } from '@/components/cumplimiento/ArchivosDocumento';
+import { useArchivosPorDocumento, accionCumplimiento } from '@/lib/cumplimientoArchivos';
 import {
   useComplianceDocs, useUpdateDocsBulk, formatFecha,
   MATERIAS, ESTADOS_EDITABLES, PAGE_SIZE,
@@ -109,7 +109,8 @@ export default function CumplimientoDocumentos() {
   const [seleccionados, setSeleccionados] = useState<Set<string>>(new Set());
   const [expedienteFiltro, setExpedienteFiltro] = useState<'Todos' | 'por_revisar' | 'con' | 'sin' | 'rechazado'>('Todos');
   const [solicitando, setSolicitando] = useState(false);
-  const { data: conteoArchivos = {} } = useConteoArchivos();
+  const { data: archivosPorDoc = {} } = useArchivosPorDocumento();
+  const conteoArchivos = useMemo(() => Object.fromEntries(Object.entries(archivosPorDoc).map(([k, v]) => [k, v.length])) as Record<string, number>, [archivosPorDoc]);
 
   // ?doc=<id> (link del correo "requiere verificación") abre ese documento
   const [params, setParams] = useSearchParams();
@@ -246,7 +247,7 @@ export default function CumplimientoDocumentos() {
   if (!isAdmin && !can('ver_cumplimiento')) {
     return (
       <div className="p-6 lg:p-8 max-w-[1700px] mx-auto">
-        <PageHeader title="Documentos" subtitle="Registro completo de documentos de Cumplimiento — filtra, edita y descarga reportes" />
+        <PageHeader title="Registro de Cumplimiento" subtitle="Vigencias y archivos de cada documento por colegio — filtra, valida, abre el archivo en OneDrive y descarga reportes" />
         <AccesoRestringido />
       </div>
     );
@@ -254,7 +255,7 @@ export default function CumplimientoDocumentos() {
 
   return (
     <div className="p-6 lg:p-8 max-w-[1700px] mx-auto">
-      <PageHeader title="Documentos" subtitle="Registro completo de documentos de Cumplimiento — filtra, edita y descarga reportes" />
+      <PageHeader title="Registro de Cumplimiento" subtitle="Vigencias y archivos de cada documento por colegio — filtra, valida, abre el archivo en OneDrive y descarga reportes" />
 
       {isError ? <ErrorBlock onRetry={() => refetch()} /> : isLoading ? <LoadingBlock /> : (
         <div>
@@ -378,7 +379,7 @@ export default function CumplimientoDocumentos() {
                         <span>{d.tipo_documento}</span>
                         {(conteoArchivos[d.id] || d.revision) && (
                           <span className="flex items-center gap-1.5 mt-0.5">
-                            {conteoArchivos[d.id] ? <span className="inline-flex items-center gap-0.5 text-[10px] font-bold text-slate-500"><Paperclip className="w-3 h-3" />{conteoArchivos[d.id]}</span> : null}
+                            <VerArchivosBoton archivos={archivosPorDoc[d.id]} />
                             <RevisionBadge revision={d.revision} />
                           </span>
                         )}
