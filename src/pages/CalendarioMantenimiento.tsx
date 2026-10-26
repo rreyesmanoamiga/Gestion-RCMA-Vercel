@@ -727,19 +727,21 @@ export default function CalendarioMantenimiento() {
   const colorCat = (cat: string) => COLORES_CATEGORIA[cat] || '#64748b';
 
   // ─── Reportes de Protección Civil ────────────────────────────────────────
-  // Descarga el archivo y además lo guarda en OneDrive (Sistema RCMA Doc/Protección Civil/...).
+  // Guarda el archivo en OneDrive (Sistema RCMA Doc/Protección Civil/...), sin descargarlo.
   // Si se vuelve a generar, reemplaza el archivo con el mismo nombre (mismo folio).
+  // Solo si OneDrive falla, se ofrece descargarlo para no perder el reporte.
   const nombreColegioPC = (codigo: string) => findColegio(directorioRowsPC, codigo)?.nombre ?? codigo;
   const guardarReportePC = async (archivo: Blob, nombre: string, carpeta: string) => {
-    descargarBlob(archivo, nombre);
     try {
       const url = await subirArchivoOneDrive(archivo, carpeta, nombre);
-      toast.success('Reporte descargado y guardado en OneDrive ✓', {
+      toast.success('Reporte guardado en OneDrive ✓', {
         description: carpeta, duration: 8000,
         action: url ? { label: 'Abrir', onClick: () => window.open(url, '_blank', 'noopener') } : undefined,
       });
     } catch (e: any) {
-      toast.error('Se descargó, pero no se pudo guardar en OneDrive: ' + (e.message ?? 'error desconocido'));
+      toast.error('No se pudo guardar en OneDrive: ' + (e.message ?? 'error desconocido'), {
+        duration: 15000, action: { label: 'Descargar', onClick: () => descargarBlob(archivo, nombre) },
+      });
     }
   };
 
@@ -1224,7 +1226,7 @@ export default function CalendarioMantenimiento() {
             </div>
             <div className="p-5 space-y-5">
               <p className="text-xs text-slate-500">
-                Genera el programa de mantenimiento con la evidencia de cumplimiento real registrada en el sistema. Cada reporte se descarga y además se guarda en tu OneDrive, en <b>Sistema RCMA Doc › Protección Civil</b>.
+                Genera el programa de mantenimiento con la evidencia de cumplimiento real registrada en el sistema. Cada reporte se guarda en tu OneDrive, en <b>Sistema RCMA Doc › Protección Civil</b>.
               </p>
 
               <div className="grid grid-cols-2 gap-3">
