@@ -95,6 +95,8 @@ export default function Sidebar({ isOpen, onToggle }) {
   const modoSOL = puedeVerSOL && (location.pathname === '/sol' || location.pathname.startsWith('/sol/'));
   const esAdminSOL = isAdmin && (user?.email ?? '').toLowerCase() === 'rreyes@manoamiga.edu.mx';
   const hayOtrosModulos = puedeVerCumplimiento || puedeVerSOL;
+  // En el Dashboard de cualquier módulo todos los menús del sidebar van plegados.
+  const enDashboard = ['/', '/cumplimiento', '/sol'].includes(location.pathname);
 
   // Selector de módulo: un botón con el módulo actual que despliega la lista
   // de módulos a los que el usuario tiene acceso.
@@ -340,8 +342,11 @@ export default function Sidebar({ isOpen, onToggle }) {
 
         {/* Navegación */}
         <nav className="flex-1 p-3 space-y-0.5 overflow-y-auto scrollbar-sidebar" aria-label="Menú principal">
+          {/* Cada módulo con su propia key (y distinta en su Dashboard): al cambiar
+              de módulo o al regresar al Dashboard los acordeones se crean de nuevo
+              (todos plegados) en lugar de heredar el estado abierto anterior. */}
           {modoSOL ? (
-            <>
+            <React.Fragment key={`sol-${enDashboard}`}>
               <Link to="/sol" onClick={handleNavClick} className={navLinkClassExacta('/sol')}>
                 <Gauge className="w-[18px] h-[18px]" />
                 Tablero SOL
@@ -364,9 +369,9 @@ export default function Sidebar({ isOpen, onToggle }) {
                   </SidebarAccordionGroup>
                 </>
               )}
-            </>
+            </React.Fragment>
           ) : modoCompliance ? (
-            <>
+            <React.Fragment key={`cumplimiento-${enDashboard}`}>
               <Link to="/cumplimiento" onClick={handleNavClick} className={navLinkClassExacta('/cumplimiento')}>
                 <LayoutDashboard className="w-[18px] h-[18px]" />
                 Dashboard
@@ -416,9 +421,9 @@ export default function Sidebar({ isOpen, onToggle }) {
               >
                 {cMonitoreo.map(renderLink)}
               </SidebarAccordionGroup>
-            </>
+            </React.Fragment>
           ) : (
-            <>
+            <React.Fragment key={`obras-${enDashboard}`}>
               {(isAdmin || can('ver_dashboard')) && (
                 <Link to="/" onClick={handleNavClick} className={navLinkClass('/')}>
                   <LayoutDashboard className="w-[18px] h-[18px]" />
@@ -481,7 +486,7 @@ export default function Sidebar({ isOpen, onToggle }) {
               >
                 {gCalidad.map(renderLink)}
               </SidebarAccordionGroup>
-            </>
+            </React.Fragment>
           )}
         </nav>
 
