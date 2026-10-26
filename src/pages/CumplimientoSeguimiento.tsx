@@ -13,6 +13,7 @@ import {
   Handshake, Wrench, Lock, Presentation, Send, Link2, MapPin, Building2, CalendarPlus, Download,
 } from 'lucide-react';
 import { descargarICSPendiente } from '@/lib/icsPendiente';
+import { fmtHora } from '@/lib/utils';
 import { logoCuadradoDataURL } from '@/lib/logoPdf';
 import { logAudit } from '@/lib/audit';
 import { useAdjuntos, SelectorFotos, subirFotos, useFotosNexus, FotosDeComentario, type FotoRef } from '@/components/nexus/FotosComentario';
@@ -33,7 +34,7 @@ interface Pendiente {
   id: string; titulo: string; descripcion: string | null; tipo: 'personal' | 'compartido';
   asignado_a: string | null; asignado_nombre: string | null;
   prioridad: 'urgente' | 'alta' | 'normal' | 'baja';
-  fecha_limite: string | null; estatus: 'pendiente' | 'en_proceso' | 'completado' | 'cancelado';
+  fecha_limite: string | null; hora_limite?: string | null; estatus: 'pendiente' | 'en_proceso' | 'completado' | 'cancelado';
   colegio: string | null; territorio: string | null; documento_id: string | null;
   created_by: string | null; created_at: string; updated_at: string;
   // Vínculo con Minutas de Cumplimiento (lo llenan los triggers de la base de datos)
@@ -387,7 +388,7 @@ export default function CumplimientoSeguimiento() {
   const [pendForm, setPendForm] = useState({
     titulo: '', descripcion: '', tipo: 'personal' as 'personal' | 'compartido',
     asignado_a: '', asignado_nombre: '', prioridad: 'normal' as Pendiente['prioridad'],
-    fecha_limite: '', estatus: 'pendiente' as Pendiente['estatus'], colegio: '', territorio: '',
+    fecha_limite: '', hora_limite: '', estatus: 'pendiente' as Pendiente['estatus'], colegio: '', territorio: '',
     presentar_semanal: false,
   });
 
@@ -420,8 +421,8 @@ export default function CumplimientoSeguimiento() {
   const openPend = (p?: Pendiente) => {
     setEditPend(p ?? null);
     setPendForm(p
-      ? { titulo: p.titulo, descripcion: p.descripcion ?? '', tipo: p.tipo, asignado_a: p.asignado_a ?? '', asignado_nombre: p.asignado_nombre ?? '', prioridad: p.prioridad, fecha_limite: p.fecha_limite ?? '', estatus: p.estatus, colegio: p.colegio ?? '', territorio: p.territorio ?? '', presentar_semanal: !!p.presentar_semanal }
-      : { titulo: '', descripcion: '', tipo: tab === 'compartidos' ? 'compartido' : 'personal', asignado_a: '', asignado_nombre: '', prioridad: 'normal', fecha_limite: '', estatus: 'pendiente', colegio: '', territorio: '', presentar_semanal: false });
+      ? { titulo: p.titulo, descripcion: p.descripcion ?? '', tipo: p.tipo, asignado_a: p.asignado_a ?? '', asignado_nombre: p.asignado_nombre ?? '', prioridad: p.prioridad, fecha_limite: p.fecha_limite ?? '', hora_limite: p.hora_limite?.slice(0, 5) ?? '', estatus: p.estatus, colegio: p.colegio ?? '', territorio: p.territorio ?? '', presentar_semanal: !!p.presentar_semanal }
+      : { titulo: '', descripcion: '', tipo: tab === 'compartidos' ? 'compartido' : 'personal', asignado_a: '', asignado_nombre: '', prioridad: 'normal', fecha_limite: '', hora_limite: '', estatus: 'pendiente', colegio: '', territorio: '', presentar_semanal: false });
     setShowPend(true);
   };
 
@@ -432,7 +433,9 @@ export default function CumplimientoSeguimiento() {
       const payload = {
         titulo: pendForm.titulo.trim(), descripcion: pendForm.descripcion.trim() || null,
         tipo: pendForm.tipo, asignado_a: pendForm.asignado_a.trim() || null, asignado_nombre: pendForm.asignado_nombre.trim() || null,
-        prioridad: pendForm.prioridad, fecha_limite: pendForm.fecha_limite || null, estatus: pendForm.estatus,
+        prioridad: pendForm.prioridad, fecha_limite: pendForm.fecha_limite || null,
+        // La hora solo tiene sentido con fecha; vacía = 9:00 en el calendario
+        hora_limite: pendForm.fecha_limite && pendForm.hora_limite ? pendForm.hora_limite : null, estatus: pendForm.estatus,
         colegio: pendForm.colegio || null, territorio: colegioObj?.territorio ?? (pendForm.territorio || null),
         presentar_semanal: pendForm.presentar_semanal,
       };
@@ -494,9 +497,9 @@ export default function CumplimientoSeguimiento() {
 
   // ── Editar un pendiente que viene de una minuta: el texto y la fecha se cambian en el acuerdo ──
   const [editAcuerdo, setEditAcuerdo] = useState<Pendiente | null>(null);
-  const [acForm, setAcForm] = useState({ descripcion: '', fecha: '', prioridad: 'normal' as Pendiente['prioridad'], presentar_semanal: false });
+  const [acForm, setAcForm] = useState({ descripcion: '', fecha: '', hora: '', prioridad: 'normal' as Pendiente['prioridad'], presentar_semanal: false });
   const abrirEditarAcuerdo = (p: Pendiente) => {
-    setAcForm({ descripcion: p.descripcion || p.titulo, fecha: p.fecha_limite ?? '', prioridad: p.prioridad || 'normal', presentar_semanal: !!p.presentar_semanal });
+    setAcForm({ descripcion: p.descripcion || p.titulo, fecha: p.fecha_limite ?? '', hora: p.hora_limite?.slice(0, 5) ?? '', prioridad: p.prioridad || 'normal', presentar_semanal: !!p.presentar_semanal });
     setEditAcuerdo(p);
   };
   const editar = (p: Pendiente) => { if (origenDe(p)) abrirEditarAcuerdo(p); else openPend(p); };
@@ -505,7 +508,7 @@ export default function CumplimientoSeguimiento() {
       if (!acForm.descripcion.trim()) throw new Error('El texto del acuerdo es obligatorio');
       // 1) El acuerdo en Minutas: la base de datos actualiza el pendiente (título, descripción y fecha límite)
       const { error: e1 } = await supabase.from('minuta_acuerdos')
-        .update({ descripcion: acForm.descripcion.trim(), fecha_compromiso: acForm.fecha || null })
+        .update({ descripcion: acForm.descripcion.trim(), fecha_compromiso: acForm.fecha || null, hora_compromiso: acForm.fecha && acForm.hora ? acForm.hora : null })
         .eq('id', p.acuerdo_id!);
       if (e1) throw e1;
       // 2) Lo que solo existe en Seguimiento
@@ -624,7 +627,7 @@ export default function CumplimientoSeguimiento() {
               return (
                 <div className="flex items-center gap-1.5 flex-wrap">
                   <p className={`font-semibold text-sm ${vencido ? 'text-red-600' : 'text-amber-600'}`}>
-                    📅 {fmtDate(p.fecha_limite)}
+                    📅 {fmtDate(p.fecha_limite)}{p.hora_limite && ` · ${fmtHora(p.hora_limite)}`}
                   </p>
                   {vencido && (
                     <span className="text-[10px] font-black px-1.5 py-0.5 rounded-full bg-red-100 text-red-700 animate-pulse">
@@ -948,7 +951,7 @@ export default function CumplimientoSeguimiento() {
             ); })()}
             {viewPend.descripcion && !(origenDe(viewPend) && viewPend.descripcion === viewPend.titulo) && <p className="text-sm text-slate-700 bg-slate-50 rounded-lg p-3">{viewPend.descripcion}</p>}
             <div className="flex items-center gap-2 flex-wrap text-xs text-slate-500">
-              {viewPend.fecha_limite && <span>📅 Fecha límite: {fmtDate(viewPend.fecha_limite)}</span>}
+              {viewPend.fecha_limite && <span>📅 Fecha límite: {fmtDate(viewPend.fecha_limite)}{viewPend.hora_limite && ` · ${fmtHora(viewPend.hora_limite)}`}</span>}
               {viewPend.tipo === 'compartido' && viewPend.asignado_nombre && <span>→ Asignado a: {viewPend.asignado_nombre}</span>}
             </div>
             <div className="flex gap-1.5 flex-wrap pt-1">
@@ -1002,6 +1005,10 @@ export default function CumplimientoSeguimiento() {
               <div>
                 <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Fecha límite</label>
                 <input type="date" className={inputCls} value={pendForm.fecha_limite} onChange={e => setPendForm(f => ({ ...f, fecha_limite: e.target.value }))} />
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Hora <span className="normal-case font-normal text-slate-400">(opcional)</span></label>
+                <input type="time" className={inputCls} value={pendForm.hora_limite} disabled={!pendForm.fecha_limite} title={pendForm.fecha_limite ? 'Hora del evento en Outlook; vacía = 9:00' : 'Primero elige la fecha'} onChange={e => setPendForm(f => ({ ...f, hora_limite: e.target.value }))} />
               </div>
             </div>
             <label className="flex items-start gap-2 text-sm bg-orange-50 border border-orange-200 rounded-lg p-3 cursor-pointer">
@@ -1082,6 +1089,8 @@ export default function CumplimientoSeguimiento() {
             <div className="grid grid-cols-2 gap-3">
               <div><label className="block text-xs font-bold text-slate-500 uppercase mb-1">Fecha compromiso</label>
                 <input type="date" className={inputCls} value={acForm.fecha} onChange={e => setAcForm(f => ({ ...f, fecha: e.target.value }))} /></div>
+              <div><label className="block text-xs font-bold text-slate-500 uppercase mb-1">Hora <span className="normal-case font-normal text-slate-400">(opcional)</span></label>
+                <input type="time" className={inputCls} value={acForm.hora} disabled={!acForm.fecha} title={acForm.fecha ? 'Hora del evento en Outlook; vacía = 9:00' : 'Primero elige la fecha'} onChange={e => setAcForm(f => ({ ...f, hora: e.target.value }))} /></div>
               <div><label className="block text-xs font-bold text-slate-500 uppercase mb-1">Prioridad</label>
                 <select className={inputCls} value={acForm.prioridad} onChange={e => setAcForm(f => ({ ...f, prioridad: e.target.value as Pendiente['prioridad'] }))}>
                   <option value="urgente">Urgente</option><option value="alta">Alta</option><option value="normal">Normal</option><option value="baja">Baja</option>

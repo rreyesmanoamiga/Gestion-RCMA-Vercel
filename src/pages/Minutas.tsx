@@ -14,6 +14,7 @@ import { usePermissions } from '@/hooks/usePermissions';
 import { useScope, esColegioDeOficina } from '@/hooks/useScope';
 import { useAuth } from '@/lib/AuthContext';
 import { logAudit } from '@/lib/audit';
+import { fmtHora } from '@/lib/utils';
 import { useSharePointUpload } from '@/hooks/useSharePointUpload';
 import { TERRITORIOS, getColegiosByTerritorio } from '@/lib/colegios';
 import { useDirectorio, getGerenteFMA, getDirectorNacional } from '@/lib/directorio';
@@ -67,6 +68,7 @@ interface Acuerdo {
   descripcion: string;
   responsable: string | null;
   fecha_compromiso: string | null;
+  hora_compromiso?: string | null;
   estado: 'pendiente' | 'en_proceso' | 'cumplido' | 'cancelado';
   fecha_cumplido: string | null;
   notas_seguimiento: string | null;
@@ -79,6 +81,7 @@ interface AcuerdoRow {
   descripcion: string;
   responsable: string;
   fecha_compromiso: string;
+  hora_compromiso: string;
 }
 
 const ESTADO_CFG: Record<string, { label: string; color: string }> = {
@@ -333,7 +336,7 @@ export default function Minutas({ modulo = 'obras' }: { modulo?: ModuloMinutas }
     if (editItem && acuerdosDeEditItem.length > 0) {
       setAcuerdosForm(acuerdosDeEditItem.map(a => ({
         id: a.id, descripcion: a.descripcion, responsable: a.responsable ?? '',
-        fecha_compromiso: a.fecha_compromiso ?? '',
+        fecha_compromiso: a.fecha_compromiso ?? '', hora_compromiso: a.hora_compromiso?.slice(0, 5) ?? '',
       })));
     }
   }, [editItem, acuerdosDeEditItem]);
@@ -419,7 +422,7 @@ export default function Minutas({ modulo = 'obras' }: { modulo?: ModuloMinutas }
   }, [externosActivos, notifExternos, notifGerenciaCN, notifEnrique, notifCAR, notifAdminColegio,
       colegioAdmins, form.colegio, gerenteFMA, directorNacional, carPorColegioMap]);
 
-  const agregarFilaAcuerdo = () => setAcuerdosForm(prev => [...prev, { descripcion: '', responsable: '', fecha_compromiso: '' }]);
+  const agregarFilaAcuerdo = () => setAcuerdosForm(prev => [...prev, { descripcion: '', responsable: '', fecha_compromiso: '', hora_compromiso: '' }]);
   const quitarFilaAcuerdo  = (idx: number) => setAcuerdosForm(prev => prev.filter((_, i) => i !== idx));
   const actualizarFilaAcuerdo = (idx: number, campo: keyof AcuerdoRow, valor: string) =>
     setAcuerdosForm(prev => prev.map((row, i) => i === idx ? { ...row, [campo]: valor } : row));
@@ -500,6 +503,7 @@ export default function Minutas({ modulo = 'obras' }: { modulo?: ModuloMinutas }
             const { error } = await supabase.from('minuta_acuerdos').update({
               numero: a.numero, descripcion: a.descripcion,
               responsable: a.responsable || null, fecha_compromiso: a.fecha_compromiso || null,
+              hora_compromiso: a.fecha_compromiso && a.hora_compromiso ? a.hora_compromiso : null,
               updated_at: new Date().toISOString(),
             }).eq('id', a.id);
             if (error) throw error;
@@ -507,6 +511,7 @@ export default function Minutas({ modulo = 'obras' }: { modulo?: ModuloMinutas }
             const { error } = await supabase.from('minuta_acuerdos').insert({
               minuta_id: minutaId, numero: a.numero, descripcion: a.descripcion,
               responsable: a.responsable || null, fecha_compromiso: a.fecha_compromiso || null,
+              hora_compromiso: a.fecha_compromiso && a.hora_compromiso ? a.hora_compromiso : null,
               creado_por: user?.email ?? null,
             });
             if (error) throw error;
@@ -892,12 +897,15 @@ export default function Minutas({ modulo = 'obras' }: { modulo?: ModuloMinutas }
                             <input value={row.descripcion} onChange={e => actualizarFilaAcuerdo(idx, 'descripcion', e.target.value)}
                               placeholder={form.tipo === 'nota_tecnica' ? '¿Qué acción se recomienda?' : '¿Qué se acordó?'}
                               className="w-full px-2 py-1.5 border border-slate-200 rounded-md text-xs focus:ring-2 focus:ring-blue-500 focus:outline-none" />
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
+                            <div className="grid grid-cols-1 sm:grid-cols-[1fr_auto_auto] gap-1.5">
                               <input value={row.responsable} onChange={e => actualizarFilaAcuerdo(idx, 'responsable', e.target.value)}
                                 placeholder="Responsable"
                                 className="px-2 py-1.5 border border-slate-200 rounded-md text-xs focus:ring-2 focus:ring-blue-500 focus:outline-none" />
                               <input type="date" value={row.fecha_compromiso} onChange={e => actualizarFilaAcuerdo(idx, 'fecha_compromiso', e.target.value)}
                                 className="px-2 py-1.5 border border-slate-200 rounded-md text-xs focus:ring-2 focus:ring-blue-500 focus:outline-none" />
+                              <input type="time" value={row.hora_compromiso} disabled={!row.fecha_compromiso} onChange={e => actualizarFilaAcuerdo(idx, 'hora_compromiso', e.target.value)}
+                                title={row.fecha_compromiso ? 'Hora (opcional): hora del evento en Outlook; vacía = 9:00' : 'Primero elige la fecha'}
+                                className="px-2 py-1.5 border border-slate-200 rounded-md text-xs focus:ring-2 focus:ring-blue-500 focus:outline-none disabled:bg-slate-100 disabled:text-slate-300" />
                             </div>
                           </div>
                           <button type="button" onClick={() => quitarFilaAcuerdo(idx)}
@@ -1339,7 +1347,7 @@ function SeguimientoAcuerdos({ acuerdos, isLoading, puedeEditar, qc }: {
                       )}
                       {a.fecha_compromiso && (
                         <span className={`text-[11px] ${vencido ? 'text-red-600 font-bold' : 'text-slate-500'}`}>
-                          📅 {format(new Date(a.fecha_compromiso + 'T12:00:00'), "d MMM yyyy", { locale: es })}
+                          📅 {format(new Date(a.fecha_compromiso + 'T12:00:00'), "d MMM yyyy", { locale: es })}{a.hora_compromiso && ` · ${fmtHora(a.hora_compromiso)}`}
                         </span>
                       )}
                       {a.minuta?.colegio && (

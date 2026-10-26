@@ -17,3 +17,12 @@ export function cn(...inputs: unknown[]) {
  */
 export const isIframe = () =>
   typeof window !== 'undefined' && window.self !== window.top;
+/**
+ * Hora límite de un pendiente ('14:30' o '14:30:00') en formato legible.
+ * @example fmtHora('14:30:00') // '2:30 p. m.'
+ */
+export const fmtHora = (h?: string | null) => {
+  if (!h) return '';
+  const [hh, mm] = h.split(':').map(Number);
+  return `${hh % 12 || 12}:${String(mm).padStart(2, '0')} ${hh < 12 ? 'a. m.' : 'p. m.'}`;
+};

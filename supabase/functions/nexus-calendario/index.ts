@@ -4,8 +4,9 @@
 // La base de datos llama a esta función (trigger con pg_net) cada vez que un
 // pendiente se crea, cambia o se borra. Si el pendiente es de Ricardo y tiene
 // fecha límite, se mantiene UN evento en su calendario de Outlook:
-//   · "Vence: <pendiente>" → el día de la fecha límite, 9:00, con el
-//     recordatorio de Outlook 3 días antes.
+//   · "Vence: <pendiente>" → el día de la fecha límite, a la hora límite
+//     (hora_limite) con recordatorio 30 min antes; sin hora, a las 9:00 con
+//     el recordatorio de Outlook 3 días antes.
 // Si cambia la fecha, el evento se mueve (también si el pendiente ya venció
 // y se le pone una fecha nueva). Mientras el pendiente siga abierto el evento
 // se conserva aunque ya haya vencido; si se completa, se borra o se queda sin
@@ -35,7 +36,9 @@ const SECRETO   = Deno.env.get('NEXUS_CAL_SECRET') ?? '';
 const GRAPH     = `https://graph.microsoft.com/v1.0/users/${CAL_EMAIL}/events`;
 const HORA      = '09:00:00';
 const ZONA      = 'Central Standard Time (Mexico)'; // Ciudad de México / Monterrey, UTC-6 sin horario de verano
-const RECORDATORIO_MIN = 3 * 24 * 60; // 3 días antes del inicio (9:00 → 9:00)
+const RECORDATORIO_MIN = 3 * 24 * 60; // sin hora: 3 días antes del inicio (9:00 → 9:00)
+const RECORDATORIO_CON_HORA_MIN = 30; // con hora: 30 min antes
+const DURACION_MIN = 15;
 
 const json = (data: unknown, status = 200) =>
   new Response(JSON.stringify(data), { status, headers: { 'Content-Type': 'application/json' } });
@@ -44,14 +47,14 @@ const json = (data: unknown, status = 200) =>
 type DB = any;
 type Pendiente = {
   id: string; titulo: string; descripcion: string | null; tipo: string; asignado_a: string | null;
-  created_by: string | null; prioridad: string | null; fecha_limite: string | null; estatus: string;
+  created_by: string | null; prioridad: string | null; fecha_limite: string | null; hora_limite: string | null; estatus: string;
   colegio: string | null; territorio: string | null; proyecto_nombre: string | null; ticket_folio: string | null;
   asignado_nombre: string | null; created_at: string | null; updated_at: string | null;
   acuerdo_id: string | null; origen: string | null; origen_numero: number | null; origen_asunto: string | null;
   origen_fecha: string | null; origen_responsable: string | null; origen_url: string | null;
 };
 type Tabla = 'nexus' | 'cumplimiento';
-const COLS_CN = 'id,titulo,descripcion,tipo,asignado_a,asignado_nombre,created_by,prioridad,fecha_limite,estatus,colegio,territorio,created_at,updated_at,acuerdo_id,origen,origen_numero,origen_asunto,origen_fecha,origen_responsable,origen_url';
+const COLS_CN = 'id,titulo,descripcion,tipo,asignado_a,asignado_nombre,created_by,prioridad,fecha_limite,hora_limite,estatus,colegio,territorio,created_at,updated_at,acuerdo_id,origen,origen_numero,origen_asunto,origen_fecha,origen_responsable,origen_url';
 type Mapa = {
   tabla?: Tabla | null;
   pendiente_id: string; evento_3d: string | null; evento_dia: string | null;
@@ -93,6 +96,11 @@ function sumarDias(fecha: string, dias: number): string {
   return d.toISOString().slice(0, 10);
 }
 
+/** 'HH:MM' de la hora límite, o null si no tiene */
+const horaDe = (p: Pendiente) => p.hora_limite ? p.hora_limite.slice(0, 5) : null;
+/** '14:30' → '2:30 p. m.' */
+const horaLarga = (h: string) => new Date(`2000-01-01T${h}:00Z`).toLocaleTimeString('es-MX', { hour: 'numeric', minute: '2-digit', timeZone: 'UTC' });
+
 const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 const fechaLarga = (f: string) => new Date(f + 'T12:00:00Z').toLocaleDateString('es-MX', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' });
 
@@ -108,6 +116,8 @@ function fila(etiqueta: string, valorHtml: string, i: number): string {
 function cuerpoHtml(p: Pendiente, h: Historial, tabla: Tabla = 'nexus'): string {
   const esCN = tabla === 'cumplimiento';
   const fechaLimite = p.fecha_limite!.slice(0, 10);
+  const hora = horaDe(p);
+  const venceTxt = `${fechaLarga(fechaLimite)}${hora ? ` a las ${horaLarga(hora)}` : ''}`;
   const esMinuta = !!p.acuerdo_id && (p.origen === 'acuerdo' || p.origen === 'accion');
   const doc = p.origen === 'accion' ? 'Nota técnica' : 'Minuta';
   const tipoTxt = !esMinuta ? (esCN ? 'Pendiente de Seguimiento de Trámites' : 'Pendiente de NEXUS')
@@ -126,7 +136,7 @@ function cuerpoHtml(p: Pendiente, h: Historial, tabla: Tabla = 'nexus'): string 
     filas.push([`Responsable según la ${doc.toLowerCase()}`, `<strong>${esc(p.origen_responsable || 'Sin responsable')}</strong>`]);
   }
   filas.push(['Pendiente asignado a', esc(paraQuien)]);
-  filas.push(['Fecha límite', `<strong>${esc(fechaLarga(fechaLimite))}</strong>`]);
+  filas.push(['Fecha límite', `<strong>${esc(venceTxt)}</strong>`]);
   filas.push(['Reprogramación', reprogHtml]);
   filas.push(['Prioridad', prioHtml]);
   if (p.colegio) filas.push(['Colegio', esc(p.colegio)]);
@@ -146,7 +156,7 @@ function cuerpoHtml(p: Pendiente, h: Historial, tabla: Tabla = 'nexus'): string 
   <p style="margin:4px 0 0;color:#94a3b8;font-size:12px;font-family:Arial,sans-serif;">${esCN ? 'Cumplimiento Normativo' : 'Coordinación de Obras'} — Colegios Mano Amiga</p>
 </td></tr>
 <tr><td style="background:${NARANJA};padding:12px 32px;">
-  <p style="margin:0;color:#ffffff;font-size:14px;font-weight:700;font-family:Arial,sans-serif;">Vence el ${esc(fechaLarga(fechaLimite))}</p>
+  <p style="margin:0;color:#ffffff;font-size:14px;font-weight:700;font-family:Arial,sans-serif;">Vence el ${esc(venceTxt)}</p>
 </td></tr>
 <tr><td style="padding:28px 32px 8px;">
   <p style="margin:0 0 6px;color:#64748b;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;font-family:Arial,sans-serif;">${esc(esMinuta ? tipoTxt : 'Pendiente')}</p>
@@ -168,13 +178,17 @@ function evento(p: Pendiente, tipo: Tipo, h: Historial, tabla: Tabla = 'nexus') 
   const dia = tipo === '3d' ? sumarDias(fechaLimite, -3) : fechaLimite;
   const cn = tabla === 'cumplimiento' ? ' (CN)' : '';
   const asunto = tipo === '3d' ? `Vence en 3 días${cn}: ${p.titulo}` : `Vence${cn}: ${p.titulo}`;
+  // Con hora límite el evento va a esa hora; sin hora, a las 9:00 como siempre
+  const hora = tipo === 'dia' ? horaDe(p) : null;
+  const inicio = `${dia}T${hora ? `${hora}:00` : HORA}`;
+  const fin = new Date(new Date(`${inicio}Z`).getTime() + DURACION_MIN * 60000).toISOString().slice(0, 19);
   return {
     subject: asunto,
     body: { contentType: 'HTML', content: cuerpoHtml(p, h, tabla) },
-    start: { dateTime: `${dia}T${HORA}`, timeZone: ZONA },
-    end: { dateTime: `${dia}T09:15:00`, timeZone: ZONA },
+    start: { dateTime: inicio, timeZone: ZONA },
+    end: { dateTime: fin, timeZone: ZONA },
     isReminderOn: true,
-    reminderMinutesBeforeStart: tipo === 'dia' ? RECORDATORIO_MIN : 0,
+    reminderMinutesBeforeStart: tipo === 'dia' ? (hora ? RECORDATORIO_CON_HORA_MIN : RECORDATORIO_MIN) : 0,
     showAs: 'free',
     importance: p.prioridad === 'urgente' || p.prioridad === 'alta' ? 'high' : 'normal',
     location: p.colegio ? { displayName: p.colegio } : undefined,
@@ -214,7 +228,7 @@ async function sincronizar(db: DB, token: string, pendienteId: string, tablaPedi
   const { data: p } = tabla === 'cumplimiento'
     ? await db.from('compliance_pendientes').select(COLS_CN).eq('id', pendienteId).maybeSingle() as { data: Pendiente | null }
     : await db.from('nexus_pendientes')
-        .select('id,titulo,descripcion,tipo,asignado_a,asignado_nombre,created_by,prioridad,fecha_limite,estatus,colegio,territorio,proyecto_nombre,ticket_folio,created_at,updated_at,acuerdo_id,origen,origen_numero,origen_asunto,origen_fecha,origen_responsable,origen_url')
+        .select('id,titulo,descripcion,tipo,asignado_a,asignado_nombre,created_by,prioridad,fecha_limite,hora_limite,estatus,colegio,territorio,proyecto_nombre,ticket_folio,created_at,updated_at,acuerdo_id,origen,origen_numero,origen_asunto,origen_fecha,origen_responsable,origen_url')
         .eq('id', pendienteId).maybeSingle() as { data: Pendiente | null };
 
   // Un solo evento: el día que vence, con recordatorio 3 días antes. Se

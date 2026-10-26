@@ -1,7 +1,8 @@
 // Genera un archivo .ics (calendario) para un pendiente de NEXUS.
 // Al abrirlo, Outlook / Calendario del celular lo agrega como evento de
 // todo el día en la fecha límite, con recordatorio un día antes a las 9:00
-// y el mismo día a las 8:00. Usa un UID fijo por pendiente: si se vuelve a
+// y el mismo día a las 8:00. Si el pendiente tiene hora límite, el evento
+// va a esa hora (15 min) con recordatorio 30 min antes. Usa un UID fijo por pendiente: si se vuelve a
 // descargar (por ejemplo, después de cambiar la fecha), el evento se
 // actualiza en lugar de duplicarse.
 
@@ -10,6 +11,7 @@ export interface PendienteICS {
   titulo: string;
   descripcion?: string | null;
   fecha_limite?: string | null;
+  hora_limite?: string | null;
   prioridad?: string | null;
   colegio?: string | null;
   territorio?: string | null;
@@ -48,6 +50,11 @@ export function crearICSPendiente(p: PendienteICS, urlSistema: string): string {
   const base = p.fecha_limite ? new Date(p.fecha_limite.slice(0, 10) + 'T12:00:00') : new Date();
   const fin = new Date(base); fin.setDate(fin.getDate() + 1);
   const ahora = new Date();
+  // Con hora límite: evento de 15 min a esa hora (hora local del equipo)
+  const hora = p.fecha_limite && p.hora_limite ? p.hora_limite.slice(0, 5) : null;
+  const inicioHora = hora ? new Date(`${p.fecha_limite!.slice(0, 10)}T${hora}:00`) : null;
+  const finHora = inicioHora ? new Date(inicioHora.getTime() + 15 * 60000) : null;
+  const local = (d: Date) => `${yyyymmdd(d)}T${String(d.getHours()).padStart(2, '0')}${String(d.getMinutes()).padStart(2, '0')}00`;
 
   const detalle = [
     p.descripcion?.trim() || '',
@@ -74,8 +81,8 @@ export function crearICSPendiente(p: PendienteICS, urlSistema: string): string {
     `UID:nexus-pendiente-${p.id}@sistema-rcma`,
     `DTSTAMP:${sello(ahora)}`,
     `SEQUENCE:${Math.floor(ahora.getTime() / 60000)}`,
-    `DTSTART;VALUE=DATE:${yyyymmdd(base)}`,
-    `DTEND;VALUE=DATE:${yyyymmdd(fin)}`,
+    inicioHora ? `DTSTART:${local(inicioHora)}` : `DTSTART;VALUE=DATE:${yyyymmdd(base)}`,
+    finHora ? `DTEND:${local(finHora)}` : `DTEND;VALUE=DATE:${yyyymmdd(fin)}`,
     `SUMMARY:${esc(titulo)}`,
     `DESCRIPTION:${esc(detalle)}`,
     `URL:${urlSistema}`,
@@ -83,19 +90,27 @@ export function crearICSPendiente(p: PendienteICS, urlSistema: string): string {
     'CATEGORIES:NEXUS',
     p.prioridad === 'urgente' || p.prioridad === 'alta' ? 'PRIORITY:1' : 'PRIORITY:5',
     'TRANSP:TRANSPARENT',
-    'X-MICROSOFT-CDO-ALLDAYEVENT:TRUE',
+    inicioHora ? '' : 'X-MICROSOFT-CDO-ALLDAYEVENT:TRUE',
     'X-MICROSOFT-CDO-BUSYSTATUS:FREE',
     // Outlook usa el primer recordatorio; el celular respeta los dos
-    'BEGIN:VALARM',
-    'ACTION:DISPLAY',
-    `DESCRIPTION:${esc(titulo)}`,
-    'TRIGGER:-PT15H',
-    'END:VALARM',
-    'BEGIN:VALARM',
-    'ACTION:DISPLAY',
-    `DESCRIPTION:${esc(titulo)}`,
-    'TRIGGER:PT8H',
-    'END:VALARM',
+    ...(inicioHora ? [
+      'BEGIN:VALARM',
+      'ACTION:DISPLAY',
+      `DESCRIPTION:${esc(titulo)}`,
+      'TRIGGER:-PT30M',
+      'END:VALARM',
+    ] : [
+      'BEGIN:VALARM',
+      'ACTION:DISPLAY',
+      `DESCRIPTION:${esc(titulo)}`,
+      'TRIGGER:-PT15H',
+      'END:VALARM',
+      'BEGIN:VALARM',
+      'ACTION:DISPLAY',
+      `DESCRIPTION:${esc(titulo)}`,
+      'TRIGGER:PT8H',
+      'END:VALARM',
+    ]),
     'END:VEVENT',
     'END:VCALENDAR',
   ].filter(Boolean);

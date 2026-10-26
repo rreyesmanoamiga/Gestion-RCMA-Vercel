@@ -17,12 +17,13 @@ import {
   ClipboardList, BarChart3, Ban, Handshake, Wrench, ExternalLink, Lock, Loader2, CalendarPlus,
 } from 'lucide-react';
 import { descargarICSPendiente } from '@/lib/icsPendiente';
+import { fmtHora } from '@/lib/utils';
 import { logoCuadradoDataURL } from '@/lib/logoPdf';
 import { useAdjuntos, SelectorFotos, subirFotos, useFotosNexus, FotosDeComentario, type FotoRef } from '@/components/nexus/FotosComentario';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 interface Nota      { id: string; titulo: string; contenido: string; categoria: string; color: string; fijada: boolean; colegio: string; territorio: string; created_at: string; updated_at: string; }
-interface Pendiente { id: string; titulo: string; descripcion: string; tipo: string; asignado_a: string; asignado_nombre: string; asignado_cc: string; asignado_cc_nombre: string; prioridad: string; fecha_limite: string | null; estatus: string; completado_at: string | null; created_by: string; created_at: string;
+interface Pendiente { id: string; titulo: string; descripcion: string; tipo: string; asignado_a: string; asignado_nombre: string; asignado_cc: string; asignado_cc_nombre: string; prioridad: string; fecha_limite: string | null; hora_limite?: string | null; estatus: string; completado_at: string | null; created_by: string; created_at: string;
   proyecto_id?: string; proyecto_nombre?: string; ticket_id?: string; ticket_folio?: string; colegio?: string; territorio?: string;
   // Vínculo con Minutas (lo llenan los triggers de la base de datos)
   acuerdo_id?: string | null; minuta_id?: string | null; origen?: 'acuerdo' | 'accion' | null; origen_numero?: number | null;
@@ -511,7 +512,7 @@ export default function Nexus() {
   const [editPend,  setEditPend]  = useState<Pendiente|null>(null);
   // Pendientes que vienen de Minutas: se editan en el acuerdo (la base de datos sincroniza NEXUS)
   const [editAcuerdo, setEditAcuerdo] = useState<Pendiente|null>(null);
-  const [acForm, setAcForm] = useState({ descripcion:'', fecha:'', prioridad:'normal', presentar_semanal:false });
+  const [acForm, setAcForm] = useState({ descripcion:'', fecha:'', hora:'', prioridad:'normal', presentar_semanal:false });
   const [viewNota,  setViewNota]  = useState<Nota|null>(null);
   const [viewPend,  setViewPend]  = useState<Pendiente|null>(null);
   const [confirmDel, setConfirmDel] = useState<{type:'nota'|'pendiente';id:string;titulo:string;origen?:'acuerdo'|'accion'|null;completado?:boolean}|null>(null);
@@ -638,7 +639,7 @@ export default function Nexus() {
   });
 
   // ── Form Pendiente ────────────────────────────────────────────────────────
-  const [pendForm, setPendForm] = useState({ titulo:'',descripcion:'',tipo:'personal',asignado_a:'',asignado_nombre:'',asignado_cc:'',asignado_cc_nombre:'',prioridad:'normal',fecha_limite:'',estatus:'pendiente',proyecto_id:'',proyecto_nombre:'',ticket_id:'',ticket_folio:'',colegio:'',territorio:'',presentar_semanal:false });
+  const [pendForm, setPendForm] = useState({ titulo:'',descripcion:'',tipo:'personal',asignado_a:'',asignado_nombre:'',asignado_cc:'',asignado_cc_nombre:'',prioridad:'normal',fecha_limite:'',hora_limite:'',estatus:'pendiente',proyecto_id:'',proyecto_nombre:'',ticket_id:'',ticket_folio:'',colegio:'',territorio:'',presentar_semanal:false });
   const [sinProyecto, setSinProyecto] = useState(false);
 
   // Usuarios: colegio seleccionado + FMA siempre disponible
@@ -662,6 +663,8 @@ export default function Nexus() {
         proyecto_id:  pendForm.proyecto_id  || null,
         ticket_id:    pendForm.ticket_id    || null,
         fecha_limite: pendForm.fecha_limite || null,
+        // La hora solo tiene sentido con fecha; vacía = 9:00 en el calendario
+        hora_limite:  pendForm.fecha_limite && pendForm.hora_limite ? pendForm.hora_limite : null,
         created_by:   userEmail,
         updated_at:   new Date().toISOString(),
       };
@@ -676,7 +679,7 @@ export default function Nexus() {
             destinatario_nombre:pendForm.asignado_nombre||pendForm.asignado_a,
             titulo:pendForm.titulo, descripcion:pendForm.descripcion,
             prioridad:pendForm.prioridad,
-            fecha_limite:pendForm.fecha_limite?fmtDate(pendForm.fecha_limite):null,
+            fecha_limite:pendForm.fecha_limite?fmtDate(pendForm.fecha_limite)+(pendForm.hora_limite?` ${fmtHora(pendForm.hora_limite)}`:''):null,
             asignado_por:userName, siteUrl:window.location.origin,
             es_directo:true,
           }});
@@ -694,7 +697,7 @@ export default function Nexus() {
               destinatario_nombre:pendForm.asignado_cc_nombre||pendForm.asignado_cc,
               titulo:pendForm.titulo, descripcion:pendForm.descripcion,
               prioridad:pendForm.prioridad,
-              fecha_limite:pendForm.fecha_limite?fmtDate(pendForm.fecha_limite):null,
+              fecha_limite:pendForm.fecha_limite?fmtDate(pendForm.fecha_limite)+(pendForm.hora_limite?` ${fmtHora(pendForm.hora_limite)}`:''):null,
               asignado_por:userName, siteUrl:window.location.origin,
               es_directo:false,
               responsable_nombre:pendForm.asignado_nombre||pendForm.asignado_a,
@@ -749,16 +752,16 @@ export default function Nexus() {
   });
 
   const abrirEditarAcuerdo = (p: Pendiente) => {
-    setAcForm({ descripcion: p.descripcion || p.titulo, fecha: p.fecha_limite ?? '', prioridad: p.prioridad || 'normal', presentar_semanal: !!p.presentar_semanal });
+    setAcForm({ descripcion: p.descripcion || p.titulo, fecha: p.fecha_limite ?? '', hora: p.hora_limite?.slice(0, 5) ?? '', prioridad: p.prioridad || 'normal', presentar_semanal: !!p.presentar_semanal });
     setEditAcuerdo(p);
   };
   const saveAcuerdo = useMutation({
     mutationFn: async (p: Pendiente) => {
       if (!isAdmin) throw new Error('Solo el administrador puede editar acuerdos');
       if (!acForm.descripcion.trim()) throw new Error('El texto del acuerdo es obligatorio');
-      // 1) El acuerdo en Minutas: la base de datos actualiza el pendiente (título, descripción y fecha límite)
+      // 1) El acuerdo en Minutas: la base de datos actualiza el pendiente (título, descripción, fecha y hora límite)
       const { error: e1 } = await supabase.from('minuta_acuerdos')
-        .update({ descripcion: acForm.descripcion.trim(), fecha_compromiso: acForm.fecha || null })
+        .update({ descripcion: acForm.descripcion.trim(), fecha_compromiso: acForm.fecha || null, hora_compromiso: acForm.fecha && acForm.hora ? acForm.hora : null })
         .eq('id', p.acuerdo_id!);
       if (e1) throw e1;
       // 2) Lo que solo existe en NEXUS
@@ -802,7 +805,7 @@ export default function Nexus() {
 
   const openNota = (n?:Nota)=>{ setEditNota(n??null); setNotaConColegio(!!(n?.colegio)); setNotaForm(n?{titulo:n.titulo,contenido:n.contenido,categoria:n.categoria,color:n.color,fijada:n.fijada,territorio:n.territorio??'',colegio:n.colegio??''}:{titulo:'',contenido:'',categoria:'General',color:'#0f172a',fijada:false,territorio:'',colegio:''}); setShowNota(true); };
 
-  const openPend = (p?:Pendiente)=>{ setEditPend(p??null); setSinProyecto(!!(p&&!p.proyecto_id&&p.proyecto_nombre)); setPendForm(p?{titulo:p.titulo,descripcion:p.descripcion,tipo:p.tipo,asignado_a:p.asignado_a,asignado_nombre:p.asignado_nombre,asignado_cc:p.asignado_cc??'',asignado_cc_nombre:p.asignado_cc_nombre??'',prioridad:p.prioridad,fecha_limite:p.fecha_limite??'',estatus:p.estatus,proyecto_id:p.proyecto_id??'',proyecto_nombre:p.proyecto_nombre??'',ticket_id:p.ticket_id??'',ticket_folio:p.ticket_folio??'',colegio:p.colegio??'',territorio:p.territorio??'',presentar_semanal:!!p.presentar_semanal}:{titulo:'',descripcion:'',tipo:tab==='compartidos'?'compartido':'personal',asignado_a:'',asignado_nombre:'',asignado_cc:'',asignado_cc_nombre:'',prioridad:'normal',fecha_limite:'',estatus:'pendiente',proyecto_id:'',proyecto_nombre:'',ticket_id:'',ticket_folio:'',colegio:'',territorio:'',presentar_semanal:false}); setShowPend(true); };
+  const openPend = (p?:Pendiente)=>{ setEditPend(p??null); setSinProyecto(!!(p&&!p.proyecto_id&&p.proyecto_nombre)); setPendForm(p?{titulo:p.titulo,descripcion:p.descripcion,tipo:p.tipo,asignado_a:p.asignado_a,asignado_nombre:p.asignado_nombre,asignado_cc:p.asignado_cc??'',asignado_cc_nombre:p.asignado_cc_nombre??'',prioridad:p.prioridad,fecha_limite:p.fecha_limite??'',hora_limite:p.hora_limite?.slice(0,5)??'',estatus:p.estatus,proyecto_id:p.proyecto_id??'',proyecto_nombre:p.proyecto_nombre??'',ticket_id:p.ticket_id??'',ticket_folio:p.ticket_folio??'',colegio:p.colegio??'',territorio:p.territorio??'',presentar_semanal:!!p.presentar_semanal}:{titulo:'',descripcion:'',tipo:tab==='compartidos'?'compartido':'personal',asignado_a:'',asignado_nombre:'',asignado_cc:'',asignado_cc_nombre:'',prioridad:'normal',fecha_limite:'',hora_limite:'',estatus:'pendiente',proyecto_id:'',proyecto_nombre:'',ticket_id:'',ticket_folio:'',colegio:'',territorio:'',presentar_semanal:false}); setShowPend(true); };
 
   // ── KPIs ─────────────────────────────────────────────────────────────────
   const kpis = useMemo(()=>({ total: pendientes.length, personales: pendientes.filter(p=>p.tipo==='personal').length, compartidos: pendientes.filter(p=>p.tipo==='compartido').length, completados: pendientes.filter(p=>p.estatus==='completado').length, urgentes: pendientes.filter(p=>p.prioridad==='urgente'&&p.estatus!=='completado').length, activos: pendientes.filter(p=>p.estatus!=='completado').length, }),[pendientes]);
@@ -888,7 +891,7 @@ export default function Nexus() {
               return (
                 <div className="flex items-center gap-1.5 flex-wrap">
                   <p className={`font-semibold text-sm ${vencido ? 'text-red-600' : porVencer ? 'text-amber-600' : 'text-amber-600'}`}>
-                    📅 {fmtDate(p.fecha_limite)}
+                    📅 {fmtDate(p.fecha_limite)}{p.hora_limite && ` · ${fmtHora(p.hora_limite)}`}
                   </p>
                   {vencido && (
                     <span className="text-[10px] font-black px-1.5 py-0.5 rounded-full bg-red-100 text-red-700 animate-pulse">
@@ -1291,7 +1294,7 @@ export default function Nexus() {
               {viewPend.proyecto_nombre && <div><p className="text-xs font-bold text-slate-400 uppercase mb-1">Proyecto vinculado</p><p className="font-semibold text-blue-700">{viewPend.proyecto_nombre}</p></div>}
               {viewPend.asignado_nombre && viewPend.tipo==='compartido' && <div><p className="text-xs font-bold text-slate-400 uppercase mb-1">Responsable directo</p><p className="font-semibold text-teal-700">{viewPend.asignado_nombre}</p><p className="text-xs text-slate-400">{viewPend.asignado_a}</p></div>}
               {viewPend.asignado_cc_nombre && <div><p className="text-xs font-bold text-slate-400 uppercase mb-1">Con conocimiento de</p><p className="font-semibold text-slate-600">{viewPend.asignado_cc_nombre}</p><p className="text-xs text-slate-400">{viewPend.asignado_cc}</p></div>}
-              {viewPend.fecha_limite && <div><p className="text-xs font-bold text-slate-400 uppercase mb-1">Fecha límite</p><p className="font-semibold text-amber-600">{fmtDate(viewPend.fecha_limite)}</p></div>}
+              {viewPend.fecha_limite && <div><p className="text-xs font-bold text-slate-400 uppercase mb-1">Fecha límite</p><p className="font-semibold text-amber-600">{fmtDate(viewPend.fecha_limite)}{viewPend.hora_limite && ` · ${fmtHora(viewPend.hora_limite)}`}</p></div>}
               {viewPend.completado_at && <div><p className="text-xs font-bold text-slate-400 uppercase mb-1">Completado el</p><p className="font-semibold text-emerald-600">{fmtFull(viewPend.completado_at)}</p></div>}
             </div>
 
@@ -1463,6 +1466,7 @@ export default function Nexus() {
 
           <div className="grid grid-cols-2 gap-3">
             <div><label className="block text-xs font-bold text-slate-500 uppercase mb-1">Fecha límite</label><input type="date" className={inputCls} value={pendForm.fecha_limite} onChange={e=>setPendForm(f=>({...f,fecha_limite:e.target.value}))}/></div>
+            <div><label className="block text-xs font-bold text-slate-500 uppercase mb-1">Hora <span className="normal-case font-normal text-slate-400">(opcional)</span></label><input type="time" className={inputCls} value={pendForm.hora_limite} disabled={!pendForm.fecha_limite} title={pendForm.fecha_limite?'Hora del evento en Outlook; vacía = 9:00':'Primero elige la fecha'} onChange={e=>setPendForm(f=>({...f,hora_limite:e.target.value}))}/></div>
             {editPend&&<div><label className="block text-xs font-bold text-slate-500 uppercase mb-1">Estatus</label><select className={inputCls} value={pendForm.estatus} onChange={e=>setPendForm(f=>({...f,estatus:e.target.value}))}><option value="pendiente">Pendiente</option><option value="en_proceso">En Proceso</option><option value="completado">Completado</option></select></div>}
           </div>
           {isAdmin&&(
@@ -1491,6 +1495,8 @@ export default function Nexus() {
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div><label className="block text-xs font-bold text-slate-500 uppercase mb-1">Fecha límite (compromiso)</label>
                 <input type="date" className={inputCls} value={acForm.fecha} onChange={e => setAcForm(f => ({ ...f, fecha: e.target.value }))}/></div>
+              <div><label className="block text-xs font-bold text-slate-500 uppercase mb-1">Hora <span className="normal-case font-normal text-slate-400">(opcional)</span></label>
+                <input type="time" className={inputCls} value={acForm.hora} disabled={!acForm.fecha} title={acForm.fecha ? 'Hora del evento en Outlook; vacía = 9:00' : 'Primero elige la fecha'} onChange={e => setAcForm(f => ({ ...f, hora: e.target.value }))}/></div>
               <div><label className="block text-xs font-bold text-slate-500 uppercase mb-1">Prioridad</label>
                 <select className={inputCls} value={acForm.prioridad} onChange={e => setAcForm(f => ({ ...f, prioridad: e.target.value }))}>
                   {(['baja','normal','alta','urgente'] as const).map(p => <option key={p} value={p}>{PRIO_CFG[p].label}</option>)}
