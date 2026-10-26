@@ -39,6 +39,7 @@ function codigoCorto(clave: string): string {
 import { supabase } from '@/lib/supabaseClient';
 import { toast } from 'sonner';
 import { imprimirHTML } from '@/lib/imprimir';
+import { LOGO_MANO_AMIGA } from '@/lib/formatoInstitucional';
 import {
   MapPin, ClipboardList, DollarSign, FileText, Upload,
   Calendar, CheckCircle2, Circle, ChevronDown, ChevronUp,
@@ -185,22 +186,49 @@ function generarComunicadoPDF(plantel: Plantel, comunicado: Comunicado, dirNombr
     ? new Date(comunicado.fecha_visita + 'T12:00:00').toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: '2-digit' })
     : '(por confirmar)';
 
-  const html = `<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8">
+  // Carta con membrete institucional (mismo lenguaje visual que Ticket MAS y
+  // Solicitud de Proyecto, pero conservando el formato de carta).
+  const html = `<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8"><title>Comunicado — ${plantel.colegio_nombre}</title>
 <style>
-  body { font-family: Arial, sans-serif; font-size: 13px; color: #222; margin: 40px; line-height: 1.6; }
-  .fecha { text-align: right; margin-bottom: 24px; }
-  .asunto { margin-bottom: 12px; }
-  .saludo { margin-bottom: 20px; }
-  .intro { margin-bottom: 20px; }
-  table { width: 100%; border-collapse: collapse; margin: 16px 0; }
-  th, td { border: 1px solid #ccc; padding: 8px 12px; text-align: left; font-size: 13px; }
-  th { background: #f0f0f0; font-weight: bold; }
-  ul { margin: 8px 0 16px 24px; }
-  li { margin-bottom: 4px; }
-  .firma { margin-top: 40px; }
-  .pie { margin-top: 4px; color: #555; }
-  .footer { margin-top: 60px; font-size: 11px; color: #888; text-align: center; border-top: 1px solid #ddd; padding-top: 8px; }
+  * { box-sizing: border-box; }
+  @page { size: letter; margin: 0 0 14mm; }
+  html, body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  body { font-family: 'Calibri','Carlito','Segoe UI',Arial,sans-serif; font-size: 12.5px; color: #1e293b; margin: 0; line-height: 1.45; background: #fff; }
+  .membrete { display: flex; align-items: center; justify-content: space-between; padding: 14px 18mm 12px;
+    background: linear-gradient(115deg,#1F4E79 0%,#1F4E79 70%,#24598a 70%,#24598a 82%,#E87722 82%,#E87722 100%); color: #fff; }
+  .membrete .k { font-size: 9px; letter-spacing: .22em; opacity: .8; }
+  .membrete .t { font-size: 15px; font-weight: 800; letter-spacing: .03em; }
+  .membrete .logo { background: #fff; border-radius: 9px; padding: 5px 9px; }
+  .membrete .logo img { height: 34px; display: block; }
+  .carta { padding: 16px 20mm 0; }
+  .fecha { text-align: right; margin-bottom: 14px; color: #475569; }
+  .asunto { margin-bottom: 8px; }
+  .saludo { margin-bottom: 10px; }
+  .intro { margin-bottom: 8px; text-align: justify; }
+  p { text-align: justify; margin: 5px 0; }
+  .carta > strong { display: block; margin: 12px 0 5px; padding: 4px 10px; background: #f1f5f9; border-left: 4px solid #E87722;
+    color: #1F4E79; font-size: 11.5px; text-transform: uppercase; letter-spacing: .07em; }
+  table { width: 100%; border-collapse: separate; border-spacing: 0; margin: 6px 0 8px; border: 1px solid #e2e8f0; border-radius: 8px; overflow: hidden; }
+  th, td { padding: 5px 12px; text-align: left; font-size: 12.5px; border-bottom: 1px solid #eef2f7; }
+  tr:last-child th, tr:last-child td { border-bottom: 0; }
+  th { background: #f8fafc; color: #1F4E79; font-weight: 700; width: 32%; }
+  table tr:first-child th:not(:first-child) { width: auto; }
+  ul { margin: 4px 0 8px 22px; padding: 0; }
+  li { margin-bottom: 1px; }
+  li::marker { color: #E87722; }
+  .firma { margin-top: 16px; }
+  .firma p { margin: 2px 0; text-align: left; }
+  .firma .linea { width: 240px; border-top: 1px solid #94a3b8; margin: 30px 0 5px; }
+  .pie { color: #64748b; }
+  .footer { position: fixed; bottom: 0; left: 0; right: 0; height: 9mm; background: #1F4E79; color: #cbd5e1; font-size: 9px;
+    display: flex; align-items: center; justify-content: space-between; padding: 0 18mm; }
+  .footer em { color: #fff; }
 </style></head><body>
+<div class="membrete">
+  <div><div class="k">RED DE COLEGIOS MANO AMIGA</div><div class="t">COORDINACIÓN DE OBRAS Y MANTENIMIENTO RCMA</div></div>
+  <div class="logo"><img src="${LOGO_MANO_AMIGA}" alt="Mano Amiga"/></div>
+</div>
+<div class="carta">
 <div class="fecha">${fechaEmision}</div>
 <div class="asunto"><strong>Asunto: Inicio de Proyectos de Levantamientos y Estudios.</strong></div>
 <div class="saludo">Estimado/a <strong>${dirNombre || comunicado.director_nombre || ''}.</strong></div>
@@ -232,12 +260,13 @@ Este proyecto es fundamental para el desarrollo de futuras iniciativas de mejora
 <p>Quedamos a su disposición para cualquier duda o aclaración.</p>
 <div class="firma">
   <p>Atentamente,</p>
-  <br>
+  <div class="linea"></div>
   <p><strong>Ing. Ricardo Joanathan Reyes Medina</strong></p>
   <p class="pie">Coordinador de Obras y Mantenimiento RCMA.</p>
   <p class="pie">Coordinación de Obras y Mantenimiento RCMA</p>
 </div>
-<div class="footer">Coordinación de Obras y Mantenimiento RCMA</div>
+</div>
+<div class="footer"><em>Colegios Mano Amiga — Juntos Transformando Vidas.</em><span>Levantamiento Nacional · ${plantel.colegio_nombre} · Sistema RCMA</span></div>
 </body></html>`;
 
   imprimirHTML(html);
