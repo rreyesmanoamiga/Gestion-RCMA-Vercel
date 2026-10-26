@@ -47,3 +47,9 @@ coverage/
 # Archivos locales de Vite
 *.local
 .vercel
+
+# Configuración personal de Claude Code
+.claude/settings.local.json
+
+# Archivos locales del CLI de Supabase
+supabase/.temp/
