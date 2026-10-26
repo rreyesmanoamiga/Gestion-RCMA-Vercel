@@ -95,7 +95,7 @@ async function getDriveItemId(token: string, carpeta: string, fileName: string):
   return data.id ?? null;
 }
 
-async function uploadChunked(token: string, carpeta: string, fileName: string, file: File): Promise<{ webUrl: string; shareUrl: string; itemId: string }> {
+async function uploadChunked(token: string, carpeta: string, fileName: string, file: Blob): Promise<{ webUrl: string; shareUrl: string; itemId: string }> {
   const path     = carpeta.split('/').map(p => encodeURIComponent(p)).join('/');
   const itemPath = `Sistema%20RCMA%20Doc/${path}/${encodeURIComponent(fileName)}`;
 
@@ -144,6 +144,14 @@ async function uploadChunked(token: string, carpeta: string, fileName: string, f
   }
 
   return { webUrl, shareUrl, itemId };
+}
+
+// Sube un archivo generado por el sistema (Blob) a "Sistema RCMA Doc/<carpeta>/<nombre>".
+// Si ya existe con el mismo nombre, lo reemplaza. Devuelve el link para compartir.
+export async function subirArchivoOneDrive(archivo: Blob, carpeta: string, nombre: string): Promise<string> {
+  const token  = await getToken();
+  const result = await uploadChunked(token, carpeta, nombre, archivo);
+  return result.shareUrl;
 }
 
 // Renombra una carpeta en OneDrive (para marcarla como CANCELADA)

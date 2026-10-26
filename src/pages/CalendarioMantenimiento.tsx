@@ -8,9 +8,12 @@ import { usePermissions } from '@/hooks/usePermissions';
 import { useScope, esColegioDeOficina } from '@/hooks/useScope';
 import { toast } from 'sonner';
 import { logAudit } from '@/lib/audit';
-import { generarReporteIndividualExcel, generarReporteGeneralPDF, generarReporteIndividualPDFFirma, type CumplimientoColegioPC } from '@/lib/reportesProteccionCivil';
+import {
+  generarReporteIndividualExcel, generarReporteGeneralPDF, generarReporteIndividualPDFFirma, type CumplimientoColegioPC,
+  descargarBlob, folioAnualPC, folioMensualPC, folioGeneralPC, carpetaAnualPC, carpetaMensualPC, carpetaGeneralPC, MESES_PC,
+} from '@/lib/reportesProteccionCivil';
 import { useDirectorio, getDirector, getAdministrador, findColegio } from '@/lib/directorio';
-import { useSharePointUpload } from '@/hooks/useSharePointUpload';
+import { useSharePointUpload, subirArchivoOneDrive } from '@/hooks/useSharePointUpload';
 import DetalleCumplimientoColegio, { type InstanciaActividad } from '@/components/calendario/DetalleCumplimientoColegio';
 
 // Comprime/redimensiona una foto antes de subirla — clave para que la
@@ -724,6 +727,22 @@ export default function CalendarioMantenimiento() {
   const colorCat = (cat: string) => COLORES_CATEGORIA[cat] || '#64748b';
 
   // ─── Reportes de Protección Civil ────────────────────────────────────────
+  // Descarga el archivo y además lo guarda en OneDrive (Sistema RCMA Doc/Protección Civil/...).
+  // Si se vuelve a generar, reemplaza el archivo con el mismo nombre (mismo folio).
+  const nombreColegioPC = (codigo: string) => findColegio(directorioRowsPC, codigo)?.nombre ?? codigo;
+  const guardarReportePC = async (archivo: Blob, nombre: string, carpeta: string) => {
+    descargarBlob(archivo, nombre);
+    try {
+      const url = await subirArchivoOneDrive(archivo, carpeta, nombre);
+      toast.success('Reporte descargado y guardado en OneDrive ✓', {
+        description: carpeta, duration: 8000,
+        action: url ? { label: 'Abrir', onClick: () => window.open(url, '_blank', 'noopener') } : undefined,
+      });
+    } catch (e: any) {
+      toast.error('Se descargó, pero no se pudo guardar en OneDrive: ' + (e.message ?? 'error desconocido'));
+    }
+  };
+
   const handleGenerarReporteIndividual = async () => {
     if (!pcColegio) { toast.error('Selecciona un colegio'); return; }
     setPcGenerando('individual');
@@ -743,7 +762,7 @@ export default function CalendarioMantenimiento() {
         (data ?? []).map((c: any) => `${c.colegio}|${c.fecha_programada}|${c.actividad_ref}`)
       );
 
-      await generarReporteIndividualExcel({
+      const archivo = await generarReporteIndividualExcel({
         colegio: pcColegio,
         colegioNombre: pcColegio,
         territorio: colegioInfo?.territorio ?? '—',
@@ -752,8 +771,9 @@ export default function CalendarioMantenimiento() {
         actividadRef,
         completionsSet,
       });
-      logAudit({ accion: 'editar', modulo: 'calendario', registro_ref: `Reporte PC Individual — ${pcColegio} ${pcAño}` });
-      toast.success('Reporte generado ✓');
+      const folio = folioAnualPC(pcColegio, pcAño);
+      await guardarReportePC(archivo, `${folio}_Reporte_Anual.xlsx`, carpetaAnualPC(nombreColegioPC(pcColegio), pcAño));
+      logAudit({ accion: 'editar', modulo: 'calendario', registro_ref: `Reporte PC Anual ${folio} — ${pcColegio} ${pcAño}` });
     } catch (e: any) {
       toast.error('Error al generar el reporte: ' + (e.message ?? 'desconocido'));
     } finally {
@@ -781,7 +801,7 @@ export default function CalendarioMantenimiento() {
       );
 
       const colegioDirectorio = findColegio(directorioRowsPC, pcColegio);
-      await generarReporteIndividualPDFFirma({
+      const archivo = await generarReporteIndividualPDFFirma({
         colegio: pcColegio,
         colegioNombre: colegioDirectorio?.nombre ?? pcColegio,
         nombreFiscal: colegioDirectorio?.nombre_oficial ?? '',
@@ -796,8 +816,9 @@ export default function CalendarioMantenimiento() {
         administradorNombre: getAdministrador(directorioRowsPC, pcColegio).nombre,
         elaboradoPor: 'Ing. Ricardo Joanathan Reyes Medina — Coordinador de Obras y Mantenimiento',
       });
-      logAudit({ accion: 'editar', modulo: 'calendario', registro_ref: `Reporte PC Firma — ${pcColegio} ${new Date(pcAño, pcMes, 1).toLocaleDateString('es-MX', { month: 'long' })} ${pcAño}` });
-      toast.success('PDF generado ✓');
+      const folio = folioMensualPC(pcColegio, pcAño, pcMes);
+      await guardarReportePC(archivo, `${folio}_Reporte_Mensual.pdf`, carpetaMensualPC(nombreColegioPC(pcColegio), pcAño, pcMes));
+      logAudit({ accion: 'editar', modulo: 'calendario', registro_ref: `Reporte PC Mensual ${folio} — ${pcColegio} ${MESES_PC[pcMes]} ${pcAño}` });
     } catch (e: any) {
       toast.error('Error al generar el PDF: ' + (e.message ?? 'desconocido'));
     } finally {
@@ -841,13 +862,14 @@ export default function CalendarioMantenimiento() {
         totalProgramado,
       }));
 
-      await generarReporteGeneralPDF({
+      const archivo = await generarReporteGeneralPDF({
         año: pcAño,
         datos,
         elaboradoPor: 'Ing. Ricardo Joanathan Reyes Medina — Coordinador de Obras y Mantenimiento',
       });
-      logAudit({ accion: 'editar', modulo: 'calendario', registro_ref: `Reporte PC General — ${pcAño}` });
-      toast.success('Reporte generado ✓');
+      const folio = folioGeneralPC(pcAño);
+      await guardarReportePC(archivo, `${folio}_Reporte_General.pdf`, carpetaGeneralPC(pcAño));
+      logAudit({ accion: 'editar', modulo: 'calendario', registro_ref: `Reporte PC General ${folio}` });
     } catch (e: any) {
       toast.error('Error al generar el reporte: ' + (e.message ?? 'desconocido'));
     } finally {
@@ -1202,7 +1224,7 @@ export default function CalendarioMantenimiento() {
             </div>
             <div className="p-5 space-y-5">
               <p className="text-xs text-slate-500">
-                Genera el programa de mantenimiento con la evidencia de cumplimiento real registrada en el sistema, listo para entregar a la Gerencia de Protección Civil.
+                Genera el programa de mantenimiento con la evidencia de cumplimiento real registrada en el sistema. Cada reporte se descarga y además se guarda en tu OneDrive, en <b>Sistema RCMA Doc › Protección Civil</b>.
               </p>
 
               <div className="grid grid-cols-2 gap-3">
@@ -1222,18 +1244,18 @@ export default function CalendarioMantenimiento() {
               </div>
 
               <div className="border border-slate-200 rounded-lg p-4">
-                <p className="text-sm font-bold text-slate-900 mb-1">Reporte Individual — Excel</p>
-                <p className="text-xs text-slate-500 mb-3">Cuadrícula día por día, agrupada por semana, de un colegio específico. Una pestaña por mes. Para uso interno.</p>
+                <p className="text-sm font-bold text-slate-900 mb-1">Reporte Anual — Excel</p>
+                <p className="text-xs text-slate-500 mb-3">Cuadrícula día por día, agrupada por semana, de un colegio específico. Una pestaña por mes. Se guarda en <span className="font-semibold">Colegio › Año</span>.</p>
                 <button onClick={handleGenerarReporteIndividual} disabled={pcGenerando !== null}
                   className="w-full px-4 py-2 bg-orange-600 text-white rounded-md text-sm font-bold hover:bg-orange-700 disabled:opacity-50 flex items-center justify-center gap-2">
                   {pcGenerando === 'individual' ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileSpreadsheet className="w-4 h-4" />}
-                  {pcGenerando === 'individual' ? 'Generando...' : 'Descargar Excel Individual'}
+                  {pcGenerando === 'individual' ? 'Generando y guardando...' : 'Generar Excel Anual'}
                 </button>
               </div>
 
               <div className="border border-blue-200 bg-blue-50/40 rounded-lg p-4">
                 <p className="text-sm font-bold text-slate-900 mb-1">Reporte Mensual con Firma — PDF</p>
-                <p className="text-xs text-slate-500 mb-3">Un solo mes, con partida de firmas (Director, Administrador, Responsable de Mantenimiento) al final. Para compartir con el colegio y que lo firmen.</p>
+                <p className="text-xs text-slate-500 mb-3">Un solo mes, con folio y partida de firmas (Director, Administrador, Responsable de Mantenimiento). Se guarda en <span className="font-semibold">Colegio › Año › Mes</span>.</p>
                 <div className="mb-3">
                   <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Mes</label>
                   <select value={pcMes} onChange={e => setPcMes(parseInt(e.target.value))}
@@ -1246,17 +1268,17 @@ export default function CalendarioMantenimiento() {
                 <button onClick={handleGenerarReporteFirma} disabled={pcGenerando !== null}
                   className="w-full px-4 py-2 bg-blue-600 text-white rounded-md text-sm font-bold hover:bg-blue-700 disabled:opacity-50 flex items-center justify-center gap-2">
                   {pcGenerando === 'firma' ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileText className="w-4 h-4" />}
-                  {pcGenerando === 'firma' ? 'Generando...' : 'Descargar PDF con Firma'}
+                  {pcGenerando === 'firma' ? 'Generando y guardando...' : (pcColegio ? `Generar PDF ${folioMensualPC(pcColegio, pcAño, pcMes)}` : 'Generar PDF con Firma')}
                 </button>
               </div>
 
               <div className="border border-slate-200 rounded-lg p-4">
                 <p className="text-sm font-bold text-slate-900 mb-1">Reporte General — PDF</p>
-                <p className="text-xs text-slate-500 mb-3">Cumplimiento de los {COLEGIOS.length} colegios, ordenado de menor a mayor avance.</p>
+                <p className="text-xs text-slate-500 mb-3">Cumplimiento de los {COLEGIOS.length} colegios, ordenado de menor a mayor avance. Se guarda en <span className="font-semibold">General › Año</span>.</p>
                 <button onClick={handleGenerarReporteGeneral} disabled={pcGenerando !== null}
                   className="w-full px-4 py-2 bg-slate-900 text-white rounded-md text-sm font-bold hover:bg-slate-800 disabled:opacity-50 flex items-center justify-center gap-2">
                   {pcGenerando === 'general' ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileText className="w-4 h-4" />}
-                  {pcGenerando === 'general' ? 'Generando...' : 'Descargar PDF General'}
+                  {pcGenerando === 'general' ? 'Generando y guardando...' : 'Generar PDF General'}
                 </button>
               </div>
             </div>
