@@ -13,20 +13,23 @@ import {
   type SolGuardianGrupo, type SolSemana,
 } from '@/lib/sol';
 import { CicloSelect, CampusSelect, inputCls, labelCls, btnPrimary, btnSecondary, useSolAdmin } from '@/components/sol/SolShared';
+import { fetchRenglonesGuardianes } from '@/lib/solData';
+import { rangosGuardianes } from '@/lib/solFormatos';
 
-/** Semáforo de la Bitácora del Guardián (SOL-F07): palomitas por semana, de 45. */
-function nivelPalomitas(v: number | null | undefined) {
+/** Semáforo de la Bitácora del Guardián (SOL-F07): palomitas por semana (renglones activos × 5 días). */
+function nivelPalomitas(v: number | null | undefined, total: number) {
+  const { verde, amarillo } = rangosGuardianes(total / 5);
   if (v === null || v === undefined) return { label: '—', cls: 'bg-slate-50 text-slate-400 border-slate-200' };
-  if (v >= 38) return { label: 'Verde', cls: 'bg-emerald-50 text-emerald-700 border-emerald-200' };
-  if (v >= 32) return { label: 'Amarillo', cls: 'bg-amber-50 text-amber-700 border-amber-200' };
+  if (v >= verde) return { label: 'Verde', cls: 'bg-emerald-50 text-emerald-700 border-emerald-200' };
+  if (v >= amarillo) return { label: 'Amarillo', cls: 'bg-amber-50 text-amber-700 border-amber-200' };
   return { label: 'Rojo', cls: 'bg-red-50 text-red-700 border-red-200' };
 }
 const semanasVacias = (): SolSemana[] => Array.from({ length: SEMANAS_TRIMESTRE }, (_, i) => ({ semana: i + 1, palomitas: null, s: '', o: '', l: '' }));
-function promedio(sem: SolSemana[]) {
+function promedio(sem: SolSemana[], total: number) {
   const v = sem.map(s => s.palomitas).filter((x): x is number => x !== null && x !== undefined && !Number.isNaN(x));
   if (!v.length) return { promedio: null, porcentaje: null };
   const p = Math.round((v.reduce((a, b) => a + b, 0) / v.length) * 10) / 10;
-  return { promedio: p, porcentaje: Math.round((p / PALOMITAS_SEMANA) * 1000) / 10 };
+  return { promedio: p, porcentaje: Math.round((p / total) * 1000) / 10 };
 }
 
 export default function SolGuardianes() {
@@ -38,6 +41,9 @@ export default function SolGuardianes() {
   const [trimestre, setTrimestre] = useState<number>(trimestreDe(hoyISO()));
   const [colegio, setColegio] = useState('');
   const [editando, setEditando] = useState<SolGuardianGrupo | 'nuevo' | null>(null);
+  // Palomitas por semana = renglones activos de la Bitácora (Catálogo SOL) × 5 días
+  const { data: nRenglones } = useQuery({ queryKey: ['sol_guardianes_renglones_n'], enabled: isAdmin, queryFn: async () => (await fetchRenglonesGuardianes(true)).length });
+  const palomitas = nRenglones ? nRenglones * 5 : PALOMITAS_SEMANA;
 
   const { data: grupos = [] } = useQuery({
     queryKey: ['sol_guardianes', ciclo, colegio],
@@ -98,12 +104,12 @@ export default function SolGuardianes() {
             <table className="w-full text-sm">
               <thead className="bg-slate-50 text-[11px] uppercase tracking-wider text-slate-500"><tr>
                 <th className="text-left px-4 py-3">Nivel</th><th className="text-left px-4 py-3">Grupo</th><th className="text-right px-4 py-3">Semanas</th>
-                <th className="text-right px-4 py-3">Promedio (de 45)</th><th className="text-left px-4 py-3">Semáforo</th><th className="text-left px-4 py-3">Guardián del trimestre</th><th className="px-4 py-3" />
+                <th className="text-right px-4 py-3">Promedio (de {palomitas})</th><th className="text-left px-4 py-3">Semáforo</th><th className="text-left px-4 py-3">Guardián del trimestre</th><th className="px-4 py-3" />
               </tr></thead>
               <tbody className="divide-y divide-slate-100">
                 {delTrimestre.length === 0 && <tr><td colSpan={7} className="px-4 py-8 text-center text-slate-500">Sin grupos capturados en este trimestre.</td></tr>}
                 {delTrimestre.map(g => {
-                  const n = nivelPalomitas(g.promedio);
+                  const n = nivelPalomitas(g.promedio, palomitas);
                   return (
                     <tr key={g.id}>
                       <td className="px-4 py-3">{g.nivel}</td><td className="px-4 py-3 font-semibold">{g.grupo}</td>
@@ -149,14 +155,15 @@ export default function SolGuardianes() {
       )}
 
       {editando && colegio && (
-        <GrupoModal grupo={editando === 'nuevo' ? null : editando} colegio={colegio} ciclo={ciclo} trimestre={trimestre}
+        <GrupoModal grupo={editando === 'nuevo' ? null : editando} palomitas={palomitas} colegio={colegio} ciclo={ciclo} trimestre={trimestre}
           onClose={() => setEditando(null)} onSaved={() => { setEditando(null); qc.invalidateQueries({ queryKey: ['sol_guardianes'] }); }} />
       )}
     </div>
   );
 }
 
-function GrupoModal({ grupo, colegio, ciclo, trimestre, onClose, onSaved }: {
+function GrupoModal({ grupo, palomitas, colegio, ciclo, trimestre, onClose, onSaved }: {
+  palomitas: number;
   grupo: SolGuardianGrupo | null; colegio: string; ciclo: string; trimestre: number; onClose: () => void; onSaved: () => void;
 }) {
   const [nivel, setNivel] = useState(grupo?.nivel ?? 'Primaria');
@@ -171,11 +178,11 @@ function GrupoModal({ grupo, colegio, ciclo, trimestre, onClose, onSaved }: {
   const [participo, setParticipo] = useState(grupo?.participo_recorridos ?? false);
   const [notas, setNotas] = useState(grupo?.notas ?? '');
   const [guardando, setGuardando] = useState(false);
-  const calc = promedio(semanas);
+  const calc = promedio(semanas, palomitas);
   const setS = (k: number, campo: keyof SolSemana, v: string) => setSemanas(p => p.map((s, i) => {
     if (i !== k) return s;
     if (campo === 'palomitas') {
-      const n = v === '' ? null : Math.max(0, Math.min(PALOMITAS_SEMANA, Number(v)));
+      const n = v === '' ? null : Math.max(0, Math.min(palomitas, Number(v)));
       return { ...s, palomitas: n === null || Number.isNaN(n) ? null : n };
     }
     return { ...s, [campo]: v };
@@ -203,7 +210,7 @@ function GrupoModal({ grupo, colegio, ciclo, trimestre, onClose, onSaved }: {
     } finally { setGuardando(false); }
   };
 
-  const n = nivelPalomitas(calc.promedio);
+  const n = nivelPalomitas(calc.promedio, palomitas);
   return (
     <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4" onClick={onClose}>
       <div className="bg-white rounded-xl shadow-xl w-full max-w-3xl max-h-[92vh] flex flex-col" onClick={e => e.stopPropagation()}>
@@ -219,13 +226,13 @@ function GrupoModal({ grupo, colegio, ciclo, trimestre, onClose, onSaved }: {
           <div className="overflow-x-auto">
             <table className="w-full text-sm min-w-[560px]">
               <thead className="text-[11px] uppercase text-slate-500"><tr>
-                <th className="text-left py-1 w-16">Semana</th><th className="text-left py-1 w-28">Palomitas (de 45)</th><th className="text-left py-1">Guardián S</th><th className="text-left py-1">Guardián O</th><th className="text-left py-1">Guardián L</th>
+                <th className="text-left py-1 w-16">Semana</th><th className="text-left py-1 w-28">Palomitas (de {palomitas})</th><th className="text-left py-1">Guardián S</th><th className="text-left py-1">Guardián O</th><th className="text-left py-1">Guardián L</th>
               </tr></thead>
               <tbody>
                 {semanas.map((s, k) => (
                   <tr key={s.semana}>
                     <td className="py-1 text-slate-500 tabular-nums">{s.semana}</td>
-                    <td className="py-1 pr-2"><input type="number" min={0} max={PALOMITAS_SEMANA} className={inputCls + ' !py-1'} value={s.palomitas ?? ''} onChange={e => setS(k, 'palomitas', e.target.value)} /></td>
+                    <td className="py-1 pr-2"><input type="number" min={0} max={palomitas} className={inputCls + ' !py-1'} value={s.palomitas ?? ''} onChange={e => setS(k, 'palomitas', e.target.value)} /></td>
                     <td className="py-1 pr-2"><input className={inputCls + ' !py-1'} value={s.s} onChange={e => setS(k, 's', e.target.value)} /></td>
                     <td className="py-1 pr-2"><input className={inputCls + ' !py-1'} value={s.o} onChange={e => setS(k, 'o', e.target.value)} /></td>
                     <td className="py-1"><input className={inputCls + ' !py-1'} value={s.l} onChange={e => setS(k, 'l', e.target.value)} /></td>
@@ -235,7 +242,7 @@ function GrupoModal({ grupo, colegio, ciclo, trimestre, onClose, onSaved }: {
             </table>
           </div>
           <div className="flex flex-wrap items-center gap-3 rounded-lg bg-slate-50 border border-slate-200 px-4 py-3 text-sm">
-            <span>Promedio del trimestre: <b className="tabular-nums">{calc.promedio ?? '—'}</b> de 45 = <b className="tabular-nums">{calc.porcentaje ?? '—'}%</b></span>
+            <span>Promedio del trimestre: <b className="tabular-nums">{calc.promedio ?? '—'}</b> de {palomitas} = <b className="tabular-nums">{calc.porcentaje ?? '—'}%</b></span>
             <span className={`px-2 py-0.5 rounded-full border text-[11px] font-bold ${n.cls}`}>{n.label}</span>
           </div>
           <div><label className={labelCls}>Guardián SOL del trimestre (SOL-F09, mayor total)</label><input className={inputCls} placeholder="Nombre del alumno(a)" value={propuesto} onChange={e => setPropuesto(e.target.value)} /></div>

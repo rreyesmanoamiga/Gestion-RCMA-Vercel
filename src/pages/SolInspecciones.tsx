@@ -16,7 +16,7 @@ import {
   SOL_TIPOS, SOL_AREAS, tipoCorto, campusSOL, nombreCampus, parseSolExcel, calcularIndice, cicloActual, cicloDe,
   fechaCorta, hoyISO, fmtIndice, type ParsedSOL, type SolInspeccion,
 } from '@/lib/sol';
-import { importarInspeccion, buscarInspeccionExistente, crearInspeccionManual, carpetaSOL, traerTodo } from '@/lib/solData';
+import { importarInspeccion, buscarInspeccionExistente, crearInspeccionManual, carpetaSOL, traerTodo, fetchReferenciaSOLF01, fetchCriterios } from '@/lib/solData';
 import {
   SolChip, CicloSelect, CampusSelect, inputCls, labelCls, btnPrimary, btnSecondary, useSolAdmin } from '@/components/sol/SolShared';
 
@@ -160,7 +160,8 @@ function ImportarModal({ directorio, usuario, onClose, onDone }: {
   const leer = async (f: File) => {
     setArchivo(f); setParsed(null); setLeyendo(true); setExiste(false);
     try {
-      const p = await parseSolExcel(f, directorio);
+      const ref = await fetchReferenciaSOLF01().catch(() => undefined);
+      const p = await parseSolExcel(f, directorio, ref);
       setParsed(p);
       if (p.colegio && p.fecha && p.tipo) setExiste(!!(await buscarInspeccionExistente(p.colegio, p.fecha, p.tipo)));
     } finally { setLeyendo(false); }
@@ -295,6 +296,7 @@ function ManualModal({ campus, usuario, onClose, onDone }: {
   const [fecha, setFecha] = useState(hoyISO());
   const [tipo, setTipo] = useState('mensual');
   const [guardando, setGuardando] = useState(false);
+  const { data: nCriterios = 0 } = useQuery({ queryKey: ['sol_criterios_activos_n'], queryFn: async () => (await fetchCriterios(true)).length });
   const crear = async () => {
     if (!colegio || !fecha) { toast.error('Elige campus y fecha'); return; }
     setGuardando(true);
@@ -324,7 +326,7 @@ function ManualModal({ campus, usuario, onClose, onDone }: {
               </select>
             </div>
           </div>
-          <p className="text-xs text-slate-500">Se crea con los 40 criterios del catálogo sin calificar; en la siguiente pantalla los calificas.</p>
+          <p className="text-xs text-slate-500">Se crea con los {nCriterios ? `${nCriterios} ` : ''}criterios activos del catálogo sin calificar; en la siguiente pantalla los calificas.</p>
         </div>
         <div className="px-5 py-4 border-t border-slate-100 flex justify-end gap-2">
           <button className={btnSecondary} onClick={onClose}>Cancelar</button>

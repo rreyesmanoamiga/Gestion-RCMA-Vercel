@@ -21,7 +21,7 @@ export const SOL_AREAS = [
   'Baños',
   'Cocina y cafetería',
   'Bodegas',
-  'Cuarto eléctrico y subestación',
+  'Cuartos técnicos',
   'Patios y rutas de evacuación',
   'Oficinas',
   'Laboratorios y talleres',
@@ -152,6 +152,14 @@ export function fechaCorta(d?: string | null): string {
 
 // ── Tipos de datos ───────────────────────────────────────────────────────────
 export interface SolCriterio { id: string; numero: number; area: string; tipo: SolComponente; texto: string; activo: boolean; }
+/** Renglón de la Bitácora del Guardián (SOL-F07). */
+export interface SolRenglonGuardian { id: string; orden: number; tipo: SolComponente; texto: string; activo: boolean; }
+/** Versión publicada de un formato SOL (sol_formatos_versiones). */
+export interface SolFormatoVersion {
+  id: string; formato: 'SOL-F01' | 'GUARDIANES' | 'SOL-V03'; version: string; vigente_desde: string;
+  contenido: unknown; archivo_url: string | null; archivo_nombre: string | null; notas: string | null;
+  publicado_por: string | null; created_at: string;
+}
 
 export interface SolRespuesta {
   id?: string;
@@ -327,6 +335,13 @@ export function calcularIndice(resps: Pick<SolRespuesta, 'area' | 'tipo' | 'cali
   };
 }
 
+/** Compara versiones de formato: "1.10" > "1.9". */
+export function compararVersionSOL(a: string, b: string): number {
+  const x = a.split('.').map(n => parseInt(n, 10) || 0), y = b.split('.').map(n => parseInt(n, 10) || 0);
+  for (let i = 0; i < Math.max(x.length, y.length); i++) { const d = (x[i] ?? 0) - (y[i] ?? 0); if (d) return d; }
+  return 0;
+}
+
 // ── Colegios / folios ────────────────────────────────────────────────────────
 export const normalizar = (s: unknown) =>
   String(s ?? '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/\s+/g, ' ').trim();
@@ -460,16 +475,21 @@ function junto(ws: Hoja, etiqueta: string, maxFila = 12): [number, number] | nul
 const textoJunto = (ws: Hoja, et: string) => { const p = junto(ws, et); return p ? texto(ws, p[0], p[1]) : ''; };
 const fechaJunto = (ws: Hoja, et: string) => { const p = junto(ws, et); return p ? fecha(ws, p[0], p[1]) : null; };
 
+/** Nombres anteriores de áreas (formatos viejos) → nombre vigente. */
+const AREAS_ANTERIORES: Record<string, SolArea> = { 'cuarto electrico y subestacion': 'Cuartos técnicos' };
 const areaCanonica = (s: string): string | null => {
   const n = normalizar(s);
-  return SOL_AREAS.find(a => normalizar(a) === n) ?? null;
+  return SOL_AREAS.find(a => normalizar(a) === n) ?? AREAS_ANTERIORES[n] ?? null;
 };
 const tipoComp = (s: string): SolComponente | null => {
   const t = s.trim().toUpperCase().charAt(0);
   return t === 'S' || t === 'O' || t === 'L' ? t : null;
 };
 
-export async function parseSolExcel(file: File | ArrayBuffer, directorio: DirectorioColegio[]): Promise<ParsedSOL> {
+/** Formato vigente contra el que se compara el archivo (Catálogo SOL → Formatos vigentes). */
+export interface ReferenciaSOLF01 { version: string | null; criterios: number }
+
+export async function parseSolExcel(file: File | ArrayBuffer, directorio: DirectorioColegio[], ref?: ReferenciaSOLF01): Promise<ParsedSOL> {
   const out: ParsedSOL = {
     campusTexto: '', colegio: null, territorio: null, fecha: null, tipo: null, tipoTexto: '',
     inspectores: '', director: '', version: '', duenos: {}, respuestas: [], hallazgos: [], tarjetas: [],
@@ -558,7 +578,10 @@ export async function parseSolExcel(file: File | ArrayBuffer, directorio: Direct
   }
 
   if (out.respuestas.length === 0) out.errores.push('No se encontraron criterios en la hoja Inspección.');
-  else if (out.respuestas.length !== 40) out.avisos.push(`Se encontraron ${out.respuestas.length} criterios (el formato oficial tiene 40).`);
+  else if (ref && ref.criterios > 0 && out.respuestas.length !== ref.criterios) out.avisos.push(`Se encontraron ${out.respuestas.length} criterios; el formato vigente tiene ${ref.criterios}.`);
+  if (ref?.version && out.version && compararVersionSOL(out.version, ref.version) < 0) {
+    out.avisos.unshift(`El archivo es el SOL-F01 v${out.version}, pero el vigente es la v${ref.version}. Se importa tal como viene; pide al campus que use el formato nuevo.`);
+  }
   const sinCal = out.respuestas.filter(r => !r.na && r.calificacion === null).length;
   if (sinCal > 0) out.avisos.push(`${sinCal} criterio(s) sin calificar; no cuentan para el Índice.`);
   const sinObs = out.respuestas.filter(r => (r.calificacion === 0 || r.calificacion === 1) && !r.observacion).length;

@@ -2,8 +2,9 @@
 // Toda escritura la hace solo el administrador (la base de datos lo exige por RLS).
 import { supabase } from '@/lib/supabaseClient';
 import {
-  calcularIndice, cicloDe, trimestreDe, codigoCorto, siguienteFolio, sumarDias, normalizar,
+  calcularIndice, cicloDe, trimestreDe, codigoCorto, siguienteFolio, sumarDias, normalizar, compararVersionSOL,
   type ParsedSOL, type SolRespuesta, type SolInspeccion, type SolCriterio,
+  type SolRenglonGuardian, type SolFormatoVersion, type ReferenciaSOLF01,
 } from '@/lib/sol';
 
 /** Trae todas las filas de una consulta en páginas de 1,000 (el límite por consulta de Supabase). */
@@ -18,6 +19,39 @@ export async function traerTodo<T>(consulta: (desde: number, hasta: number) => P
     if (!data || data.length < PAG) break;
   }
   return out;
+}
+
+/** Renglones de la Bitácora del Guardián (SOL-F07), en su orden. */
+export async function fetchRenglonesGuardianes(soloActivos = true): Promise<SolRenglonGuardian[]> {
+  let q = supabase.from('sol_guardianes_renglones').select('*').order('orden');
+  if (soloActivos) q = q.eq('activo', true);
+  const { data, error } = await q;
+  if (error) throw error;
+  return (data ?? []) as SolRenglonGuardian[];
+}
+
+/** Historial de versiones publicadas de los formatos SOL (la más nueva primero). */
+export async function fetchVersionesFormatos(): Promise<SolFormatoVersion[]> {
+  const { data, error } = await supabase.from('sol_formatos_versiones').select('*').order('created_at', { ascending: false });
+  if (error) throw error;
+  return ((data ?? []) as SolFormatoVersion[])
+    .sort((a, b) => a.formato.localeCompare(b.formato) || compararVersionSOL(b.version, a.version));
+}
+
+/** Versión vigente de cada formato (la mayor publicada). */
+export function versionesVigentes(vs: SolFormatoVersion[]): Partial<Record<SolFormatoVersion['formato'], SolFormatoVersion>> {
+  const out: Partial<Record<SolFormatoVersion['formato'], SolFormatoVersion>> = {};
+  for (const v of vs) {
+    const act = out[v.formato];
+    if (!act || compararVersionSOL(v.version, act.version) > 0) out[v.formato] = v;
+  }
+  return out;
+}
+
+/** Referencia para el importador: versión vigente del SOL-F01 y número de criterios activos. */
+export async function fetchReferenciaSOLF01(): Promise<ReferenciaSOLF01> {
+  const [vs, cr] = await Promise.all([fetchVersionesFormatos().catch(() => [] as SolFormatoVersion[]), fetchCriterios(true)]);
+  return { version: versionesVigentes(vs)['SOL-F01']?.version ?? null, criterios: cr.length };
 }
 
 export async function fetchCriterios(soloActivos = true): Promise<SolCriterio[]> {
