@@ -263,7 +263,6 @@ Este proyecto es fundamental para el desarrollo de futuras iniciativas de mejora
   <div class="linea"></div>
   <p><strong>Ing. Ricardo Joanathan Reyes Medina</strong></p>
   <p class="pie">Coordinador de Obras y Mantenimiento RCMA.</p>
-  <p class="pie">Coordinación de Obras y Mantenimiento RCMA</p>
 </div>
 </div>
 <div class="footer"><em>Colegios Mano Amiga — Juntos Transformando Vidas.</em><span>Levantamiento Nacional · ${plantel.colegio_nombre} · Sistema RCMA</span></div>
