@@ -2,7 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabaseClient';
 import { toast } from 'sonner';
-import { useAuth } from '@/lib/AuthContext';
+import { useAuth, esAdminUsuario } from '@/lib/AuthContext';
 import {
   BookUser, Search, Pencil, Trash2, X, Phone, Mail,
   MapPin, Building2, User, Users, ChevronDown, AlertTriangle, FileSpreadsheet, Loader2,
@@ -134,7 +134,7 @@ function EditSection({ title, fields, editForm, onSet }: EditSectionProps) {
 
 export default function Directorio() {
   const { user } = useAuth();
-  const isAdmin = user?.user_metadata?.role === 'admin';
+  const isAdmin = esAdminUsuario(user);
   const qc = useQueryClient();
 
   const [search, setSearch]         = useState('');

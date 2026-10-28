@@ -25,7 +25,7 @@ import {
 } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import SidebarAccordionGroup from './SidebarAccordionGroup';
-import { useAuth } from '@/lib/AuthContext';
+import { useAuth, esAdminUsuario } from '@/lib/AuthContext';
 import { cn } from '@/lib/utils';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { supabase } from '@/lib/supabaseClient';
@@ -80,7 +80,7 @@ export default function Sidebar({ isOpen, onToggle }) {
   const location    = useLocation();
   const { user, signOut } = useAuth();
   const { can }     = usePermissions();
-  const isAdmin     = user?.user_metadata?.role === 'admin';
+  const isAdmin     = esAdminUsuario(user);
   const isMobile    = useIsMobile();
   // Antes esto estaba fijo al correo de Ricardo; ahora cualquiera con el
   // permiso "Ver Cumplimiento y Protección Civil" (o admin) puede entrar.

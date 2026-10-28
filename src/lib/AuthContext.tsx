@@ -116,12 +116,12 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
   }, [doSignOut]);
 
   // Solo el administrador puede usar "Ver como"
-  const esAdminReal = user?.user_metadata?.role === 'admin';
+  const esAdminReal = esAdminUsuario(user);
   const verComo = esAdminReal ? verComoState : null;
   setSoloLectura(!!verComo);
 
   const iniciarVerComo = useCallback((v: VerComo) => {
-    if (userRef.current?.user_metadata?.role !== 'admin') return;
+    if (!esAdminUsuario(userRef.current)) return;
     // Registro en Auditoría ANTES de activar el modo (en solo lectura ya no se escribe)
     logAudit({
       accion: 'login', modulo: 'usuarios',
@@ -146,6 +146,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
       ...user,
       email: verComo.email,
       role: 'authenticated',
+      app_metadata: { ...user.app_metadata, role: 'user' },
       user_metadata: { ...user.user_metadata, role: 'user', nombre: verComo.nombre ?? verComo.email, avatar_url: null },
     } as User;
   }, [user, verComo]);
@@ -158,3 +159,12 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
 };
 
 export const useAuth = (): AuthContextType => useContext(AuthContext);
+
+/** Administrador del sistema: el correo de Ricardo o app_metadata.role = 'admin'
+ *  (app_metadata solo lo cambia el servidor). Igual que rcma_es_admin() en la BD.
+ *  No se usa user_metadata: el propio usuario lo puede modificar desde el navegador. */
+export const ADMIN_EMAIL = 'rreyes@manoamiga.edu.mx';
+export function esAdminUsuario(u: { email?: string | null; app_metadata?: Record<string, unknown> } | null | undefined): boolean {
+  if (!u) return false;
+  return (u.email ?? '').toLowerCase() === ADMIN_EMAIL || u.app_metadata?.role === 'admin';
+}

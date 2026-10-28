@@ -1,12 +1,12 @@
 import { useCallback } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { db } from '@/lib/db';
-import { useAuth } from '@/lib/AuthContext';
+import { useAuth, esAdminUsuario } from '@/lib/AuthContext';
 import { hasPermission } from '@/lib/permissions';
 
 export function usePermissions() {
   const { user } = useAuth();
-  const isAdmin = user?.user_metadata?.role === 'admin' || user?.role === 'service_role';
+  const isAdmin = esAdminUsuario(user) || user?.role === 'service_role';
 
   const { data: permsRecord } = useQuery({
     queryKey: ['userPermissions', user?.email],

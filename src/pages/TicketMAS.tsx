@@ -7,7 +7,7 @@ import { documentoInstitucional, tarjeta, grid, esc, val } from '@/lib/formatoIn
 import { FIRMA_RCMA } from '@/lib/firmaRcma';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
-import { useAuth } from '@/lib/AuthContext';
+import { useAuth, esAdminUsuario } from '@/lib/AuthContext';
 import { usePermissions } from '@/hooks/usePermissions';
 import { useScope } from '@/hooks/useScope';
 import { useEcoLookup } from '@/hooks/useEcoLookup';
@@ -273,7 +273,7 @@ export default function TicketMAS() {
   const { user } = useAuth();
   const { can } = usePermissions();
   const esAutorizadorFMA = useEsAutorizadorFMA();
-  const isAdmin = user?.user_metadata?.role === 'admin';
+  const isAdmin = esAdminUsuario(user);
   // Gerencia sin acceso al listado general: solo ve su bandeja de tickets FMA
   if (esAutorizadorFMA && !isAdmin && !can('ver_ticket_mas')) return <VoBoFMA />;
   return <TicketMASPrincipal esAutorizadorFMA={esAutorizadorFMA} />;
@@ -299,7 +299,7 @@ function TicketMASPrincipal({ esAutorizadorFMA }: { esAutorizadorFMA: boolean })
   const miPuesto = miPerfil?.puesto || '';
   const miCorreo = user?.email || '';
   const { filtrarPorAlcance } = useScope();
-  const isAdmin   = user?.user_metadata?.role === 'admin';
+  const isAdmin   = esAdminUsuario(user);
   const [corrigiendo, setCorrigiendo] = useState(false);
   const qc        = useQueryClient();
 
