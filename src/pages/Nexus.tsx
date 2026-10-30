@@ -14,7 +14,7 @@ import {
   Plus, X, Pencil, Trash2, CheckCircle2, Clock, AlertCircle,
   MessageSquare, Send, FileText, Pin, Search, Download,
   BookOpen, ListChecks, Users, MapPin, Building2, Link2,
-  ClipboardList, BarChart3, Ban, Handshake, Wrench, ExternalLink, Lock, Loader2, CalendarPlus,
+  ClipboardList, BarChart3, Ban, Handshake, Wrench, Mic, ExternalLink, Lock, Loader2, CalendarPlus,
 } from 'lucide-react';
 import { descargarICSPendiente } from '@/lib/icsPendiente';
 import { fmtHora } from '@/lib/utils';
@@ -26,7 +26,7 @@ interface Nota      { id: string; titulo: string; contenido: string; categoria: 
 interface Pendiente { id: string; titulo: string; descripcion: string; tipo: string; asignado_a: string; asignado_nombre: string; asignado_cc: string; asignado_cc_nombre: string; prioridad: string; fecha_limite: string | null; hora_limite?: string | null; estatus: string; completado_at: string | null; created_by: string; created_at: string;
   proyecto_id?: string; proyecto_nombre?: string; ticket_id?: string; ticket_folio?: string; colegio?: string; territorio?: string;
   // Vínculo con Minutas (lo llenan los triggers de la base de datos)
-  acuerdo_id?: string | null; minuta_id?: string | null; origen?: 'acuerdo' | 'accion' | null; origen_numero?: number | null;
+  acuerdo_id?: string | null; minuta_id?: string | null; origen?: 'acuerdo' | 'accion' | 'plaud' | null; origen_numero?: number | null;
   origen_asunto?: string | null; origen_fecha?: string | null; origen_responsable?: string | null; origen_url?: string | null;
   // Sale en la Presentación Semanal (Reportes) como "Proyecto en preparación"
   presentar_semanal?: boolean | null; }
@@ -55,6 +55,10 @@ const ORIGEN_CFG: Record<'acuerdo'|'accion', { label:string; corto:string; doc:s
 };
 const origenDe = (p: { acuerdo_id?: string|null; origen?: string|null }) =>
   p.acuerdo_id && (p.origen === 'acuerdo' || p.origen === 'accion') ? ORIGEN_CFG[p.origen] : null;
+// Pendientes que vienen de una grabación de Plaud (los carga el proyecto "Pendientes Plaud → NEXUS").
+// Solo es una etiqueta: no están ligados a Minutas, así que se editan y completan como cualquier pendiente.
+const PLAUD_CFG = { label:'De grabación Plaud', corto:'Plaud', doc:'Grabación', Icon:Mic, band:'bg-violet-600', soft:'bg-violet-50 border-violet-200 text-violet-900', chip:'bg-violet-50 text-violet-700 border-violet-200', ring:'ring-violet-200' };
+const esPlaud = (p: { origen?: string|null }) => p.origen === 'plaud';
 
 const fmtDate = (d?: string | null) => d ? format(new Date(d.includes('T') ? d : d + 'T12:00:00'), "d MMM yyyy", { locale: es }) : '—';
 const fmtFull = (d?: string | null) => d ? format(new Date(d), "d MMM yyyy HH:mm", { locale: es }) : '—';
@@ -516,7 +520,7 @@ export default function Nexus() {
   const [viewNota,  setViewNota]  = useState<Nota|null>(null);
   const [viewPend,  setViewPend]  = useState<Pendiente|null>(null);
   const [confirmDel, setConfirmDel] = useState<{type:'nota'|'pendiente';id:string;titulo:string;origen?:'acuerdo'|'accion'|null;completado?:boolean}|null>(null);
-  const [filtroOrigen, setFiltroOrigen] = useState<'todos'|'acuerdo'|'accion'|'otros'>('todos');
+  const [filtroOrigen, setFiltroOrigen] = useState<'todos'|'acuerdo'|'accion'|'plaud'|'otros'>('todos');
 
   // ── Queries ───────────────────────────────────────────────────────────────
   const { data: allUsers = [] } = useQuery({ queryKey:['sys_users_nexus'], queryFn: async()=>{ const {data}=await supabase.from('user_permissions').select('user_email, nombre, territorio, colegio, puesto').neq('user_email',userEmail); return (data??[]) as SysUser[]; }, enabled:isAdmin });
@@ -814,12 +818,13 @@ export default function Nexus() {
   const pendPersonalesTodos = useMemo(()=>pendientes.filter(p=>p.tipo==='personal'),[pendientes]);
   const conteoOrigen = useMemo(()=>{
     const act = pendPersonalesTodos.filter(p=>p.estatus!=='completado');
-    return { todos: act.length, acuerdo: act.filter(p=>origenDe(p)&&p.origen==='acuerdo').length, accion: act.filter(p=>origenDe(p)&&p.origen==='accion').length, otros: act.filter(p=>!origenDe(p)).length };
+    return { todos: act.length, acuerdo: act.filter(p=>origenDe(p)&&p.origen==='acuerdo').length, accion: act.filter(p=>origenDe(p)&&p.origen==='accion').length, plaud: act.filter(p=>esPlaud(p)).length, otros: act.filter(p=>!origenDe(p)&&!esPlaud(p)).length };
   },[pendPersonalesTodos]);
   const pendPersonales  = useMemo(()=>pendPersonalesTodos.filter(p=>{
     if (filtroOrigen==='todos') return true;
+    if (filtroOrigen==='plaud') return esPlaud(p);
     const o = origenDe(p);
-    return filtroOrigen==='otros' ? !o : (!!o && p.origen===filtroOrigen);
+    return filtroOrigen==='otros' ? (!o && !esPlaud(p)) : (!!o && p.origen===filtroOrigen);
   }),[pendPersonalesTodos, filtroOrigen]);
   const pendCompartidos = useMemo(()=>isAdmin?pendientes.filter(p=>p.tipo==='compartido'):pendientes,[pendientes,isAdmin]);
 
@@ -830,13 +835,15 @@ export default function Nexus() {
     const coment = comentariosMap[p.id];
     const hasComents = coment && coment.count > 0;
     const org = origenDe(p);
+    const plaud = esPlaud(p) ? PLAUD_CFG : null;
+    const marca = org ?? plaud;
     return (
       <div onClick={() => { setViewPend(p); marcarComentariosLeidos(p.id); }}
-        className={`bg-white rounded-xl border border-slate-200 border-t-4 border-l-4 ${eCfg?.cardBorder??'border-t-slate-300'} ${pCfg?.cardLeft??'border-l-slate-300'} ${org?`ring-2 ${org.ring}`:''} shadow-sm overflow-hidden flex flex-col cursor-pointer hover:shadow-md transition`}>
-        {org && (
-          <div className={`${org.band} text-white px-4 py-1.5 flex items-center gap-1.5`}>
-            <org.Icon className="w-3.5 h-3.5 shrink-0"/>
-            <span className="text-[10px] font-black uppercase tracking-wider truncate">{org.label}{p.origen_numero?` #${p.origen_numero}`:''}</span>
+        className={`bg-white rounded-xl border border-slate-200 border-t-4 border-l-4 ${eCfg?.cardBorder??'border-t-slate-300'} ${pCfg?.cardLeft??'border-l-slate-300'} ${marca?`ring-2 ${marca.ring}`:''} shadow-sm overflow-hidden flex flex-col cursor-pointer hover:shadow-md transition`}>
+        {marca && (
+          <div className={`${marca.band} text-white px-4 py-1.5 flex items-center gap-1.5`}>
+            <marca.Icon className="w-3.5 h-3.5 shrink-0"/>
+            <span className="text-[10px] font-black uppercase tracking-wider truncate">{marca.label}{org && p.origen_numero?` #${p.origen_numero}`:''}</span>
           </div>
         )}
         <div className="p-4 flex-1">
@@ -852,6 +859,13 @@ export default function Nexus() {
 
           {p.presentar_semanal && p.estatus!=='completado' && (
             <span className="inline-flex items-center gap-1 mb-2 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wide bg-orange-100 text-orange-700 border border-orange-200">Presentación semanal</span>
+          )}
+
+          {/* Grabación de Plaud de origen */}
+          {plaud && (
+            <div className={`rounded-lg border px-2.5 py-1.5 mb-2 text-[11px] leading-snug ${plaud.soft}`}>
+              <p className="font-bold truncate"><Mic className="w-3 h-3 inline mr-1 -mt-0.5"/>{plaud.doc}: {p.origen_asunto || 'Sin nombre'}{p.origen_fecha?` · ${fmtDate(p.origen_fecha)}`:''}</p>
+            </div>
           )}
 
           {/* Minuta / nota técnica de origen */}
@@ -920,7 +934,7 @@ export default function Nexus() {
             {isAdmin && p.estatus!=='completado' && <button type="button" onClick={e=>{e.stopPropagation();completarPend.mutate(p);}} className="p-1.5 text-emerald-500 hover:text-emerald-700 hover:bg-emerald-50 rounded-lg transition" title="Completar"><CheckCircle2 className="w-4 h-4"/></button>}
             {isAdmin&&p.estatus!=='completado' && <button type="button" title={org?'Editar acuerdo (también se actualiza en Minutas)':'Editar'} onClick={e=>{e.stopPropagation();if(org)abrirEditarAcuerdo(p);else openPend(p);}} className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition"><Pencil className="w-3.5 h-3.5"/></button>}
             {p.estatus==='completado' && <button type="button" onClick={async e=>{e.stopPropagation();const items=await supabase.from('nexus_comentarios').select('*').eq('pendiente_id',p.id).order('created_at').then(r=>r.data??[]); generarPDFPendiente(p,items as Comentario[]);}} className="p-1.5 text-slate-400 hover:text-teal-600 rounded-lg transition" title="PDF"><Download className="w-4 h-4"/></button>}
-            {isAdmin && <button type="button" onClick={e=>{e.stopPropagation();setConfirmDel({type:'pendiente',id:p.id,titulo:p.titulo,origen:org?p.origen:null,completado:p.estatus==='completado'});}} className="p-1.5 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition"><Trash2 className="w-3.5 h-3.5"/></button>}
+            {isAdmin && <button type="button" onClick={e=>{e.stopPropagation();setConfirmDel({type:'pendiente',id:p.id,titulo:p.titulo,origen:org?(p.origen as 'acuerdo'|'accion'):null,completado:p.estatus==='completado'});}} className="p-1.5 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition"><Trash2 className="w-3.5 h-3.5"/></button>}
             {/* Ícono comentarios — con color e indicador si hay comentarios */}
             <div className="relative p-1.5">
               <MessageSquare className={`w-3.5 h-3.5 ${hasComents ? 'text-teal-500' : 'text-slate-300'}`}/>
@@ -962,6 +976,7 @@ export default function Nexus() {
                 <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold border shrink-0 ${pCfg?.cls}`}>{pCfg?.label}</span>
               </div>
               <div className="flex items-center gap-2 flex-wrap mt-0.5">
+                {esPlaud(p) && <span className={`inline-flex items-center gap-1 text-[10px] font-bold border px-2 py-0.5 rounded-full ${PLAUD_CFG.chip}`}><Mic className="w-3 h-3"/>{PLAUD_CFG.corto} · {p.origen_asunto || PLAUD_CFG.doc}</span>}
                 {org && <span className={`inline-flex items-center gap-1 text-[10px] font-bold border px-2 py-0.5 rounded-full ${org.chip}`}><org.Icon className="w-3 h-3"/>{org.corto}{p.origen_numero?` #${p.origen_numero}`:''} · {p.origen_asunto || org.doc}</span>}
                 {p.proyecto_nombre && <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-blue-700 bg-blue-50 border border-blue-200 px-2 py-0.5 rounded-full"><ClipboardList className="w-3 h-3"/>{p.proyecto_nombre}</span>}
                 {p.ticket_folio && <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-purple-700 bg-purple-50 border border-purple-200 px-2 py-0.5 rounded-full"><Link2 className="w-3 h-3"/>{p.ticket_folio}</span>}
@@ -971,7 +986,7 @@ export default function Nexus() {
             </div>
             <div className="flex items-center gap-1 shrink-0" onClick={e => e.stopPropagation()}>
               <button type="button" onClick={async e=>{e.stopPropagation();const items2=await supabase.from('nexus_comentarios').select('*').eq('pendiente_id',p.id).order('created_at').then(r=>r.data??[]); generarPDFPendiente(p,items2 as Comentario[]);}} className="p-1.5 text-slate-400 hover:text-teal-600 rounded-lg transition" title="PDF"><Download className="w-4 h-4"/></button>
-              {isAdmin && <button type="button" onClick={e=>{e.stopPropagation();setConfirmDel({type:'pendiente',id:p.id,titulo:p.titulo,origen:org?p.origen:null,completado:true});}} className="p-1.5 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition"><Trash2 className="w-3.5 h-3.5"/></button>}
+              {isAdmin && <button type="button" onClick={e=>{e.stopPropagation();setConfirmDel({type:'pendiente',id:p.id,titulo:p.titulo,origen:org?(p.origen as 'acuerdo'|'accion'):null,completado:true});}} className="p-1.5 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition"><Trash2 className="w-3.5 h-3.5"/></button>}
               <div className="relative p-1.5">
                 <MessageSquare className={`w-3.5 h-3.5 ${hasComents ? 'text-teal-500' : 'text-slate-300'}`}/>
                 {hasComents && (
@@ -1067,12 +1082,13 @@ export default function Nexus() {
       {(tab==='personales'||tab==='compartidos')&&(
         <div className="space-y-6">
           {/* Filtro por origen — solo si hay acuerdos/acciones de Minutas */}
-          {tab==='personales' && (conteoOrigen.acuerdo>0 || conteoOrigen.accion>0 || filtroOrigen!=='todos') && (
+          {tab==='personales' && (conteoOrigen.acuerdo>0 || conteoOrigen.accion>0 || conteoOrigen.plaud>0 || filtroOrigen!=='todos') && (
             <div className="flex items-center gap-2 flex-wrap">
               {([
                 { k:'todos',   label:'Todos',                cls:'bg-slate-900 text-white border-slate-900', Icon:ListChecks },
                 { k:'acuerdo', label:'Acuerdos de minuta',   cls:'bg-indigo-600 text-white border-indigo-600', Icon:Handshake },
                 { k:'accion',  label:'Acciones de nota técnica', cls:'bg-orange-600 text-white border-orange-600', Icon:Wrench },
+                { k:'plaud',   label:'De Plaud',             cls:'bg-violet-600 text-white border-violet-600', Icon:Mic },
                 { k:'otros',   label:'Otros pendientes',     cls:'bg-slate-600 text-white border-slate-600', Icon:ClipboardList },
               ] as const).map(f => (
                 <button key={f.k} type="button" onClick={()=>setFiltroOrigen(f.k)}
@@ -1261,6 +1277,20 @@ export default function Nexus() {
               <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold border ${EST_CFG[viewPend.estatus]?.cls}`}>{EST_CFG[viewPend.estatus]?.icon}{EST_CFG[viewPend.estatus]?.label}</span>
               <span className="text-xs text-slate-400 ml-auto">{fmtDate(viewPend.created_at)}</span>
             </div>
+
+            {/* Origen: grabación de Plaud */}
+            {esPlaud(viewPend) && (
+              <div className={`rounded-xl border overflow-hidden ${PLAUD_CFG.soft}`}>
+                <div className={`${PLAUD_CFG.band} text-white px-4 py-2 flex items-center gap-2`}>
+                  <Mic className="w-4 h-4"/>
+                  <span className="text-xs font-black uppercase tracking-wider">{PLAUD_CFG.label}</span>
+                </div>
+                <div className="px-4 py-3 grid grid-cols-2 gap-3 text-sm">
+                  <div className="col-span-2"><p className="text-[10px] font-bold uppercase opacity-60 mb-0.5">{PLAUD_CFG.doc}</p><p className="font-bold">{viewPend.origen_asunto || 'Sin nombre'}</p></div>
+                  {viewPend.origen_fecha && <div><p className="text-[10px] font-bold uppercase opacity-60 mb-0.5">Fecha de la reunión</p><p className="font-semibold">{fmtDate(viewPend.origen_fecha)}</p></div>}
+                </div>
+              </div>
+            )}
 
             {/* Origen: acuerdo de minuta / acción de nota técnica */}
             {(() => { const org = origenDe(viewPend); if (!org) return null; return (
