@@ -75,6 +75,9 @@ export interface OpcionesPresentacion {
   actualizacionesCN?: Record<string, ActualizacionCN>;           // por clave de colegio
   fotoActualizacionCN?: (fotoId: string) => Promise<FotoSlide | null>;
   fotos?: (proyectoId: string) => Promise<FotoSlide[]>;
+  // Con fotos activadas: las cajas que se quedan sin foto se marcan ("Sin fotografía" /
+  // "Sin evidencia fotográfica") en lugar de quedar con "INSERTAR IMAGEN"
+  marcarSinFotos?: boolean;
   progreso?: (msg: string) => void;
 }
 
@@ -418,6 +421,54 @@ function ponerFotos(doc: Document, rels: Document, fotos: FotoSlide[], paquete: 
   });
 }
 
+// ── Cajas que se quedan sin foto ────────────────────────────────────────────
+// Sin ninguna foto, las 3 cajas se juntan en un solo panel "SIN EVIDENCIA FOTOGRÁFICA";
+// con 1 o 2 fotos, cada caja que sobra queda limpia con la leyenda "SIN FOTOGRAFÍA".
+const SIN_FOTOS = { titulo: 'SIN EVIDENCIA FOTOGRÁFICA EN ESTA SEMANA', sub: 'No se registraron fotografías en el corte semanal.' };
+type Rect = { x: number; y: number; cx: number; cy: number };
+
+function parrafoCentrado(texto: string, sz: number, color: string, negrita: boolean, spc = 0) {
+  return `<a:p><a:pPr marL="0" indent="0" algn="ctr"><a:buNone/></a:pPr><a:r><a:rPr lang="es-419" sz="${sz}" b="${negrita ? 1 : 0}" kern="0" spc="${spc}" noProof="0">` +
+    `<a:solidFill><a:srgbClr val="${color}"/></a:solidFill><a:latin typeface="Montserrat" pitchFamily="34" charset="0"/></a:rPr><a:t>${texto}</a:t></a:r></a:p>`;
+}
+function formaXml(id: number, nombre: string, c: Rect, relleno: string | null, linea: string | null, parrafos: string) {
+  return `<p:sp xmlns:p="${NS.p}" xmlns:a="${NS.a}"><p:nvSpPr><p:cNvPr id="${id}" name="${nombre}"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr>` +
+    `<p:spPr><a:xfrm><a:off x="${c.x}" y="${c.y}"/><a:ext cx="${c.cx}" cy="${c.cy}"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom>` +
+    (relleno ? `<a:solidFill><a:srgbClr val="${relleno}"/></a:solidFill>` : '<a:noFill/>') +
+    (linea ? `<a:ln w="12700"><a:solidFill><a:srgbClr val="${linea}"/></a:solidFill></a:ln>` : '<a:ln><a:noFill/></a:ln>') +
+    `</p:spPr><p:txBody><a:bodyPr wrap="square" lIns="91440" tIns="0" rIns="91440" bIns="0" rtlCol="0" anchor="ctr"/><a:lstStyle/>` +
+    (parrafos || '<a:p><a:endParaRPr lang="es-419" noProof="0"/></a:p>') + `</p:txBody></p:sp>`;
+}
+function marcarSinFoto(doc: Document, desde: number, titulo = SIN_FOTOS.titulo, sub = SIN_FOTOS.sub) {
+  const cajas = cajasFoto(doc).sort((a, b) => caja(a).x - caja(b).x);
+  const libres = cajas.slice(desde);
+  if (!libres.length) return;
+  let maxId = Math.max(0, ...hijosNS(doc, NS.p, 'cNvPr').map(c => Number(c.getAttribute('id')) || 0));
+  const nodo = (xml: string) => doc.importNode(parsear(xml).documentElement, true);
+  // Quitar el ícono y la leyenda "INSERTAR IMAGEN" de cada caja libre
+  for (const box of libres) {
+    const c = caja(box);
+    formas(doc).filter(f => f !== box && dentro(f, c) &&
+      (f.localName === 'pic' || /INSERTAR IMAGEN/i.test(textoDe(f)))).forEach(f => f.remove());
+  }
+  if (desde === 0) {
+    const a = caja(cajas[0]), z = caja(cajas[cajas.length - 1]);
+    const panel: Rect = { x: a.x, y: a.y, cx: z.x + z.cx - a.x, cy: a.cy };
+    const ancla = cajas[0];
+    ancla.parentNode!.insertBefore(nodo(formaXml(++maxId, 'Sin evidencia', panel, 'F3F7FB', 'C9D8E6',
+      parrafoCentrado(titulo, 800, '1F4E79', true, 150) + (sub ? parrafoCentrado(sub, 700, '7A90A8', false) : ''))), ancla);
+    ancla.parentNode!.insertBefore(nodo(formaXml(++maxId, 'Sin evidencia barra', { x: panel.x, y: panel.y, cx: 36576, cy: panel.cy },
+      'E87722', null, '')), ancla);
+    cajas.forEach(b => b.remove());
+    return;
+  }
+  for (const box of libres) {
+    box.parentNode!.insertBefore(nodo(formaXml(++maxId, 'Sin fotografia', caja(box), 'F3F7FB', 'C9D8E6',
+      parrafoCentrado('SIN FOTOGRAFÍA', 650, '9AAFC4', true, 100))), box);
+    box.remove();
+  }
+}
+
 // ── Textos del slide de obra ────────────────────────────────────────────────
 function textoAvance(p: ProyectoSemana, inicio: Date, fin: Date): string[] {
   if (p.cancelado) {
@@ -520,14 +571,14 @@ function llenarLevantamiento(doc: Document, pl: PlantelSemana, ubic: Ubicacion |
 interface Ubicacion { ciudad: string; pin: Element | null }
 
 // ── Slide de Cumplimiento por colegio: "Actualización de esta semana" ───────
-async function llenarActualizacionCN(doc: Document, rels: Document, act: ActualizacionCN, foto: FotoSlide | null, paquete: Paquete) {
+async function llenarActualizacionCN(doc: Document, rels: Document, act: ActualizacionCN, foto: FotoSlide | null, paquete: Paquete, marcarSinFoto = false) {
   if (act.texto) {
     const cajaTexto = formas(doc).find(f => /^TextBox/.test(nombreForma(f)) && caja22(f));
     const texto = `${fechaCorta(act.fecha)} — ${act.texto.replace(/\s+/g, ' ').trim()}`;
     // Se conserva el color del texto de la plantilla (el slide de Cumplimiento es de fondo oscuro)
     ponerTexto(cajaTexto ?? null, [recortar(texto, 420)], { italica: false });
   }
-  if (!foto) return;
+  if (!foto && !marcarSinFoto) return;
   // Recuadro de evidencia (el rectángulo redondeado con "INSERTAR IMAGEN" adentro)
   const marco = formas(doc).find(f => {
     if (f.localName !== 'sp' || !/^Rounded Rectangle/.test(nombreForma(f))) return false;
@@ -537,6 +588,14 @@ async function llenarActualizacionCN(doc: Document, rels: Document, act: Actuali
   if (!marco) return;
   const c = caja(marco);
   formas(doc).filter(f => f !== marco && dentro(f, c)).forEach(f => f.remove());
+  if (!foto) {
+    // Sin foto: el recuadro se queda (fondo oscuro de la plantilla) con la leyenda
+    const id = Math.max(0, ...hijosNS(doc, NS.p, 'cNvPr').map(x => Number(x.getAttribute('id')) || 0)) + 1;
+    const xml = formaXml(id, 'Sin evidencia CN', c, null, null,
+      parrafoCentrado('SIN EVIDENCIA FOTOGRÁFICA', 750, 'A8C0D8', true, 150) + parrafoCentrado('No se registró fotografía esta semana.', 650, '7F9BBF', false));
+    marco.parentNode!.insertBefore(doc.importNode(parsear(xml).documentElement, true), marco.nextSibling);
+    return;
+  }
   let maxId = Math.max(0, ...hijosNS(doc, NS.p, 'cNvPr').map(x => Number(x.getAttribute('id')) || 0));
   let maxRid = Math.max(0, ...hijosNS(rels, NS.rel, 'Relationship').map(r => Number((r.getAttribute('Id') ?? '').replace(/\D/g, '')) || 0));
   const rid = `rId${++maxRid}`;
@@ -704,7 +763,9 @@ export async function generarPresentacionSemanal(op: OpcionesPresentacion): Prom
       const nuevo = await paq.nuevoSlide(origen, doc);
       if (op.fotos) {
         const fotos = await op.fotos(p.id).catch(() => [] as FotoSlide[]);
-        if (fotos.length) { ponerFotos(doc, nuevo.rels, fotos, paq); limpiarAnimaciones(doc); }
+        if (fotos.length) ponerFotos(doc, nuevo.rels, fotos, paq);
+        if (op.marcarSinFotos && fotos.length < 3) marcarSinFoto(doc, fotos.length);
+        limpiarAnimaciones(doc);
         zip.file(nuevo.archivo, serializar(doc), SIN_CARPETAS);
       }
       zip.file(paq.relsDe(nuevo.archivo), serializar(nuevo.rels), SIN_CARPETAS);
@@ -731,7 +792,13 @@ export async function generarPresentacionSemanal(op: OpcionesPresentacion): Prom
         const nuevo = await paq.nuevoSlide(ref.archivo, doc);
         if (p && op.fotos) {
           const fotos = await op.fotos(p.id).catch(() => [] as FotoSlide[]);
-          if (fotos.length) { ponerFotos(doc, nuevo.rels, fotos, paq); limpiarAnimaciones(doc); }
+          if (fotos.length) ponerFotos(doc, nuevo.rels, fotos, paq);
+          if (op.marcarSinFotos && fotos.length < 3) marcarSinFoto(doc, fotos.length);
+          limpiarAnimaciones(doc);
+          zip.file(nuevo.archivo, serializar(doc), SIN_CARPETAS);
+        } else if (!p && op.marcarSinFotos) {
+          marcarSinFoto(doc, 0, 'SIN PROYECTO ACTIVO ESTA SEMANA', '');
+          limpiarAnimaciones(doc);
           zip.file(nuevo.archivo, serializar(doc), SIN_CARPETAS);
         }
         zip.file(paq.relsDe(nuevo.archivo), serializar(nuevo.rels), SIN_CARPETAS);
@@ -766,7 +833,7 @@ export async function generarPresentacionSemanal(op: OpcionesPresentacion): Prom
       aviso(`Cumplimiento: actualización de ${tipo.colegio}`);
       const nuevo = await paq.nuevoSlide(ref.archivo, doc);
       const foto = act.fotoId && op.fotoActualizacionCN ? await op.fotoActualizacionCN(act.fotoId).catch(() => null) : null;
-      await llenarActualizacionCN(doc, nuevo.rels, act, foto, paq);
+      await llenarActualizacionCN(doc, nuevo.rels, act, foto, paq, !!op.marcarSinFotos);
       limpiarAnimaciones(doc);
       zip.file(nuevo.archivo, serializar(doc), SIN_CARPETAS);
       zip.file(paq.relsDe(nuevo.archivo), serializar(nuevo.rels), SIN_CARPETAS);

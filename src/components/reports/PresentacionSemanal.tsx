@@ -85,12 +85,13 @@ async function fotosCancelado(p: ProyectoConAviso, inicio: Date, fin: Date, conF
 }
 
 async function cargarDatos(inicio: Date, fin: Date) {
-  // Activos + los que se completaron o cancelaron dentro del corte (miércoles a miércoles)
+  // Activos + los que se completaron o cancelaron dentro del corte (miércoles a miércoles).
+  // Los que se apagaron en NEXUS ("Fuera de la semanal") no salen en ningún caso.
   const { data: segs, error: e1 } = await supabase.from('nexus_seguimientos')
-    .select('id, proyecto_id, proyecto_nombre, colegio, estatus, completado_at, cancelado_at').in('estatus', ['activo', 'completado', 'cancelado']);
+    .select('*').in('estatus', ['activo', 'completado', 'cancelado']);
   if (e1) throw new Error('No se pudieron leer los seguimientos: ' + e1.message);
-  type Seg = { id: string; proyecto_id: string | null; proyecto_nombre?: string; colegio?: string; estatus: string; completado_at?: string | null; cancelado_at?: string | null };
-  const todos = (segs ?? []) as Seg[];
+  type Seg = { id: string; proyecto_id: string | null; proyecto_nombre?: string; colegio?: string; estatus: string; completado_at?: string | null; cancelado_at?: string | null; incluir_semanal?: boolean | null };
+  const todos = ((segs ?? []) as Seg[]).filter(s => s.incluir_semanal !== false);
   const idsProy = [...new Set(todos.map(s => s.proyecto_id).filter(Boolean))] as string[];
 
   const [{ data: proys, error: e2 }, { data: coms, error: e3 }, { data: pls, error: e4 }] = await Promise.all([
@@ -256,6 +257,7 @@ export default function PresentacionSemanal({ className }: { className?: string 
       const blob = await generarPresentacionSemanal({
         plantilla, semana, proyectos, planteles, actualizacionesCN,
         fotoActualizacionCN: conFotos ? fotoCN : undefined,
+        marcarSinFotos: conFotos,
         incluirSinProyecto: sinProyecto,
         // Los cancelados siempre llevan la imagen del aviso de cancelación (aunque no se pidan fotos)
         fotos: (id: string) => {
@@ -317,7 +319,7 @@ export default function PresentacionSemanal({ className }: { className?: string 
                   <Presentation className="w-5 h-5 text-orange-600" /> Presentación Semanal
                 </h3>
                 <p className="text-xs text-slate-500 mt-1">
-                  Usa la plantilla institucional y la llena con los proyectos en Seguimiento NEXUS (activos, y los concluidos o cancelados en el corte; los cancelados llevan su motivo y el aviso de cancelación) y el Levantamiento.
+                  Usa la plantilla institucional y la llena con los proyectos en Seguimiento NEXUS marcados "En la semanal" (activos, y los concluidos o cancelados en el corte; los cancelados llevan su motivo y el aviso de cancelación) y el Levantamiento.
                   En Cumplimiento Normativo, el último comentario de la semana del Seguimiento de cada colegio llena "Actualización de esta semana", y los pendientes de Seguimiento de Trámites marcados para la semanal salen después de su colegio.
                   Se guarda en OneDrive: Presentaciones Semanales / año / mes.
                 </p>
@@ -339,7 +341,7 @@ export default function PresentacionSemanal({ className }: { className?: string 
             <div className="space-y-2">
               <label className="flex items-center gap-2 text-sm text-slate-700">
                 <input type="checkbox" checked={conFotos} onChange={e => setConFotos(e.target.checked)} disabled={trabajando} />
-                Incluir fotos (primero las pegadas en los comentarios de la semana, luego las del Expediente)
+                Incluir fotos (primero las pegadas en los comentarios de la semana, luego las del Expediente). Las cajas sin foto salen marcadas "Sin fotografía".
               </label>
               <label className="flex items-center gap-2 text-sm text-slate-700">
                 <input type="checkbox" checked={sinProyecto} onChange={e => setSinProyecto(e.target.checked)} disabled={trabajando} />

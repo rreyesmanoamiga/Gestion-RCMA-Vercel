@@ -14,7 +14,7 @@ import {
   Plus, X, Pencil, Trash2, CheckCircle2, Clock, AlertCircle,
   MessageSquare, Send, FileText, Pin, Search, Download,
   BookOpen, ListChecks, Users, MapPin, Building2, Link2,
-  ClipboardList, BarChart3, Ban, Handshake, Wrench, Mic, ExternalLink, Lock, Loader2, CalendarPlus,
+  ClipboardList, BarChart3, Ban, Handshake, Wrench, Mic, ExternalLink, Lock, Loader2, CalendarPlus, Presentation,
 } from 'lucide-react';
 import { descargarICSPendiente } from '@/lib/icsPendiente';
 import { fmtHora } from '@/lib/utils';
@@ -31,7 +31,7 @@ interface Pendiente { id: string; titulo: string; descripcion: string; tipo: str
   // Sale en la Presentación Semanal (Reportes) como "Proyecto en preparación"
   presentar_semanal?: boolean | null; }
 interface Comentario { id: string; pendiente_id: string; autor_email: string; autor_nombre: string; contenido: string; leido: boolean; created_at: string; fotos?: FotoRef[] | null; }
-interface Seguimiento { id: string; proyecto_id: string; proyecto_nombre: string; territorio: string; colegio: string; estatus: 'activo'|'completado'|'cancelado'; completado_at: string | null; cancelado_at: string | null; created_at: string; presentado_semana: boolean; }
+interface Seguimiento { id: string; proyecto_id: string; proyecto_nombre: string; territorio: string; colegio: string; estatus: 'activo'|'completado'|'cancelado'; completado_at: string | null; cancelado_at: string | null; created_at: string; presentado_semana: boolean; incluir_semanal?: boolean | null; }
 interface SeguimientoAnteproyecto { id: string; anteproyecto_id: string; anteproyecto_nombre: string; territorio: string; colegio: string; estatus: 'activo'|'completado'; completado_at: string | null; created_at: string; }
 interface SysUser   { user_email: string; nombre: string; territorio: string; colegio: string; puesto: string; }
 
@@ -585,6 +585,17 @@ export default function Nexus() {
   const seguimientosCompletados = useMemo(() => seguimientos.filter(s => s.estatus === 'completado'), [seguimientos]);
   const seguimientosCancelados = useMemo(() => seguimientos.filter(s => s.estatus === 'cancelado'), [seguimientos]);
   const presentadosCount = useMemo(() => seguimientosActivos.filter(s => s.presentado_semana).length, [seguimientosActivos]);
+  const fueraSemanalCount = useMemo(() => seguimientosActivos.filter(s => s.incluir_semanal === false).length, [seguimientosActivos]);
+
+  // Incluir / sacar el proyecto de la Presentación Semanal (Reportes)
+  const toggleIncluirSemanalMutation = useMutation({
+    mutationFn: async ({ id, valor }: { id: string; valor: boolean }) => {
+      const { error } = await supabase.from('nexus_seguimientos').update({ incluir_semanal: valor }).eq('id', id);
+      if (error) throw error;
+    },
+    onSuccess: (_d, v) => { qc.invalidateQueries({ queryKey: ['nexus_seguimientos'] }); toast.success(v.valor ? 'Se incluirá en la presentación semanal' : 'No saldrá en la presentación semanal'); },
+    onError: () => toast.error('No se pudo actualizar'),
+  });
 
   const togglePresentadoMutation = useMutation({
     mutationFn: async ({ id, valor }: { id: string; valor: boolean }) => {
@@ -1124,6 +1135,12 @@ export default function Nexus() {
                 {presentadosCount} de {seguimientosActivos.length} presentados esta semana
               </span>
             )}
+            {fueraSemanalCount>0 && (
+              <span className="inline-flex items-center gap-2 text-xs font-bold text-slate-500 bg-white border border-dashed border-slate-300 px-3 py-1.5 rounded-full shrink-0">
+                <Presentation className="w-3.5 h-3.5 text-slate-400"/>
+                {fueraSemanalCount} fuera de la semanal
+              </span>
+            )}
           </div>
 
           {seguimientosActivos.length===0 && <div className="text-center py-12"><ClipboardList className="w-10 h-10 text-slate-200 mx-auto mb-3"/><p className="text-sm font-semibold text-slate-500">No hay proyectos activos en seguimiento.</p></div>}
@@ -1132,6 +1149,7 @@ export default function Nexus() {
             {seguimientosActivos.map(s=>{
               const coment = seguComentMap[s.id];
               const presentado = s.presentado_semana;
+              const enSemanal = s.incluir_semanal !== false;
               return (
                 <div key={s.id} onClick={()=>setViewSeguimiento(s)}
                   className={`bg-white rounded-xl border-l-4 ${presentado?'border-l-emerald-400':'border-l-teal-400'} border border-slate-200 shadow-sm p-4 cursor-pointer hover:shadow-md transition-all ${presentado?'opacity-60':''}`}>
@@ -1148,6 +1166,13 @@ export default function Nexus() {
                     {s.territorio && <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full"><MapPin className="w-2.5 h-2.5"/>{s.territorio}</span>}
                     {s.colegio && <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-slate-500 bg-slate-100 px-2 py-0.5 rounded-full"><Building2 className="w-2.5 h-2.5"/>{s.colegio}</span>}
                   </div>
+                  <button
+                    onClick={e=>{e.stopPropagation(); toggleIncluirSemanalMutation.mutate({id:s.id, valor:!enSemanal});}}
+                    disabled={toggleIncluirSemanalMutation.isPending}
+                    title={enSemanal?'Sale en la Presentación Semanal — clic para sacarlo':'No sale en la Presentación Semanal — clic para incluirlo'}
+                    className={`mt-2 inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wide border transition-colors disabled:opacity-50 ${enSemanal?'bg-orange-100 text-orange-700 border-orange-200 hover:bg-orange-200':'bg-white text-slate-400 border-dashed border-slate-300 hover:text-orange-600 hover:border-orange-300'}`}>
+                    <Presentation className="w-2.5 h-2.5"/>{enSemanal?'En la semanal':'Fuera de la semanal'}
+                  </button>
                   <div className="flex items-center justify-between mt-3 pt-3 border-t border-slate-100">
                     <span className="inline-flex items-center gap-1 text-xs text-slate-500"><MessageSquare className="w-3.5 h-3.5"/>{coment?.count ?? 0} nota{(coment?.count??0)!==1?'s':''}</span>
                     {coment?.lastDate && <span className="text-[10px] text-slate-400">Últ: {fmtDate(coment.lastDate)}</span>}
