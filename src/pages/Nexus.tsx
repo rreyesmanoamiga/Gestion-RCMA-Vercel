@@ -10,6 +10,7 @@ import { es } from 'date-fns/locale';
 import { logAudit } from '@/lib/audit';
 import { notifyByEmail } from '@/lib/notifications';
 import { Link as RouterLink } from 'react-router-dom';
+import EditorNota, { textoNota, VistaNota } from '@/components/nexus/EditorNota';
 import {
   Plus, X, Pencil, Trash2, CheckCircle2, Clock, AlertCircle,
   MessageSquare, Send, FileText, Pin, Search, Download,
@@ -829,7 +830,7 @@ export default function Nexus() {
   // ── KPIs ─────────────────────────────────────────────────────────────────
   const kpis = useMemo(()=>({ total: pendientes.length, personales: pendientes.filter(p=>p.tipo==='personal').length, compartidos: pendientes.filter(p=>p.tipo==='compartido').length, completados: pendientes.filter(p=>p.estatus==='completado').length, urgentes: pendientes.filter(p=>p.prioridad==='urgente'&&p.estatus!=='completado').length, activos: pendientes.filter(p=>p.estatus!=='completado').length, }),[pendientes]);
 
-  const filteredNotas   = useMemo(()=>notas.filter(n=>!search||n.titulo.toLowerCase().includes(search.toLowerCase())||n.contenido.toLowerCase().includes(search.toLowerCase())),[notas,search]);
+  const filteredNotas   = useMemo(()=>notas.filter(n=>!search||n.titulo.toLowerCase().includes(search.toLowerCase())||textoNota(n.contenido).toLowerCase().includes(search.toLowerCase())),[notas,search]);
   const pendPersonalesTodos = useMemo(()=>pendientes.filter(p=>p.tipo==='personal'),[pendientes]);
   const conteoOrigen = useMemo(()=>{
     const act = pendPersonalesTodos.filter(p=>p.estatus!=='completado');
@@ -1085,7 +1086,7 @@ export default function Nexus() {
                     <button type="button" onClick={()=>setConfirmDel({type:'nota',id:n.id,titulo:n.titulo})} className="p-1 text-red-400 hover:text-red-600 rounded"><Trash2 className="w-3.5 h-3.5"/></button>
                   </div>
                 </div>
-                <p className="text-xs text-slate-500 line-clamp-3">{n.contenido||<span className="italic">Sin contenido</span>}</p>
+                <p className="text-xs text-slate-500 line-clamp-3 whitespace-pre-line">{textoNota(n.contenido)||<span className="italic">Sin contenido</span>}</p>
                 <p className="text-[10px] text-slate-400 mt-3">{fmtDate(n.updated_at)}</p>
               </div>
             </div>
@@ -1414,7 +1415,7 @@ export default function Nexus() {
       )}
 
       {/* Ver Nota */}
-      {viewNota&&(<Modal title={viewNota.titulo} onClose={()=>setViewNota(null)} wide><div className="space-y-3"><div className="flex items-center gap-2"><span className="w-3 h-3 rounded-full" style={{background:viewNota.color}}/><span className="text-xs bg-slate-100 text-slate-600 px-2 py-0.5 rounded-full">{viewNota.categoria}</span>{viewNota.fijada&&<span className="text-xs bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full flex items-center gap-1"><Pin className="w-3 h-3"/>Fijada</span>}{viewNota.colegio&&<span className="text-xs bg-teal-50 text-teal-700 px-2 py-0.5 rounded-full">{viewNota.territorio} · {viewNota.colegio}</span>}</div><div className="bg-slate-50 rounded-lg p-4 min-h-[200px] text-sm text-slate-700 whitespace-pre-wrap">{viewNota.contenido||<span className="text-slate-400 italic">Sin contenido</span>}</div><p className="text-xs text-slate-400">Actualizada: {fmtFull(viewNota.updated_at)}</p></div><div className="flex gap-3 mt-4"><button type="button" onClick={()=>setViewNota(null)} className={btnOutline+" flex-1"}>Cerrar</button><button type="button" onClick={()=>{setViewNota(null);openNota(viewNota);}} className={btnPrimary+" flex-1 flex items-center justify-center gap-2"}><Pencil className="w-4 h-4"/>Editar</button></div></Modal>)}
+      {viewNota&&(<Modal title={viewNota.titulo} onClose={()=>setViewNota(null)} wide><div className="space-y-3"><div className="flex items-center gap-2"><span className="w-3 h-3 rounded-full" style={{background:viewNota.color}}/><span className="text-xs bg-slate-100 text-slate-600 px-2 py-0.5 rounded-full">{viewNota.categoria}</span>{viewNota.fijada&&<span className="text-xs bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full flex items-center gap-1"><Pin className="w-3 h-3"/>Fijada</span>}{viewNota.colegio&&<span className="text-xs bg-teal-50 text-teal-700 px-2 py-0.5 rounded-full">{viewNota.territorio} · {viewNota.colegio}</span>}</div><div className="bg-slate-50 rounded-lg p-4 min-h-[200px] text-sm text-slate-700"><VistaNota contenido={viewNota.contenido??''}/></div><p className="text-xs text-slate-400">Actualizada: {fmtFull(viewNota.updated_at)}</p></div><div className="flex gap-3 mt-4"><button type="button" onClick={()=>setViewNota(null)} className={btnOutline+" flex-1"}>Cerrar</button><button type="button" onClick={()=>{setViewNota(null);openNota(viewNota);}} className={btnPrimary+" flex-1 flex items-center justify-center gap-2"}><Pencil className="w-4 h-4"/>Editar</button></div></Modal>)}
 
       {/* Form Nota */}
       {showNota&&(<Modal title={editNota?'Editar Nota':'Nueva Nota'} onClose={()=>{setShowNota(false);setEditNota(null);}} wide>
@@ -1424,7 +1425,7 @@ export default function Nexus() {
             <div><label className="block text-xs font-bold text-slate-500 uppercase mb-1">Categoría</label><select className={inputCls} value={notaForm.categoria} onChange={e=>setNotaForm(f=>({...f,categoria:e.target.value}))}>{CATEGORIAS.map(c=><option key={c}>{c}</option>)}</select></div>
             <div><label className="block text-xs font-bold text-slate-500 uppercase mb-1">Color</label><div className="flex gap-2 flex-wrap pt-1">{COLORES.map(c=><button type="button" key={c} onClick={()=>setNotaForm(f=>({...f,color:c}))} className={`w-6 h-6 rounded-full border-2 transition ${notaForm.color===c?'border-slate-900 scale-110':'border-transparent'}`} style={{background:c}}/>)}</div></div>
           </div>
-          <div><label className="block text-xs font-bold text-slate-500 uppercase mb-1">Contenido</label><textarea className={inputCls} rows={7} value={notaForm.contenido} onChange={e=>setNotaForm(f=>({...f,contenido:e.target.value}))} placeholder="Escribe aquí tu nota..."/></div>
+          <div><label className="block text-xs font-bold text-slate-500 uppercase mb-1">Contenido</label><EditorNota key={editNota?.id??'nueva'} value={notaForm.contenido} onChange={html=>setNotaForm(f=>({...f,contenido:html}))} placeholder="Escribe aquí tu nota..."/></div>
           <label className="flex items-center gap-2 cursor-pointer"><input type="checkbox" className="rounded" checked={notaForm.fijada} onChange={e=>setNotaForm(f=>({...f,fijada:e.target.checked}))}/><span className="text-sm font-semibold text-slate-700">Fijar nota (aparece primero)</span></label>
           {/* Colegio opcional */}
           <label className="flex items-center gap-2 cursor-pointer"><input type="checkbox" className="rounded" checked={notaConColegio} onChange={e=>{ setNotaConColegio(e.target.checked); if(!e.target.checked) setNotaForm(f=>({...f,territorio:'',colegio:''})); }}/><span className="text-sm font-semibold text-slate-700">¿Relacionada con un colegio?</span></label>
