@@ -57,7 +57,7 @@ export function VistaNota({ contenido }: { contenido: string }) {
 const ESTILOS = `
 .nexus-nota .ql-toolbar.ql-snow{border:1px solid #cbd5e1;border-radius:8px 8px 0 0;background:#f8fafc;font-family:inherit;position:relative}
 .nexus-nota .ql-container.ql-snow{height:auto;border:1px solid #cbd5e1;border-top:0;border-radius:0 0 8px 8px;font-size:14px;font-family:inherit}
-.nexus-nota .ql-editor{height:auto;min-height:220px;max-height:50vh;overflow-y:auto}
+.nexus-nota .ql-editor{height:auto;min-height:var(--nota-alto,220px);max-height:60vh;overflow-y:auto}
 .nexus-nota .ql-editor.ql-blank::before{font-style:normal;color:#94a3b8}
 .nexus-nota.ql-snow .ql-editor{font-size:14px;color:#334155;font-family:inherit}
 .nexus-nota .ql-snow .ql-picker.ql-font .ql-picker-label::before,.nexus-nota .ql-snow .ql-picker.ql-font .ql-picker-item::before{content:'Normal'}
@@ -76,7 +76,7 @@ const ESTILOS = `
 .nexus-nota .ql-snow .ql-tooltip a.ql-remove::before{content:'Quitar'}
 `;
 
-export default function EditorNota({ value, onChange, placeholder }: { value: string; onChange: (html: string) => void; placeholder?: string }) {
+export default function EditorNota({ value, onChange, placeholder, alto }: { value: string; onChange: (html: string) => void; placeholder?: string; alto?: string }) {
   const ref = useRef<ReactQuill>(null);
   const menuRef = useRef<HTMLDivElement>(null);
   const [menu, setMenu] = useState(false);
@@ -107,7 +107,7 @@ export default function EditorNota({ value, onChange, placeholder }: { value: st
   };
 
   return (
-    <div className="nexus-nota">
+    <div className="nexus-nota" style={alto ? ({ '--nota-alto': alto } as React.CSSProperties) : undefined}>
       <style>{ESTILOS}</style>
       <div id={TOOLBAR_ID}>
         <span className="ql-formats">
