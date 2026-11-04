@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useRef } from 'react';
+import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabaseClient';
 import { useAuth } from '@/lib/AuthContext';
@@ -14,7 +14,7 @@ import {
   Plus, X, Pencil, Trash2, CheckCircle2, Clock, AlertCircle,
   MessageSquare, Send, FileText, Pin, Search, Download,
   BookOpen, ListChecks, Users, MapPin, Building2, Link2,
-  ClipboardList, BarChart3, Ban, Handshake, Wrench, Mic, ExternalLink, Lock, Loader2, CalendarPlus, Presentation,
+  ClipboardList, BarChart3, Ban, Handshake, Wrench, Mic, ExternalLink, Lock, Loader2, CalendarPlus, Presentation, ChevronDown,
 } from 'lucide-react';
 import { descargarICSPendiente } from '@/lib/icsPendiente';
 import { fmtHora } from '@/lib/utils';
@@ -521,6 +521,10 @@ export default function Nexus() {
   const [viewPend,  setViewPend]  = useState<Pendiente|null>(null);
   const [confirmDel, setConfirmDel] = useState<{type:'nota'|'pendiente';id:string;titulo:string;origen?:'acuerdo'|'accion'|null;completado?:boolean}|null>(null);
   const [filtroOrigen, setFiltroOrigen] = useState<'todos'|'acuerdo'|'accion'|'plaud'|'otros'>('todos');
+  // Completados: se muestran de 20 en 20 (igual que Proyectos) con "Cargar más"
+  const COMPLETADOS_PAGE = 20;
+  const [verCompletados, setVerCompletados] = useState(COMPLETADOS_PAGE);
+  useEffect(() => { setVerCompletados(COMPLETADOS_PAGE); }, [tab, filtroOrigen]);
 
   // ── Queries ───────────────────────────────────────────────────────────────
   const { data: allUsers = [] } = useQuery({ queryKey:['sys_users_nexus'], queryFn: async()=>{ const {data}=await supabase.from('user_permissions').select('user_email, nombre, territorio, colegio, puesto').neq('user_email',userEmail); return (data??[]) as SysUser[]; }, enabled:isAdmin });
@@ -1118,7 +1122,29 @@ export default function Nexus() {
           {isAdmin&&(tab==='personales'?pendPersonales:pendCompartidos).filter(p=>p.estatus==='completado').length>0&&(
             <div>
               <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-3 flex items-center gap-2"><CheckCircle2 className="w-3.5 h-3.5"/>Completados — evidencia</p>
-              <PendListCompletados items={(tab==='personales'?pendPersonales:pendCompartidos).filter(p=>p.estatus==='completado')}/>
+              {(() => {
+                const completados = (tab==='personales'?pendPersonales:pendCompartidos).filter(p=>p.estatus==='completado');
+                const restantes = completados.length - verCompletados;
+                return (
+                  <>
+                    <PendListCompletados items={completados.slice(0, verCompletados)}/>
+                    {restantes > 0 && (
+                      <div className="flex flex-col items-center gap-2 mt-8">
+                        <button
+                          onClick={() => setVerCompletados(v => v + COMPLETADOS_PAGE)}
+                          className="flex items-center gap-2 px-5 py-2.5 bg-white border border-slate-300 rounded-lg text-sm font-medium text-slate-700 hover:bg-slate-50 hover:border-slate-400 transition-colors shadow-sm"
+                        >
+                          <ChevronDown className="w-4 h-4" />
+                          Cargar más ({restantes} restante{restantes !== 1 ? 's' : ''})
+                        </button>
+                        <p className="text-xs text-slate-400">
+                          Mostrando {Math.min(verCompletados, completados.length)} de {completados.length} completados
+                        </p>
+                      </div>
+                    )}
+                  </>
+                );
+              })()}
             </div>
           )}
         </div>
