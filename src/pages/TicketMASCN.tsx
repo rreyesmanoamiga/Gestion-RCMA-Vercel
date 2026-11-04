@@ -70,6 +70,9 @@ interface TicketMASCN {
   id: string; folio?: string; tramite_id?: string | null; solicitud_id?: string | null;
   colegio?: string; razon_social?: string; sociedad?: string; centro_gestor?: string;
   territorio?: string; director?: string; admin_colegio?: string; contador?: string;
+  // Sociedad que paga (cuando el pago sale de otro colegio)
+  pago_otro_colegio?: boolean | null; pago_colegio?: string | null; pago_razon_social?: string | null;
+  pago_sociedad?: string | null; pago_centro_gestor?: string | null; pago_contador?: string | null;
   nombre_solicitante?: string; puesto_solicitante?: string; correo_solicitante?: string;
   fecha_elaboracion?: string;
   concepto_id?: string; concepto_nombre?: string; especificacion?: string;
@@ -124,12 +127,29 @@ function generarHTMLTicketCN(t: TicketMASCN): string {
     { n: 2, prov: t.cot2_proveedor, imp: t.cot2_importe },
     { n: 3, prov: t.cot3_proveedor, imp: t.cot3_importe },
   ];
+  // Pago de otra sociedad: el colegio que solicita y el que paga, lado a lado (igual que Ticket MAS)
+  const kv = (pares: [string, string][]) => pares.map(([k, v]) =>
+    `<div style="display:grid;grid-template-columns:88px 1fr;gap:6px;padding:2px 0"><b style="font-size:8px;color:#64748b;letter-spacing:.08em;text-transform:uppercase;padding-top:2px">${esc(k)}</b><span style="font-size:10.5px;font-weight:600">${v}</span></div>`).join('');
+  const pagoOtro = !!t.pago_otro_colegio && !!t.pago_colegio;
+  const datosColegio = pagoOtro
+    ? `<div style="text-align:right;padding:6px 12px 0"><span class="pill">PAGO DE OTRA SOCIEDAD</span></div>` +
+      `<div style="display:grid;grid-template-columns:1fr 1fr">` +
+        `<div style="padding:6px 12px 10px"><div style="font-size:9px;font-weight:800;color:#1F4E79;letter-spacing:.1em;margin-bottom:4px">COLEGIO QUE SOLICITA</div>${kv([
+          ['Colegio', val(t.colegio)], ['Razón social', val(t.razon_social)], ['Sociedad', `${val(t.sociedad)} · ${val(t.centro_gestor)}`],
+          ['Contador', val(t.contador)], ['Territorio', val(t.territorio)]])}</div>` +
+        `<div style="padding:6px 12px 10px;border-left:1px solid #e2e8f0;background:#fff7ed"><div style="font-size:9px;font-weight:800;color:#c2410c;letter-spacing:.1em;margin-bottom:4px">SOCIEDAD QUE PAGA</div>${kv([
+          ['Colegio', val(t.pago_colegio)], ['Razón social', val(t.pago_razon_social)], ['Sociedad', `${val(t.pago_sociedad)} · ${val(t.pago_centro_gestor)}`],
+          ['Contador', val(t.pago_contador)]])}</div>` +
+      `</div>`
+    : grid([
+        ['Colegio', val(t.colegio)], ['Razón social', val(t.razon_social)], ['Territorio', val(t.territorio)],
+        ['Centro gestor', val(t.centro_gestor)], ['Sociedad', val(t.sociedad)], ['Contador', val(t.contador)],
+      ]);
   const cuerpo =
-    tarjeta('Datos generales', grid([
-      ['Colegio', val(t.colegio)], ['Razón social', val(t.razon_social)], ['Territorio', val(t.territorio)],
-      ['Centro gestor', val(t.centro_gestor)], ['Sociedad', val(t.sociedad)], ['Contador', val(t.contador)],
+    tarjeta('Datos generales', datosColegio + grid([
       ['Solicitante', val(t.nombre_solicitante)], ['Puesto', val(t.puesto_solicitante)], ['Correo', val(t.correo_solicitante)],
       ['Concepto base', val(t.concepto_nombre)], ['Especificación', val(t.especificacion)], ['Fecha de elaboración', val(t.fecha_elaboracion)],
+      ['Pago', pagoOtro ? `De ${val(t.pago_colegio)}` : 'Mismo colegio'],
     ])) +
     tarjeta('Descripción del trámite', `<div class="txt">${val(t.descripcion)}</div>`) +
     tarjeta('Cotizaciones y financiamiento',
@@ -205,6 +225,8 @@ export default function TicketMASCN() {
     descripcion:'',
     cot1_importe:'', cot1_proveedor:'', cot2_importe:'', cot2_proveedor:'', cot3_importe:'', cot3_proveedor:'',
     motivo_seleccion:'', forma_financiamiento:'',
+    // ¿De qué sociedad sale el pago? (NO = del mismo colegio)
+    pago_otro:'NO', pago_colegio:'', pago_razon_social:'', pago_sociedad:'', pago_centro_gestor:'', pago_contador:'',
   };
   const [form, setForm] = useState({ ...FORM_INIT });
   const set = (k: string, v: string) => setForm(p => ({ ...p, [k]: v }));
@@ -274,6 +296,15 @@ export default function TicketMASCN() {
     const c = colegiosCN.find(x => x.nombre === nombre);
     setForm(p => ({ ...p, colegio: nombre, razon_social: c?.razon ?? '', sociedad: c?.sociedad ?? '', centro_gestor: c?.centro_gestor ?? '', territorio: c?.territorio ?? p.territorio, director: c?.director ?? '', admin_colegio: c?.admin ?? '', contador: c?.contador ?? '' }));
   };
+  // Colegio que paga: cualquiera (sin importar territorio), menos el que solicita
+  const colegiosPago = useMemo(() => colegiosCN.filter(c => c.nombre !== form.colegio), [colegiosCN, form.colegio]);
+  const onPagoOtroChange = (v: 'SI' | 'NO') =>
+    setForm(p => ({ ...p, pago_otro: v, ...(v === 'NO' ? { pago_colegio:'', pago_razon_social:'', pago_sociedad:'', pago_centro_gestor:'', pago_contador:'' } : {}) }));
+  const onPagoColegioChange = (nombre: string) => {
+    const c = colegiosCN.find(x => x.nombre === nombre);
+    setForm(p => ({ ...p, pago_colegio: nombre,
+      pago_razon_social: c?.razon ?? '', pago_sociedad: c?.sociedad ?? '', pago_centro_gestor: c?.centro_gestor ?? '', pago_contador: c?.contador ?? '' }));
+  };
   const onConcepto = (id: string) => {
     const c = conceptos.find(c => c.id === id);
     setForm(p => ({ ...p, concepto_id: id, concepto_nombre: c?.nombre ?? '' }));
@@ -298,6 +329,7 @@ export default function TicketMASCN() {
     if (!form.colegio || !form.nombre_solicitante || !form.correo_solicitante || !form.descripcion || !form.concepto_id) {
       toast.error('Completa los campos obligatorios marcados con *'); return;
     }
+    if (form.pago_otro === 'SI' && !form.pago_colegio) { toast.error('Selecciona el colegio del que sale el pago'); return; }
     const tieneCotizacion = form.cot1_importe && parseFloat(parseMXN(form.cot1_importe)) > 0;
     if (!tieneCotizacion) { toast.error('Debes capturar al menos la Cotización No. 1 con importe'); return; }
     setShowConfirmSend(true);
@@ -325,6 +357,12 @@ export default function TicketMASCN() {
         cot2_importe: form.cot2_importe ? parseFloat(parseMXN(form.cot2_importe)) : null, cot2_proveedor: form.cot2_proveedor,
         cot3_importe: form.cot3_importe ? parseFloat(parseMXN(form.cot3_importe)) : null, cot3_proveedor: form.cot3_proveedor,
         motivo_seleccion: form.motivo_seleccion, forma_financiamiento: form.forma_financiamiento,
+        pago_otro_colegio: form.pago_otro === 'SI' && !!form.pago_colegio,
+        pago_colegio: form.pago_otro === 'SI' ? form.pago_colegio || null : null,
+        pago_razon_social: form.pago_otro === 'SI' ? form.pago_razon_social || null : null,
+        pago_sociedad: form.pago_otro === 'SI' ? form.pago_sociedad || null : null,
+        pago_centro_gestor: form.pago_otro === 'SI' ? form.pago_centro_gestor || null : null,
+        pago_contador: form.pago_otro === 'SI' ? form.pago_contador || null : null,
         estatus: 'pendiente',
       }]);
       if (error) throw error;
@@ -574,6 +612,47 @@ export default function TicketMASCN() {
               <div><label className={labelClass}>Contador</label><input className={readOnlyClass} value={form.contador} readOnly /></div>
               <div><label className={labelClass}>Fecha de Elaboración</label><input className={inputClass} type="date" value={form.fecha_elaboracion} onChange={e => set('fecha_elaboracion', e.target.value)} /></div>
             </div>
+
+            {/* ¿De qué sociedad sale el pago? (igual que Ticket MAS) */}
+            <div className="border-t border-dashed border-slate-300 pt-4 mt-4">
+              <label className={labelClass}>¿De qué sociedad sale el pago? *</label>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-1">
+                {([
+                  { v: 'NO', t: 'Del mismo colegio', d: form.colegio ? `El pago sale de la sociedad de ${form.colegio}` : 'El pago sale de la sociedad del colegio que solicita' },
+                  { v: 'SI', t: 'De otro colegio / sociedad', d: 'Otro colegio paga el trámite' },
+                ] as const).map(o => {
+                  const on = form.pago_otro === o.v;
+                  return (
+                    <button key={o.v} type="button" onClick={() => onPagoOtroChange(o.v)}
+                      className={`text-left flex items-start gap-3 rounded-xl border-2 px-3 py-2.5 transition ${on ? 'border-orange-500 bg-orange-50' : 'border-slate-200 hover:border-slate-300 bg-white'}`}>
+                      <span className={`mt-0.5 w-4 h-4 rounded-full border-2 flex items-center justify-center shrink-0 ${on ? 'border-orange-500' : 'border-slate-400'}`}>
+                        {on && <span className="w-2 h-2 rounded-full bg-orange-500" />}
+                      </span>
+                      <span>
+                        <span className="block text-sm font-bold text-slate-800">{o.t}</span>
+                        <span className="block text-xs text-slate-500">{o.d}</span>
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+              {form.pago_otro === 'SI' && (
+                <div className="mt-3 rounded-xl border border-orange-200 bg-orange-50 p-4">
+                  <p className="text-[11px] font-black text-orange-700 uppercase tracking-wider mb-3">Datos para pago</p>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div><label className={labelClass}>Colegio que paga *</label>
+                      <select className={selectClass} value={form.pago_colegio} onChange={e => onPagoColegioChange(e.target.value)}>
+                        <option value="">— Seleccionar colegio —</option>
+                        {colegiosPago.map(c => <option key={c.nombre} value={c.nombre}>{c.nombre}</option>)}
+                      </select>
+                    </div>
+                    <div><label className={labelClass}>Razón Social</label><input className={readOnlyClass} value={form.pago_razon_social} readOnly /></div>
+                    <div><label className={labelClass}>Sociedad / Centro Gestor</label><input className={readOnlyClass} value={form.pago_colegio ? `${form.pago_sociedad || '—'} · ${form.pago_centro_gestor || '—'}` : ''} readOnly /></div>
+                    <div><label className={labelClass}>Contador</label><input className={readOnlyClass} value={form.pago_contador} readOnly /></div>
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
         </section>
 
@@ -785,6 +864,9 @@ export default function TicketMASCN() {
             {viewing.cot3_proveedor && <p><span className="text-slate-400 font-bold uppercase text-[11px] block">Cotización 3</span>{viewing.cot3_proveedor} — {fmx(viewing.cot3_importe)}</p>}
             <p><span className="text-slate-400 font-bold uppercase text-[11px] block">Motivo de selección</span>{viewing.motivo_seleccion || '—'}</p>
             <p><span className="text-slate-400 font-bold uppercase text-[11px] block">Forma de financiamiento</span>{viewing.forma_financiamiento || '—'}</p>
+            <p><span className="text-slate-400 font-bold uppercase text-[11px] block">Pago</span>{viewing.pago_otro_colegio && viewing.pago_colegio
+              ? `De ${viewing.pago_colegio} · Soc. ${viewing.pago_sociedad ?? '—'} · ${viewing.pago_centro_gestor ?? '—'}`
+              : 'Mismo colegio'}</p>
           </div>
           <div className="mt-4"><HistorialCorrecciones modulo="tickets_mas_cn" id={viewing.id} /></div>
           <div className="flex gap-2 mt-4">
