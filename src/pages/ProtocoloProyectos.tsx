@@ -1,12 +1,9 @@
 import React, { useState } from 'react';
-import { supabase } from '@/lib/supabaseClient';
 import { useDirectorio, getGerenteFMA } from '@/lib/directorio';
 import {
   BookOpen,
   Download,
-  FileSpreadsheet,
   FileText,
-  CheckCircle2,
   Users,
   ClipboardList,
   Ticket,
@@ -16,15 +13,18 @@ import {
   ChevronRight,
   AlertCircle,
   BarChart2,
+  Inbox,
 } from 'lucide-react';
 
-// ─── Archivos en Supabase Storage (bucket privado: documentos-rcma) ────────────
-const BUCKET              = 'documentos-rcma';
-const FILE_CONTRATOS      = 'REQUISITOS_CONTRATO_PROVEEDOR.pdf';
-const FILE_CATALOGO_AGP   = 'REQUISITOS_CONTRATOS_CATALOGO_DE_SERVICIOS_AGP.xlsx';
-const SIGNED_URL_TTL      = 60;
+// ─── Documento descargable (formato institucional, se publica con el sistema) ──
+// Está en public/documentos: es una plantilla en blanco, sin datos de nadie.
+const FILE_CATALOGO_AGP = 'REQUISITOS_CONTRATOS_CATALOGO_DE_SERVICIOS_AGP.xlsx';
+const RUTA_DOCUMENTOS   = '/documentos/';
 
 // ─── Datos de las fases del protocolo ────────────────────────────────────────
+// Refleja cómo se trabaja hoy en el Sistema RCMA: Solicitud → Recepción →
+// Validación técnica → Ticket MAS → Autorización (crea Proyecto y Expediente) →
+// Contratos → Seguimiento en NEXUS y cierre.
 const FASES = [
   {
     num: '01',
@@ -32,91 +32,87 @@ const FASES = [
     titulo: 'Solicitud de Proyecto',
     color: 'blue',
     pasos: [
-      'Ingresar al Sistema RCMA y completar el formulario de Solicitud de Proyecto con toda la información requerida: descripción del proyecto, clasificación, colegio solicitante, datos del responsable y cualquier información técnica pertinente.',
-      'Al momento de enviar la solicitud, el sistema permite adjuntar las cotizaciones de proveedores si ya se tienen disponibles. Es importante que las cotizaciones estén actualizadas — no deben tener una antigüedad mayor a 2 meses. Se requiere un mínimo de tres (3) cotizaciones de proveedores distintos. Cada cotización debe incluir: datos del proveedor (razón social, RFC, experiencia), alcance y descripción detallada del trabajo, monto total desglosado en MXN con IVA, tiempo de ejecución, garantía ofrecida y vigencia de la cotización.',
-      'En caso de no contar con las cotizaciones al momento de enviar la solicitud, deberán remitirse posteriormente por correo electrónico a rreyes@manoamiga.edu.mx, con copia a su Coordinación Administrativa Regional (CAR) y a arodriguez@manoamiga.edu.mx, en cuanto estén disponibles.',
-      'Una vez enviada la solicitud, el sistema generará una notificación automática por correo electrónico al solicitante, confirmando la recepción del registro.',
-      'La Coordinación de Obras y Mantenimiento RCMA revisará la solicitud en un plazo no mayor a 5 días hábiles y determinará los pasos a seguir.',
+      'Ingresar al Sistema RCMA, en Gestión de Proyectos › Solicitud de Proyecto, y completar el formulario: datos del centro (la razón social, sociedad y centro gestor se llenan solos con el Directorio), nombre del proyecto, tipo de iniciativa (construcción nueva, mejora, mantenimiento ordinario o extraordinario, remodelación, adecuación de espacio, ampliación, garantías o revisión), resumen, fechas propuestas de inicio y conclusión, y plan de financiamiento (Operación, FBC, Donativos u Otras fuentes). Los datos del solicitante se toman automáticamente de su usuario.',
+      'Se requiere un mínimo de tres (3) cotizaciones de proveedores distintos, actualizadas (no mayores a 2 meses). Cada cotización debe incluir: datos del proveedor (razón social, RFC, experiencia), alcance y descripción detallada del trabajo, monto total desglosado en MXN con IVA, tiempo de ejecución, garantía ofrecida y vigencia de la cotización.',
+      'Las cotizaciones se adjuntan en la misma solicitud. Si aún no se tienen, deberán enviarse en cuanto estén disponibles por correo electrónico a rreyes@manoamiga.edu.mx, con copia a su Coordinación Administrativa Regional (CAR) y a arodriguez@manoamiga.edu.mx.',
+      'Al enviar, el sistema asigna el folio de la solicitud (SOL-AAAA-NNN) y registra la fecha y hora de envío, que aparece como firma del solicitante en el formato impreso. El solicitante recibe un correo de confirmación y la Coordinación de Obras y Mantenimiento RCMA recibe el aviso de la nueva solicitud.',
     ],
   },
   {
     num: '02',
-    icon: Users,
-    titulo: 'Reunión de Entendimiento',
+    icon: Inbox,
+    titulo: 'Recepción y Revisión de la Solicitud',
     color: 'indigo',
     pasos: [
-      'En caso de que la complejidad o alcance del proyecto lo requiera, se programará una Reunión de Entendimiento con los siguientes participantes: Gerencia Administrativa del Colegio, Coordinación Administrativa Regional (CAR) y Coordinación de Obras y Mantenimiento RCMA.',
-      'El propósito de esta reunión es analizar y validar: verificación de permisos o autorizaciones requeridas, disponibilidad y suficiencia del financiamiento, necesidad de anteproyecto arquitectónico o de ingeniería, requerimiento de estudios preliminares (topográficos, de suelo, estructurales, etc.) y definición del alcance, cronograma estimado y áreas involucradas.',
+      'La Coordinación de Obras y Mantenimiento RCMA revisará la solicitud en Solicitudes Recibidas en un plazo no mayor a 5 días hábiles.',
+      'Si la información está completa, la solicitud se marca como Recibida: el solicitante recibe la notificación por correo y el formato de la Solicitud de Proyecto queda con el Vo. Bo. de la Coordinación, con fecha y hora.',
+      'Si algún dato debe ajustarse, la Coordinación lo corrige en el sistema indicando el motivo; cada corrección queda registrada en la bitácora de Auditoría con el valor anterior y el nuevo. Si la solicitud no procede, se cancela con su motivo y se notifica por correo al solicitante.',
     ],
   },
   {
     num: '03',
-    icon: BarChart2,
-    titulo: 'Revisión de Cotizaciones',
+    icon: Users,
+    titulo: 'Reunión de Entendimiento y Validación Técnica',
     color: 'teal',
     pasos: [
-      'Si las cotizaciones no fueron adjuntadas durante la Solicitud de Proyecto (Fase 01), deberán enviarse por correo electrónico a rreyes@manoamiga.edu.mx con copia a su CAR de zona y a arodriguez@manoamiga.edu.mx, en cuanto se cuente con ellas.',
-      'Recuerda que las cotizaciones deben estar actualizadas (no mayor a 2 meses de antigüedad) y ser un mínimo de tres (3) de proveedores distintos, incluyendo: datos del proveedor, alcance del trabajo, monto en MXN con IVA, tiempo de ejecución, garantía y vigencia.',
-      'La Coordinación de Obras y Mantenimiento RCMA realizará la revisión y análisis comparativo de las cotizaciones recibidas para determinar la viabilidad y proceder con las siguientes fases.',
+      'En caso de que la complejidad o el alcance del proyecto lo requiera, se programará una Reunión de Entendimiento con la Gerencia Administrativa del Colegio, la Coordinación Administrativa Regional (CAR) y la Coordinación de Obras y Mantenimiento RCMA, para validar: permisos o autorizaciones requeridas, disponibilidad y suficiencia del financiamiento, necesidad de anteproyecto arquitectónico o de ingeniería, estudios preliminares (topográficos, de suelo, estructurales, etc.), alcance, cronograma estimado y áreas involucradas.',
+      'Los acuerdos de la reunión se registran en una Minuta dentro del sistema; los acuerdos con responsable y fecha se siguen como pendientes en NEXUS hasta su cumplimiento.',
+      'Cuando se requiera, la Coordinación solicitará la participación del equipo ECO para la validación técnica del proyecto y el análisis comparativo de costos de las cotizaciones presentadas, validando su pertinencia y razonabilidad de precios. Si el proyecto necesita anteproyecto, éste se gestiona en el módulo de Anteproyectos.',
     ],
   },
   {
     num: '04',
-    icon: CheckCircle2,
-    titulo: 'Solicitud al Equipo ECO',
-    color: 'violet',
-    pasos: [
-      'La Coordinación de Obras y Mantenimiento RCMA elaborará y remitirá una solicitud formal al equipo ECO, con una descripción técnica del proyecto y la justificación de su participación.',
-      'En caso de requerirse, se programará una Reunión de Entendimiento entre la Coordinación de Obras y Mantenimiento RCMA y el equipo ECO para alinear criterios técnicos y metodológicos.',
-      'Para proyectos de mantenimiento, ECO realizará la asesoría técnica para el análisis comparativo de costos de las cotizaciones presentadas por los proveedores, validando su pertinencia y razonabilidad de precios.',
-    ],
-  },
-  {
-    num: '05',
     icon: Ticket,
     titulo: 'Ticket MAS',
     color: 'orange',
     pasos: [
-      'La habilitación del módulo Ticket MAS en el Sistema RCMA será liberada por el Coordinador de Obras y Mantenimiento, previa validación de los pasos anteriores. No se otorgará acceso al registro sin esta autorización.',
-      'Una vez habilitado el acceso, el solicitante deberá ingresar al Sistema RCMA y completar el formulario del Ticket MAS con la información técnica, financiera y de clasificación requerida, incluyendo las cotizaciones de los proveedores.',
-      'El sistema notificará automáticamente a la Coordinación de Obras y Mantenimiento RCMA al recibir el nuevo Ticket MAS para su revisión y proceso de autorización.',
+      'Con la solicitud recibida y validada, la Coordinación de Obras y Mantenimiento RCMA habilita el Ticket MAS desde Solicitudes Recibidas y el solicitante recibe el aviso por correo. Sin esta habilitación no se tiene acceso al registro.',
+      'El solicitante ingresa al Sistema RCMA y completa el formulario del Ticket MAS: clasificación del proyecto (y, si es mantenimiento, si es preventivo o correctivo), descripción del trabajo, cotizaciones (proveedor e importe), motivo de selección del proveedor, forma de financiamiento, suplemento y traspaso.',
+      'En el mismo formulario se indica de qué sociedad sale el pago: del mismo colegio o de otro colegio. Si es de otro, se selecciona el colegio que paga y sus datos (razón social, sociedad, centro gestor y contador) se llenan solos; en el Ticket MAS impreso aparecen lado a lado el colegio que solicita y la sociedad que paga.',
+      'Al enviar, el sistema asigna el folio consecutivo (TMAS-AAAA-NNN), registra la fecha y hora de envío como firma del solicitante y notifica automáticamente a la Coordinación de Obras y Mantenimiento RCMA.',
     ],
   },
   {
-    num: '06',
+    num: '05',
     icon: ShieldCheck,
     titulo: 'Autorización del Proyecto',
     color: 'green',
     pasos: [
-      'La Coordinación de Obras y Mantenimiento RCMA revisará la información registrada en el Ticket MAS y, de estar completa y correcta, procederá con la autorización formal en el sistema.',
-      'El Sistema RCMA notificará de manera automática por correo electrónico a todos los involucrados (solicitante, Gerencia Administrativa, CAR de zona y Coordinación de Obras), indicando las fechas estimadas de recepción, inicio y conclusión del proyecto.',
-      'El Coordinador de Obras y Mantenimiento hará llegar al colegio los documentos oficiales (Solicitud de Proyecto y Ticket MAS autorizados) para su integración al expediente del proyecto.',
-      'A partir de la autorización, el proyecto quedará registrado en el sistema para su seguimiento, control y supervisión por parte de la Coordinación de Obras y Mantenimiento RCMA.',
+      'La Coordinación de Obras y Mantenimiento RCMA revisa la información del Ticket MAS y, de estar completa y correcta, lo autoriza en el sistema capturando las fechas estimadas de recepción, inicio y conclusión. En proyectos de la Federación (Oficinas MTY, Oficinas CDMX y General) se requiere primero el Vo. Bo. de la Gerencia, que lo otorga con su propio usuario.',
+      'Al autorizar, el sistema notifica por correo a los involucrados (solicitante, CAR de zona y Coordinación de Obras) con las fechas estimadas del proyecto.',
+      'En automático, el proyecto queda registrado en Proyectos y se crea su expediente en OneDrive (Expedientes › Año › Colegio › Folio – Proyecto) con las carpetas de la Coordinación RCMA (Solicitud, Cotizaciones, Ticket MAS, Autorización) y de ECO (Proyecto Ejecutivo, Acta de Inicio, Reportes de Obra, Acta de Entrega, Cierre de Obra y Fotografías antes, durante y después); ahí se guarda el Ticket MAS autorizado.',
+      'Si un Ticket MAS se cancela, se registra el motivo y se notifica por correo a los involucrados; su seguimiento queda como cancelado con todo su historial.',
     ],
   },
   {
-    num: '07',
+    num: '06',
     icon: Scale,
     titulo: 'Solicitud de Contratos y Actas de Garantía',
     color: 'rose',
     pasos: [
-      'Con base en la validación técnica del equipo ECO y la selección formal del proveedor, la Coordinación de Obras y Mantenimiento RCMA remitirá vía correo electrónico una solicitud de autorización a la Dirección correspondiente para gestionar ante OR - SER Jurídico la elaboración del instrumento contractual aplicable. El tipo de documento a elaborar será determinado según la naturaleza del proyecto: Contrato de Prestación de Servicios, Contrato de Donación o Acta de Garantía.',
-      'El colegio solicitante deberá recabar la documentación corporativa y fiscal del proveedor seleccionado con base en el listado de requisitos disponible para descarga en esta fase. Dicha documentación deberá adjuntarse directamente en el correo dirigido a OR - SER Jurídico solicitando la elaboración del contrato correspondiente, con copia a: arodriguez@manoamiga.edu.mx, CAR del territorio y Coordinador de Obras y Mantenimiento RCMA.',
-      'Para la elaboración de cualquier contrato será necesario llenar el documento "Requisitos Contratos — Catálogo de Servicios AGP" disponible para descarga en esta fase, en la pestaña que corresponda al tipo de operación: Arrendamiento Cafetería, Arrendamiento, Servicios Especializados o Servicios Generales. Si tiene duda de qué pestaña llenar, la Coordinación de Obras y Mantenimiento RCMA con gusto puede asesorarle.',
-      'Para lo anterior, es MUY IMPORTANTE lo siguiente: 1) Dar un contexto detallado de la operación previamente a la Coordinación de Obras y Mantenimiento RCMA. 2) Llenar el formato anexo de forma COMPLETA. 3) Adjuntar la información solicitada COMPLETA en el mismo correo del formato.',
-      'Es fundamental que el Acta de Garantía sea firmada por el proveedor antes del inicio de los trabajos, de manera simultánea a la firma del contrato. Este documento es el respaldo formal que compromete al proveedor a responder por defectos, vicios ocultos o fallas en los materiales y mano de obra durante el período de garantía establecido. Obtener la firma del Acta previo al arranque de actividades garantiza que el colegio cuente con el sustento legal necesario para exigir correcciones o reparaciones sin costo adicional en caso de que los trabajos presenten fallas, evitando que el proveedor se deslinde de su responsabilidad una vez concluida la obra.',
+      'Con base en la validación técnica y la selección formal del proveedor, la Coordinación de Obras y Mantenimiento RCMA remitirá vía correo electrónico una solicitud de autorización a la Dirección correspondiente para gestionar ante OR - SER Jurídico la elaboración del instrumento contractual aplicable: Contrato de Prestación de Servicios, Contrato de Arrendamiento, Contrato de Comodato, Contrato de Donación o Acta de Garantía, según la naturaleza del proyecto.',
+      'Para la elaboración de cualquier contrato es necesario llenar el formato "Requisitos para Contratos — Catálogo de Servicios AGP" disponible para descarga en esta fase, en la pestaña que corresponda al tipo de operación: Arrendamiento Cafetería, Arrendamiento, Servicios Especializados, Servicios Generales o Comodato. La pestaña Instrucciones indica cuál llenar; si tiene duda, la Coordinación de Obras y Mantenimiento RCMA con gusto le asesora.',
+      'Es MUY IMPORTANTE: 1) Dar un contexto detallado de la operación previamente a la Coordinación de Obras y Mantenimiento RCMA. 2) Llenar el formato de forma COMPLETA. 3) Adjuntar la documentación solicitada COMPLETA en el mismo correo del formato, dirigido a OR - SER Jurídico con copia a arodriguez@manoamiga.edu.mx, CAR del territorio y Coordinador de Obras y Mantenimiento RCMA.',
+      'Es fundamental que el Acta de Garantía sea firmada por el proveedor antes del inicio de los trabajos, de manera simultánea a la firma del contrato. Este documento es el respaldo formal que compromete al proveedor a responder por defectos, vicios ocultos o fallas en los materiales y mano de obra durante el período de garantía establecido, y da al colegio el sustento legal para exigir correcciones o reparaciones sin costo adicional.',
     ],
     descargas: [
       {
-        filename: FILE_CONTRATOS,
-        label: 'Requisitos para Elaboración de Contrato',
-        descripcion: 'Archivo PDF · Documentación requerida al proveedor para OR - SER Jurídico',
-      },
-      {
         filename: FILE_CATALOGO_AGP,
-        label: 'Requisitos Contratos — Catálogo de Servicios AGP',
-        descripcion: 'Archivo Excel · Llenar la pestaña correspondiente: Arrendamiento Cafetería, Arrendamiento, Servicios Especializados o Servicios Generales',
+        label: 'Requisitos para Contratos — Catálogo de Servicios AGP',
+        descripcion: 'Archivo Excel · Formato institucional con instrucciones y una pestaña por tipo de contrato',
       },
+    ],
+  },
+  {
+    num: '07',
+    icon: BarChart2,
+    titulo: 'Ejecución, Seguimiento y Cierre',
+    color: 'sky',
+    pasos: [
+      'Cuando el proyecto queda En Espera, En Proceso o Pausado, el sistema abre automáticamente su bitácora en NEXUS › Seguimiento de Proyectos, donde se registran los comentarios de avance con fotografías y los pendientes del proyecto.',
+      'La evidencia del proyecto se integra en su expediente de OneDrive: proyecto ejecutivo, acta de inicio, reportes de obra, acta de entrega, cierre y fotografías del antes, durante y después.',
+      'El avance de cada proyecto se presenta en la Presentación Semanal de Seguimiento de Proyectos (miércoles), que el sistema arma con los comentarios y fotos registrados en la semana.',
+      'Al concluir los trabajos, con el acta de entrega y la garantía vigente, el proyecto se marca como Completado y su seguimiento queda como evidencia en el sistema.',
     ],
   },
 ];
@@ -129,6 +125,7 @@ const colorMap: Record<string, { bg: string; border: string; badge: string; icon
   rose:   { bg: 'bg-rose-50',   border: 'border-rose-200',   badge: 'bg-rose-100 text-rose-700',    icon: 'text-rose-600',   pill: 'bg-rose-600'   },
   orange: { bg: 'bg-orange-50', border: 'border-orange-200', badge: 'bg-orange-100 text-orange-700', icon: 'text-orange-600', pill: 'bg-orange-600' },
   green:  { bg: 'bg-emerald-50',border: 'border-emerald-200',badge: 'bg-emerald-100 text-emerald-700',icon:'text-emerald-600',pill:'bg-emerald-600' },
+  sky:    { bg: 'bg-sky-50',    border: 'border-sky-200',    badge: 'bg-sky-100 text-sky-700',      icon: 'text-sky-600',    pill: 'bg-sky-600'    },
 };
 
 export default function ProtocoloProyectos() {
@@ -144,14 +141,14 @@ export default function ProtocoloProyectos() {
   const handleDownload = async (filename: string) => {
     setLoadingFile(filename);
     try {
-      const { data, error } = await supabase.storage
-        .from(BUCKET)
-        .createSignedUrl(filename, SIGNED_URL_TTL);
-      if (error || !data?.signedUrl) throw error ?? new Error('No se pudo generar el enlace');
+      const r = await fetch(RUTA_DOCUMENTOS + filename);
+      if (!r.ok) throw new Error('No se encontró el archivo');
+      const url = URL.createObjectURL(await r.blob());
       const a = document.createElement('a');
-      a.href = data.signedUrl;
+      a.href = url;
       a.download = filename;
       a.click();
+      setTimeout(() => URL.revokeObjectURL(url), 30_000);
     } catch (err) {
       console.error('Error al descargar:', err);
       alert('No se pudo descargar el archivo. Intente de nuevo.');
