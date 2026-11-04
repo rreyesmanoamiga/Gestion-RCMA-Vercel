@@ -301,14 +301,6 @@ export default function SolicitudCN() {
                     <input readOnly className={readOnlyClass} value={form.correo_solicitante} />
                   </td>
                 </tr>
-                <tr>
-                  <td className={tdLabel}>¿Llenando a nombre de otra persona?</td>
-                  <td className={tdInput} colSpan={4}>
-                    <input className={inputClass} value={form.en_nombre_de}
-                      onChange={e => set('en_nombre_de', e.target.value)}
-                      placeholder="Opcional — si estás capturando esta solicitud por otra persona, escribe su nombre aquí" />
-                  </td>
-                </tr>
               </tbody>
             </table>
           </div>

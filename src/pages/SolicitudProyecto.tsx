@@ -11,7 +11,7 @@ const inputClass = "w-full px-2 py-1.5 border border-slate-400 text-sm focus:rin
 const readOnlyClass = "w-full px-2 py-1.5 border border-slate-300 text-sm bg-slate-100 text-slate-700 cursor-default";
 const labelClass = "text-[11px] font-bold text-slate-600 uppercase tracking-wide";
 
-const TIPOS_PROYECTO = ['CONSTRUCCIÓN NUEVA','MEJORA','PORTAFOLIO','REMODELACIÓN','ADECUACIÓN DE ESPACIO','GARANTÍAS','AMPLIACIÓN','MANTENIMIENTO EXTRAORDINARIO','REVISIÓN'];
+const TIPOS_PROYECTO = ['CONSTRUCCIÓN NUEVA','MEJORA','MANTENIMIENTO EXTRAORDINARIO','REMODELACIÓN','ADECUACIÓN DE ESPACIO','GARANTÍAS','AMPLIACIÓN','MANTENIMIENTO ORDINARIO','REVISIÓN'];
 
 // Territorios por colegio (nombre completo → territorio)
 const COLEGIO_TERRITORIO: Record<string, string> = {
@@ -391,15 +391,6 @@ export default function SolicitudProyecto() {
                   <td className={tdInput} colSpan={4}>
                     <input readOnly className={readOnlyClass} value={form.correo_solicitante}
                       placeholder="correo@ejemplo.com — recibirás confirmación aquí" />
-                  </td>
-                </tr>
-                {/* Fila 8: Llenado a nombre de otra persona (opcional, para auditoría) */}
-                <tr>
-                  <td className={tdLabel}>¿Llenando a nombre de otra persona?</td>
-                  <td className={tdInput} colSpan={4}>
-                    <input className={inputClass} value={form.en_nombre_de}
-                      onChange={e => set('en_nombre_de', e.target.value)}
-                      placeholder="Opcional — si estás capturando esta solicitud por otra persona, escribe su nombre aquí" />
                   </td>
                 </tr>
               </tbody>
