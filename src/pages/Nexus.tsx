@@ -648,6 +648,18 @@ export default function Nexus() {
   const [notaForm, setNotaForm] = useState({ titulo:'',contenido:'',categoria:'General',color:'#0f172a',fijada:false,territorio:'',colegio:'' });
   const [notaConColegio, setNotaConColegio] = useState(false);
 
+  // Palomear casillas desde la vista de la nota (sin entrar a Editar)
+  const marcarCasillaNota = useMutation({
+    mutationFn: async ({ id, contenido }: { id: string; contenido: string }) => {
+      const updated_at = new Date().toISOString();
+      const { error } = await supabase.from('nexus_notas').update({ contenido, updated_at }).eq('id', id);
+      if (error) throw error;
+      return updated_at;
+    },
+    onMutate: ({ contenido }) => { const previa = viewNota; setViewNota(v => v ? { ...v, contenido } : v); return { previa }; },
+    onSuccess: (updated_at) => { setViewNota(v => v ? { ...v, updated_at } : v); qc.invalidateQueries({ queryKey: ['nexus_notas'] }); },
+    onError: (_e, _v, ctx) => { if (ctx?.previa) setViewNota(ctx.previa); toast.error('No se pudo guardar la casilla'); },
+  });
   const saveNota = useMutation({
     mutationFn: async()=>{ if(editNota){await supabase.from('nexus_notas').update({...notaForm,updated_at:new Date().toISOString()}).eq('id',editNota.id);} else{await supabase.from('nexus_notas').insert(notaForm);} },
     onSuccess:()=>{
@@ -1415,7 +1427,7 @@ export default function Nexus() {
       )}
 
       {/* Ver Nota */}
-      {viewNota&&(<Modal title={viewNota.titulo} onClose={()=>setViewNota(null)} full><div className="space-y-3"><div className="flex items-center gap-2"><span className="w-3 h-3 rounded-full" style={{background:viewNota.color}}/><span className="text-xs bg-slate-100 text-slate-600 px-2 py-0.5 rounded-full">{viewNota.categoria}</span>{viewNota.fijada&&<span className="text-xs bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full flex items-center gap-1"><Pin className="w-3 h-3"/>Fijada</span>}{viewNota.colegio&&<span className="text-xs bg-teal-50 text-teal-700 px-2 py-0.5 rounded-full">{viewNota.territorio} · {viewNota.colegio}</span>}</div><div className="bg-slate-50 rounded-lg p-4 min-h-[45vh] text-sm text-slate-700"><VistaNota contenido={viewNota.contenido??''}/></div><p className="text-xs text-slate-400">Actualizada: {fmtFull(viewNota.updated_at)}</p></div><div className="flex gap-3 mt-4"><button type="button" onClick={()=>setViewNota(null)} className={btnOutline+" flex-1"}>Cerrar</button><button type="button" onClick={()=>{setViewNota(null);openNota(viewNota);}} className={btnPrimary+" flex-1 flex items-center justify-center gap-2"}><Pencil className="w-4 h-4"/>Editar</button></div></Modal>)}
+      {viewNota&&(<Modal title={viewNota.titulo} onClose={()=>setViewNota(null)} full><div className="space-y-3"><div className="flex items-center gap-2"><span className="w-3 h-3 rounded-full" style={{background:viewNota.color}}/><span className="text-xs bg-slate-100 text-slate-600 px-2 py-0.5 rounded-full">{viewNota.categoria}</span>{viewNota.fijada&&<span className="text-xs bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full flex items-center gap-1"><Pin className="w-3 h-3"/>Fijada</span>}{viewNota.colegio&&<span className="text-xs bg-teal-50 text-teal-700 px-2 py-0.5 rounded-full">{viewNota.territorio} · {viewNota.colegio}</span>}</div><div className="bg-slate-50 rounded-lg p-4 min-h-[45vh] text-sm text-slate-700"><VistaNota contenido={viewNota.contenido??''} onCambiar={html=>marcarCasillaNota.mutate({id:viewNota.id,contenido:html})}/></div><p className="text-xs text-slate-400">Actualizada: {fmtFull(viewNota.updated_at)}</p></div><div className="flex gap-3 mt-4"><button type="button" onClick={()=>setViewNota(null)} className={btnOutline+" flex-1"}>Cerrar</button><button type="button" onClick={()=>{setViewNota(null);openNota(viewNota);}} className={btnPrimary+" flex-1 flex items-center justify-center gap-2"}><Pencil className="w-4 h-4"/>Editar</button></div></Modal>)}
 
       {/* Form Nota */}
       {showNota&&(<Modal title={editNota?'Editar Nota':'Nueva Nota'} onClose={()=>{setShowNota(false);setEditNota(null);}} full>

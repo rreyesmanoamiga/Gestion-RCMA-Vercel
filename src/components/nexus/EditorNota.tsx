@@ -43,12 +43,65 @@ export function textoNota(contenido: string | null | undefined): string {
 }
 
 /** Nota con su formato, en solo lectura (contenido limpio con DOMPurify) */
-export function VistaNota({ contenido }: { contenido: string }) {
+// Casillas palomeadas: tachadas y en gris (en el editor y en la vista)
+const ESTILO_CASILLAS = `
+.ql-editor ul[data-checked=true] > li{text-decoration:line-through;color:#94a3b8}
+.nexus-vista .ql-editor ul[data-checked]{pointer-events:auto}
+.nexus-vista .ql-editor ul[data-checked] > li{cursor:pointer;border-radius:4px}
+.nexus-vista .ql-editor ul[data-checked] > li:hover{background:#eef2f7}
+`;
+
+/** Cambia la casilla número `idx` (en orden de aparición) y regresa el HTML nuevo.
+ *  Quill guarda varias casillas seguidas en un mismo <ul data-checked>: se separan,
+ *  se cambia la elegida y se vuelven a juntar las consecutivas con el mismo estado. */
+export function alternarCasilla(html: string, idx: number): string {
+  const doc = new DOMParser().parseFromString(`<div>${html}</div>`, 'text/html');
+  const raiz = doc.body.firstElementChild as HTMLElement;
+  Array.from(raiz.querySelectorAll('ul[data-checked]')).forEach(ul => {
+    const items = Array.from(ul.children).filter(c => c.tagName === 'LI');
+    if (items.length <= 1) return;
+    items.forEach(li => {
+      const u = doc.createElement('ul');
+      u.setAttribute('data-checked', ul.getAttribute('data-checked') ?? 'false');
+      u.appendChild(li);
+      ul.parentNode!.insertBefore(u, ul);
+    });
+    ul.remove();
+  });
+  const ul = Array.from(raiz.querySelectorAll('ul[data-checked] > li'))[idx]?.parentElement;
+  if (!ul) return html;
+  ul.setAttribute('data-checked', ul.getAttribute('data-checked') === 'true' ? 'false' : 'true');
+  let previo: Element | null = null;
+  Array.from(raiz.children).forEach(el => {
+    const estado = el.tagName === 'UL' ? el.getAttribute('data-checked') : null;
+    if (previo && estado !== null && previo.getAttribute('data-checked') === estado) {
+      while (el.firstChild) previo.appendChild(el.firstChild);
+      el.remove();
+    } else {
+      previo = estado !== null ? el : null;
+    }
+  });
+  return raiz.innerHTML;
+}
+
+/** Nota con su formato, en solo lectura (contenido limpio con DOMPurify).
+ *  Con `onCambiar`, las casillas de tareas se palomean con un clic. */
+export function VistaNota({ contenido, onCambiar }: { contenido: string; onCambiar?: (html: string) => void }) {
   const html = useMemo(() => DOMPurify.sanitize(aHTML(contenido)), [contenido]);
   if (!textoNota(contenido)) return <span className="text-slate-400 italic">Sin contenido</span>;
+  const marcar = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (!onCambiar) return;
+    const t = e.target as HTMLElement;
+    if (t.closest('a')) return;
+    const li = t.closest('li');
+    if (!li || !li.parentElement?.hasAttribute('data-checked')) return;
+    const idx = Array.from(e.currentTarget.querySelectorAll('ul[data-checked] > li')).indexOf(li);
+    if (idx >= 0) onCambiar(alternarCasilla(html, idx));
+  };
   return (
-    <div className="ql-snow">
-      <div className="ql-editor" style={{ padding: 0, height: 'auto', fontSize: 14, fontFamily: 'inherit' }} dangerouslySetInnerHTML={{ __html: html }} />
+    <div className={`ql-snow${onCambiar ? ' nexus-vista' : ''}`}>
+      <style>{ESTILO_CASILLAS}</style>
+      <div className="ql-editor" onClick={marcar} style={{ padding: 0, height: 'auto', fontSize: 14, fontFamily: 'inherit' }} dangerouslySetInnerHTML={{ __html: html }} />
     </div>
   );
 }
@@ -108,7 +161,7 @@ export default function EditorNota({ value, onChange, placeholder, alto }: { val
 
   return (
     <div className="nexus-nota" style={alto ? ({ '--nota-alto': alto } as React.CSSProperties) : undefined}>
-      <style>{ESTILOS}</style>
+      <style>{ESTILOS + ESTILO_CASILLAS}</style>
       <div id={TOOLBAR_ID}>
         <span className="ql-formats">
           <select className="ql-font" defaultValue=""><option value="" /><option value="serif" /><option value="monospace" /></select>
