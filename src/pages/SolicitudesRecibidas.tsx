@@ -110,7 +110,9 @@ export default function SolicitudesRecibidas() {
       ],
       cuerpo,
       firmas: [
-        { nombre: val(s.nombre_solicitante), puesto: `Solicitante${s.puesto_solicitante ? ' · ' + esc(s.puesto_solicitante) : ''}` },
+        // Firma del solicitante: fecha y hora en que la envió (igual que en Ticket MAS)
+        { contenido: `<span class="d">Enviada en el sistema<br/>${s.created_at ? esc(format(new Date(s.created_at), 'dd/MM/yyyy HH:mm', { locale: es })) : '—'}</span>`,
+          nombre: val(s.nombre_solicitante), puesto: `Solicitante${s.puesto_solicitante ? ' · ' + esc(s.puesto_solicitante) : ''}` },
         // Al marcarla como recibida, el Vo. Bo. de Coordinación se llena solo
         s.recibida_at
           ? { contenido: `<span class="d"><b>✓ Recibida</b> en el sistema<br/>${esc(format(new Date(s.recibida_at), 'dd/MM/yyyy HH:mm', { locale: es }))}</span>`,
