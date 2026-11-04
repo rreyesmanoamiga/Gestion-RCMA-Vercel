@@ -483,18 +483,25 @@ function TicketMASPrincipal({ esAutorizadorFMA }: { esAutorizadorFMA: boolean })
     setShowConfirmSend(false);
     setLoading(true);
     try {
-      // Generar folio: tomar el número máximo existente + 1 (evita duplicados por eliminados/cancelados)
-      const currentYear = new Date().getFullYear();
-      const { data: foliosExistentes } = await supabase.from('tickets_mas')
-        .select('folio')
-        .like('folio', `TMAS-${currentYear}-%`);
-      let maxNum = 0;
-      (foliosExistentes ?? []).forEach((row: any) => {
-        const match = row.folio?.match(/TMAS-\d{4}-(\d+)$/);
-        if (match) { const n = parseInt(match[1], 10); if (n > maxNum) maxNum = n; }
-      });
-      const num = maxNum + 1;
-      const folio = `TMAS-${currentYear}-${String(num).padStart(3, '0')}`;
+      // Folio: lo calcula la base (rcma_folio_tmas) viendo TODOS los tickets. Desde el navegador
+      // un usuario de colegio solo ve los de su colegio, y el máximo salía repetido.
+      let folio: string;
+      const { data: folioBD, error: errFolio } = await supabase.rpc('rcma_folio_tmas');
+      if (!errFolio && typeof folioBD === 'string' && folioBD) {
+        folio = folioBD;
+      } else {
+        // Respaldo (si la función aún no existe): número máximo visible + 1
+        const currentYear = new Date().getFullYear();
+        const { data: foliosExistentes } = await supabase.from('tickets_mas')
+          .select('folio')
+          .like('folio', `TMAS-${currentYear}-%`);
+        let maxNum = 0;
+        (foliosExistentes ?? []).forEach((row: any) => {
+          const match = row.folio?.match(/TMAS-\d{4}-(\d+)$/);
+          if (match) { const n = parseInt(match[1], 10); if (n > maxNum) maxNum = n; }
+        });
+        folio = `TMAS-${currentYear}-${String(maxNum + 1).padStart(3, '0')}`;
+      }
 
       const { error } = await supabase.from('tickets_mas').insert([{
         folio,
