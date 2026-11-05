@@ -5,10 +5,11 @@ import { useAuth } from '@/lib/AuthContext';
 import { logAudit } from '@/lib/audit';
 import { useSharePointUpload } from '@/hooks/useSharePointUpload';
 import { toast } from 'sonner';
+import PageHeader from '@/components/shared/PageHeader';
 import { Send, CheckCircle, AlertTriangle } from 'lucide-react';
 
-const inputClass = "w-full px-2 py-1.5 border border-slate-400 text-sm focus:ring-1 focus:ring-slate-700 focus:outline-none bg-white text-slate-900";
-const readOnlyClass = "w-full px-2 py-1.5 border border-slate-300 text-sm bg-slate-100 text-slate-700 cursor-default";
+const inputClass = "w-full px-2 py-1.5 border border-slate-400 text-sm focus:ring-1 focus:ring-slate-700 focus:outline-none bg-white text-slate-900 rounded";
+const readOnlyClass = "w-full px-2 py-1.5 border border-slate-300 text-sm bg-slate-100 text-slate-600 cursor-default rounded";
 const labelClass = "text-[11px] font-bold text-slate-600 uppercase tracking-wide";
 
 const TIPOS_PROYECTO = ['CONSTRUCCIÓN NUEVA','MEJORA','MANTENIMIENTO EXTRAORDINARIO','REMODELACIÓN','ADECUACIÓN DE ESPACIO','GARANTÍAS','AMPLIACIÓN','MANTENIMIENTO ORDINARIO','REVISIÓN'];
@@ -81,10 +82,6 @@ const formatMXN = (v: string) => {
 const parseMXN = (v: string) => v.replace(/[^0-9.]/g, '');
 const toNum = (v: string) => parseFloat(v) || 0;
 
-const thStyle = "bg-slate-800 text-white text-[11px] font-bold uppercase tracking-wider px-3 py-2 text-center";
-const tdLabel = "border border-slate-400 px-2 py-1.5 bg-slate-100 text-[11px] font-bold text-slate-700 uppercase w-48";
-const tdInput = "border border-slate-400 px-0 py-0";
-const tdNum   = "border border-slate-400 px-2 py-1.5 text-sm text-right font-mono";
 
 export default function SolicitudProyecto() {
   const añoActual = new Date().getFullYear().toString();
@@ -297,357 +294,273 @@ export default function SolicitudProyecto() {
     );
   }
 
+  // Tarjeta de fuente de financiamiento (monto + % del costo)
+  const fuente = (label: string, k: 'monto_operacion' | 'monto_fbc' | 'monto_donativos' | 'monto_otras', monto: number) => (
+    <div className="grid grid-cols-[1fr_auto] md:grid-cols-[180px_1fr_70px] items-center gap-2 md:gap-3">
+      <label className={labelClass + ' col-span-2 md:col-span-1'}>{label}</label>
+      <input type="text" className={inputClass + ' text-right font-mono'} value={formatMXN(form[k])}
+        onChange={e => set(k, parseMXN(e.target.value))} placeholder="$0.00" />
+      <span className="text-xs font-bold text-slate-500 text-right">{pct(monto)}</span>
+    </div>
+  );
+  const cuadra = costo > 0 && Math.abs(totalMonto - costo) < 1;
+  const avanceFin = costo > 0 ? Math.min(100, (totalMonto / costo) * 100) : 0;
+
   return (
-    <div className="max-w-5xl mx-auto p-4 space-y-0">
-      {/* Encabezado tipo formato oficial */}
-      <div className="border-2 border-slate-800">
-        {/* Título principal */}
-        <div className="bg-slate-800 text-white py-3 px-4 flex items-center justify-between">
-          <div className="text-center flex-1">
-            <h1 className="text-sm font-black uppercase tracking-widest">Red de Colegios Mano Amiga</h1>
-            <h2 className="text-xs font-bold uppercase tracking-wider mt-0.5 text-slate-300">Solicitud de Inicio de Obra o Mantenimiento</h2>
-          </div>
-          <img src="/colegio-mano-amiga.png" alt="Mano Amiga" className="h-12 w-auto object-contain ml-4 rounded" />
-        </div>
+    <div className="max-w-4xl mx-auto p-4 space-y-6">
+      <PageHeader title="Solicitud de Proyecto" subtitle="Solicitud de Inicio de Obra o Mantenimiento · Construcciones, Mejoras y Mantenimiento" />
 
-        <form onSubmit={handleSubmit}>
-          {/* ── SECCIÓN I: IDENTIFICACIÓN ── */}
-          <div className="border-b border-slate-400">
-            <div className="bg-slate-200 px-3 py-1.5 border-b border-slate-400">
-              <span className="text-[11px] font-black uppercase tracking-widest text-slate-700">I. Identificación</span>
-            </div>
-            <table className="w-full border-collapse text-sm">
-              <tbody>
-                {/* Fila 1: División + Fecha */}
-                <tr>
-                  <td className={tdLabel}>División</td>
-                  <td className={tdInput} colSpan={2}>
-                    <input readOnly className={readOnlyClass} value="Red De Colegios Mano Amiga" />
-                  </td>
-                  <td className={tdLabel}>Fecha de Elaboración</td>
-                  <td className={tdInput}>
-                    <input readOnly className={readOnlyClass} value={new Date().toLocaleDateString('es-MX')} />
-                  </td>
-                </tr>
-                {/* Fila 2: Nombre del Centro */}
-                <tr>
-                  <td className={tdLabel}>Nombre del Centro *</td>
-                  <td className={tdInput} colSpan={2}>
-                    <select required className={`${inputClass} bg-white`} value={form.nombre_centro} onChange={e => handleColegio(e.target.value)}>
-                      <option value="">Seleccionar colegio...</option>
-                      {COLEGIOS_DATA.map(c => <option key={c.colegio} value={c.colegio}>{c.colegio}</option>)}
-                    </select>
-                  </td>
-                  <td className={tdLabel}>Ciclo / Año Fiscal</td>
-                  <td className={tdInput}>
-                    <input readOnly className={readOnlyClass} value={añoActual} />
-                  </td>
-                </tr>
-                {/* Fila 3: Razón Social */}
-                <tr>
-                  <td className={tdLabel}>Razón Social / Soc. Operadora</td>
-                  <td className={tdInput} colSpan={2}>
-                    <input readOnly className={readOnlyClass} value={form.razon_social} placeholder="Se completa al seleccionar colegio" />
-                  </td>
-                  <td className={tdLabel}>Sociedad</td>
-                  <td className={tdInput}>
-                    <input readOnly className={readOnlyClass} value={form.sociedad} />
-                  </td>
-                </tr>
-                {/* Fila 4: Centro de Gestor */}
-                <tr>
-                  <td className={tdLabel}>Centro de Gestor</td>
-                  <td className={tdInput} colSpan={2}>
-                    <input readOnly className={readOnlyClass} value={form.centro_gestor} placeholder="Se completa al seleccionar colegio" />
-                  </td>
-                  <td className={tdLabel}></td>
-                  <td className={tdInput}></td>
-                </tr>
-                {/* Fila 5: Nombre del Proyecto */}
-                <tr>
-                  <td className={tdLabel}>Nombre del Proyecto *</td>
-                  <td className={tdInput} colSpan={4}>
-                    <input required className={inputClass} value={form.nombre_proyecto}
-                      onChange={e => set('nombre_proyecto', e.target.value)}
-                      placeholder="Ej. Cambio de cristales dañados edificio secundaria" />
-                  </td>
-                </tr>
-                {/* Fila 6: Solicitante */}
-                <tr>
-                  <td className={tdLabel}>Nombre del Solicitante</td>
-                  <td className={tdInput} colSpan={2}>
-                    <input readOnly className={readOnlyClass} value={form.nombre_solicitante}
-                      placeholder="Sin nombre en tu perfil — pide que lo capturen en Accesos" />
-                  </td>
-                  <td className={tdLabel}>Puesto del Solicitante</td>
-                  <td className={tdInput}>
-                    <input readOnly className={readOnlyClass} value={form.puesto_solicitante}
-                      placeholder="Sin puesto en tu perfil — pide que lo capturen en Accesos" />
-                  </td>
-                </tr>
-                {/* Fila 7: Correo */}
-                <tr>
-                  <td className={tdLabel}>Correo de Notificación</td>
-                  <td className={tdInput} colSpan={4}>
-                    <input readOnly className={readOnlyClass} value={form.correo_solicitante}
-                      placeholder="correo@ejemplo.com — recibirás confirmación aquí" />
-                  </td>
-                </tr>
-              </tbody>
-            </table>
+      <form onSubmit={handleSubmit} className="space-y-6">
+        {/* ── Datos del solicitante ── */}
+        <section className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+          <div className="bg-slate-800 text-white px-4 py-2.5 text-xs font-bold uppercase tracking-wider border-l-4 border-[#ED7102]">
+            Datos del Solicitante
           </div>
-
-          {/* ── TIPO DE INICIATIVA ── */}
-          <div className="border-b border-slate-400">
-            <div className="bg-slate-200 px-3 py-1.5 border-b border-slate-400">
-              <span className="text-[11px] font-black uppercase tracking-widest text-slate-700">Tipo de Iniciativa *</span>
+          <div className="p-4 grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div>
+              <label className={labelClass}>Nombre completo</label>
+              <input readOnly className={readOnlyClass} value={form.nombre_solicitante} placeholder="Sin nombre en tu perfil — pide que lo capturen en Accesos" />
             </div>
-            <div className="p-3 grid grid-cols-2 sm:grid-cols-3 gap-2">
-              {TIPOS_PROYECTO.map(tipo => (
-                <label key={tipo} className="flex items-center gap-2 cursor-pointer group">
-                  <div className={`w-4 h-4 border-2 flex items-center justify-center flex-shrink-0 transition-colors ${
-                    form.tipo_iniciativa === tipo ? 'border-slate-800 bg-slate-800' : 'border-slate-400 group-hover:border-slate-600'
-                  }`}
-                    onClick={() => set('tipo_iniciativa', tipo)}>
-                    {form.tipo_iniciativa === tipo && <div className="w-2 h-2 bg-white" />}
-                  </div>
-                  <span className="text-xs font-medium text-slate-700 uppercase">{tipo}</span>
-                </label>
-              ))}
+            <div>
+              <label className={labelClass}>Puesto</label>
+              <input readOnly className={readOnlyClass} value={form.puesto_solicitante} placeholder="Sin puesto en tu perfil — pide que lo capturen en Accesos" />
+            </div>
+            <div>
+              <label className={labelClass}>Correo de notificación</label>
+              <input readOnly className={readOnlyClass} value={form.correo_solicitante} />
             </div>
           </div>
+          <p className="px-4 pb-3 text-[11px] text-slate-400 -mt-2">
+            Estos datos se toman automáticamente de tu sesión — si algo está mal o vacío, pide que lo corrijan en Accesos.
+          </p>
+        </section>
 
-          {/* ── SECCIÓN II: RESUMEN DEL PROYECTO ── */}
-          <div className="border-b border-slate-400">
-            <div className="bg-slate-200 px-3 py-1.5 border-b border-slate-400">
-              <span className="text-[11px] font-black uppercase tracking-widest text-slate-700">II. Resumen del Proyecto</span>
+        {/* ── 1. Identificación ── */}
+        <section className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+          <div className="bg-slate-800 text-white px-4 py-2.5 text-xs font-bold uppercase tracking-wider border-l-4 border-[#ED7102]">
+            1. Identificación
+          </div>
+          <div className="p-4 grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className={labelClass}>Nombre del Centro *</label>
+              <select required className={inputClass} value={form.nombre_centro} onChange={e => handleColegio(e.target.value)}>
+                <option value="">— Seleccionar colegio —</option>
+                {COLEGIOS_DATA.map(c => <option key={c.colegio} value={c.colegio}>{c.colegio}</option>)}
+              </select>
             </div>
-            <div className="p-3 space-y-3">
+            <div>
+              <label className={labelClass}>Razón Social / Soc. Operadora</label>
+              <input readOnly className={readOnlyClass} value={form.razon_social} placeholder="Se completa al seleccionar colegio" />
+            </div>
+            <div>
+              <label className={labelClass}>Sociedad</label>
+              <input readOnly className={readOnlyClass} value={form.sociedad} />
+            </div>
+            <div>
+              <label className={labelClass}>Centro Gestor</label>
+              <input readOnly className={readOnlyClass} value={form.centro_gestor} />
+            </div>
+            <div>
+              <label className={labelClass}>Fecha de Elaboración</label>
+              <input readOnly className={readOnlyClass} value={new Date().toLocaleDateString('es-MX')} />
+            </div>
+            <div>
+              <label className={labelClass}>Ciclo / Año Fiscal</label>
+              <input readOnly className={readOnlyClass} value={añoActual} />
+            </div>
+          </div>
+        </section>
+
+        {/* ── 2. Proyecto ── */}
+        <section className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+          <div className="bg-slate-800 text-white px-4 py-2.5 text-xs font-bold uppercase tracking-wider border-l-4 border-[#ED7102]">
+            2. Proyecto
+          </div>
+          <div className="p-4 space-y-4">
+            <div>
+              <label className={labelClass}>Nombre del Proyecto *</label>
+              <input required className={inputClass} value={form.nombre_proyecto}
+                onChange={e => set('nombre_proyecto', e.target.value)}
+                placeholder="Ej. Cambio de cristales dañados edificio secundaria" />
+            </div>
+            <div>
+              <label className={labelClass}>Tipo de Iniciativa *</label>
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-2 mt-1">
+                {TIPOS_PROYECTO.map(tipo => {
+                  const on = form.tipo_iniciativa === tipo;
+                  return (
+                    <button key={tipo} type="button" onClick={() => set('tipo_iniciativa', tipo)}
+                      className={`flex items-center gap-2 rounded-lg border-2 px-3 py-2 text-left transition ${on ? 'border-[#ED7102] bg-[#ED7102] text-white shadow-sm' : 'border-slate-200 bg-white text-slate-700 hover:border-orange-300'}`}>
+                      <span className={`w-3.5 h-3.5 rounded-full border-2 flex items-center justify-center shrink-0 ${on ? 'border-white' : 'border-slate-400'}`}>
+                        {on && <span className="w-1.5 h-1.5 rounded-full bg-white" />}
+                      </span>
+                      <span className="text-[11px] font-bold uppercase leading-tight">{tipo}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+            <div>
+              <label className={labelClass}>Descripción / Justificación</label>
+              <textarea className={inputClass + ' min-h-[110px] resize-none'} value={form.resumen_proyecto}
+                onChange={e => set('resumen_proyecto', e.target.value)}
+                placeholder="Describe el proyecto: objetivo, área afectada, características técnicas, medidas, materiales, motivo de la solicitud..." />
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <label className={labelClass + " block mb-1"}>Descripción / Justificación</label>
-                <textarea className={`${inputClass} h-28 resize-none`} value={form.resumen_proyecto}
-                  onChange={e => set('resumen_proyecto', e.target.value)}
-                  placeholder="Describe el proyecto: objetivo, área afectada, características técnicas, medidas, materiales, motivo de la solicitud..." />
+                <label className={labelClass}>Fecha Propuesta de Inicio</label>
+                <input type="date" className={inputClass} value={form.fecha_inicio_propuesta}
+                  onChange={e => set('fecha_inicio_propuesta', e.target.value)} />
               </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <label className={labelClass + " block mb-1"}>Fecha Propuesta de Inicio</label>
-                  <input type="date" className={inputClass} value={form.fecha_inicio_propuesta}
-                    onChange={e => set('fecha_inicio_propuesta', e.target.value)} />
-                </div>
-                <div>
-                  <label className={labelClass + " block mb-1"}>Fecha en que se Requiere Obra Concluida</label>
-                  <input type="date" className={inputClass} value={form.fecha_fin_propuesta}
-                    onChange={e => set('fecha_fin_propuesta', e.target.value)} />
-                </div>
+              <div>
+                <label className={labelClass}>Fecha en que se Requiere Obra Concluida</label>
+                <input type="date" className={inputClass} value={form.fecha_fin_propuesta}
+                  onChange={e => set('fecha_fin_propuesta', e.target.value)} />
               </div>
-              <p className="text-[10px] text-slate-500 italic">Las fechas propuestas estarán sujetas a la aprobación de los aspectos legales y de construcción, así como del protocolo de autorización.</p>
             </div>
+            <p className="text-[11px] text-slate-400 -mt-2">Las fechas propuestas estarán sujetas a la aprobación de los aspectos legales y de construcción, así como del protocolo de autorización.</p>
           </div>
+        </section>
 
-          {/* ── SECCIÓN III: PLAN DE FINANCIAMIENTO ── */}
-          <div className="border-b border-slate-400">
-            <div className="bg-slate-200 px-3 py-1.5 border-b border-slate-400">
-              <span className="text-[11px] font-black uppercase tracking-widest text-slate-700">III. Plan de Financiamiento</span>
-            </div>
-            <div className="overflow-x-auto">
-            <table className="w-full border-collapse min-w-[400px]">
-              <thead>
-                <tr>
-                  <th className={thStyle + " w-48"}>Fuente</th>
-                  <th className={thStyle}>Monto (MXN)</th>
-                  <th className={thStyle + " w-24"}>% del Total</th>
-                </tr>
-              </thead>
-              <tbody>
-                {/* Costo total */}
-                <tr className="bg-slate-50">
-                  <td className="border border-slate-400 px-3 py-1.5 text-[11px] font-black text-slate-800 uppercase">
-                    Costo Aproximado Total {form.tipo_iniciativa !== 'GARANTÍAS' ? '*' : '(no requerido para Garantías)'}
-                  </td>
-                  <td className={tdInput}>
-                    <input type="text" className={inputClass + " text-right font-mono"}
-                      required={form.tipo_iniciativa !== 'GARANTÍAS'}
-                      value={formatMXN(form.costo_aproximado)}
-                      onChange={e => set('costo_aproximado', parseMXN(e.target.value))}
-                      placeholder={form.tipo_iniciativa === 'GARANTÍAS' ? '$0.00 (sin costo)' : '$0.00'} />
-                  </td>
-                  <td className={tdNum + " bg-slate-100 font-bold"}>100%</td>
-                </tr>
-                {/* Operación */}
-                <tr>
-                  <td className="border border-slate-400 px-3 py-1.5 text-[11px] font-bold text-slate-700 uppercase">Operación</td>
-                  <td className={tdInput}>
-                    <input type="text" className={inputClass + " text-right font-mono"}
-                      value={formatMXN(form.monto_operacion)}
-                      onChange={e => set('monto_operacion', parseMXN(e.target.value))}
-                      placeholder="$0.00" />
-                  </td>
-                  <td className={tdNum}>{pct(opMonto)}</td>
-                </tr>
-                {/* FBC */}
-                <tr>
-                  <td className="border border-slate-400 px-3 py-1.5 text-[11px] font-bold text-slate-700 uppercase">FBC (Fondo Bajo Custodia)</td>
-                  <td className={tdInput}>
-                    <input type="text" className={inputClass + " text-right font-mono"}
-                      value={formatMXN(form.monto_fbc)}
-                      onChange={e => set('monto_fbc', parseMXN(e.target.value))}
-                      placeholder="$0.00" />
-                  </td>
-                  <td className={tdNum}>{pct(fbcMonto)}</td>
-                </tr>
-                {/* Donativos */}
-                <tr>
-                  <td className="border border-slate-400 px-3 py-1.5 text-[11px] font-bold text-slate-700 uppercase">Donativos</td>
-                  <td className={tdInput}>
-                    <input type="text" className={inputClass + " text-right font-mono"}
-                      value={formatMXN(form.monto_donativos)}
-                      onChange={e => set('monto_donativos', parseMXN(e.target.value))}
-                      placeholder="$0.00" />
-                  </td>
-                  <td className={tdNum}>{pct(donMonto)}</td>
-                </tr>
-                {/* Otras */}
-                <tr>
-                  <td className="border border-slate-400 px-3 py-1.5 text-[11px] font-bold text-slate-700 uppercase">Otras Fuentes</td>
-                  <td className={tdInput}>
-                    <input type="text" className={inputClass + " text-right font-mono"}
-                      value={formatMXN(form.monto_otras)}
-                      onChange={e => set('monto_otras', parseMXN(e.target.value))}
-                      placeholder="$0.00" />
-                  </td>
-                  <td className={tdNum}>{pct(otrasMonto)}</td>
-                </tr>
-                {otrasMonto > 0 && (
-                  <tr className={otrasSinDetalle ? 'bg-red-50' : ''}>
-                    <td className={`border px-3 py-1.5 text-[11px] font-bold uppercase ${otrasSinDetalle ? 'border-red-500 text-red-700 bg-red-100' : 'border-slate-400 text-slate-700'}`}>
-                      ¿A qué se refiere? *
-                    </td>
-                    <td className={`border px-0 py-0 ${otrasSinDetalle ? 'border-red-500' : 'border-slate-400'}`} colSpan={2}>
-                      <input type="text" ref={otrasDetalleRef}
-                        className={otrasSinDetalle
-                          ? inputClass + ' !border-2 !border-red-500 !bg-red-50 placeholder:text-red-400 focus:!ring-red-500'
-                          : inputClass}
-                        aria-invalid={otrasSinDetalle}
-                        value={form.monto_otras_detalle}
-                        onChange={e => set('monto_otras_detalle', e.target.value)}
-                        placeholder="Especifica de dónde proviene este monto (ej. aportación de municipio, venta de activo, etc.)" />
-                      {otrasSinDetalle && (
-                        <p className="px-2 py-1 text-xs font-bold text-red-600">
-                          ⚠ Obligatorio: escribe de qué fuente proviene el monto de "Otras Fuentes". Sin este dato no podrás enviar la solicitud.
-                        </p>
-                      )}
-                    </td>
-                  </tr>
-                )}
-                {/* Total */}
-                <tr className="bg-slate-100">
-                  <td className="border border-slate-400 px-3 py-1.5 text-[11px] font-black text-slate-800 uppercase">Total Financiamiento</td>
-                  <td className={tdNum + " border border-slate-400 font-black text-slate-900"}>
-                    {totalMonto.toLocaleString('es-MX', { style: 'currency', currency: 'MXN' })}
-                  </td>
-                  <td className={`${tdNum} border border-slate-400 font-black ${
-                    costo > 0 && Math.abs(totalMonto - costo) < 1 ? 'text-emerald-700' : totalMonto > costo && costo > 0 ? 'text-red-600' : 'text-slate-700'
-                  }`}>
-                    {costo > 0 ? ((totalMonto / costo) * 100).toFixed(0) + '%' : '0%'}
-                  </td>
-                </tr>
-              </tbody>
-            </table>
-            {costo > 0 && Math.abs(totalMonto - costo) > 1 && (
-              <div className="px-3 py-2 bg-amber-50 border-t border-amber-200">
-                <p className="text-xs text-amber-700 font-bold">
-                  ⚠ El total del financiamiento debe ser igual al costo aproximado. Diferencia: {(totalMonto - costo).toLocaleString('es-MX', { style: 'currency', currency: 'MXN' })}
-                </p>
-              </div>
-            )}
+        {/* ── 3. Plan de financiamiento ── */}
+        <section className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+          <div className="bg-slate-800 text-white px-4 py-2.5 text-xs font-bold uppercase tracking-wider border-l-4 border-[#ED7102]">
+            3. Plan de Financiamiento
           </div>
-          </div>
-
-          {/* ── COTIZACIONES ── */}
-          <div className="border-b border-slate-400">
-            <div className="bg-slate-100 px-4 py-2 border-b border-slate-400">
-              <h3 className="text-[11px] font-black text-slate-700 uppercase tracking-widest">
-                COTIZACIONES (OPCIONAL)
-              </h3>
-            </div>
-            <div className="px-4 py-4 space-y-3">
-              {/* Toggle ¿Ya tienes cotizaciones? */}
-              <label className="flex items-center gap-3 cursor-pointer select-none">
-                <div
-                  onClick={() => { setTieneCotizaciones(!tieneCotizaciones); if (tieneCotizaciones) setCotizacionFiles([]); }}
-                  className={`relative w-10 h-5 rounded-full transition-colors cursor-pointer ${tieneCotizaciones ? 'bg-teal-500' : 'bg-slate-300'}`}>
-                  <span className={`absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform ${tieneCotizaciones ? 'translate-x-5' : 'translate-x-0'}`} />
-                </div>
-                <span className="text-sm font-semibold text-slate-700">¿Ya tienes cotizaciones para adjuntar?</span>
+          <div className="p-4 space-y-4">
+            <div className="grid grid-cols-[1fr_auto] md:grid-cols-[180px_1fr_70px] items-center gap-2 md:gap-3 p-3 bg-orange-50 rounded-lg border border-orange-200">
+              <label className={labelClass + ' col-span-2 md:col-span-1'}>
+                Costo Aproximado Total {form.tipo_iniciativa !== 'GARANTÍAS' ? '*' : <span className="normal-case font-medium text-slate-400">(no requerido para Garantías)</span>}
               </label>
+              <input type="text" className={inputClass + ' text-right font-mono font-bold'}
+                required={form.tipo_iniciativa !== 'GARANTÍAS'}
+                value={formatMXN(form.costo_aproximado)}
+                onChange={e => set('costo_aproximado', parseMXN(e.target.value))}
+                placeholder={form.tipo_iniciativa === 'GARANTÍAS' ? '$0.00 (sin costo)' : '$0.00'} />
+              <span className="text-xs font-black text-slate-700 text-right">100%</span>
+            </div>
 
-              {tieneCotizaciones && (
-                <div className="space-y-3">
-                  <p className="text-xs text-slate-500">
-                    Adjunta tus cotizaciones (PDF, imágenes, Word, etc.). Se subirán a SharePoint automáticamente al enviar la solicitud.
-                  </p>
-                  <label
-                    onDragOver={e => { e.preventDefault(); e.stopPropagation(); setDragActive(true); }}
-                    onDragLeave={e => { e.preventDefault(); e.stopPropagation(); setDragActive(false); }}
-                    onDrop={e => {
-                      e.preventDefault(); e.stopPropagation(); setDragActive(false);
-                      const EXT_PERMITIDAS = ['.pdf', '.doc', '.docx', '.xls', '.xlsx', '.jpg', '.jpeg', '.png', '.zip'];
-                      const dropped = Array.from(e.dataTransfer.files ?? []).filter(f =>
-                        EXT_PERMITIDAS.some(ext => f.name.toLowerCase().endsWith(ext))
-                      );
-                      if (dropped.length === 0) { toast.error('Formato no permitido. Usa PDF, Word, Excel, imagen o ZIP.'); return; }
-                      setCotizacionFiles(prev => [...prev, ...dropped]);
-                    }}
-                    className={`flex items-center gap-3 cursor-pointer border-2 border-dashed rounded-lg px-4 py-3 transition
-                    ${dragActive ? 'border-teal-500 bg-teal-100 scale-[1.01]' : cotizacionFiles.length > 0 ? 'border-teal-400 bg-teal-50' : 'border-slate-300 hover:border-teal-400 hover:bg-slate-50'}`}>
-                    <svg className="w-5 h-5 text-teal-500 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
-                    </svg>
-                    <div className="flex-1 min-w-0">
-                      {cotizacionFiles.length === 0
-                        ? <span className="text-sm text-slate-500">Arrastra tus archivos aquí o haz clic para seleccionarlos...</span>
-                        : <span className="text-sm text-teal-700 font-semibold">{cotizacionFiles.length} archivo{cotizacionFiles.length > 1 ? 's' : ''} seleccionado{cotizacionFiles.length > 1 ? 's' : ''} — arrastra más para agregar</span>
-                      }
-                    </div>
-                    <input type="file" multiple accept=".pdf,.doc,.docx,.xls,.xlsx,.jpg,.jpeg,.png,.zip"
-                      className="hidden"
-                      onChange={e => setCotizacionFiles(prev => [...prev, ...Array.from(e.target.files ?? [])])} />
-                  </label>
-
-                  {cotizacionFiles.length > 0 && (
-                    <ul className="space-y-1">
-                      {cotizacionFiles.map((f, i) => (
-                        <li key={i} className="flex items-center justify-between bg-teal-50 border border-teal-200 rounded px-3 py-1.5">
-                          <span className="text-xs text-teal-800 font-medium truncate">{f.name}</span>
-                          <button type="button" onClick={() => setCotizacionFiles(prev => prev.filter((_, j) => j !== i))}
-                            className="text-red-400 hover:text-red-600 text-xs ml-2 shrink-0">✕</button>
-                        </li>
-                      ))}
-                    </ul>
+            <div className="space-y-3">
+              {fuente('Operación', 'monto_operacion', opMonto)}
+              {fuente('FBC (Fondo Bajo Custodia)', 'monto_fbc', fbcMonto)}
+              {fuente('Donativos', 'monto_donativos', donMonto)}
+              {fuente('Otras Fuentes', 'monto_otras', otrasMonto)}
+              {otrasMonto > 0 && (
+                <div className={`rounded-lg p-3 border ${otrasSinDetalle ? 'border-red-300 bg-red-50' : 'border-slate-200 bg-slate-50'}`}>
+                  <label className={labelClass + (otrasSinDetalle ? ' !text-red-700' : '')}>¿A qué se refiere "Otras Fuentes"? *</label>
+                  <input type="text" ref={otrasDetalleRef}
+                    className={otrasSinDetalle ? inputClass + ' !border-2 !border-red-500 !bg-white placeholder:text-red-400 focus:!ring-red-500' : inputClass}
+                    aria-invalid={otrasSinDetalle}
+                    value={form.monto_otras_detalle}
+                    onChange={e => set('monto_otras_detalle', e.target.value)}
+                    placeholder="Especifica de dónde proviene este monto (ej. aportación de municipio, venta de activo, etc.)" />
+                  {otrasSinDetalle && (
+                    <p className="mt-1 text-xs font-bold text-red-600">
+                      ⚠ Obligatorio: escribe de qué fuente proviene el monto de "Otras Fuentes". Sin este dato no podrás enviar la solicitud.
+                    </p>
                   )}
                 </div>
               )}
             </div>
-          </div>
 
-          {/* ── PIE DEL FORMATO ── */}
-          <div className="bg-slate-50 px-4 py-3 border-b border-slate-400">
-            <p className="text-[10px] text-slate-500 italic text-center">
-              Para iniciar el proyecto se deberá tener el visto bueno de la Gerencia y de la Coordinación de Obras y Mantenimientos RCMA. Todas las solicitudes deberán incluir un mínimo de 3 cotizaciones.
-            </p>
+            {/* Total y cuadre contra el costo */}
+            <div className="rounded-lg border border-slate-200 p-3">
+              <div className="flex items-center justify-between gap-3">
+                <span className={labelClass}>Total Financiamiento</span>
+                <span className="font-mono font-black text-slate-900">
+                  {totalMonto.toLocaleString('es-MX', { style: 'currency', currency: 'MXN' })}
+                  <span className={`ml-2 text-xs ${cuadra ? 'text-emerald-600' : totalMonto > costo && costo > 0 ? 'text-red-600' : 'text-slate-500'}`}>
+                    {costo > 0 ? ((totalMonto / costo) * 100).toFixed(0) + '%' : '0%'}
+                  </span>
+                </span>
+              </div>
+              <div className="mt-2 h-2 rounded-full bg-slate-100 overflow-hidden">
+                <div className={`h-full rounded-full transition-all ${cuadra ? 'bg-emerald-500' : totalMonto > costo && costo > 0 ? 'bg-red-500' : 'bg-orange-500'}`}
+                  style={{ width: `${avanceFin}%` }} />
+              </div>
+              {costo > 0 && Math.abs(totalMonto - costo) > 1 && (
+                <p className="mt-2 text-xs text-amber-700 font-bold">
+                  ⚠ El total del financiamiento debe ser igual al costo aproximado. Diferencia: {(totalMonto - costo).toLocaleString('es-MX', { style: 'currency', currency: 'MXN' })}
+                </p>
+              )}
+            </div>
           </div>
+        </section>
 
-          {/* ── BOTÓN ENVIAR ── */}
-          <div className="p-4 flex justify-end bg-white">
-            <button type="submit" disabled={loading}
-              className="flex items-center gap-2 px-8 py-3 bg-slate-900 text-white rounded-md text-sm font-bold hover:bg-slate-800 disabled:opacity-50 transition-colors shadow-md">
-              <Send className="w-4 h-4" />
-              {loading ? 'Enviando solicitud...' : 'Enviar Solicitud de Proyecto'}
-            </button>
+        {/* ── 4. Cotizaciones ── */}
+        <section className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+          <div className="bg-slate-800 text-white px-4 py-2.5 text-xs font-bold uppercase tracking-wider border-l-4 border-[#ED7102]">
+            4. Cotizaciones (opcional)
           </div>
-        </form>
-      </div>
+          <div className="p-4 space-y-3">
+            <label className="flex items-center gap-3 cursor-pointer select-none">
+              <div
+                onClick={() => { setTieneCotizaciones(!tieneCotizaciones); if (tieneCotizaciones) setCotizacionFiles([]); }}
+                className={`relative w-10 h-5 rounded-full transition-colors cursor-pointer ${tieneCotizaciones ? 'bg-[#ED7102]' : 'bg-slate-300'}`}>
+                <span className={`absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform ${tieneCotizaciones ? 'translate-x-5' : 'translate-x-0'}`} />
+              </div>
+              <span className="text-sm font-semibold text-slate-700">¿Ya tienes cotizaciones para adjuntar?</span>
+            </label>
+
+            {tieneCotizaciones && (
+              <div className="space-y-3">
+                <p className="text-xs text-slate-500">
+                  Adjunta tus cotizaciones (PDF, imágenes, Word, etc.). Se subirán a SharePoint automáticamente al enviar la solicitud.
+                </p>
+                <label
+                  onDragOver={e => { e.preventDefault(); e.stopPropagation(); setDragActive(true); }}
+                  onDragLeave={e => { e.preventDefault(); e.stopPropagation(); setDragActive(false); }}
+                  onDrop={e => {
+                    e.preventDefault(); e.stopPropagation(); setDragActive(false);
+                    const EXT_PERMITIDAS = ['.pdf', '.doc', '.docx', '.xls', '.xlsx', '.jpg', '.jpeg', '.png', '.zip'];
+                    const dropped = Array.from(e.dataTransfer.files ?? []).filter(f =>
+                      EXT_PERMITIDAS.some(ext => f.name.toLowerCase().endsWith(ext))
+                    );
+                    if (dropped.length === 0) { toast.error('Formato no permitido. Usa PDF, Word, Excel, imagen o ZIP.'); return; }
+                    setCotizacionFiles(prev => [...prev, ...dropped]);
+                  }}
+                  className={`flex items-center gap-3 cursor-pointer border-2 border-dashed rounded-lg px-4 py-3 transition
+                  ${dragActive ? 'border-teal-500 bg-teal-100 scale-[1.01]' : cotizacionFiles.length > 0 ? 'border-teal-400 bg-teal-50' : 'border-slate-300 hover:border-teal-400 hover:bg-slate-50'}`}>
+                  <svg className="w-5 h-5 text-teal-500 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                  </svg>
+                  <div className="flex-1 min-w-0">
+                    {cotizacionFiles.length === 0
+                      ? <span className="text-sm text-slate-500">Arrastra tus archivos aquí o haz clic para seleccionarlos...</span>
+                      : <span className="text-sm text-teal-700 font-semibold">{cotizacionFiles.length} archivo{cotizacionFiles.length > 1 ? 's' : ''} seleccionado{cotizacionFiles.length > 1 ? 's' : ''} — arrastra más para agregar</span>
+                    }
+                  </div>
+                  <input type="file" multiple accept=".pdf,.doc,.docx,.xls,.xlsx,.jpg,.jpeg,.png,.zip"
+                    className="hidden"
+                    onChange={e => setCotizacionFiles(prev => [...prev, ...Array.from(e.target.files ?? [])])} />
+                </label>
+
+                {cotizacionFiles.length > 0 && (
+                  <ul className="space-y-1">
+                    {cotizacionFiles.map((f, i) => (
+                      <li key={i} className="flex items-center justify-between bg-teal-50 border border-teal-200 rounded px-3 py-1.5">
+                        <span className="text-xs text-teal-800 font-medium truncate">{f.name}</span>
+                        <button type="button" onClick={() => setCotizacionFiles(prev => prev.filter((_, j) => j !== i))}
+                          className="text-red-400 hover:text-red-600 text-xs ml-2 shrink-0">✕</button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            )}
+          </div>
+        </section>
+
+        <p className="text-[11px] text-slate-500 text-center">
+          Para iniciar el proyecto se deberá tener el visto bueno de la Gerencia y de la Coordinación de Obras y Mantenimiento RCMA. Todas las solicitudes deberán incluir un mínimo de 3 cotizaciones.
+        </p>
+
+        <button type="submit" disabled={loading}
+          className="w-full flex items-center justify-center gap-2 py-3 bg-[#ED7102] text-white font-bold text-sm rounded-xl hover:bg-[#d66500] disabled:opacity-50 transition shadow-sm">
+          <Send className="w-4 h-4" />
+          {loading ? 'Enviando solicitud...' : 'Enviar Solicitud de Proyecto'}
+        </button>
+      </form>
 
       {showConfirmSend && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 p-4">
