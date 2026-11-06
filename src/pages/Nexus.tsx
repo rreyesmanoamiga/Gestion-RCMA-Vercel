@@ -11,11 +11,12 @@ import { logAudit } from '@/lib/audit';
 import { notifyByEmail } from '@/lib/notifications';
 import { Link as RouterLink } from 'react-router-dom';
 import EditorNota, { textoNota, VistaNota } from '@/components/nexus/EditorNota';
+import BriefingsPanel from '@/components/nexus/BriefingsPanel';
 import {
   Plus, X, Pencil, Trash2, CheckCircle2, Clock, AlertCircle,
   MessageSquare, Send, FileText, Pin, Search, Download,
   BookOpen, ListChecks, Users, MapPin, Building2, Link2,
-  ClipboardList, BarChart3, Ban, Handshake, Wrench, Mic, ExternalLink, Lock, Loader2, CalendarPlus, Presentation, ChevronDown,
+  ClipboardList, BarChart3, Ban, Handshake, Wrench, Mic, ExternalLink, Lock, Loader2, CalendarPlus, Presentation, ChevronDown, Newspaper,
 } from 'lucide-react';
 import { descargarICSPendiente } from '@/lib/icsPendiente';
 import { fmtHora } from '@/lib/utils';
@@ -506,7 +507,7 @@ export default function Nexus() {
   const userEmail = user?.email ?? '';
   const userName  = user?.user_metadata?.nombre || user?.email || 'Usuario';
 
-  const [tab, setTab]         = useState<'notas'|'personales'|'compartidos'|'seguimiento'|'seg_ante'>(isAdmin?'notas':'compartidos');
+  const [tab, setTab]         = useState<'notas'|'personales'|'compartidos'|'seguimiento'|'seg_ante'|'briefings'>(isAdmin?'notas':'compartidos');
   const [search, setSearch]   = useState('');
   const [expandedP, setExpandedP] = useState<string|null>(null);
 
@@ -1072,6 +1073,7 @@ export default function Nexus() {
         <button type="button" onClick={()=>setTab('compartidos')} className={`flex items-center gap-1.5 px-4 py-2 rounded-md text-sm font-semibold transition ${tab==='compartidos'?'bg-white text-slate-900 shadow-sm':'text-slate-500 hover:text-slate-700'}`}><Users className="w-4 h-4"/>{isAdmin?'Compartidos':'Mis Pendientes'}<span className={`ml-1 text-xs px-1.5 py-0.5 rounded-full font-bold ${tab==='compartidos'?'bg-slate-900 text-white':'bg-slate-200 text-slate-500'}`}>{pendCompartidos.filter(p=>p.estatus!=='completado').length}</span></button>
         {isAdmin&&<button type="button" onClick={()=>setTab('seguimiento')} className={`flex items-center gap-1.5 px-4 py-2 rounded-md text-sm font-semibold transition ${tab==='seguimiento'?'bg-white text-slate-900 shadow-sm':'text-slate-500 hover:text-slate-700'}`}><ClipboardList className="w-4 h-4"/>Seguimiento Proyectos<span className={`ml-1 text-xs px-1.5 py-0.5 rounded-full font-bold ${tab==='seguimiento'?'bg-slate-900 text-white':'bg-slate-200 text-slate-500'}`}>{seguimientosActivos.length}</span></button>}
         {isAdmin&&<button type="button" onClick={()=>setTab('seg_ante')} className={`flex items-center gap-1.5 px-4 py-2 rounded-md text-sm font-semibold transition ${tab==='seg_ante'?'bg-white text-slate-900 shadow-sm':'text-slate-500 hover:text-slate-700'}`}><ClipboardList className="w-4 h-4"/>Seguimiento Anteproyectos<span className={`ml-1 text-xs px-1.5 py-0.5 rounded-full font-bold ${tab==='seg_ante'?'bg-slate-900 text-white':'bg-slate-200 text-slate-500'}`}>{seguimientosAnteActivos.length}</span></button>}
+        {isAdmin&&<button type="button" onClick={()=>setTab('briefings')} className={`flex items-center gap-1.5 px-4 py-2 rounded-md text-sm font-semibold transition ${tab==='briefings'?'bg-white text-slate-900 shadow-sm':'text-slate-500 hover:text-slate-700'}`}><Newspaper className="w-4 h-4"/>Briefings</button>}
       </div>
 
       {/* Búsqueda notas */}
@@ -1276,6 +1278,9 @@ export default function Nexus() {
       )}
 
       {/* ── Seguimiento de Anteproyectos ─────────────────────────────────────── */}
+      {/* ── Briefings (PDF diarios en OneDrive) ── */}
+      {tab==='briefings'&&isAdmin&&<BriefingsPanel/>}
+
       {tab==='seg_ante'&&(
         <div className="space-y-6">
           <p className="text-sm text-slate-500 -mt-2">Bitácora de seguimiento por anteproyecto activo — se crea sola cuando un anteproyecto queda En Revisión o Aprobado, y pasa a evidencia cuando se marca Entregado.</p>
