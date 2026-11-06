@@ -45,7 +45,15 @@ interface Solicitud {
   created_at?:           string;
   recibida_at?:          string;
   ticket_mas_habilitado_at?: string | null;
+  ticket_mas_habilitado_por?: string | null;
+  ticket_mas_habilitado_nota?: string | null;
 }
+
+/** Texto del aviso "Ticket MAS habilitado": fecha, quién y nota (histórico) */
+const tituloHabilitado = (s: Solicitud) =>
+  `Habilitado el ${new Date(s.ticket_mas_habilitado_at!).toLocaleDateString('es-MX')}`
+  + (s.ticket_mas_habilitado_por ? ` por ${s.ticket_mas_habilitado_por}` : '')
+  + (s.ticket_mas_habilitado_nota ? ` · ${s.ticket_mas_habilitado_nota}` : '');
 
 const fmx = (n?: number | null) =>
   n != null ? Number(n).toLocaleString('es-MX', { style: 'currency', currency: 'MXN' }) : '—';
@@ -240,6 +248,13 @@ export default function SolicitudesRecibidas() {
       if (!sol) throw new Error('No encontrada');
       if (!sol.correo_solicitante) throw new Error('Esta solicitud no tiene correo de solicitante');
 
+      // 0. Revisar en la base (no en pantalla) que no esté habilitada ya:
+      // así nunca se manda el correo dos veces ni se re-habilita una solicitud.
+      const { data: fresca, error: frErr } = await supabase
+        .from('solicitudes').select('ticket_mas_habilitado_at').eq('id', id).maybeSingle();
+      if (frErr) throw frErr;
+      if (fresca?.ticket_mas_habilitado_at) throw new Error('Esta solicitud ya tenía el Ticket MAS habilitado');
+
       // 1. Activar SOLO el permiso de enviar (no "ver") — así el solicitante
       // cae en modo "solo formulario" (ver TicketMAS.tsx: soloFormulario) y
       // nunca ve el listado completo de tickets de todos los colegios, que
@@ -280,11 +295,16 @@ export default function SolicitudesRecibidas() {
         detalle:      { accion_especial: 'ticket_mas_habilitado', correo: sol.correo_solicitante },
       });
     },
-    onSuccess: () => {
+    onSuccess: (_d, id) => {
       queryClient.invalidateQueries({ queryKey: ['solicitudes'] });
+      // Si estaba abierta en el detalle, que el botón cambie ahí mismo
+      setViewing(v => (v && v.id === id ? { ...v, ticket_mas_habilitado_at: new Date().toISOString() } : v));
       toast.success('Ticket MAS habilitado y correo enviado');
     },
-    onError: (err: unknown) => toast.error(err instanceof Error ? err.message : 'No se pudo habilitar Ticket MAS'),
+    onError: (err: unknown) => {
+      queryClient.invalidateQueries({ queryKey: ['solicitudes'] });
+      toast.error(err instanceof Error ? err.message : 'No se pudo habilitar Ticket MAS');
+    },
   });
 
   const deleteMutation = useMutation({
@@ -506,7 +526,7 @@ export default function SolicitudesRecibidas() {
                     </button>
                   )}
                   {s.estatus === 'recibida' && s.ticket_mas_habilitado_at && (
-                    <span title={`Habilitado el ${new Date(s.ticket_mas_habilitado_at).toLocaleDateString('es-MX')}`}
+                    <span title={tituloHabilitado(s)}
                       className="flex items-center gap-1.5 px-3 py-2 bg-blue-50 text-blue-700 border border-blue-200 rounded-md text-sm font-medium">
                       <CheckCircle className="w-4 h-4" /> Ticket MAS habilitado
                     </span>
@@ -675,7 +695,7 @@ export default function SolicitudesRecibidas() {
                   </button>
                 )}
                 {viewing.estatus === 'recibida' && viewing.ticket_mas_habilitado_at && (
-                  <span className="flex items-center gap-2 px-5 py-2 bg-blue-50 text-blue-700 border border-blue-200 rounded-md text-sm font-medium">
+                  <span title={tituloHabilitado(viewing)} className="flex items-center gap-2 px-5 py-2 bg-blue-50 text-blue-700 border border-blue-200 rounded-md text-sm font-medium">
                     <CheckCircle className="w-4 h-4" /> Ticket MAS habilitado
                   </span>
                 )}
