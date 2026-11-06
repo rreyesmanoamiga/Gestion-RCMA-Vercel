@@ -5,7 +5,7 @@ import React, { useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabaseClient';
 import { toast } from 'sonner';
-import { FileText, UploadCloud, ExternalLink, Trash2, Loader2, Sun, CalendarClock, CalendarRange, FolderOpen } from 'lucide-react';
+import { FileText, UploadCloud, ExternalLink, Trash2, Loader2, Sun, CalendarClock, CalendarRange, FolderOpen, Folder, ChevronDown } from 'lucide-react';
 
 interface Briefing { id: string; nombre: string; tamano: number; url: string; creado: string | null; mes: string }
 interface Listado { anios: string[]; anio: string; archivos: Briefing[] }
@@ -48,6 +48,8 @@ export default function BriefingsPanel() {
   const [arrastrando, setArrastrando] = useState(false);
   const [subiendo, setSubiendo] = useState<string | null>(null);
   const [borrar, setBorrar] = useState<Briefing | null>(null);
+  // Meses plegados/desplegados a mano; sin elección, solo el mes más reciente va abierto
+  const [abiertos, setAbiertos] = useState<Record<string, boolean>>({});
 
   const { data, isLoading, error } = useQuery({
     queryKey: ['nexus_briefings', anio],
@@ -123,10 +125,22 @@ export default function BriefingsPanel() {
       {!isLoading && !error && archivos.length === 0 && (
         <div className="text-center py-12"><FolderOpen className="w-10 h-10 text-slate-200 mx-auto mb-3" /><p className="text-sm font-semibold text-slate-500">Aún no hay briefings guardados{data?.anio ? ` en ${data.anio}` : ''}.</p></div>
       )}
-      {Object.entries(porMes).map(([mes, lista]) => (
+      {Object.entries(porMes).map(([mes, lista], i) => {
+        const clave = `${data?.anio}-${mes}`;
+        const abierto = abiertos[clave] ?? i === 0;
+        return (
         <div key={mes}>
-          <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-3 flex items-center gap-2"><FolderOpen className="w-3.5 h-3.5" />{mes.replace(/^\d+ - /, '')} {data?.anio}<span className="normal-case tracking-normal font-semibold">· {lista.length} archivo{lista.length !== 1 ? 's' : ''}</span></p>
-          <div className="bg-white rounded-xl border border-slate-200 divide-y divide-slate-100 overflow-hidden">
+          <button type="button" onClick={() => setAbiertos(a => ({ ...a, [clave]: !abierto }))} aria-expanded={abierto}
+            className="w-full flex items-center gap-2 mb-3 text-xs font-bold text-slate-400 uppercase tracking-widest hover:text-slate-600 transition">
+            {abierto ? <FolderOpen className="w-3.5 h-3.5" /> : <Folder className="w-3.5 h-3.5" />}
+            {mes.replace(/^\d+ - /, '')} {data?.anio}
+            <span className="normal-case tracking-normal font-semibold">· {lista.length} archivo{lista.length !== 1 ? 's' : ''}</span>
+            <span className="flex-1 border-t border-slate-200 mx-2" />
+            <span className="normal-case tracking-normal font-semibold text-[11px]">{abierto ? 'Ocultar' : 'Ver'}</span>
+            <ChevronDown className={`w-4 h-4 transition-transform ${abierto ? 'rotate-180' : ''}`} />
+          </button>
+          {abierto && (
+          <div className="bg-white rounded-xl border border-slate-200 divide-y divide-slate-100 overflow-hidden mb-2">
             {lista.map(b => {
               const t = tipoDe(b.nombre);
               return (
@@ -148,8 +162,10 @@ export default function BriefingsPanel() {
               );
             })}
           </div>
+          )}
         </div>
-      ))}
+        );
+      })}
 
       {borrar && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 p-4" onClick={() => setBorrar(null)}>

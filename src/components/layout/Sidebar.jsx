@@ -355,16 +355,16 @@ export default function Sidebar({ isOpen, onToggle }) {
               {esAdminSOL && (
                 <>
                   <div className="pt-2" />
-                  <SidebarAccordionGroup label="Inspección" icon={ClipboardList} defaultOpen={solInspeccion.some(i => isActive(i.to))}>
+                  <SidebarAccordionGroup label="Inspección" icon={ClipboardList} defaultOpen={solInspeccion.some(i => isActive(i.to))} active={solInspeccion.some(i => isActive(i.to))}>
                     {solInspeccion.map(renderLink)}
                   </SidebarAccordionGroup>
-                  <SidebarAccordionGroup label="Seguimiento" icon={ListChecks} defaultOpen={solSeguimiento.some(i => isActive(i.to))}>
+                  <SidebarAccordionGroup label="Seguimiento" icon={ListChecks} defaultOpen={solSeguimiento.some(i => isActive(i.to))} active={solSeguimiento.some(i => isActive(i.to))}>
                     {solSeguimiento.map(renderLink)}
                   </SidebarAccordionGroup>
-                  <SidebarAccordionGroup label="Organización" icon={Users} defaultOpen={solOrganizacion.some(i => isActive(i.to))}>
+                  <SidebarAccordionGroup label="Organización" icon={Users} defaultOpen={solOrganizacion.some(i => isActive(i.to))} active={solOrganizacion.some(i => isActive(i.to))}>
                     {solOrganizacion.map(renderLink)}
                   </SidebarAccordionGroup>
-                  <SidebarAccordionGroup label="Resultados" icon={Award} defaultOpen={solResultados.some(i => isActive(i.to))}>
+                  <SidebarAccordionGroup label="Resultados" icon={Award} defaultOpen={solResultados.some(i => isActive(i.to))} active={solResultados.some(i => isActive(i.to))}>
                     {solResultados.map(renderLink)}
                   </SidebarAccordionGroup>
                 </>
@@ -382,7 +382,7 @@ export default function Sidebar({ isOpen, onToggle }) {
               <SidebarAccordionGroup
                 label="Control Normativo"
                 icon={ShieldCheck}
-                defaultOpen={cControlNormativo.some(i => isActive(i.to))}
+                defaultOpen={cControlNormativo.some(i => isActive(i.to))} active={cControlNormativo.some(i => isActive(i.to))}
               >
                 {cControlNormativo.map(renderLink)}
               </SidebarAccordionGroup>
@@ -391,7 +391,7 @@ export default function Sidebar({ isOpen, onToggle }) {
                 label="Gestión de Trámites CN"
                 icon={ClipboardEdit}
                 hidden={cTramitesCN.length === 0}
-                defaultOpen={cTramitesCN.some(i => isActive(i.to))}
+                defaultOpen={cTramitesCN.some(i => isActive(i.to))} active={cTramitesCN.some(i => isActive(i.to))}
               >
                 {cTramitesCN.map(renderLink)}
               </SidebarAccordionGroup>
@@ -399,7 +399,7 @@ export default function Sidebar({ isOpen, onToggle }) {
               <SidebarAccordionGroup
                 label="Gestión de Protección Civil"
                 icon={ShieldAlert}
-                defaultOpen={cGestionPC.some(i => isActive(i.to))}
+                defaultOpen={cGestionPC.some(i => isActive(i.to))} active={cGestionPC.some(i => isActive(i.to))}
               >
                 {cGestionPC.map(renderLink)}
               </SidebarAccordionGroup>
@@ -408,7 +408,7 @@ export default function Sidebar({ isOpen, onToggle }) {
                 <SidebarAccordionGroup
                   label="Costos y Presupuestos"
                   icon={BarChart3}
-                  defaultOpen={costosLista.some(i => isActive(i.to))}
+                  defaultOpen={costosLista.some(i => isActive(i.to))} active={costosLista.some(i => isActive(i.to))}
                 >
                   {costosLista.map(renderLink)}
                 </SidebarAccordionGroup>
@@ -417,7 +417,7 @@ export default function Sidebar({ isOpen, onToggle }) {
               <SidebarAccordionGroup
                 label="Monitoreo y Reportes"
                 icon={ListTodo}
-                defaultOpen={cMonitoreo.some(i => isActive(i.to))}
+                defaultOpen={cMonitoreo.some(i => isActive(i.to))} active={cMonitoreo.some(i => isActive(i.to))}
               >
                 {cMonitoreo.map(renderLink)}
               </SidebarAccordionGroup>
@@ -443,7 +443,7 @@ export default function Sidebar({ isOpen, onToggle }) {
                 label="Gestión de Proyectos"
                 icon={FolderKanban}
                 hidden={gGestionProyectos.length === 0}
-                defaultOpen={gGestionProyectos.some(i => isActive(i.to))}
+                defaultOpen={gGestionProyectos.some(i => isActive(i.to))} active={gGestionProyectos.some(i => isActive(i.to))}
               >
                 {gGestionProyectos.map(renderLink)}
               </SidebarAccordionGroup>
@@ -452,7 +452,7 @@ export default function Sidebar({ isOpen, onToggle }) {
                 label="Operación Diaria"
                 icon={ListTodo}
                 hidden={gOperacion.length === 0}
-                defaultOpen={gOperacion.some(i => isActive(i.to))}
+                defaultOpen={gOperacion.some(i => isActive(i.to))} active={gOperacion.some(i => isActive(i.to))}
               >
                 {gOperacion.map(renderLink)}
               </SidebarAccordionGroup>
@@ -461,7 +461,7 @@ export default function Sidebar({ isOpen, onToggle }) {
                 label="Control Financiero"
                 icon={BarChart3}
                 hidden={gFinanciero.length === 0}
-                defaultOpen={gFinanciero.some(i => isActive(i.to))}
+                defaultOpen={gFinanciero.some(i => isActive(i.to))} active={gFinanciero.some(i => isActive(i.to))}
               >
                 {gFinanciero.map(renderLink)}
               </SidebarAccordionGroup>
@@ -470,7 +470,7 @@ export default function Sidebar({ isOpen, onToggle }) {
                 label="Plataforma y Red"
                 icon={Network}
                 hidden={!gPlataformaVisible}
-                defaultOpen={isActive('/nexus') || gPlataformaResto.some(i => isActive(i.to))}
+                defaultOpen={isActive('/nexus') || gPlataformaResto.some(i => isActive(i.to))} active={isActive('/nexus') || gPlataformaResto.some(i => isActive(i.to))}
               >
                 {nexusVisible && (
                   <NexusLink navLinkClass={navLinkClass} handleNavClick={handleNavClick} userEmail={user?.email} isAdmin={isAdmin} />
@@ -482,7 +482,7 @@ export default function Sidebar({ isOpen, onToggle }) {
                 label="Control de Calidad"
                 icon={ClipboardCheck}
                 hidden={gCalidad.length === 0}
-                defaultOpen={gCalidad.some(i => isActive(i.to))}
+                defaultOpen={gCalidad.some(i => isActive(i.to))} active={gCalidad.some(i => isActive(i.to))}
               >
                 {gCalidad.map(renderLink)}
               </SidebarAccordionGroup>
