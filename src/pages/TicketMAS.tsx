@@ -104,6 +104,7 @@ const ESTATUSES_ADMIN      = ['pendiente','en_revision','autorizado','cancelado'
 // ─── Tipos ────────────────────────────────────────────────────────────────────
 interface TicketMAS {
   id:                     string;
+  solicitud_id?:          string | null;
   folio?:                 string;
   colegio?:               string;
   razon_social?:          string;
@@ -367,6 +368,7 @@ function TicketMASPrincipal({ esAutorizadorFMA }: { esAutorizadorFMA: boolean })
     motivo_seleccion:'', forma_financiamiento:'',
     elaborar_suplemento:'NO', elaborar_traspaso:'SI',
     nombre_proyecto:'',
+    solicitud_id:'',
     // ¿De qué sociedad sale el pago? (NO = del mismo colegio)
     pago_otro:'NO', pago_colegio:'', pago_razon_social:'', pago_sociedad:'', pago_centro_gestor:'', pago_contador:'',
   };
@@ -401,6 +403,42 @@ function TicketMASPrincipal({ esAutorizadorFMA }: { esAutorizadorFMA: boolean })
     }
   }, []);
   const set = (k: string, v: string) => setForm(p => ({ ...p, [k]: v }));
+
+  // Solicitudes de Proyecto con Ticket MAS habilitado y todavía sin ticket
+  // (las propias; el admin ve todas). Cada ticket queda ligado a una solicitud.
+  const { data: solicitudesParaTicket = [] } = useQuery({
+    queryKey: ['solicitudes_para_ticket', user?.email],
+    queryFn: async () => {
+      const { data, error } = await supabase.rpc('rcma_solicitudes_para_ticket');
+      if (error) throw error;
+      return (data ?? []) as { id: string; folio: string | null; nombre_proyecto: string | null; nombre_centro: string | null; correo_solicitante: string | null }[];
+    },
+    enabled: !!user?.email && puedeCrear,
+  });
+
+  // Detalle: de qué solicitud viene el ticket que se está viendo
+  const { data: solicitudDeTicket } = useQuery({
+    queryKey: ['solicitud_de_ticket', viewing?.solicitud_id],
+    queryFn: async () => {
+      const { data } = await supabase.from('solicitudes').select('folio, nombre_proyecto').eq('id', viewing!.solicitud_id!).maybeSingle();
+      return data as { folio: string | null; nombre_proyecto: string | null } | null;
+    },
+    enabled: !!viewing?.solicitud_id,
+  });
+
+  const onSolicitudOrigen = (id: string) => {
+    const sol = solicitudesParaTicket.find(x => x.id === id);
+    if (!sol) { set('solicitud_id', ''); return; }
+    const c = colegiosTicket.find(x => x.nombre === sol.nombre_centro);
+    setForm(p => ({
+      ...p, solicitud_id: sol.id,
+      nombre_proyecto: p.nombre_proyecto || sol.nombre_proyecto || '',
+      ...(c ? {
+        colegio: c.nombre, razon_social: c.razon, sociedad: c.sociedad, centro_gestor: c.centro_gestor,
+        territorio: c.territorio, director: c.director, admin_colegio: c.admin, contador: c.contador,
+      } : {}),
+    }));
+  };
 
   // ── Admin form state (llenado por Ricardo) ───────────────────────────────────
   const ADMIN_INIT = { fecha_recepcion:'', fecha_inicio_estimada:'', fecha_fin_estimada:'', areas_participantes:'', autorizado_por:'' };
@@ -495,6 +533,10 @@ function TicketMASPrincipal({ esAutorizadorFMA }: { esAutorizadorFMA: boolean })
       toast.error('Tu perfil no tiene nombre y/o puesto capturados — pide al administrador que los agregue en Accesos antes de continuar.');
       return;
     }
+    if (!isAdmin && !form.solicitud_id) {
+      toast.error('Elige la Solicitud de Proyecto de la que sale este Ticket MAS');
+      return;
+    }
     if (!form.colegio || !form.descripcion || !form.clasificacion || !form.nombre_proyecto) {
       toast.error('Completa los campos obligatorios marcados con *');
       return;
@@ -565,6 +607,7 @@ function TicketMASPrincipal({ esAutorizadorFMA }: { esAutorizadorFMA: boolean })
         numero_orden_interna: form.numero_orden_interna,
         descripcion:          form.descripcion,
         nombre_proyecto:      form.nombre_proyecto,
+        solicitud_id:         form.solicitud_id || null,
         cot1_importe:         form.cot1_importe ? parseFloat(parseMXN(form.cot1_importe)) : null,
         cot1_proveedor:       form.cot1_proveedor,
         cot2_importe:         form.cot2_importe ? parseFloat(parseMXN(form.cot2_importe)) : null,
@@ -583,13 +626,19 @@ function TicketMASPrincipal({ esAutorizadorFMA }: { esAutorizadorFMA: boolean })
         pago_contador:        form.pago_otro === 'SI' ? form.pago_contador || null : null,
         estatus:              'pendiente',
       }]);
-      if (error) throw error;
+      if (error) {
+        if ((error as any).code === '23505' && String(error.message).includes('ux_tickets_mas_solicitud')) {
+          throw new Error('Esa Solicitud de Proyecto ya tiene un Ticket MAS');
+        }
+        throw error;
+      }
 
       logAudit({
         accion:       'crear',
         modulo:       'tickets_mas',
         registro_ref: folio,
-        detalle:      { colegio: form.colegio, solicitante: form.nombre_solicitante, descripcion: form.descripcion },
+        detalle:      { colegio: form.colegio, solicitante: form.nombre_solicitante, descripcion: form.descripcion,
+                        solicitud: solicitudesParaTicket.find(x => x.id === form.solicitud_id)?.folio ?? null },
       });
 
       // Quitar el acceso al formulario automáticamente tras enviarlo — así el
@@ -597,6 +646,9 @@ function TicketMASPrincipal({ esAutorizadorFMA }: { esAutorizadorFMA: boolean })
       // para el siguiente proyecto autorizado. No aplica al administrador.
       if (!isAdmin && user?.email) {
         try {
+          // Si todavía tiene otra solicitud habilitada sin ticket, el acceso se queda
+          const { data: pendientes } = await supabase.rpc('rcma_solicitudes_para_ticket');
+          if ((pendientes ?? []).length > 0) throw new Error('quedan solicitudes');
           await supabase.from('user_permissions')
             .update({ enviar_ticket_mas: false })
             .eq('user_email', user.email);
@@ -639,6 +691,7 @@ function TicketMASPrincipal({ esAutorizadorFMA }: { esAutorizadorFMA: boolean })
         }
       }
 
+      qc.invalidateQueries({ queryKey: ['solicitudes_para_ticket'] });
       setEnviado(true);
     } catch (e: any) {
       // Si fue por falta de conexión, guardar el borrador localmente para no perder la captura
@@ -1167,6 +1220,35 @@ function TicketMASPrincipal({ esAutorizadorFMA }: { esAutorizadorFMA: boolean })
             Estos datos se toman automáticamente de tu sesión — si algo está mal o vacío, pide que lo corrijan en Accesos.
           </p>
         </section>
+
+        {/* ── Solicitud de Proyecto de origen ── */}
+        {(!isAdmin || solicitudesParaTicket.length > 0) && (
+          <section className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+            <div className="bg-slate-800 text-white px-4 py-2.5 text-xs font-bold uppercase tracking-wider">
+              Solicitud de Proyecto{isAdmin ? ' (opcional)' : ' *'}
+            </div>
+            <div className="p-4">
+              {solicitudesParaTicket.length === 0 ? (
+                <p className="text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-lg p-3">
+                  No tienes ninguna Solicitud de Proyecto con Ticket MAS habilitado. La Coordinación de Obras y Mantenimiento RCMA lo habilita desde Solicitudes Recibidas.
+                </p>
+              ) : (
+                <>
+                  <label className={labelClass}>¿De qué solicitud sale este Ticket MAS?</label>
+                  <select className={selectClass} value={form.solicitud_id} onChange={e => onSolicitudOrigen(e.target.value)}>
+                    <option value="">— Seleccionar solicitud —</option>
+                    {solicitudesParaTicket.map(x => (
+                      <option key={x.id} value={x.id}>
+                        {x.folio ? `${x.folio} · ` : ''}{x.nombre_proyecto ?? 'Sin nombre'} ({x.nombre_centro ?? '—'})
+                      </option>
+                    ))}
+                  </select>
+                  <p className="text-[10px] text-slate-400 mt-1">Al elegirla se llenan el colegio y el nombre del proyecto — puedes ajustarlos. Cada solicitud solo puede tener un Ticket MAS.</p>
+                </>
+              )}
+            </div>
+          </section>
+        )}
 
         {/* ── Datos generales ── */}
         <section className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
@@ -1720,6 +1802,14 @@ function TicketMASPrincipal({ esAutorizadorFMA }: { esAutorizadorFMA: boolean })
             ))}
           </div>
           <div className="px-4 pb-4">
+            <div className="mb-3">
+              <p className="text-[10px] font-bold text-slate-400 uppercase mb-1">Solicitud de Proyecto</p>
+              <p className="text-sm text-slate-700 bg-slate-50 rounded-lg p-3">
+                {viewing.solicitud_id
+                  ? (solicitudDeTicket ? `${solicitudDeTicket.folio ?? ''} · ${solicitudDeTicket.nombre_proyecto ?? ''}` : '…')
+                  : <span className="text-slate-400 italic">Sin vincular</span>}
+              </p>
+            </div>
             {viewing.nombre_proyecto && (
               <div className="mb-3">
                 <p className="text-[10px] font-bold text-slate-400 uppercase mb-1">Nombre del Proyecto</p>

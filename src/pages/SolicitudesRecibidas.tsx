@@ -6,7 +6,7 @@ import { imprimirHTML } from '@/lib/imprimir';
 import { documentoInstitucional, tarjeta, grid, barraFinanciamiento, esc, val } from '@/lib/formatoInstitucional';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
-import { ChevronDown, CheckCircle, Eye, X, Building2, User, Mail, Calendar, DollarSign, Printer, Trash2, Ban, Send } from 'lucide-react';
+import { ChevronDown, CheckCircle, Eye, X, Building2, User, Mail, Calendar, DollarSign, Printer, Trash2, Ban, Send, FileSignature, Undo2 } from 'lucide-react';
 import { useSharePointUpload, renameCarpetaSharePoint } from '@/hooks/useSharePointUpload';
 import { logAudit } from '@/lib/audit';
 import { useScope } from '@/hooks/useScope';
@@ -47,7 +47,22 @@ interface Solicitud {
   ticket_mas_habilitado_at?: string | null;
   ticket_mas_habilitado_por?: string | null;
   ticket_mas_habilitado_nota?: string | null;
+  ticket_mas_retirado_at?:     string | null;
+  ticket_mas_retirado_por?:    string | null;
+  ticket_mas_retirado_motivo?: string | null;
 }
+
+interface TicketDeSolicitud { id: string; folio: string | null; estatus: string | null; solicitud_id: string }
+
+/** Estado del Ticket MAS ligado a la solicitud (chip) */
+const ESTADO_TICKET: Record<string, { label: string; cls: string }> = {
+  autorizado: { label: 'Autorizado', cls: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
+  cancelado:  { label: 'Cancelado',  cls: 'bg-red-50 text-red-700 border-red-200' },
+  pendiente:  { label: 'En revisión', cls: 'bg-amber-50 text-amber-700 border-amber-200' },
+};
+const estadoTicket = (t: TicketDeSolicitud) =>
+  ESTADO_TICKET[t.estatus ?? ''] ?? { label: t.estatus ?? '—', cls: 'bg-slate-50 text-slate-600 border-slate-200' };
+const esHistorica = (s: Solicitud) => (s.ticket_mas_habilitado_nota ?? '').startsWith('Histórico');
 
 /** Texto del aviso "Ticket MAS habilitado": fecha, quién y nota (histórico) */
 const tituloHabilitado = (s: Solicitud) =>
@@ -164,6 +179,22 @@ export default function SolicitudesRecibidas() {
       return data ?? [];
     },
   });
+
+  // Ticket MAS ligado a cada solicitud (tickets_mas.solicitud_id)
+  const { data: ticketsLigados = [] } = useQuery({
+    queryKey: ['tickets_mas_por_solicitud'],
+    queryFn: async () => {
+      const { data, error } = await supabase.from('tickets_mas')
+        .select('id, folio, estatus, solicitud_id').not('solicitud_id', 'is', null);
+      if (error) throw error;
+      return (data ?? []) as TicketDeSolicitud[];
+    },
+  });
+  const ticketDe = useMemo(() => {
+    const m: Record<string, TicketDeSolicitud> = {};
+    ticketsLigados.forEach(t => { m[t.solicitud_id] = t; });
+    return m;
+  }, [ticketsLigados]);
 
   const solicitudesAlcance = raw as Solicitud[];
   const solicitudes = useMemo(
@@ -305,6 +336,43 @@ export default function SolicitudesRecibidas() {
       queryClient.invalidateQueries({ queryKey: ['solicitudes'] });
       toast.error(err instanceof Error ? err.message : 'No se pudo habilitar Ticket MAS');
     },
+  });
+
+  // ── Retirar habilitación: solo habilitadas que nunca mandaron Ticket MAS ──
+  const [retirando, setRetirando] = useState<Solicitud | null>(null);
+  const [motivoRetiro, setMotivoRetiro] = useState('');
+  const retirarMutation = useMutation({
+    mutationFn: async ({ sol, motivo }: { sol: Solicitud; motivo: string }) => {
+      const { error } = await supabase.from('solicitudes')
+        .update({ ticket_mas_retirado_at: new Date().toISOString(), ticket_mas_retirado_motivo: motivo })
+        .eq('id', sol.id);
+      if (error) throw error;
+
+      // Quitar el permiso de enviar si ya no le queda otra solicitud habilitada sin ticket
+      if (sol.correo_solicitante) {
+        const { data: pendientes } = await supabase.rpc('rcma_solicitudes_para_ticket');
+        const otras = (pendientes ?? []).filter((x: any) =>
+          (x.correo_solicitante ?? '').toLowerCase() === sol.correo_solicitante!.toLowerCase() && x.id !== sol.id);
+        if (otras.length === 0) {
+          await supabase.from('user_permissions').update({ enviar_ticket_mas: false }).eq('user_email', sol.correo_solicitante);
+        }
+      }
+
+      logAudit({
+        accion:       'editar',
+        modulo:       'solicitudes',
+        registro_id:  sol.id,
+        registro_ref: sol.nombre_proyecto,
+        detalle:      { accion_especial: 'ticket_mas_retirado', motivo, correo: sol.correo_solicitante },
+      });
+    },
+    onSuccess: (_d, { sol, motivo }) => {
+      queryClient.invalidateQueries({ queryKey: ['solicitudes'] });
+      setViewing(v => (v && v.id === sol.id ? { ...v, ticket_mas_retirado_at: new Date().toISOString(), ticket_mas_retirado_motivo: motivo } : v));
+      setRetirando(null); setMotivoRetiro('');
+      toast.success('Habilitación de Ticket MAS retirada');
+    },
+    onError: (err: unknown) => toast.error(err instanceof Error ? err.message : 'No se pudo retirar'),
   });
 
   const deleteMutation = useMutation({
@@ -517,6 +585,14 @@ export default function SolicitudesRecibidas() {
                       <CheckCircle className="w-4 h-4" /> Recibida
                     </button>
                   )}
+                  <EstadoTicketMAS s={s} ticket={ticketDe[s.id]} />
+                  {isAdmin && s.estatus === 'recibida' && s.ticket_mas_habilitado_at && !s.ticket_mas_retirado_at && !ticketDe[s.id] && !esHistorica(s) && (
+                    <button onClick={() => { setRetirando(s); setMotivoRetiro(''); }}
+                      title="Quitar el acceso a Ticket MAS de esta solicitud (no se envió ticket)"
+                      className="flex items-center gap-1.5 px-3 py-2 border border-slate-300 text-slate-600 rounded-md text-sm font-medium hover:bg-slate-50 transition-colors">
+                      <Undo2 className="w-4 h-4" /> Retirar
+                    </button>
+                  )}
                   {isAdmin && s.estatus === 'recibida' && !s.ticket_mas_habilitado_at && (
                     <button onClick={() => habilitarTicketMasMutation.mutate(s.id)}
                       disabled={habilitarTicketMasMutation.isPending}
@@ -524,12 +600,6 @@ export default function SolicitudesRecibidas() {
                       className="flex items-center gap-1.5 px-3 py-2 bg-blue-600 text-white rounded-md text-sm font-bold hover:bg-blue-700 transition-colors disabled:opacity-50">
                       <Send className="w-4 h-4" /> {habilitarTicketMasMutation.isPending ? 'Enviando...' : 'Habilitar Ticket MAS'}
                     </button>
-                  )}
-                  {s.estatus === 'recibida' && s.ticket_mas_habilitado_at && (
-                    <span title={tituloHabilitado(s)}
-                      className="flex items-center gap-1.5 px-3 py-2 bg-blue-50 text-blue-700 border border-blue-200 rounded-md text-sm font-medium">
-                      <CheckCircle className="w-4 h-4" /> Ticket MAS habilitado
-                    </span>
                   )}
                   <BotonCorregir modulo="solicitudes" estatus={s.estatus} onClick={() => setCorrigiendo(s)} />
                   {isAdmin && s.estatus !== 'cancelada' && (
@@ -694,10 +764,12 @@ export default function SolicitudesRecibidas() {
                     {habilitarTicketMasMutation.isPending ? 'Enviando...' : 'Habilitar Ticket MAS'}
                   </button>
                 )}
-                {viewing.estatus === 'recibida' && viewing.ticket_mas_habilitado_at && (
-                  <span title={tituloHabilitado(viewing)} className="flex items-center gap-2 px-5 py-2 bg-blue-50 text-blue-700 border border-blue-200 rounded-md text-sm font-medium">
-                    <CheckCircle className="w-4 h-4" /> Ticket MAS habilitado
-                  </span>
+                <EstadoTicketMAS s={viewing} ticket={ticketDe[viewing.id]} grande />
+                {isAdmin && viewing.estatus === 'recibida' && viewing.ticket_mas_habilitado_at && !viewing.ticket_mas_retirado_at && !ticketDe[viewing.id] && !esHistorica(viewing) && (
+                  <button onClick={() => { setRetirando(viewing); setMotivoRetiro(''); }}
+                    className="flex items-center gap-2 px-5 py-2 border border-slate-300 text-slate-600 rounded-md text-sm font-medium hover:bg-slate-50 transition-colors">
+                    <Undo2 className="w-4 h-4" /> Retirar habilitación
+                  </button>
                 )}
               </div>
             </div>
@@ -728,6 +800,41 @@ export default function SolicitudesRecibidas() {
     </div>
 
       {/* Modal confirmar cancelación */}
+      {retirando && (
+        <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/50 p-4">
+          <div className="bg-white rounded-lg shadow-xl max-w-sm w-full p-6">
+            <div className="flex items-center gap-3 mb-3">
+              <div className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center">
+                <Undo2 className="w-5 h-5 text-slate-600" />
+              </div>
+              <h2 className="text-lg font-bold text-slate-900">¿Retirar el Ticket MAS?</h2>
+            </div>
+            <p className="text-sm text-slate-600 mb-1">
+              <span className="font-semibold">{retirando.folio ? `${retirando.folio} · ` : ''}{retirando.nombre_proyecto}</span>
+            </p>
+            <p className="text-sm text-slate-500">
+              El solicitante ya no podrá enviar el Ticket MAS de esta solicitud. Queda registrado y <span className="font-bold">no se puede deshacer</span>: si el proyecto sigue, tendrá que enviar una nueva solicitud.
+            </p>
+            <label className="block text-xs font-bold text-slate-500 uppercase mt-4 mb-1">Motivo *</label>
+            <textarea value={motivoRetiro} onChange={e => setMotivoRetiro(e.target.value)} rows={3}
+              className="w-full px-3 py-2 border border-slate-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-[#ED7102]/40"
+              placeholder="Ej: El colegio decidió no continuar por ahora" />
+            <div className="flex justify-end gap-3 mt-5">
+              <button onClick={() => setRetirando(null)}
+                className="px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100 rounded-md transition-colors">
+                Volver
+              </button>
+              <button onClick={() => retirarMutation.mutate({ sol: retirando, motivo: motivoRetiro.trim() })}
+                disabled={retirarMutation.isPending || motivoRetiro.trim().length < 5}
+                className="px-4 py-2 text-sm font-bold bg-slate-800 text-white hover:bg-slate-700 rounded-md disabled:opacity-50 transition-colors flex items-center gap-2">
+                <Undo2 className="w-4 h-4" />
+                {retirarMutation.isPending ? 'Retirando...' : 'Sí, retirar'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {cancelandoId && (
         <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/50 p-4">
           <div className="bg-white rounded-lg shadow-xl max-w-sm w-full p-6">
@@ -838,4 +945,33 @@ export default function SolicitudesRecibidas() {
     )}
     </>
   );
+}
+/** Estado del Ticket MAS de una solicitud: ticket ligado, retirado o habilitado */
+function EstadoTicketMAS({ s, ticket, grande = false }: { s: Solicitud; ticket?: TicketDeSolicitud; grande?: boolean }) {
+  const base = `flex items-center ${grande ? 'gap-2 px-5' : 'gap-1.5 px-3'} py-2 border rounded-md text-sm font-medium`;
+  if (ticket) {
+    const e = estadoTicket(ticket);
+    return (
+      <span title={`Ticket MAS ${ticket.folio ?? ''} — ${e.label}`} className={`${base} ${e.cls}`}>
+        <FileSignature className="w-4 h-4" /> {ticket.folio} · {e.label}
+      </span>
+    );
+  }
+  if (s.estatus !== 'recibida') return null;
+  if (s.ticket_mas_retirado_at) {
+    return (
+      <span title={`Retirado el ${new Date(s.ticket_mas_retirado_at).toLocaleDateString('es-MX')}${s.ticket_mas_retirado_por ? ` por ${s.ticket_mas_retirado_por}` : ''}${s.ticket_mas_retirado_motivo ? ` · ${s.ticket_mas_retirado_motivo}` : ''}`}
+        className={`${base} bg-slate-100 text-slate-500 border-slate-200`}>
+        <Undo2 className="w-4 h-4" /> Ticket MAS retirado
+      </span>
+    );
+  }
+  if (s.ticket_mas_habilitado_at) {
+    return (
+      <span title={tituloHabilitado(s)} className={`${base} bg-blue-50 text-blue-700 border-blue-200`}>
+        <CheckCircle className="w-4 h-4" /> Ticket MAS habilitado
+      </span>
+    );
+  }
+  return null;
 }
