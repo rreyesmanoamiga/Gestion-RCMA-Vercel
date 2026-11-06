@@ -1,11 +1,11 @@
-// NEXUS · Briefings: los PDF diarios (Resumen matutino y Preparación de reuniones)
+// NEXUS · Briefings: los PDF de Resumen matutino, Preparación de reuniones y Resumen semanal
 // guardados en OneDrive (Sistema RCMA Doc/Briefings/AAAA/MM - Mes).
 // Todo pasa por la función "briefings" (solo admin; la llave de Microsoft no sale del servidor).
 import React, { useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabaseClient';
 import { toast } from 'sonner';
-import { FileText, UploadCloud, ExternalLink, Trash2, Loader2, Sun, CalendarClock, FolderOpen } from 'lucide-react';
+import { FileText, UploadCloud, ExternalLink, Trash2, Loader2, Sun, CalendarClock, CalendarRange, FolderOpen } from 'lucide-react';
 
 interface Briefing { id: string; nombre: string; tamano: number; url: string; creado: string | null; mes: string }
 interface Listado { anios: string[]; anio: string; archivos: Briefing[] }
@@ -30,6 +30,7 @@ const hoyISO = () => {
 const fechaDe = (nombre: string) => /(\d{4}-\d{2}-\d{2})/.exec(nombre)?.[1] ?? hoyISO();
 
 const TIPOS = [
+  { re: /resumen\s*_?semanal/i, label: 'Resumen semanal', cls: 'bg-emerald-50 text-emerald-700 border-emerald-200', Icon: CalendarRange },
   { re: /resumen\s*_?matutino/i, label: 'Resumen matutino', cls: 'bg-orange-50 text-orange-700 border-orange-200', Icon: Sun },
   { re: /briefing\s*_?reuniones|reuniones/i, label: 'Preparación de reuniones', cls: 'bg-blue-50 text-blue-800 border-blue-200', Icon: CalendarClock },
 ];
@@ -91,7 +92,7 @@ export default function BriefingsPanel() {
   return (
     <div className="space-y-5">
       <div className="flex items-center justify-between flex-wrap gap-2 -mt-2">
-        <p className="text-sm text-slate-500">Resúmenes matutinos y preparación de reuniones, guardados en OneDrive › Sistema RCMA Doc › Briefings.</p>
+        <p className="text-sm text-slate-500">Resúmenes matutinos, preparación de reuniones y resumen semanal, guardados en OneDrive › Sistema RCMA Doc › Briefings.</p>
         {data && data.anios.length > 1 && (
           <select value={data.anio} onChange={e => setAnio(e.target.value)} className="px-3 py-1.5 border border-slate-300 rounded-lg text-sm bg-white">
             {data.anios.map(a => <option key={a} value={a}>{a}</option>)}
