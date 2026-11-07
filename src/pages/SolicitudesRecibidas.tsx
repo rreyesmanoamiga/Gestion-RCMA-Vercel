@@ -279,12 +279,14 @@ export default function SolicitudesRecibidas() {
       if (!sol) throw new Error('No encontrada');
       if (!sol.correo_solicitante) throw new Error('Esta solicitud no tiene correo de solicitante');
 
-      // 0. Revisar en la base (no en pantalla) que no esté habilitada ya:
-      // así nunca se manda el correo dos veces ni se re-habilita una solicitud.
+      // 0. Revisar en la base (no en pantalla) que no esté habilitada ya —así nunca
+      // se manda el correo dos veces—. Si estaba retirada, se vuelve a habilitar.
       const { data: fresca, error: frErr } = await supabase
-        .from('solicitudes').select('ticket_mas_habilitado_at').eq('id', id).maybeSingle();
+        .from('solicitudes').select('ticket_mas_habilitado_at, ticket_mas_retirado_at').eq('id', id).maybeSingle();
       if (frErr) throw frErr;
-      if (fresca?.ticket_mas_habilitado_at) throw new Error('Esta solicitud ya tenía el Ticket MAS habilitado');
+      const reHabilitar = !!fresca?.ticket_mas_retirado_at;
+      if (fresca?.ticket_mas_habilitado_at && !reHabilitar) throw new Error('Esta solicitud ya tenía el Ticket MAS habilitado');
+      if (ticketDe[id]) throw new Error('Esta solicitud ya tiene Ticket MAS');
 
       // 1. Activar SOLO el permiso de enviar (no "ver") — así el solicitante
       // cae en modo "solo formulario" (ver TicketMAS.tsx: soloFormulario) y
@@ -312,9 +314,10 @@ export default function SolicitudesRecibidas() {
       if (mailErr) throw mailErr;
 
       // 3. Marcar en la solicitud que ya se hizo, para que el botón cambie
+      //    (re-habilitar = quitar el retiro; la base pone la nueva fecha)
       const { error: upErr } = await supabase
         .from('solicitudes')
-        .update({ ticket_mas_habilitado_at: new Date().toISOString() })
+        .update(reHabilitar ? { ticket_mas_retirado_at: null } : { ticket_mas_habilitado_at: new Date().toISOString() })
         .eq('id', id);
       if (upErr) throw upErr;
 
@@ -323,13 +326,15 @@ export default function SolicitudesRecibidas() {
         modulo:       'solicitudes',
         registro_id:  sol.id,
         registro_ref: sol.nombre_proyecto,
-        detalle:      { accion_especial: 'ticket_mas_habilitado', correo: sol.correo_solicitante },
+        detalle:      reHabilitar
+          ? { accion_especial: 'ticket_mas_rehabilitado', correo: sol.correo_solicitante, retiro_previo: sol.ticket_mas_retirado_motivo ?? null }
+          : { accion_especial: 'ticket_mas_habilitado', correo: sol.correo_solicitante },
       });
     },
     onSuccess: (_d, id) => {
       queryClient.invalidateQueries({ queryKey: ['solicitudes'] });
       // Si estaba abierta en el detalle, que el botón cambie ahí mismo
-      setViewing(v => (v && v.id === id ? { ...v, ticket_mas_habilitado_at: new Date().toISOString() } : v));
+      setViewing(v => (v && v.id === id ? { ...v, ticket_mas_habilitado_at: new Date().toISOString(), ticket_mas_retirado_at: null, ticket_mas_retirado_motivo: null } : v));
       toast.success('Ticket MAS habilitado y correo enviado');
     },
     onError: (err: unknown) => {
@@ -593,6 +598,14 @@ export default function SolicitudesRecibidas() {
                       <Undo2 className="w-4 h-4" /> Retirar
                     </button>
                   )}
+                  {isAdmin && s.estatus === 'recibida' && s.ticket_mas_retirado_at && !ticketDe[s.id] && (
+                    <button onClick={() => habilitarTicketMasMutation.mutate(s.id)}
+                      disabled={habilitarTicketMasMutation.isPending}
+                      title="Vuelve a dar acceso a Ticket MAS al solicitante y le avisa por correo"
+                      className="flex items-center gap-1.5 px-3 py-2 bg-blue-600 text-white rounded-md text-sm font-bold hover:bg-blue-700 transition-colors disabled:opacity-50">
+                      <Send className="w-4 h-4" /> {habilitarTicketMasMutation.isPending ? 'Enviando...' : 'Habilitar de nuevo'}
+                    </button>
+                  )}
                   {isAdmin && s.estatus === 'recibida' && !s.ticket_mas_habilitado_at && (
                     <button onClick={() => habilitarTicketMasMutation.mutate(s.id)}
                       disabled={habilitarTicketMasMutation.isPending}
@@ -765,6 +778,14 @@ export default function SolicitudesRecibidas() {
                   </button>
                 )}
                 <EstadoTicketMAS s={viewing} ticket={ticketDe[viewing.id]} grande />
+                {isAdmin && viewing.estatus === 'recibida' && viewing.ticket_mas_retirado_at && !ticketDe[viewing.id] && (
+                  <button onClick={() => habilitarTicketMasMutation.mutate(viewing.id)}
+                    disabled={habilitarTicketMasMutation.isPending}
+                    className="flex items-center gap-2 px-5 py-2 bg-blue-600 text-white rounded-md text-sm font-bold hover:bg-blue-700 transition-colors disabled:opacity-50">
+                    <Send className="w-4 h-4" />
+                    {habilitarTicketMasMutation.isPending ? 'Enviando...' : 'Habilitar de nuevo'}
+                  </button>
+                )}
                 {isAdmin && viewing.estatus === 'recibida' && viewing.ticket_mas_habilitado_at && !viewing.ticket_mas_retirado_at && !ticketDe[viewing.id] && !esHistorica(viewing) && (
                   <button onClick={() => { setRetirando(viewing); setMotivoRetiro(''); }}
                     className="flex items-center gap-2 px-5 py-2 border border-slate-300 text-slate-600 rounded-md text-sm font-medium hover:bg-slate-50 transition-colors">
@@ -813,7 +834,7 @@ export default function SolicitudesRecibidas() {
               <span className="font-semibold">{retirando.folio ? `${retirando.folio} · ` : ''}{retirando.nombre_proyecto}</span>
             </p>
             <p className="text-sm text-slate-500">
-              El solicitante ya no podrá enviar el Ticket MAS de esta solicitud. Queda registrado y <span className="font-bold">no se puede deshacer</span>: si el proyecto sigue, tendrá que enviar una nueva solicitud.
+              El solicitante ya no podrá enviar el Ticket MAS de esta solicitud hasta que lo vuelvas a habilitar (por ejemplo, después de una aclaración). Si el proyecto ya no va, mejor <span className="font-bold">cancela la solicitud</span>.
             </p>
             <label className="block text-xs font-bold text-slate-500 uppercase mt-4 mb-1">Motivo *</label>
             <textarea value={motivoRetiro} onChange={e => setMotivoRetiro(e.target.value)} rows={3}
