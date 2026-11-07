@@ -428,11 +428,12 @@ function TicketMASPrincipal({ esAutorizadorFMA }: { esAutorizadorFMA: boolean })
 
   const onSolicitudOrigen = (id: string) => {
     const sol = solicitudesParaTicket.find(x => x.id === id);
-    if (!sol) { set('solicitud_id', ''); return; }
+    // Sin solicitud: el colegio no puede escribir el nombre (solo el admin)
+    if (!sol) { setForm(p => ({ ...p, solicitud_id: '', nombre_proyecto: isAdmin ? p.nombre_proyecto : '' })); return; }
     const c = colegiosTicket.find(x => x.nombre === sol.nombre_centro);
     setForm(p => ({
       ...p, solicitud_id: sol.id,
-      nombre_proyecto: p.nombre_proyecto || sol.nombre_proyecto || '',
+      nombre_proyecto: (sol.nombre_proyecto ?? '').trim(),
       ...(c ? {
         colegio: c.nombre, razon_social: c.razon, sociedad: c.sociedad, centro_gestor: c.centro_gestor,
         territorio: c.territorio, director: c.director, admin_colegio: c.admin, contador: c.contador,
@@ -1414,8 +1415,17 @@ function TicketMASPrincipal({ esAutorizadorFMA }: { esAutorizadorFMA: boolean })
           <div className="p-4 space-y-4">
             <div>
               <label className={labelClass}>Nombre del Proyecto *</label>
-              <input className={inputClass} value={form.nombre_proyecto} onChange={e => set('nombre_proyecto', e.target.value)} placeholder="Ej: Mantenimiento de Luminarias Primaria" />
-              <p className="text-[10px] text-slate-400 mt-1">Este nombre se usará para identificar el expediente y el proyecto vinculado.</p>
+              {form.solicitud_id || !isAdmin ? (
+                <input className={readOnlyClass} value={form.nombre_proyecto} readOnly
+                  placeholder="Se toma de la Solicitud de Proyecto que elijas arriba" />
+              ) : (
+                <input className={inputClass} value={form.nombre_proyecto} onChange={e => set('nombre_proyecto', e.target.value)} placeholder="Ej: Mantenimiento de Luminarias Primaria" />
+              )}
+              <p className="text-[10px] text-slate-400 mt-1">
+                {form.solicitud_id || !isAdmin
+                  ? 'Es el nombre de tu Solicitud de Proyecto; también identifica el expediente y el proyecto vinculado.'
+                  : 'Este nombre se usará para identificar el expediente y el proyecto vinculado.'}
+              </p>
             </div>
             <div>
               <label className={labelClass}>Descripción de la obra *</label>
