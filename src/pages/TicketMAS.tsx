@@ -348,6 +348,7 @@ function TicketMASPrincipal({ esAutorizadorFMA }: { esAutorizadorFMA: boolean })
   const [showConfirmSend, setShowConfirmSend] = useState(false);
   const [viewing, setViewing]     = useState<TicketMAS | null>(null);
   const [filterStatus, setFilter] = useState('todos');
+  const [filterColegio, setFilterColegio] = useState('todos');
   const [tmasVisibleCount, setTmasVisibleCount] = useState(TMAS_PAGE_SIZE);
 
   useEffect(() => {
@@ -520,10 +521,33 @@ function TicketMASPrincipal({ esAutorizadorFMA }: { esAutorizadorFMA: boolean })
     [rawTicketsMas, filtrarPorAlcance]
   );
 
+  // Colegios con tickets (para el filtro) y tickets del colegio elegido
+  const colegiosConTicket = useMemo(
+    () => Array.from(new Set(tickets.map(t => t.colegio).filter((c): c is string => !!c))).sort((a, b) => a.localeCompare(b, 'es')),
+    [tickets]
+  );
+  const ticketsColegio = useMemo(
+    () => (filterColegio === 'todos' ? tickets : tickets.filter(t => t.colegio === filterColegio)),
+    [tickets, filterColegio]
+  );
+
+  // KPIs del listado (respetan el filtro de colegio, no el de estatus)
+  const kpisTickets = useMemo(() => {
+    const porAtender = ticketsColegio.filter(t => t.estatus === 'pendiente' || t.estatus === 'en_revision');
+    return {
+      total:       ticketsColegio.length,
+      porAtender:  porAtender.length,
+      vencidos:    porAtender.filter(isVencido).length,
+      autorizados: ticketsColegio.filter(t => t.estatus === 'autorizado').length,
+      cancelados:  ticketsColegio.filter(t => t.estatus === 'cancelado').length,
+      monto:       ticketsColegio.filter(t => t.estatus === 'autorizado').reduce((sum, t) => sum + (Number(t.cot1_importe) || 0), 0),
+    };
+  }, [ticketsColegio]);
+
   const ticketsFiltrados = useMemo(() => {
-    if (filterStatus === 'todos') return tickets;
-    return tickets.filter(t => t.estatus === filterStatus);
-  }, [tickets, filterStatus]);
+    if (filterStatus === 'todos') return ticketsColegio;
+    return ticketsColegio.filter(t => t.estatus === filterStatus);
+  }, [ticketsColegio, filterStatus]);
 
   const ticketsVisibles = useMemo(() => ticketsFiltrados.slice(0, tmasVisibleCount), [ticketsFiltrados, tmasVisibleCount]);
   const hasMoreTickets    = tmasVisibleCount < ticketsFiltrados.length;
@@ -1547,7 +1571,38 @@ function TicketMASPrincipal({ esAutorizadorFMA }: { esAutorizadorFMA: boolean })
           )}
         </div>
 
+        {/* KPIs */}
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+          {[
+            { label: 'Total Tickets', value: kpisTickets.total,       color: 'text-slate-900'   },
+            { label: 'Por Atender',   value: kpisTickets.porAtender,  color: 'text-amber-600'   },
+            { label: 'Autorizados',   value: kpisTickets.autorizados, color: 'text-emerald-600' },
+            { label: 'Cancelados',    value: kpisTickets.cancelados,  color: 'text-red-600'     },
+          ].map(({ label, value, color }) => (
+            <div key={label} className="bg-white rounded-xl border border-slate-200 p-4 shadow-sm">
+              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">{label}</p>
+              <p className={`text-xl font-black ${color}`}>{value}</p>
+              {label === 'Por Atender' && (
+                kpisTickets.vencidos > 0
+                  ? <p className="text-[10px] font-bold text-red-600 mt-0.5">⚠ {kpisTickets.vencidos} con más de 12 h sin revisar</p>
+                  : <p className="text-[10px] text-slate-400 mt-0.5">Pendientes y en revisión</p>
+              )}
+            </div>
+          ))}
+          <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-sm">
+            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Monto Autorizado</p>
+            <p className="text-lg font-black text-blue-600">
+              {kpisTickets.monto.toLocaleString('es-MX', { style: 'currency', currency: 'MXN' })}
+            </p>
+          </div>
+        </div>
+
         <div className="flex items-center gap-3 flex-wrap">
+          <select value={filterColegio} onChange={e => { setFilterColegio(e.target.value); setTmasVisibleCount(TMAS_PAGE_SIZE); }}
+            className="h-8 px-3 bg-white border border-slate-300 rounded-full text-xs font-semibold text-slate-700 focus:ring-2 focus:ring-slate-400 focus:outline-none">
+            <option value="todos">Todos los colegios</option>
+            {colegiosConTicket.map(c => <option key={c} value={c}>{c}</option>)}
+          </select>
           {['todos','pendiente','en_revision','autorizado','cancelado'].map(s => (
             <button key={s} onClick={() => { setFilter(s); setTmasVisibleCount(TMAS_PAGE_SIZE); }}
               className={`px-3 py-1.5 rounded-full text-xs font-semibold border transition ${filterStatus === s ? 'bg-slate-900 text-white border-slate-900' : 'bg-white text-slate-600 border-slate-300 hover:border-slate-500'}`}>
