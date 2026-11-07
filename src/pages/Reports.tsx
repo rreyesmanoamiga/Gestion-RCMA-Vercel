@@ -10,7 +10,6 @@ import PageHeader from '@/components/shared/PageHeader';
 import { mergeActividadesConCustom, calcularFechasEnMes } from './CalendarioMantenimiento';
 import { COLEGIOS, normalizarColegio } from '@/lib/colegios';
 import { useComplianceDocs, esRetraso, type ComplianceDoc } from '@/lib/complianceShared';
-import { logoCuadradoDataURL } from '@/lib/logoPdf';
 import PresentacionSemanal from '@/components/reports/PresentacionSemanal';
 import { usePermissions } from '@/hooks/usePermissions';
 import { useScope } from '@/hooks/useScope';
@@ -38,14 +37,28 @@ interface Stats    { total: number; completed: number; avgProgress: number; }
 // ─── Helpers de dibujo ────────────────────────────────────────────────────────
 type Doc = InstanceType<typeof import('jspdf').jsPDF>;
 
-const STATUS_COLORS_RGB: Record<string, [number,number,number]> = {
-  en_proceso:  [59,  130, 246],
-  en_espera:   [245, 158, 11],
-  completado:  [34,  197, 94],
-  cancelado:   [239, 68,  68],
-  pausado:     [156, 163, 175],
-  pendiente:   [139, 92,  246],
-  aprobado:    [34,  197, 94],
+// ─── Diseño institucional de reportes (PDF) ──────────────────────────────────
+// Azul marino y naranja Mano Amiga, con logo. Distinto al formato del Ticket MAS
+// y de la Solicitud: franja vertical a la izquierda, secciones numeradas,
+// tarjetas blancas y pie con línea naranja.
+type RGB = [number, number, number];
+const C_NAVY:   RGB = [0, 41, 90];
+const C_NAVY2:  RGB = [31, 78, 121];
+const C_BLUE:   RGB = [91, 135, 181];
+const C_ORANGE: RGB = [237, 113, 2];
+const C_TEXT:   RGB = [30, 41, 59];
+const C_MUTED:  RGB = [100, 116, 139];
+const C_LINE:   RGB = [226, 232, 240];
+const C_ZEBRA:  RGB = [245, 248, 252];
+
+const STATUS_COLORS_RGB: Record<string, RGB> = {
+  en_proceso:  C_NAVY2,
+  en_espera:   C_ORANGE,
+  completado:  [22, 163, 74],
+  cancelado:   [220, 38, 38],
+  pausado:     [148, 163, 184],
+  pendiente:   C_BLUE,
+  aprobado:    [22, 163, 74],
 };
 const STATUS_LABELS: Record<string, string> = {
   en_proceso: 'En Proceso', en_espera: 'En Espera',
@@ -56,96 +69,134 @@ const STATUS_LABELS: Record<string, string> = {
 function fmtMXN(n: number): string {
   return n.toLocaleString('es-MX', { style: 'currency', currency: 'MXN', maximumFractionDigits: 0 });
 }
+/** Mezcla un color con blanco (t = 0 → color, 1 → blanco) */
+const tinte = (c: RGB, t: number): RGB => c.map(v => Math.round(v + (255 - v) * t)) as RGB;
+const fechaLarga = () => new Date().toLocaleDateString('es-MX', { year: 'numeric', month: 'long', day: 'numeric' });
 
-// ─── Gráfica de barras horizontales (por estatus) ─────────────────────────────
+// ─── Logo horizontal Mano Amiga (recortado, sin espacio vacío) ───────────────
+interface LogoPDF { data: string; ratio: number }
+let logoCache: LogoPDF | null | undefined;
+async function cargarLogo(): Promise<LogoPDF | null> {
+  if (logoCache !== undefined) return logoCache;
+  try {
+    logoCache = await new Promise<LogoPDF>((res, rej) => {
+      const img = new Image(); img.crossOrigin = 'anonymous';
+      img.onload = () => {
+        const w = img.naturalWidth, h = img.naturalHeight;
+        const cv = document.createElement('canvas'); cv.width = w; cv.height = h;
+        const ctx = cv.getContext('2d')!; ctx.drawImage(img, 0, 0);
+        let x0 = w, y0 = h, x1 = -1, y1 = -1;
+        try {
+          const d = ctx.getImageData(0, 0, w, h).data;
+          for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+            const i = (y * w + x) * 4;
+            const vacio = d[i + 3] < 10 || (d[i] > 245 && d[i + 1] > 245 && d[i + 2] > 245);
+            if (!vacio) { if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y; }
+          }
+        } catch { x0 = 0; y0 = 0; x1 = w - 1; y1 = h - 1; }
+        if (x1 < x0) { x0 = 0; y0 = 0; x1 = w - 1; y1 = h - 1; }
+        const cw = x1 - x0 + 1, ch = y1 - y0 + 1;
+        const out = document.createElement('canvas'); out.width = cw; out.height = ch;
+        out.getContext('2d')!.drawImage(cv, x0, y0, cw, ch, 0, 0, cw, ch);
+        res({ data: out.toDataURL('image/png'), ratio: cw / ch });
+      };
+      img.onerror = rej; img.src = '/colegio-mano-amiga.png';
+    });
+  } catch { logoCache = null; }
+  return logoCache;
+}
+
+// ─── Gráfica de barras horizontales ──────────────────────────────────────────
 function drawHorizontalBars(
   doc: Doc, x: number, y: number, w: number,
-  data: { label: string; value: number; color: [number,number,number] }[],
+  data: { label: string; value: number; color: RGB }[],
   title: string
 ): number {
   const total = data.reduce((s, d) => s + d.value, 0);
   if (total === 0) return y;
-
-  doc.setFontSize(10); doc.setFont('helvetica', 'bold'); doc.setTextColor(30, 30, 30);
-  doc.text(title, x, y); y += 6;
-
-  const barW = w - 30; const barH = 6; const gap = 9;
+  if (title) {
+    doc.setFontSize(8.5); doc.setFont('helvetica', 'bold'); doc.setTextColor(...C_NAVY);
+    doc.text(title.toUpperCase(), x, y); y += 6;
+  }
+  const max = Math.max(...data.map(d => d.value));
+  const barW = w - 42; const barH = 4.2; const gap = 8;
   data.forEach(item => {
     if (item.value === 0) return;
-    const pct = item.value / total;
-    const filled = Math.max(2, Math.round(pct * barW));
-    // Label izquierda
-    doc.setFontSize(7.5); doc.setFont('helvetica', 'normal'); doc.setTextColor(80, 80, 80);
-    doc.text(item.label.length > 14 ? item.label.slice(0,12)+'…' : item.label, x, y);
-    // Barra fondo
-    doc.setFillColor(241, 245, 249); doc.rect(x + 28, y - barH + 1, barW, barH, 'F');
-    // Barra rellena
-    doc.setFillColor(...item.color); doc.rect(x + 28, y - barH + 1, filled, barH, 'F');
-    // Valor
-    doc.setFontSize(7); doc.setFont('helvetica', 'bold'); doc.setTextColor(30, 30, 30);
-    doc.text(String(item.value), x + 28 + barW + 2, y);
+    const filled = Math.max(3, (item.value / max) * barW);
+    doc.setFontSize(7.5); doc.setFont('helvetica', 'normal'); doc.setTextColor(...C_TEXT);
+    doc.text(item.label.length > 16 ? item.label.slice(0, 15) + '…' : item.label, x, y);
+    doc.setFillColor(238, 242, 247); doc.roundedRect(x + 32, y - barH + 0.8, barW, barH, barH / 2, barH / 2, 'F');
+    doc.setFillColor(...item.color); doc.roundedRect(x + 32, y - barH + 0.8, filled, barH, barH / 2, barH / 2, 'F');
+    doc.setFontSize(7.5); doc.setFont('helvetica', 'bold'); doc.setTextColor(...C_NAVY);
+    doc.text(String(item.value), x + 32 + filled + 2, y);
     y += gap;
   });
-  return y + 3;
+  return y + 2;
 }
 
-// ─── Cajas de KPI ─────────────────────────────────────────────────────────────
+// ─── Tarjetas de KPI (blancas, con punto de color) ───────────────────────────
 function drawKPIBoxes(
   doc: Doc, x: number, y: number, W: number,
-  boxes: { label: string; value: string; color: [number,number,number] }[]
+  boxes: { label: string; value: string; color: RGB }[]
 ): number {
   const n = boxes.length;
-  const bw = (W - 40 - (n - 1) * 4) / n;
+  const bw = (W - 40 - (n - 1) * 3.5) / n;
+  const bh = 17;
   boxes.forEach((box, i) => {
-    const bx = x + i * (bw + 4);
-    doc.setFillColor(...box.color); doc.rect(bx, y, bw, 16, 'F');
-    doc.setTextColor(255, 255, 255); doc.setFont('helvetica', 'bold');
-    // Ajuste dinámico de fuente para que el label siempre quepa
-    const fs = box.label.length > 17 ? 5.5 : box.label.length > 14 ? 6 : 6.5;
-    doc.setFontSize(fs);
-    doc.text(box.label, bx + bw / 2, y + 5.5, { align: 'center' });
-    doc.setFontSize(10); doc.setFont('helvetica', 'bold');
-    doc.text(box.value, bx + bw / 2, y + 13.5, { align: 'center' });
+    const bx = x + i * (bw + 3.5);
+    doc.setFillColor(255, 255, 255); doc.setDrawColor(...C_LINE); doc.setLineWidth(0.3);
+    doc.roundedRect(bx, y, bw, bh, 2.5, 2.5, 'FD');
+    doc.setFillColor(...box.color); doc.roundedRect(bx, y + 3, 1.4, bh - 6, 0.7, 0.7, 'F');
+    const fs = box.label.length > 20 ? 5.4 : box.label.length > 15 ? 5.9 : 6.4;
+    doc.setFontSize(fs); doc.setFont('helvetica', 'bold'); doc.setTextColor(...C_MUTED);
+    doc.text(box.label.toUpperCase(), bx + 4.5, y + 6);
+    const largo = box.value.length > 11;
+    doc.setFontSize(largo ? 9.5 : 13); doc.setTextColor(...C_NAVY);
+    doc.text(box.value, bx + 4.5, y + (largo ? 13 : 13.6));
   });
-  return y + 22;
+  return y + bh + 5;
 }
 
-// ─── Stacked bar (distribución de estatus) ────────────────────────────────────
+// ─── Barra apilada (distribución) ────────────────────────────────────────────
 function drawStackedBar(
   doc: Doc, x: number, y: number, w: number,
-  segments: { value: number; color: [number,number,number]; label: string }[],
+  segments: { value: number; color: RGB; label: string }[],
   title: string
 ): number {
   const total = segments.reduce((s, d) => s + d.value, 0);
   if (total === 0) return y;
-  doc.setFontSize(9); doc.setFont('helvetica', 'bold'); doc.setTextColor(30, 30, 30);
-  doc.text(title, x, y); y += 5;
-  const barH = 10; let cx = x;
-  segments.forEach(seg => {
-    if (seg.value === 0) return;
-    const sw = Math.max(2, Math.round((seg.value / total) * w));
-    doc.setFillColor(...seg.color); doc.rect(cx, y, sw, barH, 'F');
-    if (sw > 12) {
-      doc.setFontSize(6.5); doc.setFont('helvetica', 'bold'); doc.setTextColor(255, 255, 255);
-      doc.text(String(seg.value), cx + sw / 2, y + 6.5, { align: 'center' });
+  doc.setFontSize(8.5); doc.setFont('helvetica', 'bold'); doc.setTextColor(...C_NAVY);
+  doc.text(title.toUpperCase(), x, y); y += 4;
+  const barH = 8; let cx = x;
+  doc.setFillColor(238, 242, 247); doc.roundedRect(x, y, w, barH, 2, 2, 'F');
+  const visibles = segments.filter(s => s.value > 0);
+  visibles.forEach((seg, i) => {
+    const sw = Math.max(2, (seg.value / total) * w);
+    doc.setFillColor(...seg.color);
+    if (visibles.length === 1) doc.roundedRect(cx, y, sw, barH, 2, 2, 'F');
+    else if (i === 0) { doc.roundedRect(cx, y, sw, barH, 2, 2, 'F'); doc.rect(cx + sw - 2, y, 2, barH, 'F'); }
+    else if (i === visibles.length - 1) { doc.roundedRect(cx, y, sw, barH, 2, 2, 'F'); doc.rect(cx, y, 2, barH, 'F'); }
+    else doc.rect(cx, y, sw, barH, 'F');
+    if (sw > 10) {
+      doc.setFontSize(7); doc.setFont('helvetica', 'bold'); doc.setTextColor(255, 255, 255);
+      doc.text(String(seg.value), cx + sw / 2, y + 5.4, { align: 'center' });
     }
     cx += sw;
   });
-  // Leyenda
-  y += barH + 4;
+  y += barH + 5;
   let lx = x;
-  segments.filter(s => s.value > 0).forEach(seg => {
-    doc.setFillColor(...seg.color); doc.rect(lx, y, 4, 4, 'F');
-    doc.setFontSize(6.5); doc.setFont('helvetica', 'normal'); doc.setTextColor(80, 80, 80);
+  visibles.forEach(seg => {
+    doc.setFillColor(...seg.color); doc.circle(lx + 1.6, y - 1.2, 1.6, 'F');
+    doc.setFontSize(7); doc.setFont('helvetica', 'normal'); doc.setTextColor(...C_TEXT);
     const txt = `${seg.label} (${seg.value})`;
-    doc.text(txt, lx + 6, y + 3.5);
+    doc.text(txt, lx + 4.5, y);
     lx += doc.getTextWidth(txt) + 10;
-    if (lx > x + w) { lx = x; y += 7; }
+    if (lx > x + w - 30) { lx = x; y += 6; }
   });
-  return y + 8;
+  return y + 7;
 }
 
-// ─── Tabla genérica ────────────────────────────────────────────────────────────
+// ─── Tabla (encabezado azul redondeado, renglones alternados) ────────────────
 function drawTable(
   doc: Doc, y: number, W: number,
   headers: { label: string; x: number; align?: 'left' | 'right' | 'center' }[],
@@ -154,37 +205,39 @@ function drawTable(
   pageH = 297
 ): number {
   const doc2 = doc as any;
-  doc.setFillColor(241, 245, 249); doc.rect(18, y - 4, W - 36, 9, 'F');
-  doc.setFontSize(8); doc.setFont('helvetica', 'bold'); doc.setTextColor(100, 116, 139);
-  headers.forEach(h => doc.text(h.label, h.x, y, { align: h.align ?? 'left' }));
-  y += 7;
-  doc.setDrawColor(220, 220, 220); doc.line(20, y, W - 20, y); y += 2;
-  doc.setFont('helvetica', 'normal'); doc.setTextColor(30, 30, 30);
+  const encabezado = () => {
+    doc.setFillColor(...C_NAVY); doc.roundedRect(18, y - 5, W - 36, 9, 2, 2, 'F');
+    doc.rect(18, y, W - 36, 4, 'F');
+    doc.setFontSize(7); doc.setFont('helvetica', 'bold'); doc.setTextColor(255, 255, 255);
+    headers.forEach(h => doc.text(h.label.toUpperCase(), h.x, y + 0.6, { align: h.align ?? 'left' }));
+    y += 9;
+  };
+  encabezado();
+  doc.setFont('helvetica', 'normal');
   rows.slice(0, maxRows).forEach((row, i) => {
-    if (y > pageH - 32) { doc.addPage(); y = 20; }
-    if (i % 2 === 0) { doc.setFillColor(248, 250, 252); doc.rect(18, y - 4, W - 36, 8, 'F'); }
-    doc.setFontSize(8);
+    if (y > pageH - 26) { doc.addPage(); y = 22; encabezado(); doc.setFont('helvetica', 'normal'); }
+    if (i % 2 === 1) { doc.setFillColor(...C_ZEBRA); doc.rect(18, y - 4.6, W - 36, 7.4, 'F'); }
+    doc.setDrawColor(238, 242, 247); doc.setLineWidth(0.2); doc.line(18, y + 2.8, W - 18, y + 2.8);
+    doc.setFontSize(7.8); doc.setTextColor(...C_TEXT);
     row.forEach((cell, ci) => {
       const h = headers[ci];
+      if (!h) return;
       const nextX = ci < headers.length - 1 ? headers[ci + 1].x : (W - 18);
-      const maxW  = nextX - h.x - 2;
-      // Usar medición exacta de texto para truncar solo si es necesario
+      const maxW  = h.align === 'right' ? 40 : Math.max(nextX - h.x - 2, ci === headers.length - 1 ? 17 : 0);
       let txt = String(cell ?? '—');
       if (doc2.getTextWidth && doc2.getTextWidth(txt) > maxW) {
-        while (txt.length > 1 && doc2.getTextWidth(txt + '…') > maxW) {
-          txt = txt.slice(0, -1);
-        }
+        while (txt.length > 1 && doc2.getTextWidth(txt + '…') > maxW) txt = txt.slice(0, -1);
         txt = txt + '…';
       }
       doc.text(txt, h.x, y, { align: h.align ?? 'left' });
     });
-    y += 8;
+    y += 7.4;
   });
   if (rows.length > maxRows) {
-    y += 2; doc.setFontSize(8); doc.setTextColor(100, 116, 139);
+    y += 2; doc.setFontSize(7.5); doc.setFont('helvetica', 'italic'); doc.setTextColor(...C_MUTED);
     doc.text(`Mostrando ${maxRows} de ${rows.length} registros.`, 20, y); y += 6;
   }
-  return y;
+  return y + 2;
 }
 
 async function loadJsPDF(): Promise<typeof import('jspdf').jsPDF> {
@@ -199,33 +252,92 @@ async function loadJsPDF(): Promise<typeof import('jspdf').jsPDF> {
   return w.jspdf!.jsPDF;
 }
 
+/** Encabezado: logo a la izquierda, título grande y chip naranja con la fecha. Deja y ≈ 44. */
 async function pdfHeader(doc: Doc, W: number, title: string, subtitle: string) {
-  doc.setFillColor(15, 23, 42); doc.rect(0, 0, W, 28, 'F');
-  doc.setFontSize(15); doc.setFont('helvetica', 'bold'); doc.setTextColor(255, 255, 255);
-  doc.text(title, 20, 13);
-  doc.setFontSize(8.5); doc.setFont('helvetica', 'normal'); doc.setTextColor(180, 180, 200);
-  doc.text(subtitle, 20, 21);
-  try {
-    const logoImg = await new Promise<string>((res, rej) => {
-      const img = new Image(); img.crossOrigin = 'anonymous';
-      img.onload = () => res(logoCuadradoDataURL(img));
-      img.onerror = rej; img.src = '/logo.png';
-    });
-    doc.addImage(logoImg, 'PNG', W - 32, 2, 22, 22);
-  } catch { /* sin logo */ }
+  const logo = await cargarLogo();
+  if (logo) { const h = 15; doc.addImage(logo.data, 'PNG', 20, 11, h * logo.ratio, h); }
+  doc.setFontSize(6.8); doc.setFont('helvetica', 'bold'); doc.setTextColor(...C_ORANGE);
+  doc.text('REPORTE  ·  SISTEMA RCMA', W - 18, 12, { align: 'right', charSpace: 0.6 } as any);
+  doc.setFontSize(19); doc.setTextColor(...C_NAVY);
+  doc.text(title, W - 18, 20.5, { align: 'right' });
+  doc.setFontSize(7.6); doc.setFont('helvetica', 'bold');
+  const tw = doc.getTextWidth(subtitle) + 8;
+  doc.setFillColor(255, 243, 232); doc.roundedRect(W - 18 - tw, 23.5, tw, 6, 3, 3, 'F');
+  doc.setTextColor(194, 65, 12); doc.text(subtitle, W - 18 - tw / 2, 27.6, { align: 'center' });
+  doc.setDrawColor(...C_LINE); doc.setLineWidth(0.5); doc.line(20, 34, W - 18, 34);
 }
 
-function pdfFooter(doc: Doc, label: string) {
+/** Título de sección: número en recuadro naranja, título azul y línea */
+function seccionPDF(doc: Doc, y: number, W: number, numero: string | number, titulo: string): number {
+  const num = String(numero).padStart(2, '0');
+  doc.setFontSize(8); doc.setFont('helvetica', 'bold');
+  const nw = doc.getTextWidth(num) + 5;
+  doc.setFillColor(...C_ORANGE); doc.roundedRect(20, y - 4.4, nw, 6.2, 1.6, 1.6, 'F');
+  doc.setTextColor(255, 255, 255); doc.text(num, 20 + nw / 2, y, { align: 'center' });
+  doc.setFontSize(10); doc.setTextColor(...C_NAVY);
+  const t = titulo.toUpperCase();
+  doc.text(t, 20 + nw + 3, y);
+  const tx = 20 + nw + 3 + doc.getTextWidth(t) + 3;
+  doc.setDrawColor(203, 213, 225); doc.setLineWidth(0.3); doc.line(tx, y - 1.4, W - 18, y - 1.4);
+  return y + 8;
+}
+
+/** Pie y franja lateral en cada hoja (omite las hojas de portada) */
+function pdfFooter(doc: Doc, label: string, portadas = 0) {
   const pages = doc.getNumberOfPages();
   for (let i = 1; i <= pages; i++) {
+    if (i <= portadas) continue;
     doc.setPage(i);
     const pH = (doc as any).internal.pageSize.getHeight();
     const pW = (doc as any).internal.pageSize.getWidth();
-    doc.setFillColor(15, 23, 42); doc.rect(0, pH - 11, pW, 11, 'F');
-    doc.setFontSize(7); doc.setFont('helvetica', 'normal'); doc.setTextColor(160, 160, 180);
-    doc.text(label, 20, pH - 5);
-    doc.text('Página ' + i + ' de ' + pages, pW - 20, pH - 5, { align: 'right' });
+    // Franja lateral: azul con remate naranja
+    doc.setFillColor(...C_NAVY); doc.rect(0, 0, 5, pH * 0.78, 'F');
+    doc.setFillColor(...C_ORANGE); doc.rect(0, pH * 0.78, 5, pH * 0.22, 'F');
+    // Pie
+    doc.setDrawColor(...C_ORANGE); doc.setLineWidth(0.9); doc.line(5, pH - 11, pW, pH - 11);
+    doc.setFontSize(7); doc.setFont('helvetica', 'bold'); doc.setTextColor(...C_NAVY);
+    doc.text('Colegios Mano Amiga', 20, pH - 5);
+    const bw = doc.getTextWidth('Colegios Mano Amiga ');
+    doc.setFont('helvetica', 'normal'); doc.setTextColor(...C_MUTED);
+    doc.text('— Juntos Transformando Vidas  ·  ' + label, 20 + bw, pH - 5);
+    const pag = 'Página ' + i + ' de ' + pages;
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(7);
+    const pw = doc.getTextWidth(pag) + 7;
+    doc.setFillColor(...C_NAVY); doc.roundedRect(pW - 18 - pw, pH - 8.6, pw, 5.4, 2.7, 2.7, 'F');
+    doc.setTextColor(255, 255, 255); doc.text(pag, pW - 18 - pw / 2, pH - 4.9, { align: 'center' });
   }
+}
+
+/** Portada del Resumen General: fondo azul, círculos y 4 cifras clave */
+async function portadaPDF(doc: Doc, titulo: string[], cifras: { label: string; value: string; destacada?: boolean }[]) {
+  const W = 210, H = 297;
+  doc.setFillColor(...C_NAVY); doc.rect(0, 0, W, H, 'F');
+  doc.setFillColor(11, 58, 115); doc.circle(W + 20, 40, 105, 'F');
+  doc.setFillColor(44, 86, 134); doc.circle(W + 20, 40, 70, 'F');
+  doc.setDrawColor(...C_ORANGE); doc.setLineWidth(7); doc.circle(-6, H + 4, 46, 'S');
+  const logo = await cargarLogo();
+  doc.setFillColor(255, 255, 255); doc.roundedRect(18, 18, 62, 26, 4, 4, 'F');
+  if (logo) { const lh = 16, lw = Math.min(54, lh * logo.ratio); doc.addImage(logo.data, 'PNG', 18 + (62 - lw) / 2, 18 + (26 - lw / logo.ratio) / 2, lw, lw / logo.ratio); }
+  doc.setFontSize(8.5); doc.setFont('helvetica', 'bold'); doc.setTextColor(...C_ORANGE);
+  doc.text('SISTEMA RCMA  ·  COORDINACIÓN DE OBRAS Y MANTENIMIENTO', 18, 108, { charSpace: 0.8 } as any);
+  doc.setFontSize(40); doc.setTextColor(255, 255, 255);
+  titulo.forEach((l, i) => doc.text(l, 18, 126 + i * 16));
+  doc.setFontSize(12); doc.setFont('helvetica', 'normal'); doc.setTextColor(203, 213, 225);
+  doc.text('Corte al ' + fechaLarga(), 18, 126 + titulo.length * 16 + 4);
+  const bw = 78, bh = 24, gx = 6, top = 178;
+  cifras.slice(0, 4).forEach((c, i) => {
+    const bx = 18 + (i % 2) * (bw + gx), by = top + Math.floor(i / 2) * (bh + gx);
+    if (c.destacada) { doc.setFillColor(...C_ORANGE); doc.roundedRect(bx, by, bw, bh, 4, 4, 'F'); }
+    else { doc.setFillColor(15, 55, 105); doc.setDrawColor(52, 90, 140); doc.setLineWidth(0.4); doc.roundedRect(bx, by, bw, bh, 4, 4, 'FD'); }
+    doc.setFontSize(7); doc.setFont('helvetica', 'bold'); doc.setTextColor(...(c.destacada ? [255, 228, 204] as RGB : [147, 197, 253] as RGB));
+    doc.text(c.label.toUpperCase(), bx + 6, by + 8, { charSpace: 0.4 } as any);
+    doc.setFontSize(c.value.length > 10 ? 15 : 19); doc.setTextColor(255, 255, 255);
+    doc.text(c.value, bx + 6, by + 18.5);
+  });
+  doc.setDrawColor(255, 255, 255); doc.setLineWidth(0.2); doc.line(18, H - 22, W - 18, H - 22);
+  doc.setFontSize(8); doc.setFont('helvetica', 'normal'); doc.setTextColor(203, 213, 225);
+  doc.text('Colegios Mano Amiga — Juntos Transformando Vidas', 18, H - 15);
+  doc.text('Documento confidencial', W - 18, H - 15, { align: 'right' });
 }
 
 // ─── Export PDF: Estatus por Colegio ──────────────────────────────────────────
@@ -235,8 +347,8 @@ async function exportEstatusColegioPDF({ projects, tickets, ticketsMas, minimos,
   const JsPDF = await loadJsPDF();
   const doc = new JsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
   const W = 297;
-  await pdfHeader(doc, W, 'Estatus por Colegio', 'Sistema RCMA  ·  Generado el ' + new Date().toLocaleDateString('es-MX', { year: 'numeric', month: 'long', day: 'numeric' }));
-  let y = 38;
+  await pdfHeader(doc, W, 'Estatus por Colegio', 'Generado el ' + fechaLarga());
+  let y = 44;
 
   const colegios = Array.from(new Set([
     ...projects.map(p => p.colegio).filter(Boolean) as string[],
@@ -271,6 +383,20 @@ async function exportEstatusColegioPDF({ projects, tickets, ticketsMas, minimos,
     ];
   });
 
+  const totAct  = projects.filter(p => p.status !== 'completado' && p.status !== 'cancelado').length;
+  const totComp = projects.filter(p => p.status === 'completado').length;
+  const totPres = projects.reduce((s, p) => s + (p.budget ?? 0), 0);
+  const totMas  = ticketsMas.filter((t: any) => t.estatus === 'pendiente' || t.estatus === 'en_revision').length;
+  y = seccionPDF(doc, y, W, 1, 'Panorama');
+  y = drawKPIBoxes(doc, 20, y, W, [
+    { label: 'Colegios',           value: String(colegios.length), color: C_NAVY },
+    { label: 'Proyectos activos',  value: String(totAct),          color: C_NAVY2 },
+    { label: 'Completados',        value: String(totComp),         color: [22, 163, 74] },
+    { label: 'Presupuesto',        value: fmtMXN(totPres),         color: C_ORANGE },
+    { label: 'Ticket MAS por atender', value: String(totMas),      color: C_BLUE },
+  ]);
+  y += 2;
+  y = seccionPDF(doc, y, W, 2, 'Detalle por colegio');
   y = drawTable(doc, y, W, [
     { label: 'Colegio',            x: 20  },
     { label: 'Activos',            x: 88,  align: 'center' },
@@ -282,120 +408,148 @@ async function exportEstatusColegioPDF({ projects, tickets, ticketsMas, minimos,
     { label: 'Fase Levantamiento', x: 248 },
   ], rows, 200, 210);
 
-  pdfFooter(doc, 'Sistema RCMA  ·  Colegios Mano Amiga  ·  Documento confidencial');
+  pdfFooter(doc, 'Estatus por Colegio  ·  Documento confidencial');
   doc.save('estatus-por-colegio-' + Date.now() + '.pdf');
 }
 
 // ─── Export PDF: Reporte de Incidencias ───────────────────────────────────────
-async function exportIncidenciasPDF({ projects, pendientes, ticketsMas, minimos, pagosLev, planteles }: {
-  projects: Project[]; pendientes: Pendiente[]; ticketsMas: any[]; minimos: any[];
+async function exportIncidenciasPDF({ projects, nexusPendientes, ticketsMas, minimos, pagosLev, planteles }: {
+  projects: Project[]; nexusPendientes: NexusPendiente[]; ticketsMas: any[]; minimos: any[];
   pagosLev: PagoLev[]; planteles: PlantelLev[];
 }): Promise<void> {
   const JsPDF = await loadJsPDF();
   const doc = new JsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
   const W = 210;
-  await pdfHeader(doc, W, 'Reporte de Incidencias', 'Sistema RCMA  ·  Generado el ' + new Date().toLocaleDateString('es-MX', { year: 'numeric', month: 'long', day: 'numeric' }));
-  let y = 38;
+  await pdfHeader(doc, W, 'Reporte de Incidencias', 'Generado el ' + fechaLarga());
+  let y = 42;
+  const ROJO: RGB = [220, 38, 38], VERDE: RGB = [22, 163, 74];
+  const fmtF = (d?: string | null) => d ? new Date(d.length === 10 ? d + 'T12:00:00' : d).toLocaleDateString('es-MX', { day: '2-digit', month: '2-digit', year: 'numeric' }) : '—';
 
-  const sectionTitle = (title: string, color: [number,number,number]) => {
-    if (y > 270) { doc.addPage(); y = 20; }
-    doc.setFillColor(...color); doc.rect(18, y - 4, W - 36, 9, 'F');
-    doc.setFontSize(9.5); doc.setFont('helvetica', 'bold'); doc.setTextColor(255, 255, 255);
-    doc.text(title, 22, y + 2); y += 11;
-  };
-  const emptyMsg = (msg: string) => {
-    doc.setFontSize(8.5); doc.setFont('helvetica', 'normal'); doc.setTextColor(150, 150, 150);
-    doc.text(msg, 20, y); y += 8;
-  };
-
-  // 1. Tickets MAS vencidos (+12h sin revisión)
-  sectionTitle('1. Tickets MAS Vencidos (más de 12h sin revisión)', [220, 38, 38]);
-  const tmasVencidos = ticketsMas.filter((t: any) => {
-    if (t.estatus !== 'pendiente') return false;
-    if (!t.created_at) return false;
-    return (Date.now() - new Date(t.created_at).getTime()) > 12 * 60 * 60 * 1000;
-  });
-  if (tmasVencidos.length > 0) {
-    const rows = tmasVencidos.slice(0, 30).map((t: any) => [
-      t.folio ?? '—', t.colegio ?? '—', t.territorio ?? '—',
-      t.created_at ? new Date(t.created_at).toLocaleDateString('es-MX') : '—',
-    ]);
-    y = drawTable(doc, y, W, [
-      { label: 'Folio', x: 20 }, { label: 'Colegio', x: 65 }, { label: 'Territorio', x: 140 }, { label: 'Fecha', x: 170 },
-    ], rows, 30, 297);
-  } else emptyMsg('Sin tickets MAS vencidos. ✓');
-  y += 4;
-
-  // 2. Proyectos urgentes con avance bajo
-  sectionTitle('2. Proyectos Urgentes con Avance Menor a 30%', [202, 138, 4]);
+  // ── Cálculo de las 5 incidencias ──
+  const ahora = Date.now();
+  const horasDe = (t: any) => t.created_at ? Math.floor((ahora - new Date(t.created_at).getTime()) / 3600000) : 0;
+  const tmasSinAtender = ticketsMas
+    .filter((t: any) => (t.estatus === 'pendiente' || t.estatus === 'en_revision') && horasDe(t) > 12)
+    .sort((a: any, b: any) => horasDe(b) - horasDe(a));
   const urgentesBajoAvance = projects.filter(p => p.priority === 'urgente' && p.status !== 'completado' && p.status !== 'cancelado' && (p.progress ?? 0) < 30);
-  if (urgentesBajoAvance.length > 0) {
-    const rows = urgentesBajoAvance.slice(0, 30).map(p => [
-      p.folio ?? '—', p.name ?? '—', p.colegio ?? '—', (p.progress ?? 0) + '%',
-    ]);
-    y = drawTable(doc, y, W, [
-      { label: 'Folio', x: 20 }, { label: 'Proyecto', x: 50 }, { label: 'Colegio', x: 140 }, { label: 'Avance', x: 175, align: 'right' },
-    ], rows, 30, 297);
-  } else emptyMsg('Sin proyectos urgentes con avance bajo. ✓');
-  y += 4;
-
-  // 3. Pendientes de prioridad alta/urgente
-  sectionTitle('3. Pendientes de Prioridad Alta o Urgente', [202, 138, 4]);
-  const pendUrgentes = pendientes.filter(p => p.prioridad === 'alta' || p.prioridad === 'urgente');
-  if (pendUrgentes.length > 0) {
-    const rows = pendUrgentes.slice(0, 30).map(p => [
-      p.colegio ?? '—', p.nombre_proyecto ?? '—', p.territorio ?? '—', p.prioridad ?? '—',
-    ]);
-    y = drawTable(doc, y, W, [
-      { label: 'Colegio', x: 20 }, { label: 'Pendiente', x: 60 }, { label: 'Territorio', x: 150 }, { label: 'Prioridad', x: 175 },
-    ], rows, 30, 297);
-  } else emptyMsg('Sin pendientes de prioridad alta o urgente. ✓');
-  y += 4;
-
-  // 4. Mínimos Indispensables con incumplimientos críticos (P1)
-  sectionTitle('4. Mínimos Indispensables — Incumplimientos Críticos (P1)', [220, 38, 38]);
+  const pendUrgentes = nexusPendientes.filter(p =>
+    (p.prioridad === 'alta' || p.prioridad === 'urgente') && p.estatus !== 'completado' && p.estatus !== 'cancelado');
   const ITEM_PRIO_INC: Record<string, string> = {
     puertas_ancho:'P1',pasillos:'P1',tablero:'P1',circuitos:'P1',polo_tierra:'P1',agua_red:'P1',gas:'P1',pasillos_libres:'P1',const_pc:'P1',pipc:'P1',seg_estr:'P1',extintores:'P1',senal_emerg:'P1',cisterna_limp:'P1',cert_extinct:'P1',
   };
-  const minP1Criticos = minimos.filter((m: any) => {
-    const its = Array.isArray(m.items) ? m.items : [];
-    return its.some((i: any) => (ITEM_PRIO_INC[i.id] ?? 'P3') === 'P1' && i.estado === 'no_cumple');
-  });
-  if (minP1Criticos.length > 0) {
-    const rows = minP1Criticos.slice(0, 30).map((m: any) => {
-      const its = Array.isArray(m.items) ? m.items : [];
-      const p1nc = its.filter((i: any) => (ITEM_PRIO_INC[i.id] ?? 'P3') === 'P1' && i.estado === 'no_cumple').length;
-      return [m.colegio ?? '—', m.territorio ?? '—', String(p1nc)];
-    });
-    y = drawTable(doc, y, W, [
-      { label: 'Colegio', x: 20 }, { label: 'Territorio', x: 110 }, { label: 'Pendientes P1', x: 160, align: 'right' },
-    ], rows, 30, 297);
-  } else emptyMsg('Sin incumplimientos críticos P1. ✓');
-  y += 4;
-
-  // 5. Pagos de Levantamiento Nacional vencidos
-  sectionTitle('5. Pagos de Levantamiento Nacional Vencidos', [220, 38, 38]);
+  const p1NoCumple = (m: any) => (Array.isArray(m.items) ? m.items : [])
+    .filter((i: any) => (ITEM_PRIO_INC[i.id] ?? 'P3') === 'P1' && i.estado === 'no_cumple').length;
+  const minP1Criticos = minimos.filter((m: any) => p1NoCumple(m) > 0).sort((a: any, b: any) => p1NoCumple(b) - p1NoCumple(a));
   const plantelById = Object.fromEntries(planteles.map(p => [p.id, p]));
-  const pagosVencidos = pagosLev.filter(p => !p.pagado);
-  if (pagosVencidos.length > 0) {
-    const rows = pagosVencidos.slice(0, 30).map(p => [
-      plantelById[p.plantel_id ?? '']?.colegio_nombre ?? '—',
-      p.mes_etiqueta ?? '—', p.concepto ?? '—',
-      p.monto_programado != null ? fmtMXN(p.monto_programado) : '—',
-    ]);
-    y = drawTable(doc, y, W, [
-      { label: 'Colegio', x: 20 }, { label: 'Mes', x: 90 }, { label: 'Concepto', x: 115 }, { label: 'Monto', x: 175, align: 'right' },
-    ], rows, 30, 297);
-  } else emptyMsg('Sin pagos pendientes de Levantamiento Nacional. ✓');
+  const pagosPendientes = pagosLev.filter(p => !p.pagado).sort((a, b) => (a.mes_numero ?? 0) - (b.mes_numero ?? 0));
 
-  pdfFooter(doc, 'Sistema RCMA  ·  Colegios Mano Amiga  ·  Documento confidencial');
+  const bloques = [
+    { n: 1, corto: 'Ticket MAS sin atender',  titulo: 'Ticket MAS sin atender (más de 12 h)',        total: tmasSinAtender.length },
+    { n: 2, corto: 'Urgentes atrasados',       titulo: 'Proyectos urgentes con avance menor a 30%',  total: urgentesBajoAvance.length },
+    { n: 3, corto: 'Pendientes urgentes',      titulo: 'Pendientes NEXUS urgentes o de prioridad alta', total: pendUrgentes.length },
+    { n: 4, corto: 'Mínimos críticos (P1)',    titulo: 'Mínimos Indispensables: incumplimientos P1', total: minP1Criticos.length },
+    { n: 5, corto: 'Pagos Levantamiento',      titulo: 'Pagos de Levantamiento Nacional pendientes', total: pagosPendientes.length },
+  ];
+  const totalInc = bloques.reduce((s, b) => s + b.total, 0);
+
+  // ── Semáforo general ──
+  doc.setFontSize(8); doc.setFont('helvetica', 'normal'); doc.setTextColor(...C_MUTED);
+  doc.text('Focos rojos que requieren atención, con los datos del sistema al momento de generar el reporte.', 20, y); y += 6;
+  const tw = (W - 40 - 4 * 3) / 5, th = 24;
+  bloques.forEach((b, i) => {
+    const bx = 20 + i * (tw + 3);
+    const col = b.total > 0 ? ROJO : VERDE;
+    doc.setFillColor(...tinte(col, 0.92)); doc.setDrawColor(...tinte(col, 0.7)); doc.setLineWidth(0.3);
+    doc.roundedRect(bx, y, tw, th, 2.5, 2.5, 'FD');
+    doc.setFillColor(...col); doc.circle(bx + 5, y + 6, 1.8, 'F');
+    doc.setFontSize(5.8); doc.setFont('helvetica', 'bold'); doc.setTextColor(...C_MUTED);
+    doc.text(String(b.n).padStart(2, '0'), bx + 8.5, y + 6.9);
+    doc.setFontSize(18); doc.setTextColor(...col); doc.text(String(b.total), bx + 4, y + 16.5);
+    doc.setFontSize(5.8); doc.setTextColor(...C_TEXT);
+    doc.text(doc.splitTextToSize(b.corto, tw - 6), bx + 4, y + 20.8);
+  });
+  y += th + 4;
+  // Banda de resultado general
+  const colG = totalInc > 0 ? ROJO : VERDE;
+  doc.setFillColor(...colG); doc.roundedRect(20, y, W - 40, 8, 2, 2, 'F');
+  doc.setFontSize(8.5); doc.setFont('helvetica', 'bold'); doc.setTextColor(255, 255, 255);
+  doc.text(totalInc > 0 ? `${totalInc} incidencia${totalInc !== 1 ? 's' : ''} por atender` : 'Todo en orden: sin incidencias', W / 2, y + 5.4, { align: 'center' });
+  y += 16;
+
+  const sinIncidencias = (msg: string) => {
+    if (y > 262) { doc.addPage(); y = 22; }
+    doc.setFillColor(240, 253, 244); doc.setDrawColor(187, 247, 208); doc.setLineWidth(0.3);
+    doc.roundedRect(20, y - 4.5, W - 40, 9, 2, 2, 'FD');
+    doc.setDrawColor(...VERDE); doc.setLineWidth(0.8);
+    doc.line(24, y - 0.4, 25.6, y + 1.2); doc.line(25.6, y + 1.2, 28.6, y - 2.2);
+    doc.setFontSize(8); doc.setFont('helvetica', 'bold'); doc.setTextColor(21, 128, 61);
+    doc.text(msg, 32, y + 0.8);
+    y += 10;
+  };
+  const seccion = (b: typeof bloques[number]) => {
+    if (y > 250) { doc.addPage(); y = 22; }
+    y = seccionPDF(doc, y, W, b.n, b.titulo);
+  };
+
+  // 1. Ticket MAS sin atender
+  seccion(bloques[0]);
+  if (tmasSinAtender.length > 0) {
+    y = drawTable(doc, y, W, [
+      { label: 'Folio', x: 20 }, { label: 'Colegio', x: 52 }, { label: 'Estatus', x: 112 }, { label: 'Enviado', x: 142 }, { label: 'Horas', x: 190, align: 'right' },
+    ], tmasSinAtender.map((t: any) => [
+      t.folio ?? '—', t.colegio ?? '—', t.estatus === 'en_revision' ? 'En revisión' : 'Pendiente', fmtF(t.created_at), String(horasDe(t)),
+    ]), 30, 297);
+  } else sinIncidencias('Todos los Ticket MAS están atendidos.');
+  y += 3;
+
+  // 2. Proyectos urgentes con avance bajo
+  seccion(bloques[1]);
+  if (urgentesBajoAvance.length > 0) {
+    y = drawTable(doc, y, W, [
+      { label: 'Folio', x: 20 }, { label: 'Proyecto', x: 50 }, { label: 'Colegio', x: 140 }, { label: 'Avance', x: 190, align: 'right' },
+    ], urgentesBajoAvance.map(p => [p.folio ?? '—', p.name ?? '—', p.colegio ?? '—', (p.progress ?? 0) + '%']), 30, 297);
+  } else sinIncidencias('Sin proyectos urgentes atrasados.');
+  y += 3;
+
+  // 3. Pendientes NEXUS urgentes / alta
+  seccion(bloques[2]);
+  if (pendUrgentes.length > 0) {
+    y = drawTable(doc, y, W, [
+      { label: 'Pendiente', x: 20 }, { label: 'Colegio', x: 86 }, { label: 'Asignado a', x: 120 }, { label: 'Prioridad', x: 150 }, { label: 'Fecha límite', x: 190, align: 'right' },
+    ], pendUrgentes.map(p => [
+      p.titulo ?? '—', p.colegio ?? '—', p.asignado_nombre ?? '—', p.prioridad === 'urgente' ? 'Urgente' : 'Alta', fmtF(p.fecha_limite),
+    ]), 30, 297);
+  } else sinIncidencias('Sin pendientes urgentes o de prioridad alta.');
+  y += 3;
+
+  // 4. Mínimos Indispensables P1
+  seccion(bloques[3]);
+  if (minP1Criticos.length > 0) {
+    y = drawTable(doc, y, W, [
+      { label: 'Colegio', x: 20 }, { label: 'Territorio', x: 90 }, { label: 'Fecha evaluación', x: 125 }, { label: 'P1 sin cumplir', x: 190, align: 'right' },
+    ], minP1Criticos.map((m: any) => [m.colegio ?? '—', m.territorio ?? '—', fmtF(m.fecha), String(p1NoCumple(m))]), 30, 297);
+  } else sinIncidencias('Sin incumplimientos críticos P1.');
+  y += 3;
+
+  // 5. Pagos de Levantamiento Nacional pendientes
+  seccion(bloques[4]);
+  if (pagosPendientes.length > 0) {
+    y = drawTable(doc, y, W, [
+      { label: 'Colegio', x: 20 }, { label: 'Mes', x: 95 }, { label: 'Concepto', x: 120 }, { label: 'Monto programado', x: 190, align: 'right' },
+    ], pagosPendientes.map(p => [
+      plantelById[p.plantel_id ?? '']?.colegio_nombre ?? '—', p.mes_etiqueta ?? '—', p.concepto ?? '—',
+      p.monto_programado != null ? fmtMXN(p.monto_programado) : '—',
+    ]), 30, 297);
+  } else sinIncidencias('Todos los pagos de Levantamiento Nacional están cubiertos.');
+
+  pdfFooter(doc, 'Reporte de Incidencias  ·  Documento confidencial');
   doc.save('reporte-incidencias-' + Date.now() + '.pdf');
 }
 
 // ─── Export PDF mejorado ──────────────────────────────────────────────────────
-async function exportResumenPDF({ stats, projects, checklists, solicitudes, tickets, pendientes, ticketsMas, minimos, anteproyectos, solicitudesAll, cumplimiento, requisiciones, planteles, pagosLev, entregablesLev, complianceDocs, compliancePendientes }: {
+async function exportResumenPDF({ stats, projects, checklists, solicitudes, tickets, pendientes, nexusPendientes = [], ticketsMas, minimos, anteproyectos, solicitudesAll, cumplimiento, requisiciones, planteles, pagosLev, entregablesLev, complianceDocs, compliancePendientes }: {
   stats: Stats; projects: Project[]; checklists: unknown[];
-  solicitudes: Solicitud[]; tickets: Ticket[]; pendientes: Pendiente[];
+  solicitudes: Solicitud[]; tickets: Ticket[]; pendientes: Pendiente[]; nexusPendientes?: NexusPendiente[];
   ticketsMas: any[]; minimos: any[]; anteproyectos: any[]; solicitudesAll: any[];
   cumplimiento: ColegioCumplimiento[]; requisiciones: ReqInsumo[];
   planteles: PlantelLev[]; pagosLev: PagoLev[]; entregablesLev: EntregableLev[];
@@ -426,33 +580,33 @@ async function exportResumenPDF({ stats, projects, checklists, solicitudes, tick
 
   const section = (title: string) => {
     const H = getH();
-    if (y > H - 40) { doc.addPage(); y = 20; }
+    if (y > H - 40) { doc.addPage(); y = 22; }
     y += 4;
-    doc.setFillColor(15, 23, 42); doc.rect(18, y - 4, W - 36, 10, 'F');
-    doc.setFontSize(10); doc.setFont('helvetica', 'bold'); doc.setTextColor(255, 255, 255);
-    doc.text(title, 22, y + 2); y += 12;
+    const m = /^(\d+)\.\s*(.*)$/.exec(title);
+    y = seccionPDF(doc, y, W, m ? m[1] : '•', m ? m[2] : title);
   };
   const divider = () => {
     doc.setDrawColor(220, 220, 220); doc.line(20, y, W - 20, y); y += 5;
   };
 
   // ─── PORTADA ───────────────────────────────────────────────────────────────
-  doc.setFillColor(15, 23, 42); doc.rect(0, 0, W, 35, 'F');
-  doc.setFontSize(17); doc.setFont('helvetica', 'bold'); doc.setTextColor(255, 255, 255);
-  doc.text('Reporte General — Colegios Mano Amiga', 20, 15);
-  doc.setFontSize(9); doc.setFont('helvetica', 'normal'); doc.setTextColor(180, 180, 200);
-  doc.text('Sistema RCMA  ·  Generado el ' + now, 20, 24);
-  doc.setFontSize(8); doc.setTextColor(100, 116, 139);
-  doc.text('Documento confidencial — solo para uso interno', 20, 31);
-  try {
-    const logoImg = await new Promise<string>((res, rej) => {
-      const img = new Image(); img.crossOrigin = 'anonymous';
-      img.onload = () => res(logoCuadradoDataURL(img));
-      img.onerror = rej; img.src = '/logo.png';
-    });
-    doc.addImage(logoImg, 'PNG', W - 38, 3, 26, 26);
-  } catch { /* sin logo */ }
-  y = 46;
+  {
+    const act = projects.filter(p => p.status !== 'completado' && p.status !== 'cancelado');
+    const avg = act.length > 0 ? Math.round(act.reduce((a, p) => a + (p.progress ?? 0), 0) / act.length) : 0;
+    const aut = ticketsMas.filter((t: any) => t.estatus === 'autorizado');
+    const monto = aut.reduce((s: number, t: any) => s + (Number(t.cot1_importe) || 0), 0);
+    const montoCorto = monto >= 1e6 ? '$' + (monto / 1e6).toFixed(2) + ' M' : fmtMXN(monto);
+    await portadaPDF(doc, ['Resumen', 'General'], [
+      { label: 'Proyectos activos', value: String(act.length) },
+      { label: 'Avance promedio', value: avg + '%' },
+      { label: 'Ticket MAS autorizados', value: String(aut.length) },
+      { label: 'Monto autorizado', value: montoCorto, destacada: true },
+    ]);
+    doc.addPage();
+    void now;
+    await pdfHeader(doc, W, 'Resumen General', 'Generado el ' + fechaLarga());
+  }
+  y = 40;
 
   // ─── SECCIÓN 1: KPIs Ejecutivos ────────────────────────────────────────────
   section('1. Resumen Ejecutivo');
@@ -469,7 +623,7 @@ async function exportResumenPDF({ stats, projects, checklists, solicitudes, tick
     { label: 'Completados',    value: String(completed.length),    color: [34, 197, 94]  },
     { label: 'Avance Prom.',   value: avgA + '%',                  color: [99, 102, 241] },
     { label: 'Tickets TCMM',   value: String(tickets.length),      color: [239, 68,  68] },
-    { label: 'Pendientes',     value: String(pendientes.length),   color: [245, 158, 11] },
+    { label: 'Pendientes NEXUS', value: String((nexusPendientes.length ? nexusPendientes.filter(p => p.estatus !== 'completado' && p.estatus !== 'cancelado') : pendientes).length), color: [245, 158, 11] },
     { label: 'Inspecciones',   value: String(checklists.length),   color: [20,  184, 166] },
   ]);
   y += 4;
@@ -489,28 +643,35 @@ async function exportResumenPDF({ stats, projects, checklists, solicitudes, tick
   ]);
   y += 4;
 
-  // Resumen financiero
-  doc.setFontSize(9); doc.setFont('helvetica', 'bold'); doc.setTextColor(30, 30, 30);
-  doc.text('Resumen Financiero', 20, y); y += 5;
-  const fw = (W - 40 - 12) / 4;
-  [
-    { label: 'Presupuesto Proyectos',  value: fmtMXN(budgetProj),                    color: [59, 130, 246]  as [number,number,number] },
-    { label: 'Presupuesto Tickets',    value: fmtMXN(budgetTick),                    color: [239, 68, 68]   as [number,number,number] },
-    { label: 'Presupuesto Anteproyectos', value: fmtMXN(budgetAnte),                color: [99, 102, 241]  as [number,number,number] },
-    { label: 'Total General',          value: fmtMXN(budgetProj + budgetTick + budgetAnte), color: [15, 23, 42] as [number,number,number] },
-  ].forEach((box, i) => {
-    const bx = 20 + i * (fw + 4);
-    doc.setFillColor(...box.color); doc.rect(bx, y, fw, 18, 'F');
-    doc.setFontSize(6.5); doc.setFont('helvetica', 'bold'); doc.setTextColor(255, 255, 255);
-    doc.text(box.label, bx + fw / 2, y + 5, { align: 'center' });
-    doc.setFontSize(8.5); doc.text(box.value, bx + fw / 2, y + 14, { align: 'center' });
-  });
-  y += 26;
+  // Resumen financiero (tarjetas unidas; el total en azul)
+  doc.setFontSize(8.5); doc.setFont('helvetica', 'bold'); doc.setTextColor(...C_NAVY);
+  doc.text('RESUMEN FINANCIERO', 20, y); y += 3;
+  {
+    const fw = (W - 40) / 4, fh = 16;
+    const cajas = [
+      { label: 'Presupuesto Proyectos',     value: fmtMXN(budgetProj) },
+      { label: 'Presupuesto Tickets',       value: fmtMXN(budgetTick) },
+      { label: 'Presupuesto Anteproyectos', value: fmtMXN(budgetAnte) },
+      { label: 'Total General',             value: fmtMXN(budgetProj + budgetTick + budgetAnte) },
+    ];
+    doc.setFillColor(255, 255, 255); doc.setDrawColor(...C_LINE); doc.setLineWidth(0.3);
+    doc.roundedRect(20, y, W - 40, fh, 2.5, 2.5, 'FD');
+    doc.setFillColor(...C_NAVY); doc.roundedRect(20 + 3 * fw, y, fw, fh, 2.5, 2.5, 'F'); doc.rect(20 + 3 * fw, y, 3, fh, 'F');
+    cajas.forEach((c, i) => {
+      const bx = 20 + i * fw, total = i === 3;
+      if (i > 0 && !total) { doc.setDrawColor(...C_LINE); doc.line(bx, y + 2, bx, y + fh - 2); }
+      doc.setFontSize(5.8); doc.setFont('helvetica', 'bold'); doc.setTextColor(...(total ? [203, 213, 225] as RGB : C_MUTED));
+      doc.text(c.label.toUpperCase(), bx + 4, y + 5.5);
+      doc.setFontSize(10.5); doc.setTextColor(...(total ? [255, 255, 255] as RGB : C_NAVY));
+      doc.text(c.value, bx + 4, y + 12);
+    });
+    y += fh + 8;
+  }
 
   // Desglose territorial
   if (y > getH() - 40) { doc.addPage(); y = 20; }
-  doc.setFontSize(9); doc.setFont('helvetica', 'bold'); doc.setTextColor(30, 30, 30);
-  doc.text('Estado por Territorio', 20, y); y += 5;
+  doc.setFontSize(8.5); doc.setFont('helvetica', 'bold'); doc.setTextColor(...C_NAVY);
+  doc.text('ESTADO POR TERRITORIO', 20, y); y += 7;
   const tRows = ['NORTE', 'MEXICO', 'FMA'].map(ter => {
     const tp = projects.filter(p => p.territorio === ter);
     const tt = tickets.filter((t: any) => t.territorio === ter);
@@ -520,10 +681,10 @@ async function exportResumenPDF({ stats, projects, checklists, solicitudes, tick
   });
   y = drawTable(doc, y, 210, [
     { label: 'Territorio',       x: 20  },
-    { label: 'Total Proyectos',  x: 72  },
-    { label: 'Activos',          x: 118 },
-    { label: 'Tickets TCMM',    x: 148 },
-    { label: 'Ticket MAS',      x: 178 },
+    { label: 'Total Proyectos',  x: 66  },
+    { label: 'Activos',          x: 104 },
+    { label: 'Tickets TCMM',    x: 132 },
+    { label: 'Ticket MAS',      x: 164 },
   ], tRows, 10);
   y += 6;
 
@@ -549,7 +710,7 @@ async function exportResumenPDF({ stats, projects, checklists, solicitudes, tick
   const terBars = territories.map(ter => ({
     label: ter,
     value: projects.filter(p => (p.territorio ?? 'Sin territorio') === ter).length,
-    color: [59, 130, 246] as [number,number,number],
+    color: C_BLUE,
   }));
   const savedY = y;
   const halfX = 20 + (W - 40) / 2 + 6;
@@ -564,7 +725,7 @@ async function exportResumenPDF({ stats, projects, checklists, solicitudes, tick
 
   const colegios = Array.from(new Set(projects.map(p => p.colegio).filter(Boolean))).sort() as string[];
   const topColegios = colegios
-    .map(c => ({ label: c, value: projects.filter(p => p.colegio === c).length, color: [99, 102, 241] as [number,number,number] }))
+    .map(c => ({ label: c.replace('Mano Amiga ', ''), value: projects.filter(p => p.colegio === c).length, color: C_NAVY2 }))
     .sort((a, b) => b.value - a.value)
     .slice(0, 12);
 
@@ -713,9 +874,8 @@ async function exportResumenPDF({ stats, projects, checklists, solicitudes, tick
   section('7. Anteproyectos y Solicitudes');
 
   // Sub-header anteproyectos
-  doc.setFontSize(9); doc.setFont('helvetica', 'bold'); doc.setTextColor(99, 102, 241);
-  doc.text('Anteproyectos (' + anteproyectos.length + ')', 20, y); y += 4;
-  doc.setDrawColor(199, 200, 246); doc.line(20, y, W - 20, y); y += 5;
+  doc.setFontSize(8.5); doc.setFont('helvetica', 'bold'); doc.setTextColor(...C_NAVY);
+  doc.text('ANTEPROYECTOS (' + anteproyectos.length + ')', 20, y); y += 7;
 
   if (anteproyectos.length > 0) {
     const anteEstLbl: Record<string,string> = { en_revision:'En Revisión', entregado:'Entregado', aprobado:'Aprobado', rechazado:'Rechazado', pendiente:'Pendiente' };
@@ -741,9 +901,8 @@ async function exportResumenPDF({ stats, projects, checklists, solicitudes, tick
 
   // Sub-header solicitudes
   if (y > getH() - 40) { doc.addPage(); y = 20; }
-  doc.setFontSize(9); doc.setFont('helvetica', 'bold'); doc.setTextColor(168, 85, 247);
-  doc.text('Solicitudes de Proyecto (' + solicitudesAll.length + ')', 20, y); y += 4;
-  doc.setDrawColor(216, 180, 254); doc.line(20, y, W - 20, y); y += 5;
+  doc.setFontSize(8.5); doc.setFont('helvetica', 'bold'); doc.setTextColor(...C_NAVY);
+  doc.text('SOLICITUDES DE PROYECTO (' + solicitudesAll.length + ')', 20, y); y += 7;
 
   if (solicitudesAll.length > 0) {
     const solRows = solicitudesAll.slice(0, 25).map((s: any) => [
@@ -771,10 +930,10 @@ async function exportResumenPDF({ stats, projects, checklists, solicitudes, tick
   section('8. Detalle Proyectos Activos');
 
   // Barra de avance promedio visual
-  doc.setFontSize(8); doc.setFont('helvetica', 'bold'); doc.setTextColor(30, 30, 30);
-  doc.text('Avance promedio de proyectos activos:', 20, y);
-  doc.setFillColor(241, 245, 249); doc.rect(20, y + 3, W - 40, 8, 'F');
-  doc.setFillColor(59, 130, 246); doc.rect(20, y + 3, Math.round(((W - 40) * avgA) / 100), 8, 'F');
+  doc.setFontSize(8.5); doc.setFont('helvetica', 'bold'); doc.setTextColor(...C_NAVY);
+  doc.text('AVANCE PROMEDIO DE PROYECTOS ACTIVOS', 20, y);
+  doc.setFillColor(238, 242, 247); doc.roundedRect(20, y + 3, W - 40, 8, 2, 2, 'F');
+  doc.setFillColor(...C_NAVY2); doc.roundedRect(20, y + 3, Math.max(4, Math.round(((W - 40) * avgA) / 100)), 8, 2, 2, 'F');
   doc.setFontSize(7.5); doc.setFont('helvetica', 'bold'); doc.setTextColor(255, 255, 255);
   if (avgA > 5) doc.text(avgA + '% de avance promedio', 24, y + 9);
   y += 18;
@@ -862,8 +1021,8 @@ async function exportResumenPDF({ stats, projects, checklists, solicitudes, tick
 
   y = drawKPIBoxes(doc, 20, y, W, [
     { label: 'Cumplimiento Promedio', value: `${pctPromedio}%`,        color: [15, 23, 42]   },
-    { label: 'Colegios al Día (≥80%)', value: String(colegiosAlDia),    color: [22, 163, 74]  },
-    { label: 'Colegios Rezagados (<40%)', value: String(colegiosRezagados), color: [220, 38, 38] },
+    { label: 'Al día (80% o más)', value: String(colegiosAlDia),    color: [22, 163, 74]  },
+    { label: 'Rezagados (menos de 40%)', value: String(colegiosRezagados), color: [220, 38, 38] },
     { label: 'Total Colegios',        value: String(totalColegios),    color: [59, 130, 246] },
   ]);
   y += 4;
@@ -948,8 +1107,8 @@ async function exportResumenPDF({ stats, projects, checklists, solicitudes, tick
       p.colegio_nombre ?? '—', p.zona ?? '—', p.eco_nombre ?? '—',
       p.asignacion ?? '—', p.fase ?? '—',
     ]);
-    doc.setFontSize(9); doc.setFont('helvetica', 'bold'); doc.setTextColor(30, 30, 30);
-    doc.text('Planteles', 20, y); y += 5;
+    doc.setFontSize(8.5); doc.setFont('helvetica', 'bold'); doc.setTextColor(...C_NAVY);
+    doc.text('PLANTELES', 20, y); y += 7;
     y = drawTable(doc, y, W, [
       { label: 'Colegio',     x: 20  },
       { label: 'Zona',        x: 110 },
@@ -1012,17 +1171,7 @@ async function exportResumenPDF({ stats, projects, checklists, solicitudes, tick
   }
   y += 4;
 
-  // ─── PIE DE PÁGINA ─────────────────────────────────────────────────────────
-  const pages = doc.getNumberOfPages();
-  for (let i = 1; i <= pages; i++) {
-    doc.setPage(i);
-    const pH = (doc as any).internal.pageSize.getHeight();
-    const pW = (doc as any).internal.pageSize.getWidth();
-    doc.setFillColor(15, 23, 42); doc.rect(0, pH - 11, pW, 11, 'F');
-    doc.setFontSize(7); doc.setFont('helvetica', 'normal'); doc.setTextColor(160, 160, 180);
-    doc.text('Sistema RCMA  ·  Colegios Mano Amiga  ·  Documento confidencial', 20, pH - 5);
-    doc.text('Página ' + i + ' de ' + pages, pW - 20, pH - 5, { align: 'right' });
-  }
+  pdfFooter(doc, 'Resumen General  ·  Documento confidencial', 1);
 
   doc.save('reporte-mano-amiga-' + Date.now() + '.pdf');
 }
@@ -1044,18 +1193,170 @@ async function loadXLSX() {
   return lib;
 }
 
-async function exportMatrizExcel(data: {
-  projects: unknown[]; checklists: unknown[]; tickets: unknown[];
-  anteproyectos: unknown[]; solicitudes: unknown[];
-  minimos: unknown[]; ticketsMas: unknown[]; cumplimiento: ColegioCumplimiento[];
-  requisiciones: unknown[]; planteles: unknown[]; pagosLev: unknown[];
-  nexusNotas: unknown[]; nexusPendientes: unknown[]; reportesLev: unknown[];
-  complianceDocs: ComplianceDoc[]; compliancePendientes: CompliancePendiente[];
-  complianceNotas: ComplianceNota[]; complianceSeguimientos: ComplianceSeguimiento[];
-}) {
+// ─── Matriz RCMA: hojas que arma exportMatrizExcel y cómo se dibujan ──────────
+type CeldaMatriz = string | number | null | undefined;
+interface HojaMatriz {
+  name: string; title: string; headers: string[]; rows: CeldaMatriz[][];
+  widths: number[]; moneyCol?: number | number[];
+}
+interface ResumenMatriz { label: string; count: number }
+const ORDEN_MATRIZ = [
+  '📊 Resumen Ejecutivo', '📁 Proyectos', '💰 Presupuesto vs Real', '🎫 Tickets TCMM', '🎫 Ticket MAS',
+  '📐 Anteproyectos', '✅ Inspecciones', '📩 Solicitudes',
+  'Minimos Indispensables', 'Minimos Detalle',
+  '🔧 Cumplimiento Mtto.', '📦 Requisiciones', '🏫 Levant. Planteles', '💵 Levant. Pagos', '📄 Levant. Reportes',
+  '📝 Nexus Notas', '✅ Nexus Pendientes',
+  '📋 Cumpl. Documentos', '✅ Cumpl. Pendientes', '📝 Cumpl. Notas', '📌 Cumpl. Seguim.',
+];
+const archivoMatriz = () => `Matriz_Sistema_RCMA_${new Date().toISOString().slice(0, 10)}.xlsx`;
+
+/** Diseño nuevo (ExcelJS): logo, banda azul, línea naranja, estatus con color y total */
+async function renderMatrizPro(hojas: HojaMatriz[], resRows: ResumenMatriz[], totalGeneral: number, now: string) {
+  const mod: any = await import('exceljs');
+  const ExcelJS = mod.default ?? mod;
+  const wb = new ExcelJS.Workbook();
+  wb.creator = 'Sistema RCMA'; wb.created = new Date();
+
+  // Logo (si no carga, la matriz sale igual sin logo)
+  let logoId: number | null = null; let logoRatio = 3.2;
+  const logo = await cargarLogo();
+  if (logo) { logoId = wb.addImage({ base64: logo.data, extension: 'png' }); logoRatio = logo.ratio; }
+
+  const NAVY = 'FF00295A', NAVY2 = 'FF1F4E79', ORANGE = 'FFED7102', ZEBRA = 'FFF3F7FC', LINEA = 'FFE2E8F0';
+  const relleno = (argb: string) => ({ type: 'pattern', pattern: 'solid', fgColor: { argb } });
+  const borde = { top: { style: 'thin', color: { argb: LINEA } }, bottom: { style: 'thin', color: { argb: LINEA } }, left: { style: 'thin', color: { argb: LINEA } }, right: { style: 'thin', color: { argb: LINEA } } };
+  const colorEstatus = (v: string): [string, string] | null => {
+    const t = v.toLowerCase();
+    if (/autoriz|aprob|complet|surtid|verific|sí cumple|si cumple|^cumple|entregad|^sí$|activo/.test(t)) return ['FFDCFCE7', 'FF15803D'];
+    if (/cancel|rechaz|no cumple|retraso|vencid|^no$/.test(t)) return ['FFFEE2E2', 'FFB91C1C'];
+    if (/pend|revisi|proceso|espera|pausad|recibid|por expirar|cotiz/.test(t)) return ['FFFEF3C7', 'FFB45309'];
+    return null;
+  };
+
+  // Hojas en el orden de siempre
+  const hojaDe: Record<string, any> = {};
+  ORDEN_MATRIZ.forEach(n => { hojaDe[n] = wb.addWorksheet(n, { views: [{ state: 'frozen', ySplit: 4, showGridLines: false }] }); });
+
+  /** Encabezado común: fila 1 logo + título, fila 2 banda azul, fila 3 línea naranja */
+  const encabezado = (ws: any, nCols: number, titulo: string, detalle: string) => {
+    ws.getRow(1).height = 46; ws.getRow(2).height = 20; ws.getRow(3).height = 5;
+    const desde = nCols >= 4 ? 3 : 2;
+    ws.mergeCells(1, desde, 1, nCols);
+    const t = ws.getCell(1, desde);
+    t.value = titulo; t.font = { name: 'Calibri', size: 18, bold: true, color: { argb: NAVY } };
+    t.alignment = { horizontal: 'right', vertical: 'middle' };
+    const corte = Math.max(1, Math.ceil(nCols * 0.55));
+    ws.mergeCells(2, 1, 2, corte);
+    const iz = ws.getCell(2, 1);
+    iz.value = detalle; iz.font = { name: 'Calibri', size: 10, color: { argb: 'FFFFFFFF' } };
+    iz.alignment = { horizontal: 'left', vertical: 'middle', indent: 1 };
+    if (corte < nCols) {
+      ws.mergeCells(2, corte + 1, 2, nCols);
+      const de = ws.getCell(2, corte + 1);
+      de.value = 'Matriz Sistema RCMA  ·  Coordinación de Obras y Mantenimiento';
+      de.font = { name: 'Calibri', size: 9, italic: true, color: { argb: 'FFCBD5E1' } };
+      de.alignment = { horizontal: 'right', vertical: 'middle' };
+    }
+    for (let c = 1; c <= nCols; c++) { ws.getCell(2, c).fill = relleno(NAVY); ws.getCell(3, c).fill = relleno(ORANGE); }
+    if (logoId != null) {
+      const alto = 44;
+      ws.addImage(logoId, { tl: { col: 0.12, row: 0.12 }, ext: { width: Math.round(alto * logoRatio), height: alto }, editAs: 'oneCell' });
+    }
+  };
+
+  hojas.forEach(h => {
+    const ws = hojaDe[h.name] ?? wb.addWorksheet(h.name);
+    const nCols = h.headers.length;
+    const money = h.moneyCol === undefined ? [] : Array.isArray(h.moneyCol) ? h.moneyCol : [h.moneyCol];
+    ws.properties.tabColor = { argb: NAVY2 };
+    ws.columns = h.widths.map(w => ({ width: w + 2 }));
+    encabezado(ws, nCols, h.title.replace(/\s+\u2014\s+Sistema RCMA$/, ''), `Corte al ${now}  ·  ${h.rows.length} registro${h.rows.length !== 1 ? 's' : ''}`);
+
+    // Encabezados de columna
+    const hr = ws.getRow(4); hr.height = 26;
+    h.headers.forEach((t, c) => {
+      const cell = hr.getCell(c + 1);
+      cell.value = t; cell.fill = relleno(NAVY2);
+      cell.font = { name: 'Calibri', size: 10, bold: true, color: { argb: 'FFFFFFFF' } };
+      cell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
+      cell.border = { left: { style: 'thin', color: { argb: 'FF3B6A97' } }, right: { style: 'thin', color: { argb: 'FF3B6A97' } } };
+    });
+    const iFolio = h.headers.findIndex(x => /^folio$/i.test(x));
+    const iEstatus = h.headers.findIndex(x => /^(estatus|estado|resultado|estado general|pagado)$/i.test(x));
+
+    // Datos
+    h.rows.forEach((row, ri) => {
+      const r = ws.getRow(ri + 5); r.height = 19;
+      row.forEach((val, ci) => {
+        const cell = r.getCell(ci + 1);
+        const esMoneda = money.includes(ci);
+        cell.value = val === null || val === undefined ? '—' : val;
+        cell.font = { name: 'Calibri', size: 10, color: { argb: 'FF1E293B' } };
+        cell.border = borde;
+        cell.alignment = { vertical: 'middle', horizontal: esMoneda ? 'right' : typeof val === 'number' ? 'center' : 'left' };
+        if (ri % 2 === 1) cell.fill = relleno(ZEBRA);
+        if (esMoneda) cell.numFmt = '"$"#,##0.00';
+        if (ci === iFolio && typeof val === 'string' && val !== '—') cell.font = { name: 'Calibri', size: 10, bold: true, color: { argb: 'FFDC2626' } };
+        if (ci === iEstatus && typeof val === 'string') {
+          const col = colorEstatus(val);
+          if (col) { cell.fill = relleno(col[0]); cell.font = { name: 'Calibri', size: 10, bold: true, color: { argb: col[1] } }; cell.alignment = { horizontal: 'center', vertical: 'middle' }; }
+        }
+      });
+    });
+
+    // Total
+    const tr = ws.getRow(h.rows.length + 5); tr.height = 22;
+    for (let c = 1; c <= nCols; c++) {
+      const cell = tr.getCell(c);
+      cell.fill = relleno('FFFFF3E8');
+      cell.font = { name: 'Calibri', size: 10, bold: true, color: { argb: 'FFC2410C' } };
+      cell.border = { top: { style: 'medium', color: { argb: ORANGE } } };
+      cell.alignment = { vertical: 'middle', horizontal: money.includes(c - 1) ? 'right' : 'left', indent: c === 1 ? 1 : 0 };
+      if (money.includes(c - 1)) {
+        cell.value = h.rows.reduce((s, row) => s + (typeof row[c - 1] === 'number' ? (row[c - 1] as number) : 0), 0);
+        cell.numFmt = '"$"#,##0.00';
+      }
+    }
+    tr.getCell(1).value = `TOTAL  ·  ${h.rows.length} registro${h.rows.length !== 1 ? 's' : ''}`;
+    if (nCols > 0) ws.autoFilter = { from: { row: 4, column: 1 }, to: { row: 4, column: nCols } };
+  });
+
+  // Resumen ejecutivo
+  const ws = hojaDe['📊 Resumen Ejecutivo'];
+  ws.properties.tabColor = { argb: ORANGE };
+  ws.columns = [{ width: 46 }, { width: 22 }];
+  encabezado(ws, 2, 'Resumen Ejecutivo', `Corte al ${now}`);
+  const hr = ws.getRow(4); hr.height = 24;
+  [['MÓDULO', 'left'], ['TOTAL DE REGISTROS', 'right']].forEach(([t, al], i) => {
+    const c = hr.getCell(i + 1); c.value = t; c.fill = relleno(NAVY2);
+    c.font = { name: 'Calibri', size: 10, bold: true, color: { argb: 'FFFFFFFF' } };
+    c.alignment = { horizontal: al, vertical: 'middle', indent: i === 0 ? 1 : 0 };
+  });
+  resRows.forEach((row, i) => {
+    const r = ws.getRow(i + 5); r.height = 21;
+    const a = r.getCell(1), b = r.getCell(2);
+    a.value = row.label; b.value = row.count;
+    a.font = { name: 'Calibri', size: 11, color: { argb: 'FF1E293B' } }; a.alignment = { vertical: 'middle', indent: 1 };
+    b.font = { name: 'Calibri', size: 12, bold: true, color: { argb: NAVY } }; b.alignment = { horizontal: 'right', vertical: 'middle' };
+    [a, b].forEach(c => { c.border = borde; if (i % 2 === 1) c.fill = relleno(ZEBRA); });
+  });
+  const tr = ws.getRow(resRows.length + 5); tr.height = 26;
+  const ta = tr.getCell(1), tb = tr.getCell(2);
+  ta.value = 'TOTAL GENERAL'; tb.value = totalGeneral;
+  [ta, tb].forEach(c => { c.fill = relleno(NAVY); c.font = { name: 'Calibri', size: 12, bold: true, color: { argb: 'FFFFFFFF' } }; c.border = { top: { style: 'medium', color: { argb: ORANGE } } }; });
+  ta.alignment = { vertical: 'middle', indent: 1 }; tb.alignment = { horizontal: 'right', vertical: 'middle' };
+
+  const buf = await wb.xlsx.writeBuffer();
+  const url = URL.createObjectURL(new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }));
+  const a = document.createElement('a'); a.href = url; a.download = archivoMatriz();
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 4000);
+}
+
+/** Diseño anterior (xlsx-js-style): respaldo por si el nuevo falla */
+async function renderMatrizClasico(hojas: HojaMatriz[], resRows: ResumenMatriz[], totalGeneral: number, now: string) {
   const XLSX = await loadXLSX();
   const wb   = XLSX.utils.book_new();
-  const now  = new Date().toLocaleDateString('es-MX', { year: 'numeric', month: 'long', day: 'numeric' });
 
   const bdr = {
     top:    { style: 'thin', color: { rgb: 'FFD1D5DB' } },
@@ -1101,6 +1402,59 @@ async function exportMatrizExcel(data: {
     ws['!autofilter'] = { ref: `A3:${XLSX.utils.encode_cell({ r: 2, c: nCols - 1 })}` };
     ws['!merges'] = [{ s: { r: 0, c: 0 }, e: { r: 0, c: splitCol - 1 } }, { s: { r: 0, c: splitCol }, e: { r: 0, c: nCols - 1 } }, { s: { r: 1, c: 0 }, e: { r: 1, c: nCols - 1 } }];
     XLSX.utils.book_append_sheet(wb, ws as import('xlsx').WorkSheet, name);
+  }
+
+  hojas.forEach(h => buildSheet(h.name, h.title, h.headers, h.rows, h.widths, h.moneyCol));
+  const ws7: Record<string, unknown> = {};
+  const sRT = { font: { bold: true, sz: 16, name: 'Calibri', color: { rgb: 'FFFFFFFF' } }, fill: { patternType: 'solid', fgColor: { rgb: 'FF0F172A' } }, alignment: { horizontal: 'left', vertical: 'center' } };
+  const sRD = { font: { italic: true, sz: 10, name: 'Calibri', color: { rgb: 'FFD1D5DB' } }, fill: { patternType: 'solid', fgColor: { rgb: 'FF0F172A' } }, alignment: { horizontal: 'right', vertical: 'center' } };
+  const sRH = { font: { bold: true, sz: 11, name: 'Calibri', color: { rgb: 'FFFFFFFF' } }, fill: { patternType: 'solid', fgColor: { rgb: 'FF1E40AF' } }, alignment: { horizontal: 'left', vertical: 'center' }, border: bdr };
+  const sRHN = { ...sRH, alignment: { horizontal: 'right', vertical: 'center' } };
+  const sRR = (alt: boolean) => ({ font: { sz: 11, name: 'Calibri', color: { rgb: 'FF111827' } }, fill: { patternType: alt ? 'solid' : 'none', fgColor: { rgb: alt ? 'FFF0F4FF' : 'FFFFFFFF' } }, alignment: { horizontal: 'left', vertical: 'center' }, border: bdr });
+  const sRN = (alt: boolean) => ({ ...sRR(alt), font: { bold: true, sz: 12, name: 'Calibri', color: { rgb: 'FF1E40AF' } }, alignment: { horizontal: 'right', vertical: 'center' } });
+  const sRTL = { font: { bold: true, sz: 12, name: 'Calibri', color: { rgb: 'FFFFFFFF' } }, fill: { patternType: 'solid', fgColor: { rgb: 'FF0F172A' } }, alignment: { horizontal: 'left', vertical: 'center' }, border: bdr };
+  const sRTN = { ...sRTL, alignment: { horizontal: 'right', vertical: 'center' } };
+  ws7['A1'] = { v: 'SISTEMA RCMA — MATRIZ DE CONCENTRADO', t: 's', s: sRT };
+  ws7['B1'] = { v: `Generado: ${now}`, t: 's', s: sRD };
+  ws7['A2'] = { v: '', t: 's', s: { fill: { patternType: 'solid', fgColor: { rgb: 'FF0F172A' } } } };
+  ws7['B2'] = { v: '', t: 's', s: { fill: { patternType: 'solid', fgColor: { rgb: 'FF0F172A' } } } };
+  ws7['A3'] = { v: 'MÓDULO', t: 's', s: sRH }; ws7['B3'] = { v: 'TOTAL DE REGISTROS', t: 's', s: sRHN };
+  resRows.forEach((row, i) => { const alt = i % 2 === 1; ws7[`A${i + 4}`] = { v: row.label, t: 's', s: sRR(alt) }; ws7[`B${i + 4}`] = { v: row.count, t: 'n', s: sRN(alt) }; });
+  const sepR = resRows.length + 4;
+  ws7[`A${sepR}`] = { v: '', t: 's', s: { fill: { patternType: 'solid', fgColor: { rgb: 'FFD1D5DB' } } } };
+  ws7[`B${sepR}`] = { v: '', t: 's', s: { fill: { patternType: 'solid', fgColor: { rgb: 'FFD1D5DB' } } } };
+  ws7[`A${sepR + 1}`] = { v: 'TOTAL GENERAL', t: 's', s: sRTL };
+  ws7[`B${sepR + 1}`] = { v: totalGeneral, t: 'n', s: sRTN };
+  ws7['!ref'] = `A1:B${sepR + 1}`;
+  ws7['!cols'] = [{ wch: 38 }, { wch: 22 }];
+  ws7['!rows'] = [{ hpt: 32 }, { hpt: 5 }, { hpt: 22 }, ...resRows.map(() => ({ hpt: 22 })), { hpt: 4 }, { hpt: 26 }];
+  ws7['!merges'] = [{ s: { r: 0, c: 0 }, e: { r: 0, c: 1 } }, { s: { r: 1, c: 0 }, e: { r: 1, c: 1 } }];
+  XLSX.utils.book_append_sheet(wb, ws7 as import('xlsx').WorkSheet, '📊 Resumen Ejecutivo');
+
+  wb.SheetNames = [
+    '📊 Resumen Ejecutivo', '📁 Proyectos', '💰 Presupuesto vs Real', '🎫 Tickets TCMM', '🎫 Ticket MAS',
+    '📐 Anteproyectos', '✅ Inspecciones', '📩 Solicitudes',
+    'Minimos Indispensables', 'Minimos Detalle',
+    '🔧 Cumplimiento Mtto.', '📦 Requisiciones', '🏫 Levant. Planteles', '💵 Levant. Pagos', '📄 Levant. Reportes',
+    '📝 Nexus Notas', '✅ Nexus Pendientes',
+    '📋 Cumpl. Documentos', '✅ Cumpl. Pendientes', '📝 Cumpl. Notas', '📌 Cumpl. Seguim.',
+  ];
+  XLSX.writeFile(wb, archivoMatriz());
+}
+
+async function exportMatrizExcel(data: {
+  projects: unknown[]; checklists: unknown[]; tickets: unknown[];
+  anteproyectos: unknown[]; solicitudes: unknown[];
+  minimos: unknown[]; ticketsMas: unknown[]; cumplimiento: ColegioCumplimiento[];
+  requisiciones: unknown[]; planteles: unknown[]; pagosLev: unknown[];
+  nexusNotas: unknown[]; nexusPendientes: unknown[]; reportesLev: unknown[];
+  complianceDocs: ComplianceDoc[]; compliancePendientes: CompliancePendiente[];
+  complianceNotas: ComplianceNota[]; complianceSeguimientos: ComplianceSeguimiento[];
+}) {
+  const now  = new Date().toLocaleDateString('es-MX', { year: 'numeric', month: 'long', day: 'numeric' });
+  const hojas: HojaMatriz[] = [];
+  function buildSheet(name: string, sheetTitle: string, headers: string[], rows: CeldaMatriz[][], colWidths: number[], moneyCol?: number | number[]) {
+    hojas.push({ name, title: sheetTitle, headers, rows, widths: colWidths, moneyCol });
   }
 
   const fmt = (d?: string | null) => d ? new Date(d).toLocaleDateString('es-MX') : '—';
@@ -1332,7 +1686,6 @@ async function exportMatrizExcel(data: {
     [20, 12, 44, 14, 16]);
 
   // Resumen ejecutivo
-  const ws7: Record<string, unknown> = {};
   const nexusPendCompartidos = (data.nexusPendientes as Record<string, unknown>[]).filter(p => !!p.asignado_cc).length;
   const resRows = [
     { label: 'Proyectos', count: data.projects.length },
@@ -1355,40 +1708,12 @@ async function exportMatrizExcel(data: {
     { label: 'Cumplimiento Normativo — Seguimientos', count: data.complianceSeguimientos.length },
   ];
   const totalGeneral = resRows.filter(r => r.label !== 'NEXUS — Pendientes Compartidos').reduce((a, r) => a + r.count, 0);
-  const sRT = { font: { bold: true, sz: 16, name: 'Calibri', color: { rgb: 'FFFFFFFF' } }, fill: { patternType: 'solid', fgColor: { rgb: 'FF0F172A' } }, alignment: { horizontal: 'left', vertical: 'center' } };
-  const sRD = { font: { italic: true, sz: 10, name: 'Calibri', color: { rgb: 'FFD1D5DB' } }, fill: { patternType: 'solid', fgColor: { rgb: 'FF0F172A' } }, alignment: { horizontal: 'right', vertical: 'center' } };
-  const sRH = { font: { bold: true, sz: 11, name: 'Calibri', color: { rgb: 'FFFFFFFF' } }, fill: { patternType: 'solid', fgColor: { rgb: 'FF1E40AF' } }, alignment: { horizontal: 'left', vertical: 'center' }, border: bdr };
-  const sRHN = { ...sRH, alignment: { horizontal: 'right', vertical: 'center' } };
-  const sRR = (alt: boolean) => ({ font: { sz: 11, name: 'Calibri', color: { rgb: 'FF111827' } }, fill: { patternType: alt ? 'solid' : 'none', fgColor: { rgb: alt ? 'FFF0F4FF' : 'FFFFFFFF' } }, alignment: { horizontal: 'left', vertical: 'center' }, border: bdr });
-  const sRN = (alt: boolean) => ({ ...sRR(alt), font: { bold: true, sz: 12, name: 'Calibri', color: { rgb: 'FF1E40AF' } }, alignment: { horizontal: 'right', vertical: 'center' } });
-  const sRTL = { font: { bold: true, sz: 12, name: 'Calibri', color: { rgb: 'FFFFFFFF' } }, fill: { patternType: 'solid', fgColor: { rgb: 'FF0F172A' } }, alignment: { horizontal: 'left', vertical: 'center' }, border: bdr };
-  const sRTN = { ...sRTL, alignment: { horizontal: 'right', vertical: 'center' } };
-  ws7['A1'] = { v: 'SISTEMA RCMA — MATRIZ DE CONCENTRADO', t: 's', s: sRT };
-  ws7['B1'] = { v: `Generado: ${now}`, t: 's', s: sRD };
-  ws7['A2'] = { v: '', t: 's', s: { fill: { patternType: 'solid', fgColor: { rgb: 'FF0F172A' } } } };
-  ws7['B2'] = { v: '', t: 's', s: { fill: { patternType: 'solid', fgColor: { rgb: 'FF0F172A' } } } };
-  ws7['A3'] = { v: 'MÓDULO', t: 's', s: sRH }; ws7['B3'] = { v: 'TOTAL DE REGISTROS', t: 's', s: sRHN };
-  resRows.forEach((row, i) => { const alt = i % 2 === 1; ws7[`A${i + 4}`] = { v: row.label, t: 's', s: sRR(alt) }; ws7[`B${i + 4}`] = { v: row.count, t: 'n', s: sRN(alt) }; });
-  const sepR = resRows.length + 4;
-  ws7[`A${sepR}`] = { v: '', t: 's', s: { fill: { patternType: 'solid', fgColor: { rgb: 'FFD1D5DB' } } } };
-  ws7[`B${sepR}`] = { v: '', t: 's', s: { fill: { patternType: 'solid', fgColor: { rgb: 'FFD1D5DB' } } } };
-  ws7[`A${sepR + 1}`] = { v: 'TOTAL GENERAL', t: 's', s: sRTL };
-  ws7[`B${sepR + 1}`] = { v: totalGeneral, t: 'n', s: sRTN };
-  ws7['!ref'] = `A1:B${sepR + 1}`;
-  ws7['!cols'] = [{ wch: 38 }, { wch: 22 }];
-  ws7['!rows'] = [{ hpt: 32 }, { hpt: 5 }, { hpt: 22 }, ...resRows.map(() => ({ hpt: 22 })), { hpt: 4 }, { hpt: 26 }];
-  ws7['!merges'] = [{ s: { r: 0, c: 0 }, e: { r: 0, c: 1 } }, { s: { r: 1, c: 0 }, e: { r: 1, c: 1 } }];
-  XLSX.utils.book_append_sheet(wb, ws7 as import('xlsx').WorkSheet, '📊 Resumen Ejecutivo');
-
-  wb.SheetNames = [
-    '📊 Resumen Ejecutivo', '📁 Proyectos', '💰 Presupuesto vs Real', '🎫 Tickets TCMM', '🎫 Ticket MAS',
-    '📐 Anteproyectos', '✅ Inspecciones', '📩 Solicitudes',
-    'Minimos Indispensables', 'Minimos Detalle',
-    '🔧 Cumplimiento Mtto.', '📦 Requisiciones', '🏫 Levant. Planteles', '💵 Levant. Pagos', '📄 Levant. Reportes',
-    '📝 Nexus Notas', '✅ Nexus Pendientes',
-    '📋 Cumpl. Documentos', '✅ Cumpl. Pendientes', '📝 Cumpl. Notas', '📌 Cumpl. Seguim.',
-  ];
-  XLSX.writeFile(wb, `Matriz_Sistema_RCMA_${new Date().toISOString().slice(0, 10)}.xlsx`);
+  try {
+    await renderMatrizPro(hojas, resRows, totalGeneral, now);
+  } catch (e) {
+    console.warn('Matriz con diseño nuevo no se pudo generar; se usa el formato anterior', e);
+    await renderMatrizClasico(hojas, resRows, totalGeneral, now);
+  }
 }
 
 // ─── Componente ───────────────────────────────────────────────────────────────
@@ -1589,6 +1914,7 @@ export default function Reports() {
   const handleExportPDF = () => exportResumenPDF({
     stats, projects, checklists, solicitudes, tickets: rawTicketsFull as unknown as Ticket[],
     pendientes,
+    nexusPendientes: rawNexusPendientes as unknown as NexusPendiente[],
     ticketsMas:    rawTicketsMas    as any[],
     minimos:       rawMinimos       as any[],
     anteproyectos: rawAnteproyectos as any[],
@@ -1618,7 +1944,7 @@ export default function Reports() {
   }).catch(e => { console.error('Error generando reporte de estatus por colegio:', e); alert('Error al generar el reporte: ' + (e?.message ?? e)); });
 
   const handleExportIncidencias = () => exportIncidenciasPDF({
-    projects, pendientes, ticketsMas: ticketsMasArr, minimos: rawMinimos as any[],
+    projects, nexusPendientes: rawNexusPendientes as unknown as NexusPendiente[], ticketsMas: ticketsMasArr, minimos: rawMinimos as any[],
     pagosLev, planteles,
   }).catch(e => { console.error('Error generando reporte de incidencias:', e); alert('Error al generar el reporte: ' + (e?.message ?? e)); });
 
