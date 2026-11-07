@@ -429,7 +429,7 @@ function TicketMASPrincipal({ esAutorizadorFMA }: { esAutorizadorFMA: boolean })
   const onSolicitudOrigen = (id: string) => {
     const sol = solicitudesParaTicket.find(x => x.id === id);
     // Sin solicitud: el colegio no puede escribir el nombre (solo el admin)
-    if (!sol) { setForm(p => ({ ...p, solicitud_id: '', nombre_proyecto: isAdmin ? p.nombre_proyecto : '' })); return; }
+    if (!sol) { setForm(p => ({ ...p, solicitud_id: '', nombre_proyecto: '' })); return; }
     const c = colegiosTicket.find(x => x.nombre === sol.nombre_centro);
     setForm(p => ({
       ...p, solicitud_id: sol.id,
@@ -534,7 +534,7 @@ function TicketMASPrincipal({ esAutorizadorFMA }: { esAutorizadorFMA: boolean })
       toast.error('Tu perfil no tiene nombre y/o puesto capturados — pide al administrador que los agregue en Accesos antes de continuar.');
       return;
     }
-    if (!isAdmin && !form.solicitud_id) {
+    if (!form.solicitud_id) {
       toast.error('Elige la Solicitud de Proyecto de la que sale este Ticket MAS');
       return;
     }
@@ -1223,33 +1223,41 @@ function TicketMASPrincipal({ esAutorizadorFMA }: { esAutorizadorFMA: boolean })
         </section>
 
         {/* ── Solicitud de Proyecto de origen ── */}
-        {(!isAdmin || solicitudesParaTicket.length > 0) && (
-          <section className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-            <div className="bg-slate-800 text-white px-4 py-2.5 text-xs font-bold uppercase tracking-wider">
-              Solicitud de Proyecto{isAdmin ? ' (opcional)' : ' *'}
-            </div>
-            <div className="p-4">
-              {solicitudesParaTicket.length === 0 ? (
-                <p className="text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-lg p-3">
-                  No tienes ninguna Solicitud de Proyecto con Ticket MAS habilitado. La Coordinación de Obras y Mantenimiento RCMA lo habilita desde Solicitudes Recibidas.
-                </p>
-              ) : (
-                <>
-                  <label className={labelClass}>¿De qué solicitud sale este Ticket MAS?</label>
-                  <select className={selectClass} value={form.solicitud_id} onChange={e => onSolicitudOrigen(e.target.value)}>
-                    <option value="">— Seleccionar solicitud —</option>
-                    {solicitudesParaTicket.map(x => (
-                      <option key={x.id} value={x.id}>
-                        {x.folio ? `${x.folio} · ` : ''}{x.nombre_proyecto ?? 'Sin nombre'} ({x.nombre_centro ?? '—'})
-                      </option>
-                    ))}
-                  </select>
-                  <p className="text-[10px] text-slate-400 mt-1">Al elegirla se llenan el colegio y el nombre del proyecto — puedes ajustarlos. Cada solicitud solo puede tener un Ticket MAS.</p>
-                </>
-              )}
-            </div>
-          </section>
-        )}
+        <section className={`bg-white rounded-xl border-2 shadow-sm overflow-hidden transition-colors ${form.solicitud_id ? 'border-emerald-300' : 'border-[#ED7102]'}`}>
+          <div className="bg-slate-800 text-white px-4 py-2.5 text-xs font-bold uppercase tracking-wider flex items-center justify-between gap-2">
+            <span>Solicitud de Proyecto *</span>
+            {form.solicitud_id
+              ? <span className="normal-case tracking-normal text-[10px] font-bold bg-emerald-500 text-white px-2 py-0.5 rounded-full">✓ Seleccionada</span>
+              : <span className="normal-case tracking-normal text-[10px] font-bold bg-[#ED7102] text-white px-2 py-0.5 rounded-full">Obligatorio</span>}
+          </div>
+          <div className="p-4">
+            {solicitudesParaTicket.length === 0 ? (
+              <p className="text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-lg p-3">
+                {isAdmin
+                  ? 'No hay Solicitudes de Proyecto con Ticket MAS habilitado y sin ticket. Habilítala primero en Solicitudes Recibidas.'
+                  : 'No tienes ninguna Solicitud de Proyecto con Ticket MAS habilitado. La Coordinación de Obras y Mantenimiento RCMA lo habilita desde Solicitudes Recibidas.'}
+              </p>
+            ) : (
+              <>
+                <label className={labelClass}>¿De qué solicitud sale este Ticket MAS?</label>
+                {!form.solicitud_id && (
+                  <p className="text-xs font-semibold text-[#ED7102] bg-orange-50 border border-orange-200 rounded-lg px-3 py-2 mb-2">
+                    Primero elige tu Solicitud de Proyecto: sin ella no se puede enviar el Ticket MAS.
+                  </p>
+                )}
+                <select className={`${selectClass} ${form.solicitud_id ? '' : 'ring-2 ring-[#ED7102]/40 border-[#ED7102]'}`} value={form.solicitud_id} onChange={e => onSolicitudOrigen(e.target.value)}>
+                  <option value="">— Seleccionar solicitud —</option>
+                  {solicitudesParaTicket.map(x => (
+                    <option key={x.id} value={x.id}>
+                      {x.folio ? `${x.folio} · ` : ''}{x.nombre_proyecto ?? 'Sin nombre'} ({x.nombre_centro ?? '—'})
+                    </option>
+                  ))}
+                </select>
+                <p className="text-[10px] text-slate-400 mt-1">Al elegirla se llenan el colegio y el nombre del proyecto. Cada solicitud solo puede tener un Ticket MAS.</p>
+              </>
+            )}
+          </div>
+        </section>
 
         {/* ── Datos generales ── */}
         <section className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
@@ -1415,17 +1423,9 @@ function TicketMASPrincipal({ esAutorizadorFMA }: { esAutorizadorFMA: boolean })
           <div className="p-4 space-y-4">
             <div>
               <label className={labelClass}>Nombre del Proyecto *</label>
-              {form.solicitud_id || !isAdmin ? (
-                <input className={readOnlyClass} value={form.nombre_proyecto} readOnly
-                  placeholder="Se toma de la Solicitud de Proyecto que elijas arriba" />
-              ) : (
-                <input className={inputClass} value={form.nombre_proyecto} onChange={e => set('nombre_proyecto', e.target.value)} placeholder="Ej: Mantenimiento de Luminarias Primaria" />
-              )}
-              <p className="text-[10px] text-slate-400 mt-1">
-                {form.solicitud_id || !isAdmin
-                  ? 'Es el nombre de tu Solicitud de Proyecto; también identifica el expediente y el proyecto vinculado.'
-                  : 'Este nombre se usará para identificar el expediente y el proyecto vinculado.'}
-              </p>
+              <input className={readOnlyClass} value={form.nombre_proyecto} readOnly
+                placeholder="Se toma de la Solicitud de Proyecto que elijas arriba" />
+              <p className="text-[10px] text-slate-400 mt-1">Es el nombre de la Solicitud de Proyecto; también identifica el expediente y el proyecto vinculado.</p>
             </div>
             <div>
               <label className={labelClass}>Descripción de la obra *</label>
