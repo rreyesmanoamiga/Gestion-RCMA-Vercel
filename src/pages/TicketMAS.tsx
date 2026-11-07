@@ -201,7 +201,8 @@ function EstatusBadge({ estatus, vencido }: { estatus?: string; vencido?: boolea
 }
 
 // ─── Generador de PDF del ticket ──────────────────────────────────────────────
-function generarHTMLTicket(t: TicketMAS, firma: string): string {
+/** solicitud: la Solicitud de Proyecto vinculada (folio y nombre), para ligarlo también en papel */
+function generarHTMLTicket(t: TicketMAS, firma: string, solicitud?: { folio: string | null; nombre_proyecto: string | null } | null): string {
   const hoy = format(new Date(), "dd 'de' MMMM 'de' yyyy", { locale: es });
   const fechaAuth = t.fecha_autorizacion
     ? format(new Date(t.fecha_autorizacion), "dd/MM/yyyy", { locale: es })
@@ -265,6 +266,7 @@ function generarHTMLTicket(t: TicketMAS, firma: string): string {
     subtitulo: 'Construcciones, Mejoras y Mantenimiento',
     kpis: [
       { etiqueta: 'Folio', valor: val(t.folio), folio: true },
+      { etiqueta: 'Solicitud vinculada', valor: solicitud?.folio ? esc(solicitud.folio) : 'Sin vincular', folio: !!solicitud?.folio },
       { etiqueta: 'Estatus', valor: esc(ESTATUS_STYLE[t.estatus ?? 'pendiente']?.label ?? 'Pendiente'), pill: true },
       { etiqueta: 'Fecha', valor: esc(hoy) },
       { etiqueta: 'Importe', valor: fmx(t.cot1_importe) },
@@ -275,7 +277,7 @@ function generarHTMLTicket(t: TicketMAS, firma: string): string {
         puesto: `Solicitante${t.puesto_solicitante ? ' · ' + esc(t.puesto_solicitante) : ''}` },
       firmaDerecha,
     ],
-    referencia: `Ticket MAS ${t.folio ?? ''}${t.estatus === 'autorizado' ? ` · Autorizado el ${fechaAuth}` : ''}`,
+    referencia: `Ticket MAS ${t.folio ?? ''}${solicitud?.folio ? ` · Solicitud de Proyecto ${solicitud.folio}` : ''}${t.estatus === 'autorizado' ? ` · Autorizado el ${fechaAuth}` : ''}`,
   });
 }
 
@@ -997,9 +999,14 @@ function TicketMASPrincipal({ esAutorizadorFMA }: { esAutorizadorFMA: boolean })
   };
 
     // ── Imprimir ticket ────────────────────────────────────────────────────────────
-  const handlePrint = (t: TicketMAS) => {
-    const html = generarHTMLTicket(t, FIRMA_RCMA);
-    imprimirHTML(html);
+  const handlePrint = async (t: TicketMAS) => {
+    // Folio de la Solicitud de Proyecto vinculada, para que salga en el formato
+    let solicitud: { folio: string | null; nombre_proyecto: string | null } | null = null;
+    if (t.solicitud_id) {
+      const { data } = await supabase.from('solicitudes').select('folio, nombre_proyecto').eq('id', t.solicitud_id).maybeSingle();
+      solicitud = data ?? null;
+    }
+    imprimirHTML(generarHTMLTicket(t, FIRMA_RCMA, solicitud));
   };
 
   // ── Abrir para revisión ───────────────────────────────────────────────────────
@@ -1812,13 +1819,16 @@ function TicketMASPrincipal({ esAutorizadorFMA }: { esAutorizadorFMA: boolean })
             ))}
           </div>
           <div className="px-4 pb-4">
-            <div className="mb-3">
-              <p className="text-[10px] font-bold text-slate-400 uppercase mb-1">Solicitud de Proyecto</p>
-              <p className="text-sm text-slate-700 bg-slate-50 rounded-lg p-3">
-                {viewing.solicitud_id
-                  ? (solicitudDeTicket ? `${solicitudDeTicket.folio ?? ''} · ${solicitudDeTicket.nombre_proyecto ?? ''}` : '…')
-                  : <span className="text-slate-400 italic">Sin vincular</span>}
-              </p>
+            <div className={`mb-3 rounded-lg border-l-4 p-3 ${viewing.solicitud_id ? 'border-[#ED7102] bg-orange-50' : 'border-slate-300 bg-slate-50'}`}>
+              <p className="text-[10px] font-bold text-slate-500 uppercase mb-1">Solicitud de Proyecto vinculada</p>
+              {viewing.solicitud_id ? (
+                <p className="text-sm text-slate-800">
+                  <span className="font-mono font-black text-[#00295A] mr-2">{solicitudDeTicket?.folio ?? '…'}</span>
+                  {solicitudDeTicket?.nombre_proyecto ?? ''}
+                </p>
+              ) : (
+                <p className="text-sm text-slate-400 italic">Sin vincular</p>
+              )}
             </div>
             {viewing.nombre_proyecto && (
               <div className="mb-3">
