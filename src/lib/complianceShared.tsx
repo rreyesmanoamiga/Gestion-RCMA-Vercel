@@ -72,6 +72,64 @@ const MESES_POR_PERIODICIDAD: Record<string, number> = {
   'Mensual': 1, 'Trimestral': 3, 'Semestral': 6,
   'Anual': 12, 'Cada 2 años': 24, 'Cada 3 años': 36, 'Cada 4 años': 48, 'Cada 5 años': 60, 'Cada 10 años': 120,
 };
+export const UNICO_TRAMITE = 'Único trámite';
+
+/** Meses de vigencia de una periodicidad ("Anual" → 12, "10 meses" → 10). null = no vence. */
+export function mesesDePeriodicidad(periodicidad: string | null | undefined): number | null {
+  if (!periodicidad) return null;
+  if (MESES_POR_PERIODICIDAD[periodicidad]) return MESES_POR_PERIODICIDAD[periodicidad];
+  const m = /^\s*(?:cada\s+)?(\d{1,3})\s*mes(?:es)?\s*$/i.exec(periodicidad);
+  return m && Number(m[1]) > 0 ? Number(m[1]) : null;
+}
+/** Nombre que se guarda: los meses de siempre conservan su nombre (12 → "Anual"); los demás, "N meses". */
+export function etiquetaPeriodicidad(meses: number | null): string {
+  if (!meses || meses <= 0) return UNICO_TRAMITE;
+  const nombre = Object.entries(MESES_POR_PERIODICIDAD).find(([, m]) => m === meses)?.[0];
+  return nombre ?? `${meses} ${meses === 1 ? 'mes' : 'meses'}`;
+}
+/** Texto para mostrar: "Anual · 12 meses", "10 meses", "Único trámite" */
+export function textoPeriodicidad(periodicidad: string | null | undefined): string {
+  const m = mesesDePeriodicidad(periodicidad);
+  if (!m) return UNICO_TRAMITE;
+  const nombre = etiquetaPeriodicidad(m);
+  return /mes(es)?$/.test(nombre) ? nombre : `${nombre} · ${m} ${m === 1 ? 'mes' : 'meses'}`;
+}
+
+/** Vigencia en número de meses, con casilla "Trámite único (no vence)" */
+export function SelectorVigencia({ value, onChange, compacto = false, resaltado = false }: {
+  value: string; onChange: (periodicidad: string) => void; compacto?: boolean; resaltado?: boolean;
+}) {
+  const meses = mesesDePeriodicidad(value);
+  const [texto, setTexto] = useState(meses ? String(meses) : '');
+  useEffect(() => { setTexto(meses ? String(meses) : ''); }, [meses]);
+  const unico = !meses;
+  const confirmar = () => {
+    const n = parseInt(texto, 10);
+    if (!n || n < 1) { setTexto(meses ? String(meses) : ''); return; }
+    const nuevo = etiquetaPeriodicidad(Math.min(n, 240));
+    if (nuevo !== value) onChange(nuevo);
+  };
+  const caja = compacto
+    ? `w-14 text-xs font-semibold border rounded-lg px-2 py-1 text-center ${resaltado ? 'border-amber-300 text-amber-700 bg-amber-50' : 'border-slate-200 text-slate-600 bg-white'}`
+    : 'w-24 px-3 py-2 border border-slate-300 rounded-lg text-sm text-center bg-white';
+  return (
+    <div className={`flex items-center ${compacto ? 'gap-2' : 'gap-3'} flex-wrap`}>
+      {!unico && (
+        <span className="flex items-center gap-1.5">
+          <input type="number" min={1} max={240} value={texto} className={caja}
+            onChange={e => setTexto(e.target.value)} onBlur={confirmar}
+            onKeyDown={e => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }} />
+          <span className={`${compacto ? 'text-[11px]' : 'text-sm'} text-slate-500`}>meses</span>
+        </span>
+      )}
+      <label className={`flex items-center gap-1.5 cursor-pointer ${compacto ? 'text-[11px]' : 'text-xs'} ${unico ? (resaltado ? 'text-amber-700 font-semibold' : 'text-slate-600 font-semibold') : 'text-slate-400'}`}>
+        <input type="checkbox" checked={unico} className="w-3.5 h-3.5 rounded border-slate-300"
+          onChange={e => onChange(e.target.checked ? UNICO_TRAMITE : etiquetaPeriodicidad(12))} />
+        Trámite único (no vence)
+      </label>
+    </div>
+  );
+}
 
 // Aviso 3 semanas antes del vencimiento; en periodos cortos (mensual,
 // trimestral) se usa una cuarta parte del periodo para que no quede
@@ -93,7 +151,7 @@ export interface VigenciaCalculada {
 export function calcularVigencia(vigenteDesde: string | null, periodicidad: string | null | undefined, hoy: Date): VigenciaCalculada {
   if (!vigenteDesde) return { vigente_hasta: null, fecha_limite_recepcion: null, vigente: null };
 
-  const meses = periodicidad ? MESES_POR_PERIODICIDAD[periodicidad] : undefined;
+  const meses = mesesDePeriodicidad(periodicidad);
   if (!meses) {
     // "Único trámite": no vuelve a vencer, se queda vigente para siempre.
     return { vigente_hasta: null, fecha_limite_recepcion: null, vigente: 'Si' };
@@ -113,6 +171,20 @@ export function calcularVigencia(vigenteDesde: string | null, periodicidad: stri
   if (hasta < hoy) vigente = 'No';
   else if (limite <= hoy) vigente = 'Por expirar';
 
+  return { vigente_hasta: toISO(hasta), fecha_limite_recepcion: toISO(limite), vigente };
+}
+
+/** Igual que calcularVigencia, pero con el "Vigente hasta" que dice el propio documento (pólizas, seguros…) */
+export function calcularVigenciaConFecha(vigenteDesde: string | null, vigenteHasta: string, hoy: Date): VigenciaCalculada {
+  const hasta = new Date(vigenteHasta + 'T00:00:00');
+  const desde = vigenteDesde ? new Date(vigenteDesde + 'T00:00:00') : null;
+  const diasPeriodo = desde ? Math.max(1, Math.round((hasta.getTime() - desde.getTime()) / 86400000)) : 365;
+  const limite = new Date(hasta);
+  limite.setDate(limite.getDate() - Math.min(DIAS_ANTICIPACION_FECHA_LIMITE, Math.round(diasPeriodo / 4)));
+  const toISO = (d: Date) => d.toISOString().slice(0, 10);
+  let vigente: 'Si' | 'No' | 'Por expirar' = 'Si';
+  if (hasta < hoy) vigente = 'No';
+  else if (limite <= hoy) vigente = 'Por expirar';
   return { vigente_hasta: toISO(hasta), fecha_limite_recepcion: toISO(limite), vigente };
 }
 
@@ -371,9 +443,28 @@ export function DetalleModal({ doc, onClose, onSaved, periodicidad }: { doc: Com
     setForm(f => ({ ...f, [campo]: e.target.value }));
 
   const hoy = useMemo(() => { const d = new Date(); d.setHours(0, 0, 0, 0); return d; }, []);
+
+  // "Vigente hasta" según el documento (pólizas, seguros…): manda sobre el cálculo.
+  // Se lee aparte para que, si la columna aún no existe, el resto siga funcionando.
+  const [manualDisponible, setManualDisponible] = useState(false);
+  const [usarFechaDoc, setUsarFechaDoc] = useState(false);
+  const [venceDoc, setVenceDoc] = useState(doc.vigente_hasta ?? '');
+  useEffect(() => {
+    let vivo = true;
+    supabase.from('compliance_documentos').select('vigente_hasta_manual').eq('id', doc.id).maybeSingle()
+      .then(({ data, error }) => {
+        if (!vivo || error) return;
+        setManualDisponible(true);
+        if ((data as any)?.vigente_hasta_manual) { setUsarFechaDoc(true); setVenceDoc(doc.vigente_hasta ?? ''); }
+      });
+    return () => { vivo = false; };
+  }, [doc.id, doc.vigente_hasta]);
+
   const vigencia = useMemo(
-    () => calcularVigencia(form.vigente_desde || null, periodicidad, hoy),
-    [form.vigente_desde, periodicidad, hoy]
+    () => (usarFechaDoc && venceDoc
+      ? calcularVigenciaConFecha(form.vigente_desde || null, venceDoc, hoy)
+      : calcularVigencia(form.vigente_desde || null, periodicidad, hoy)),
+    [form.vigente_desde, periodicidad, hoy, usarFechaDoc, venceDoc]
   );
 
   const construirPatch = (): Partial<ComplianceDoc> => ({
@@ -387,12 +478,17 @@ export function DetalleModal({ doc, onClose, onSaved, periodicidad }: { doc: Com
       vigente_hasta: vigencia.vigente_hasta,
       año: form.año ? parseInt(form.año, 10) : doc.año,
       responsable: form.responsable.trim() || null,
-  });
+      ...(manualDisponible ? { vigente_hasta_manual: usarFechaDoc && !!venceDoc } : {}),
+  } as Partial<ComplianceDoc>);
 
   // Antes de Verificar: la fecha del documento es obligatoria si el concepto
   // vence (así el sistema calcula el vencimiento y los recordatorios).
   const guardarAntesDeVerificar = async (): Promise<boolean> => {
-    const vence = !!periodicidad && periodicidad !== 'Único trámite';
+    if (usarFechaDoc && !venceDoc) {
+      toast.error('Captura la fecha de vencimiento que dice el documento antes de verificar');
+      return false;
+    }
+    const vence = !usarFechaDoc && !!mesesDePeriodicidad(periodicidad);
     if (vence && !form.vigente_desde) {
       toast.error('Captura "Vigente desde" (fecha del documento) antes de verificar', {
         description: `Con la periodicidad (${periodicidad}) el sistema calcula cuándo vence y manda los recordatorios.`,
@@ -492,11 +588,31 @@ export function DetalleModal({ doc, onClose, onSaved, periodicidad }: { doc: Com
               <input type="date" value={form.vigente_desde} onChange={set('vigente_desde')} disabled={updateDoc.isPending} className={inputCls} />
             </div>
             <div>
-              <label className={labelCls}>Vigente hasta (automático)</label>
-              <div className={`${inputCls} bg-slate-50 text-slate-500`}>
-                {vigencia.vigente_hasta ? formatFecha(vigencia.vigente_hasta) : (form.vigente_desde ? 'No vence (trámite único)' : '—')}
-              </div>
+              {usarFechaDoc ? (
+                <>
+                  <label className={labelCls}>Vigente hasta <span className="normal-case font-normal">(según el documento)</span></label>
+                  <input type="date" value={venceDoc} onChange={e => setVenceDoc(e.target.value)} disabled={updateDoc.isPending}
+                    className={`${inputCls} border-[#ED7102]/50 bg-orange-50/40`} />
+                </>
+              ) : (
+                <>
+                  <label className={labelCls}>Vigente hasta (automático)</label>
+                  <div className={`${inputCls} bg-slate-50 text-slate-500`}>
+                    {vigencia.vigente_hasta ? formatFecha(vigencia.vigente_hasta) : (form.vigente_desde ? 'No vence (trámite único)' : '—')}
+                  </div>
+                </>
+              )}
             </div>
+            {manualDisponible && (
+              <label className="col-span-2 flex items-start gap-2 text-xs text-slate-600 cursor-pointer -mt-1">
+                <input type="checkbox" checked={usarFechaDoc} disabled={updateDoc.isPending} className="mt-0.5 w-3.5 h-3.5 rounded border-slate-300"
+                  onChange={e => { setUsarFechaDoc(e.target.checked); if (e.target.checked && !venceDoc) setVenceDoc(vigencia.vigente_hasta ?? ''); }} />
+                <span>
+                  <span className="font-semibold">Usar la fecha de vencimiento que dice el documento</span>
+                  <span className="text-slate-400"> — para pólizas, seguros o trámites con fecha propia. Esa fecha manda sobre la periodicidad y los recordatorios salen con ella.</span>
+                </span>
+              </label>
+            )}
           </div>
 
           <ArchivosDocumento
@@ -511,9 +627,11 @@ export function DetalleModal({ doc, onClose, onSaved, periodicidad }: { doc: Com
 
           {periodicidad && (
             <div className={`rounded-lg px-3 py-2.5 border ${vigencia.vigente === 'No' || vigencia.vigente === 'Por expirar' ? 'bg-amber-50 border-amber-200' : 'bg-slate-50 border-slate-200'}`}>
-              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wide">Periodicidad: {periodicidad}</p>
+              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wide">
+                {usarFechaDoc ? 'Vigencia: fecha del documento' : `Periodicidad: ${textoPeriodicidad(periodicidad)}`}
+              </p>
               <p className="text-xs mt-0.5">
-                {!form.vigente_desde
+                {!form.vigente_desde && !(usarFechaDoc && venceDoc)
                   ? 'Captura "Vigente desde" para calcular vencimiento y fecha límite automáticamente'
                   : vigencia.fecha_limite_recepcion
                     ? <>Fecha límite: <strong>{formatFecha(vigencia.fecha_limite_recepcion)}</strong> (3 semanas antes de vencer) · Vence: <strong>{formatFecha(vigencia.vigente_hasta)}</strong></>

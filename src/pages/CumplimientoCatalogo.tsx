@@ -6,7 +6,7 @@ import PageHeader from '@/components/shared/PageHeader';
 import { usePermissions } from '@/hooks/usePermissions';
 import AccesoRestringido from '@/components/shared/AccesoRestringido';
 import { COLEGIOS } from '@/lib/colegios';
-import { MATERIAS, PERIODICIDADES } from '@/lib/complianceShared';
+import { MATERIAS, PERIODICIDADES, SelectorVigencia, textoPeriodicidad, mesesDePeriodicidad } from '@/lib/complianceShared';
 import { Plus, Pencil, Trash2, X, Save, RefreshCw, ChevronDown, Loader2 } from 'lucide-react';
 
 interface Concepto {
@@ -181,7 +181,7 @@ export default function CumplimientoCatalogo() {
   // ── Cambiar la periodicidad SOLO para el colegio seleccionado ─────────────
   const setPeriodicidadColegioMutation = useMutation({
     mutationFn: async ({ concepto, periodicidad }: { concepto: Concepto; periodicidad: string }) => {
-      if (periodicidad === concepto.periodicidad) {
+      if (mesesDePeriodicidad(periodicidad) === mesesDePeriodicidad(concepto.periodicidad)) {
         // Coincide con el default del catálogo — no hace falta guardar excepción
         const { error } = await supabase.from('compliance_periodicidad_colegio')
           .delete().eq('colegio', colegioSel).eq('concepto_id', concepto.id);
@@ -328,7 +328,7 @@ export default function CumplimientoCatalogo() {
                   )}
                 </div>
                 <span className="text-[10px] font-bold text-slate-500 bg-slate-100 px-2 py-1 rounded-full shrink-0 whitespace-nowrap">
-                  {c.periodicidad}
+                  {textoPeriodicidad(c.periodicidad)}
                 </span>
                 <button onClick={() => { setEditando(c); setForm({
                   nombre: c.nombre, materia: c.materia, norma: c.norma ?? '', periodicidad: c.periodicidad,
@@ -359,13 +359,13 @@ export default function CumplimientoCatalogo() {
         </div>
         <p className="px-5 pt-3 text-xs text-slate-400">
           Por default, <strong>todos los conceptos aplican</strong> a todos los colegios con la periodicidad del catálogo.
-          Desmarca lo que NO le aplique a <strong>{colegioSel}</strong>, o cambia su periodicidad si aquí es distinta (ej. cada 2 años en vez de anual).
+          Desmarca lo que NO le aplique a <strong>{colegioSel}</strong>, o cambia sus meses de vigencia si aquí es distinta (ej. 24 en vez de 12). En ámbar: distinta al catálogo.
         </p>
         <div className="divide-y divide-slate-50">
           {conceptos.filter(c => c.activo).map(c => {
             const excepcion = excepcionesColegio.has(c.id);
             const periodicidadActual = periodicidadPorConcepto.get(c.id) ?? c.periodicidad;
-            const esDistinta = periodicidadActual !== c.periodicidad;
+            const esDistinta = mesesDePeriodicidad(periodicidadActual) !== mesesDePeriodicidad(c.periodicidad);
             return (
               <div key={c.id} className="flex items-center gap-3 px-5 py-2 flex-wrap">
                 <label className="flex items-center gap-2.5 cursor-pointer flex-1 min-w-[220px]">
@@ -376,13 +376,10 @@ export default function CumplimientoCatalogo() {
                   </span>
                 </label>
                 {!excepcion && (
-                  <select
-                    value={periodicidadActual}
-                    onChange={e => setPeriodicidadColegioMutation.mutate({ concepto: c, periodicidad: e.target.value })}
-                    className={`text-xs font-semibold border rounded-lg px-2 py-1 bg-white shrink-0 ${esDistinta ? 'border-amber-300 text-amber-700 bg-amber-50' : 'border-slate-200 text-slate-500'}`}
-                  >
-                    {PERIODICIDADES.map(p => <option key={p} value={p}>{p}</option>)}
-                  </select>
+                  <div className="shrink-0" title={esDistinta ? `En este colegio es distinta al catálogo (${textoPeriodicidad(c.periodicidad)})` : 'Igual que el catálogo'}>
+                    <SelectorVigencia compacto resaltado={esDistinta} value={periodicidadActual}
+                      onChange={v => setPeriodicidadColegioMutation.mutate({ concepto: c, periodicidad: v })} />
+                  </div>
                 )}
               </div>
             );
@@ -414,10 +411,9 @@ export default function CumplimientoCatalogo() {
                 <textarea className={inputClass + ' resize-none'} rows={2} value={form.norma} onChange={e => setForm(p => ({ ...p, norma: e.target.value }))} />
               </div>
               <div>
-                <label className="block text-xs font-bold text-slate-500 uppercase mb-1.5">Periodicidad</label>
-                <select className={inputClass + ' bg-white'} value={form.periodicidad} onChange={e => setForm(p => ({ ...p, periodicidad: e.target.value }))}>
-                  {PERIODICIDADES.map(p => <option key={p} value={p}>{p}</option>)}
-                </select>
+                <label className="block text-xs font-bold text-slate-500 uppercase mb-1.5">Vigencia</label>
+                <SelectorVigencia value={form.periodicidad} onChange={v => setForm(p => ({ ...p, periodicidad: v }))} />
+                <p className="text-[11px] text-slate-500 mt-1">{textoPeriodicidad(form.periodicidad)}</p>
                 <p className="text-[11px] text-slate-400 mt-1">
                   Este es el valor por default para todos los colegios — puedes cambiarlo para uno en particular más abajo, en "Excepciones por colegio".
                 </p>
