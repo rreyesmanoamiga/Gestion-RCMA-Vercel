@@ -443,6 +443,27 @@ export function DetalleModal({ doc, onClose, onSaved, periodicidad }: { doc: Com
     setForm(f => ({ ...f, [campo]: e.target.value }));
 
   const hoy = useMemo(() => { const d = new Date(); d.setHours(0, 0, 0, 0); return d; }, []);
+  const qcModal = useQueryClient();
+
+  // Vigencia (meses) del concepto: el admin la puede cambiar aquí mismo; al guardar
+  // se actualiza el Catálogo para TODOS los colegios (y este colegio deja su excepción).
+  const [periodicidadEdit, setPeriodicidadEdit] = useState<string | undefined>(periodicidad);
+  useEffect(() => { setPeriodicidadEdit(periodicidad); }, [periodicidad]);
+  const periodicidadCambio = !!periodicidadEdit && mesesDePeriodicidad(periodicidadEdit) !== mesesDePeriodicidad(periodicidad);
+  const guardarPeriodicidadCatalogo = async (): Promise<boolean> => {
+    if (!periodicidadCambio || !periodicidadEdit) return true;
+    const { data: concepto, error: e1 } = await supabase.from('compliance_conceptos')
+      .select('id').eq('nombre', doc.tipo_documento).maybeSingle();
+    if (e1 || !concepto) { toast.error('No encontré este documento en el Catálogo; cambia la vigencia desde Catálogo de Cumplimiento'); return false; }
+    const { error: e2 } = await supabase.from('compliance_conceptos').update({ periodicidad: periodicidadEdit }).eq('id', (concepto as any).id);
+    if (e2) { toast.error(e2.message); return false; }
+    await supabase.from('compliance_periodicidad_colegio').delete().eq('colegio', doc.colegio).eq('concepto_id', (concepto as any).id);
+    ['compliance_conceptos', 'compliance_conceptos_activos', 'compliance_conceptos_periodicidad',
+     'compliance_periodicidad_colegio', 'compliance_periodicidad_colegio_lite', 'expediente_periodicidades']
+      .forEach(k => qcModal.invalidateQueries({ queryKey: [k] }));
+    toast.success(`Vigencia actualizada en el Catálogo: ${textoPeriodicidad(periodicidadEdit)} (todos los colegios)`);
+    return true;
+  };
 
   // "Vigente hasta" según el documento (pólizas, seguros…): manda sobre el cálculo.
   // Se lee aparte para que, si la columna aún no existe, el resto siga funcionando.
@@ -463,8 +484,8 @@ export function DetalleModal({ doc, onClose, onSaved, periodicidad }: { doc: Com
   const vigencia = useMemo(
     () => (usarFechaDoc && venceDoc
       ? calcularVigenciaConFecha(form.vigente_desde || null, venceDoc, hoy)
-      : calcularVigencia(form.vigente_desde || null, periodicidad, hoy)),
-    [form.vigente_desde, periodicidad, hoy, usarFechaDoc, venceDoc]
+      : calcularVigencia(form.vigente_desde || null, periodicidadEdit, hoy)),
+    [form.vigente_desde, periodicidadEdit, hoy, usarFechaDoc, venceDoc]
   );
 
   const construirPatch = (): Partial<ComplianceDoc> => ({
@@ -488,13 +509,14 @@ export function DetalleModal({ doc, onClose, onSaved, periodicidad }: { doc: Com
       toast.error('Captura la fecha de vencimiento que dice el documento antes de verificar');
       return false;
     }
-    const vence = !usarFechaDoc && !!mesesDePeriodicidad(periodicidad);
+    const vence = !usarFechaDoc && !!mesesDePeriodicidad(periodicidadEdit);
     if (vence && !form.vigente_desde) {
       toast.error('Captura "Vigente desde" (fecha del documento) antes de verificar', {
-        description: `Con la periodicidad (${periodicidad}) el sistema calcula cuándo vence y manda los recordatorios.`,
+        description: `Con la vigencia (${textoPeriodicidad(periodicidadEdit)}) el sistema calcula cuándo vence y manda los recordatorios.`,
       });
       return false;
     }
+    if (!(await guardarPeriodicidadCatalogo())) return false;
     try {
       const { estado: _omitido, ...resto } = construirPatch();
       await updateDoc.mutateAsync({ id: doc.id, patch: resto });
@@ -502,7 +524,8 @@ export function DetalleModal({ doc, onClose, onSaved, periodicidad }: { doc: Com
     } catch { return false; }
   };
 
-  const guardarTodo = () => {
+  const guardarTodo = async () => {
+    if (!(await guardarPeriodicidadCatalogo())) return;
     const patch = construirPatch();
     updateDoc.mutate(
       { id: doc.id, patch },
@@ -583,6 +606,19 @@ export function DetalleModal({ doc, onClose, onSaved, periodicidad }: { doc: Com
               <label className={labelCls}>Año</label>
               <input type="number" value={form.año} onChange={set('año')} disabled={updateDoc.isPending} className={inputCls} />
             </div>
+            {isAdmin && periodicidad && !usarFechaDoc && (
+              <div className="col-span-2">
+                <label className={labelCls}>Vigencia <span className="normal-case font-normal">(recurrencia del concepto · aplica a todos los colegios)</span></label>
+                <div className={`rounded-lg border px-3 py-2 ${periodicidadCambio ? 'border-amber-300 bg-amber-50' : 'border-slate-200 bg-white'}`}>
+                  <SelectorVigencia value={periodicidadEdit ?? periodicidad} onChange={setPeriodicidadEdit} compacto resaltado={periodicidadCambio} />
+                  {periodicidadCambio && (
+                    <p className="text-[11px] text-amber-700 mt-1">
+                      Antes: {textoPeriodicidad(periodicidad)} → ahora: <b>{textoPeriodicidad(periodicidadEdit)}</b>. Al guardar se cambia en el Catálogo para todos los colegios.
+                    </p>
+                  )}
+                </div>
+              </div>
+            )}
             <div>
               <label className={labelCls}>Vigente desde <span className="normal-case font-normal">(fecha del documento)</span></label>
               <input type="date" value={form.vigente_desde} onChange={set('vigente_desde')} disabled={updateDoc.isPending} className={inputCls} />
@@ -628,7 +664,7 @@ export function DetalleModal({ doc, onClose, onSaved, periodicidad }: { doc: Com
           {periodicidad && (
             <div className={`rounded-lg px-3 py-2.5 border ${vigencia.vigente === 'No' || vigencia.vigente === 'Por expirar' ? 'bg-amber-50 border-amber-200' : 'bg-slate-50 border-slate-200'}`}>
               <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wide">
-                {usarFechaDoc ? 'Vigencia: fecha del documento' : `Periodicidad: ${textoPeriodicidad(periodicidad)}`}
+                {usarFechaDoc ? 'Vigencia: fecha del documento' : `Periodicidad: ${textoPeriodicidad(periodicidadEdit)}`}
               </p>
               <p className="text-xs mt-0.5">
                 {!form.vigente_desde && !(usarFechaDoc && venceDoc)
