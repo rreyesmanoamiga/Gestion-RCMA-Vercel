@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import {
   LayoutDashboard,
@@ -130,6 +130,17 @@ export default function Sidebar({ isOpen, onToggle }) {
     location.pathname === path ||
     (path !== '/' && path !== '/solicitud' && path !== '/solicitudes' && location.pathname.startsWith(path))
   );
+
+  // Acordeones: solo uno abierto a la vez. Al cambiar de página se abre el
+  // grupo de la página actual (en el Dashboard, todos plegados). El grupo de la
+  // página actual, si se cierra, conserva su punto naranja.
+  const [grupoAbierto, setGrupoAbierto] = useState(null);
+  const gruposActivos = [];
+  const acc = (key, activo) => {
+    if (activo) gruposActivos.push(key);
+    return { active: activo, open: grupoAbierto === key, onToggle: () => setGrupoAbierto(g => (g === key ? null : key)) };
+  };
+  useLayoutEffect(() => { setGrupoAbierto(gruposActivos[0] ?? null); }, [location.pathname]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const navLinkClass = (path) => cn(
     'flex items-center gap-3 pl-[10px] pr-3 py-2.5 rounded-md text-sm font-medium transition-all duration-200 border-l-2',
@@ -355,16 +366,16 @@ export default function Sidebar({ isOpen, onToggle }) {
               {esAdminSOL && (
                 <>
                   <div className="pt-2" />
-                  <SidebarAccordionGroup label="Inspección" icon={ClipboardList} defaultOpen={solInspeccion.some(i => isActive(i.to))} active={solInspeccion.some(i => isActive(i.to))}>
+                  <SidebarAccordionGroup label="Inspección" icon={ClipboardList} {...acc('g1', solInspeccion.some(i => isActive(i.to)))}>
                     {solInspeccion.map(renderLink)}
                   </SidebarAccordionGroup>
-                  <SidebarAccordionGroup label="Seguimiento" icon={ListChecks} defaultOpen={solSeguimiento.some(i => isActive(i.to))} active={solSeguimiento.some(i => isActive(i.to))}>
+                  <SidebarAccordionGroup label="Seguimiento" icon={ListChecks} {...acc('g2', solSeguimiento.some(i => isActive(i.to)))}>
                     {solSeguimiento.map(renderLink)}
                   </SidebarAccordionGroup>
-                  <SidebarAccordionGroup label="Organización" icon={Users} defaultOpen={solOrganizacion.some(i => isActive(i.to))} active={solOrganizacion.some(i => isActive(i.to))}>
+                  <SidebarAccordionGroup label="Organización" icon={Users} {...acc('g3', solOrganizacion.some(i => isActive(i.to)))}>
                     {solOrganizacion.map(renderLink)}
                   </SidebarAccordionGroup>
-                  <SidebarAccordionGroup label="Resultados" icon={Award} defaultOpen={solResultados.some(i => isActive(i.to))} active={solResultados.some(i => isActive(i.to))}>
+                  <SidebarAccordionGroup label="Resultados" icon={Award} {...acc('g4', solResultados.some(i => isActive(i.to)))}>
                     {solResultados.map(renderLink)}
                   </SidebarAccordionGroup>
                 </>
@@ -382,7 +393,7 @@ export default function Sidebar({ isOpen, onToggle }) {
               <SidebarAccordionGroup
                 label="Control Normativo"
                 icon={ShieldCheck}
-                defaultOpen={cControlNormativo.some(i => isActive(i.to))} active={cControlNormativo.some(i => isActive(i.to))}
+                {...acc('g5', cControlNormativo.some(i => isActive(i.to)))}
               >
                 {cControlNormativo.map(renderLink)}
               </SidebarAccordionGroup>
@@ -391,7 +402,7 @@ export default function Sidebar({ isOpen, onToggle }) {
                 label="Gestión de Trámites CN"
                 icon={ClipboardEdit}
                 hidden={cTramitesCN.length === 0}
-                defaultOpen={cTramitesCN.some(i => isActive(i.to))} active={cTramitesCN.some(i => isActive(i.to))}
+                {...acc('g6', cTramitesCN.some(i => isActive(i.to)))}
               >
                 {cTramitesCN.map(renderLink)}
               </SidebarAccordionGroup>
@@ -399,7 +410,7 @@ export default function Sidebar({ isOpen, onToggle }) {
               <SidebarAccordionGroup
                 label="Gestión de Protección Civil"
                 icon={ShieldAlert}
-                defaultOpen={cGestionPC.some(i => isActive(i.to))} active={cGestionPC.some(i => isActive(i.to))}
+                {...acc('g7', cGestionPC.some(i => isActive(i.to)))}
               >
                 {cGestionPC.map(renderLink)}
               </SidebarAccordionGroup>
@@ -408,7 +419,7 @@ export default function Sidebar({ isOpen, onToggle }) {
                 <SidebarAccordionGroup
                   label="Costos y Presupuestos"
                   icon={BarChart3}
-                  defaultOpen={costosLista.some(i => isActive(i.to))} active={costosLista.some(i => isActive(i.to))}
+                  {...acc('g8', costosLista.some(i => isActive(i.to)))}
                 >
                   {costosLista.map(renderLink)}
                 </SidebarAccordionGroup>
@@ -417,7 +428,7 @@ export default function Sidebar({ isOpen, onToggle }) {
               <SidebarAccordionGroup
                 label="Monitoreo y Reportes"
                 icon={ListTodo}
-                defaultOpen={cMonitoreo.some(i => isActive(i.to))} active={cMonitoreo.some(i => isActive(i.to))}
+                {...acc('g9', cMonitoreo.some(i => isActive(i.to)))}
               >
                 {cMonitoreo.map(renderLink)}
               </SidebarAccordionGroup>
@@ -443,7 +454,7 @@ export default function Sidebar({ isOpen, onToggle }) {
                 label="Gestión de Proyectos"
                 icon={FolderKanban}
                 hidden={gGestionProyectos.length === 0}
-                defaultOpen={gGestionProyectos.some(i => isActive(i.to))} active={gGestionProyectos.some(i => isActive(i.to))}
+                {...acc('g10', gGestionProyectos.some(i => isActive(i.to)))}
               >
                 {gGestionProyectos.map(renderLink)}
               </SidebarAccordionGroup>
@@ -452,7 +463,7 @@ export default function Sidebar({ isOpen, onToggle }) {
                 label="Operación Diaria"
                 icon={ListTodo}
                 hidden={gOperacion.length === 0}
-                defaultOpen={gOperacion.some(i => isActive(i.to))} active={gOperacion.some(i => isActive(i.to))}
+                {...acc('g11', gOperacion.some(i => isActive(i.to)))}
               >
                 {gOperacion.map(renderLink)}
               </SidebarAccordionGroup>
@@ -461,7 +472,7 @@ export default function Sidebar({ isOpen, onToggle }) {
                 label="Control Financiero"
                 icon={BarChart3}
                 hidden={gFinanciero.length === 0}
-                defaultOpen={gFinanciero.some(i => isActive(i.to))} active={gFinanciero.some(i => isActive(i.to))}
+                {...acc('g12', gFinanciero.some(i => isActive(i.to)))}
               >
                 {gFinanciero.map(renderLink)}
               </SidebarAccordionGroup>
@@ -470,7 +481,7 @@ export default function Sidebar({ isOpen, onToggle }) {
                 label="Plataforma y Red"
                 icon={Network}
                 hidden={!gPlataformaVisible}
-                defaultOpen={isActive('/nexus') || gPlataformaResto.some(i => isActive(i.to))} active={isActive('/nexus') || gPlataformaResto.some(i => isActive(i.to))}
+                {...acc('g13', isActive('/nexus') || gPlataformaResto.some(i => isActive(i.to)))}
               >
                 {nexusVisible && (
                   <NexusLink navLinkClass={navLinkClass} handleNavClick={handleNavClick} userEmail={user?.email} isAdmin={isAdmin} />
@@ -482,7 +493,7 @@ export default function Sidebar({ isOpen, onToggle }) {
                 label="Control de Calidad"
                 icon={ClipboardCheck}
                 hidden={gCalidad.length === 0}
-                defaultOpen={gCalidad.some(i => isActive(i.to))} active={gCalidad.some(i => isActive(i.to))}
+                {...acc('g14', gCalidad.some(i => isActive(i.to)))}
               >
                 {gCalidad.map(renderLink)}
               </SidebarAccordionGroup>
