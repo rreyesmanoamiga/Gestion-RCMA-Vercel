@@ -147,6 +147,8 @@ export default function SolicitudesRecibidas() {
     }));
   };
   const [filterEstatus, setFilterEstatus] = useState('all');
+  const [filterTerritorio, setFilterTerritorio] = useState('all');
+  const [filterColegio, setFilterColegio]       = useState('all');
   const [visibleCount, setVisibleCount]   = useState(PAGE_SIZE);
   const [viewing, setViewing]             = useState<Solicitud | null>(null);
   const [deletingId, setDeletingId]       = useState<string | null>(null);
@@ -449,9 +451,34 @@ export default function SolicitudesRecibidas() {
     onError: () => toast.error('Error al cancelar la solicitud'),
   });
 
+  // Territorio de cada solicitud (FMA y oficinas no vienen en el Directorio de colegios)
+  const territorioDe = (s: Solicitud) => {
+    const c = s.nombre_centro ?? '';
+    return colegioTerritorioMap[c] ?? (c === 'FMA' || c.startsWith('OF.') ? 'FMA' : '');
+  };
+  const ORDEN_TERRITORIOS = ['NORTE', 'MEXICO', 'FMA'];
+  const ETIQUETA_TERRITORIO: Record<string, string> = { NORTE: 'Norte', MEXICO: 'México', FMA: 'FMA' };
+  const territoriosDisp = useMemo(() => {
+    const presentes = new Set(solicitudes.map(territorioDe).filter(Boolean));
+    return [...ORDEN_TERRITORIOS.filter(t => presentes.has(t)), ...[...presentes].filter(t => !ORDEN_TERRITORIOS.includes(t)).sort()];
+  }, [solicitudes, colegioTerritorioMap]);
+  const colegiosDisp = useMemo(() =>
+    [...new Set(solicitudes
+      .filter(s => filterTerritorio === 'all' || territorioDe(s) === filterTerritorio)
+      .map(s => s.nombre_centro ?? '')
+      .filter(Boolean))].sort((a, b) => a.localeCompare(b, 'es')),
+    [solicitudes, filterTerritorio, colegioTerritorioMap]);
+
+  // Territorio y colegio acotan también los KPIs; el estatus solo la lista
+  const base = useMemo(() =>
+    solicitudes.filter(s =>
+      (filterTerritorio === 'all' || territorioDe(s) === filterTerritorio) &&
+      (filterColegio === 'all' || s.nombre_centro === filterColegio)),
+    [solicitudes, filterTerritorio, filterColegio, colegioTerritorioMap]);
+
   const filtered = useMemo(() =>
-    solicitudes.filter(s => filterEstatus === 'all' || s.estatus === filterEstatus),
-    [solicitudes, filterEstatus]
+    base.filter(s => filterEstatus === 'all' || s.estatus === filterEstatus),
+    [base, filterEstatus]
   );
 
   const visible   = filtered.slice(0, visibleCount);
@@ -459,11 +486,11 @@ export default function SolicitudesRecibidas() {
   const remaining = filtered.length - visibleCount;
 
   const kpis = useMemo(() => ({
-    total:      solicitudes.length,
-    nuevas:     solicitudes.filter(s => s.estatus === 'pendiente').length,
-    recibidas:  solicitudes.filter(s => s.estatus === 'recibida').length,
-    canceladas: solicitudes.filter(s => s.estatus === 'cancelada').length,
-  }), [solicitudes]);
+    total:      base.length,
+    nuevas:     base.filter(s => s.estatus === 'pendiente').length,
+    recibidas:  base.filter(s => s.estatus === 'recibida').length,
+    canceladas: base.filter(s => s.estatus === 'cancelada').length,
+  }), [base]);
 
   if (!puedeVer) {
     return (
@@ -504,7 +531,27 @@ export default function SolicitudesRecibidas() {
       </div>
 
       {/* Filtro */}
-      <div className="flex gap-3">
+      <div className="flex gap-3 flex-wrap">
+        {territoriosDisp.length > 1 && (
+          <select className="h-10 px-3 py-2 bg-white border border-slate-300 rounded-md text-sm focus:ring-2 focus:ring-slate-400 focus:outline-none text-slate-700"
+            value={filterTerritorio} onChange={e => {
+              const t = e.target.value;
+              setFilterTerritorio(t);
+              // Si el colegio elegido no es de ese territorio, se limpia
+              if (t !== 'all' && filterColegio !== 'all' && !solicitudes.some(s => s.nombre_centro === filterColegio && territorioDe(s) === t)) setFilterColegio('all');
+              setVisibleCount(PAGE_SIZE);
+            }}>
+            <option value="all">Todos los territorios</option>
+            {territoriosDisp.map(t => <option key={t} value={t}>{ETIQUETA_TERRITORIO[t] ?? t}</option>)}
+          </select>
+        )}
+        {(colegiosDisp.length > 1 || filterColegio !== 'all') && (
+          <select className="h-10 px-3 py-2 bg-white border border-slate-300 rounded-md text-sm focus:ring-2 focus:ring-slate-400 focus:outline-none text-slate-700"
+            value={filterColegio} onChange={e => { setFilterColegio(e.target.value); setVisibleCount(PAGE_SIZE); }}>
+            <option value="all">Todos los colegios</option>
+            {colegiosDisp.map(c => <option key={c} value={c}>{c}</option>)}
+          </select>
+        )}
         <select className="h-10 px-3 py-2 bg-white border border-slate-300 rounded-md text-sm focus:ring-2 focus:ring-slate-400 focus:outline-none text-slate-700"
           value={filterEstatus} onChange={e => { setFilterEstatus(e.target.value); setVisibleCount(PAGE_SIZE); }}>
           <option value="all">Todas</option>
@@ -523,7 +570,7 @@ export default function SolicitudesRecibidas() {
       {filtered.length === 0 ? (
         <div className="bg-white rounded-xl border border-slate-200 py-20 text-center">
           <Building2 className="w-12 h-12 text-slate-200 mx-auto mb-3" />
-          <p className="text-slate-400 font-medium">No hay solicitudes {filterEstatus !== 'all' ? filterEstatus + 's' : ''}.</p>
+          <p className="text-slate-400 font-medium">No hay solicitudes {filterEstatus !== 'all' ? filterEstatus + 's' : ''}{filterColegio !== 'all' ? ` de ${filterColegio}` : filterTerritorio !== 'all' ? ` en ${ETIQUETA_TERRITORIO[filterTerritorio] ?? filterTerritorio}` : ''}.</p>
         </div>
       ) : (
         <div className="space-y-3">
