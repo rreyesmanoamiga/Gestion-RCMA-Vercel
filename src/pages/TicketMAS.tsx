@@ -23,7 +23,7 @@ import { renameCarpetaSharePoint } from '@/hooks/useSharePointUpload';
 import { logAudit } from '@/lib/audit';
 import { notifyByEmail } from '@/lib/notifications';
 import { BotonCorregir, CorregirModal, MarcaCorregida, HistorialCorrecciones } from '@/components/shared/CorreccionSolicitud';
-import { RemanenteBadge, RemanentePregunta, RemanenteDetalle, remanenteValido, textoRemanente } from '@/components/shared/RemanenteSorteo';
+import { RemanenteBadge, RemanenteDetalle, textoRemanente } from '@/components/shared/RemanenteSorteo';
 import { CORRECCION_TICKET_MAS } from '@/lib/correcciones';
 import VoBoFMA, { PanelVoBoFMA, EstadoVoBoFMA, avisarVoBoFMA, pendienteVoBo } from '@/components/ticketmas/VoBoFMA';
 
@@ -578,10 +578,6 @@ function TicketMASPrincipal({ esAutorizadorFMA }: { esAutorizadorFMA: boolean })
     }
     if (form.pago_otro === 'SI' && !form.pago_colegio) {
       toast.error('Selecciona el colegio del que sale el pago');
-      return;
-    }
-    if (!remanenteValido(form.remanente_sorteo, form.remanente_anios)) {
-      toast.error(form.remanente_sorteo === true ? 'Marca de qué sorteo(s) sale el remanente' : 'Indica si se paga con el Remanente del Sorteo Mano Amiga');
       return;
     }
     if (form.orden_interna === 'SI' && (!form.numero_orden_interna || form.numero_orden_interna === 'N/A')) {
@@ -1495,8 +1491,15 @@ function TicketMASPrincipal({ esAutorizadorFMA }: { esAutorizadorFMA: boolean })
               </div>
             ))}
 
-            <RemanentePregunta si={form.remanente_sorteo} anios={form.remanente_anios}
-              onChange={(si, anios) => setForm(p => ({ ...p, remanente_sorteo: si, remanente_anios: anios }))} />
+            {/* El remanente se contesta en la Solicitud de Proyecto y se jala al elegirla (solo lectura) */}
+            {form.solicitud_id && (
+              <div className={`rounded-lg border-l-4 p-3 ${form.remanente_sorteo ? 'border-purple-500 bg-purple-50' : 'border-slate-300 bg-slate-50'}`}>
+                <p className="text-[10px] font-bold text-slate-500 uppercase">Remanente del Sorteo Mano Amiga <span className="normal-case font-medium text-slate-400">— viene de la Solicitud de Proyecto</span></p>
+                <p className={`text-sm mt-0.5 ${form.remanente_sorteo ? 'font-bold text-purple-800' : 'text-slate-600'}`}>
+                  {form.remanente_sorteo === null ? <span className="italic text-slate-400">La solicitud no lo indica</span> : textoRemanente(form.remanente_sorteo, form.remanente_anios)}
+                </p>
+              </div>
+            )}
             <div>
               <label className={labelClass}>Motivo de Selección del Proveedor</label>
               <textarea className={inputClass + ' min-h-[60px] resize-none'} value={form.motivo_seleccion} onChange={e => set('motivo_seleccion', e.target.value)} />

@@ -10,12 +10,6 @@ import { logAudit } from '@/lib/audit';
 //   remanente_anios:  de qué sorteo(s) sale; puede ser más de uno cuando juntan
 //                     el remanente de varios años (p. ej. 2025 y 2026).
 
-/** Años que se ofrecen: dos atrás, el actual y el siguiente (más los que ya traiga el registro) */
-export const aniosSorteo = (extra: number[] = []) => {
-  const y = new Date().getFullYear();
-  return [...new Set([y - 2, y - 1, y, y + 1, ...extra])].sort((a, b) => a - b);
-};
-
 export const textoAnios = (anios?: number[] | null) => {
   const a = [...(anios ?? [])].sort((x, y) => x - y);
   return a.length ? a.join(' – ') : '';
@@ -41,10 +35,17 @@ export function RemanenteBadge({ si, anios, className = '' }: { si?: boolean | n
   );
 }
 
-/** Pregunta Sí/No + años (formularios de Solicitud y Ticket MAS, y editor del administrador) */
+/** Pregunta Sí/No + años (Solicitud de Proyecto y corrección del administrador).
+ *  Hasta 3 años tecleados: cuando juntan el remanente de varios sorteos (p. ej. 2025 y 2026). */
 export function RemanentePregunta({ si, anios, onChange, requerido = true }: {
   si: boolean | null; anios: number[]; onChange: (si: boolean | null, anios: number[]) => void; requerido?: boolean;
 }) {
+  const [txt, setTxt] = useState<string[]>(() => [0, 1, 2].map(i => anios[i] ? String(anios[i]) : ''));
+  const aAnios = (t: string[]) => [...new Set(t.filter(v => /^\d{4}$/.test(v)).map(Number).filter(n => n >= 2000 && n <= 2100))].sort((x, y) => x - y);
+  const cambiar = (i: number, v: string) => {
+    const t = [...txt]; t[i] = v.replace(/\D/g, '').slice(0, 4); setTxt(t);
+    onChange(true, aAnios(t));
+  };
   const sinContestar = requerido && si === null;
   const sinAnio = requerido && si === true && anios.length === 0;
   return (
@@ -52,30 +53,26 @@ export function RemanentePregunta({ si, anios, onChange, requerido = true }: {
       <p className="text-[11px] font-bold text-slate-700 uppercase tracking-wide">¿Se paga con el Remanente del Sorteo Mano Amiga?{requerido && ' *'}</p>
       <div className="flex flex-wrap gap-3 mt-2 items-start">
         <div className="flex rounded-md border border-slate-300 overflow-hidden text-sm font-bold shrink-0">
-          <button type="button" onClick={() => onChange(true, anios)}
+          <button type="button" onClick={() => onChange(true, aAnios(txt))}
             className={`px-5 py-1.5 ${si === true ? 'bg-purple-600 text-white' : 'bg-white text-slate-600 hover:bg-slate-50'}`}>Sí</button>
           <button type="button" onClick={() => onChange(false, [])}
             className={`px-5 py-1.5 border-l border-slate-300 ${si === false ? 'bg-slate-800 text-white' : 'bg-white text-slate-600 hover:bg-slate-50'}`}>No</button>
         </div>
         {si === true && (
           <div>
-            <p className="text-[11px] font-bold text-slate-600 uppercase mb-1">Sorteo(s) del que sale{requerido && ' *'} <span className="normal-case font-medium text-slate-400">— marca uno o varios si se junta el remanente de varios años</span></p>
-            <div className="flex flex-wrap gap-1.5">
-              {aniosSorteo(anios).map(a => {
-                const on = anios.includes(a);
-                return (
-                  <button type="button" key={a} onClick={() => onChange(true, on ? anios.filter(x => x !== a) : [...anios, a].sort((x, y) => x - y))}
-                    className={`px-3 py-1 rounded-full text-xs font-bold border ${on ? 'bg-purple-600 text-white border-purple-600' : 'bg-white text-slate-600 border-slate-300 hover:border-purple-400'}`}>
-                    Sorteo {a}
-                  </button>
-                );
-              })}
+            <p className="text-[11px] font-bold text-slate-600 uppercase mb-1">Año(s) del sorteo{requerido && ' *'} <span className="normal-case font-medium text-slate-400">— si se junta el remanente de varios sorteos, escribe cada año</span></p>
+            <div className="flex flex-wrap gap-2">
+              {[0, 1, 2].map(i => (
+                <input key={i} inputMode="numeric" maxLength={4} value={txt[i]} onChange={e => cambiar(i, e.target.value)}
+                  placeholder={i === 0 ? `Ej. ${new Date().getFullYear()}` : 'Otro año'}
+                  className="w-28 px-3 py-1.5 border border-slate-300 rounded-md text-sm font-bold text-center text-purple-800 bg-white focus:ring-2 focus:ring-purple-300 focus:outline-none" />
+              ))}
             </div>
           </div>
         )}
       </div>
       {sinContestar && <p className="text-[11px] text-purple-700 font-semibold mt-2">Contesta Sí o No.</p>}
-      {sinAnio && <p className="text-[11px] text-purple-700 font-semibold mt-2">Marca de qué sorteo(s) sale el remanente.</p>}
+      {sinAnio && <p className="text-[11px] text-purple-700 font-semibold mt-2">Escribe el año del sorteo del que sale el remanente (4 dígitos).</p>}
     </div>
   );
 }
@@ -122,7 +119,7 @@ export function RemanenteDetalle({ tabla, id, referencia, si, anios, editable, o
       ) : (
         <div className="mt-2 space-y-2">
           <RemanentePregunta si={vSi} anios={vAnios} onChange={(a, b) => { setVSi(a); setVAnios(b); }} requerido={false} />
-          <p className="text-[11px] text-slate-500">Si todavía no sabes el año, puedes dejarlo en "Sí" sin marcar sorteo.</p>
+          <p className="text-[11px] text-slate-500">Si todavía no sabes el año, puedes dejarlo en "Sí" sin escribir año.</p>
           <div className="flex gap-2">
             <button type="button" onClick={guardar} disabled={guardando}
               className="px-3 py-1.5 bg-slate-900 text-white rounded-md text-xs font-bold hover:bg-slate-800 disabled:opacity-50">{guardando ? 'Guardando…' : 'Guardar'}</button>
