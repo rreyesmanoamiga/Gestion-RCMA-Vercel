@@ -7,6 +7,7 @@ import { useSharePointUpload } from '@/hooks/useSharePointUpload';
 import { toast } from 'sonner';
 import PageHeader from '@/components/shared/PageHeader';
 import { Send, CheckCircle, AlertTriangle } from 'lucide-react';
+import { RemanentePregunta, remanenteValido } from '@/components/shared/RemanenteSorteo';
 
 const inputClass = "w-full px-2 py-1.5 border border-slate-400 text-sm focus:ring-1 focus:ring-slate-700 focus:outline-none bg-white text-slate-900 rounded";
 const readOnlyClass = "w-full px-2 py-1.5 border border-slate-300 text-sm bg-slate-100 text-slate-600 cursor-default rounded";
@@ -128,6 +129,8 @@ export default function SolicitudProyecto() {
     monto_otras:            '',
     monto_otras_detalle:    '',
     en_nombre_de:           '',
+    remanente_sorteo:       null as boolean | null,
+    remanente_anios:        [] as number[],
   });
 
   // Por si el perfil (nombre/puesto) resuelve después del primer render.
@@ -177,6 +180,10 @@ export default function SolicitudProyecto() {
       toast.error('Ingresa el costo aproximado del proyecto'); return;
     }
     if (otrasSinDetalle) { avisarOtrasFuentes(); return; }
+    if (!remanenteValido(form.remanente_sorteo, form.remanente_anios)) {
+      toast.error(form.remanente_sorteo === true ? 'Marca de qué sorteo(s) sale el remanente' : 'Indica si se paga con el Remanente del Sorteo Mano Amiga');
+      return;
+    }
     if (!tieneCotizaciones || cotizacionFiles.length === 0) {
       toast.warning('Recuerda adjuntar la cotización más adelante en cuanto la tengas disponible.');
     }
@@ -211,6 +218,8 @@ export default function SolicitudProyecto() {
         monto_donativos:        donMonto    || null,
         monto_otras:            otrasMonto  || null,
         monto_otras_detalle:    form.monto_otras_detalle.trim() || null,
+        remanente_sorteo:       form.remanente_sorteo,
+        remanente_anios:        form.remanente_sorteo ? form.remanente_anios : [],
       }).select('id').single();
       if (error) throw error;
 
@@ -286,7 +295,7 @@ export default function SolicitudProyecto() {
         <p className="text-slate-500 text-center max-w-md">
           Tu solicitud de proyecto fue recibida correctamente. Recibirás una confirmación a <strong>{form.correo_solicitante}</strong> cuando sea revisada.
         </p>
-        <button onClick={() => { setEnviado(false); setForm({ nombre_centro:'',razon_social:'',sociedad:'',centro_gestor:'',ciclo_año_fiscal:añoActual,nombre_solicitante:miNombre,puesto_solicitante:miPuesto,correo_solicitante:miCorreo,nombre_proyecto:'',tipo_iniciativa:'',resumen_proyecto:'',fecha_inicio_propuesta:'',fecha_fin_propuesta:'',costo_aproximado:'',monto_operacion:'',monto_fbc:'',monto_donativos:'',monto_otras:'',monto_otras_detalle:'',en_nombre_de:''}); setTieneCotizaciones(false); setCotizacionFiles([]); }}
+        <button onClick={() => { setEnviado(false); setForm({ nombre_centro:'',razon_social:'',sociedad:'',centro_gestor:'',ciclo_año_fiscal:añoActual,nombre_solicitante:miNombre,puesto_solicitante:miPuesto,correo_solicitante:miCorreo,nombre_proyecto:'',tipo_iniciativa:'',resumen_proyecto:'',fecha_inicio_propuesta:'',fecha_fin_propuesta:'',costo_aproximado:'',monto_operacion:'',monto_fbc:'',monto_donativos:'',monto_otras:'',monto_otras_detalle:'',en_nombre_de:'',remanente_sorteo:null,remanente_anios:[]}); setTieneCotizaciones(false); setCotizacionFiles([]); }}
           className="px-6 py-2 bg-slate-900 text-white rounded-md text-sm font-medium hover:bg-slate-800 transition-colors">
           Nueva Solicitud
         </button>
@@ -484,6 +493,9 @@ export default function SolicitudProyecto() {
                 </p>
               )}
             </div>
+
+            <RemanentePregunta si={form.remanente_sorteo} anios={form.remanente_anios}
+              onChange={(si, anios) => setForm(p => ({ ...p, remanente_sorteo: si, remanente_anios: anios }))} />
           </div>
         </section>
 

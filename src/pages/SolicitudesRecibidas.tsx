@@ -16,6 +16,7 @@ import AccesoRestringido from '@/components/shared/AccesoRestringido';
 import { useDirectorio } from '@/lib/directorio';
 import { BotonCorregir, CorregirModal, MarcaCorregida, HistorialCorrecciones } from '@/components/shared/CorreccionSolicitud';
 import { CORRECCION_SOLICITUD } from '@/lib/correcciones';
+import { RemanenteBadge, RemanenteDetalle, textoRemanente } from '@/components/shared/RemanenteSorteo';
 
 const PAGE_SIZE = 20;
 
@@ -41,6 +42,8 @@ interface Solicitud {
   monto_donativos?:      number | null;
   monto_otras?:          number | null;
   monto_otras_detalle?:  string | null;
+  remanente_sorteo?:     boolean | null;
+  remanente_anios?:      number[] | null;
   estatus?:              string;
   created_at?:           string;
   recibida_at?:          string;
@@ -119,7 +122,8 @@ export default function SolicitudesRecibidas() {
         `<table><tr><th>Fuente</th><th class="num">Monto (MXN)</th><th class="num">% del total</th></tr>${
           fuentes.map(f => `<tr><td>${f.nombre}</td><td class="num">${fmx(f.monto)}</td><td class="num">${pct(f.monto)}</td></tr>`).join('')}
           ${otrasDetalle}
-          <tr class="tot"><td>Costo aproximado total</td><td class="num">${fmx(s.costo_aproximado)}</td><td class="num">100%</td></tr></table>`);
+          <tr class="tot"><td>Costo aproximado total</td><td class="num">${fmx(s.costo_aproximado)}</td><td class="num">100%</td></tr></table>` +
+        grid([['Remanente del Sorteo Mano Amiga', esc(textoRemanente(s.remanente_sorteo, s.remanente_anios))]]));
 
     imprimirHTML(documentoInstitucional({
       tituloPestana: `Solicitud — ${s.folio ? s.folio + ' ' : ''}${s.nombre_proyecto ?? ''}`,
@@ -589,6 +593,7 @@ export default function SolicitudesRecibidas() {
                       {s.estatus === 'pendiente' ? 'Pendiente' : s.estatus === 'cancelada' ? 'Cancelada' : 'Recibida'}
                     </span>
                     <MarcaCorregida modulo="solicitudes" id={s.id} />
+                    <RemanenteBadge si={s.remanente_sorteo} anios={s.remanente_anios} />
                     {s.tipo_iniciativa && (
                       <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 uppercase">
                         {s.tipo_iniciativa}
@@ -784,6 +789,11 @@ export default function SolicitudesRecibidas() {
                       )}
                     </tbody>
                   </table>
+                  <div className="mt-3">
+                    <RemanenteDetalle key={viewing.id} tabla="solicitudes" id={viewing.id} referencia={viewing.folio}
+                      si={viewing.remanente_sorteo} anios={viewing.remanente_anios} editable={isAdmin}
+                      onGuardado={(si, anios) => { setViewing(v => v ? { ...v, remanente_sorteo: si, remanente_anios: anios } : v); queryClient.invalidateQueries({ queryKey: ['solicitudes'] }); }} />
+                  </div>
                 </div>
               </div>
               <div className="mx-4 mb-4"><HistorialCorrecciones modulo="solicitudes" id={viewing.id} /></div>

@@ -23,6 +23,7 @@ import { renameCarpetaSharePoint } from '@/hooks/useSharePointUpload';
 import { logAudit } from '@/lib/audit';
 import { notifyByEmail } from '@/lib/notifications';
 import { BotonCorregir, CorregirModal, MarcaCorregida, HistorialCorrecciones } from '@/components/shared/CorreccionSolicitud';
+import { RemanenteBadge, RemanentePregunta, RemanenteDetalle, remanenteValido, textoRemanente } from '@/components/shared/RemanenteSorteo';
 import { CORRECCION_TICKET_MAS } from '@/lib/correcciones';
 import VoBoFMA, { PanelVoBoFMA, EstadoVoBoFMA, avisarVoBoFMA, pendienteVoBo } from '@/components/ticketmas/VoBoFMA';
 
@@ -133,6 +134,8 @@ interface TicketMAS {
   cot3_proveedor?:        string;
   motivo_seleccion?:      string;
   forma_financiamiento?:  string;
+  remanente_sorteo?:      boolean | null;
+  remanente_anios?:       number[] | null;
   elaborar_suplemento?:   string;
   elaborar_traspaso?:     string;
   // Sociedad que paga (cuando el pago sale de otro colegio)
@@ -248,6 +251,7 @@ function generarHTMLTicket(t: TicketMAS, firma: string, solicitud?: { folio: str
       grid([
         ['Motivo de selección', val(t.motivo_seleccion)], ['Financiamiento', val(t.forma_financiamiento)],
         ['Suplemento / Traspaso', `${val(t.elaborar_suplemento)} / ${val(t.elaborar_traspaso)}`],
+        ['Remanente del Sorteo Mano Amiga', esc(textoRemanente(t.remanente_sorteo, t.remanente_anios))],
       ])) +
     tarjeta('Ventanilla única', grid([
       ['Recepción', val(t.fecha_recepcion)], ['Inicio estimado', val(t.fecha_inicio_estimada)], ['Fin estimado', val(t.fecha_fin_estimada)],
@@ -369,6 +373,7 @@ function TicketMASPrincipal({ esAutorizadorFMA }: { esAutorizadorFMA: boolean })
     cot2_importe:'', cot2_proveedor:'',
     cot3_importe:'', cot3_proveedor:'',
     motivo_seleccion:'', forma_financiamiento:'',
+    remanente_sorteo: null as boolean | null, remanente_anios: [] as number[],
     elaborar_suplemento:'NO', elaborar_traspaso:'SI',
     nombre_proyecto:'',
     solicitud_id:'',
@@ -414,7 +419,7 @@ function TicketMASPrincipal({ esAutorizadorFMA }: { esAutorizadorFMA: boolean })
     queryFn: async () => {
       const { data, error } = await supabase.rpc('rcma_solicitudes_para_ticket');
       if (error) throw error;
-      return (data ?? []) as { id: string; folio: string | null; nombre_proyecto: string | null; nombre_centro: string | null; correo_solicitante: string | null }[];
+      return (data ?? []) as { id: string; folio: string | null; nombre_proyecto: string | null; nombre_centro: string | null; correo_solicitante: string | null; remanente_sorteo?: boolean | null; remanente_anios?: number[] | null }[];
     },
     enabled: !!user?.email && puedeCrear,
   });
@@ -432,11 +437,14 @@ function TicketMASPrincipal({ esAutorizadorFMA }: { esAutorizadorFMA: boolean })
   const onSolicitudOrigen = (id: string) => {
     const sol = solicitudesParaTicket.find(x => x.id === id);
     // Sin solicitud: el colegio no puede escribir el nombre (solo el admin)
-    if (!sol) { setForm(p => ({ ...p, solicitud_id: '', nombre_proyecto: '' })); return; }
+    if (!sol) { setForm(p => ({ ...p, solicitud_id: '', nombre_proyecto: '', remanente_sorteo: null, remanente_anios: [] })); return; }
     const c = colegiosTicket.find(x => x.nombre === sol.nombre_centro);
     setForm(p => ({
       ...p, solicitud_id: sol.id,
       nombre_proyecto: (sol.nombre_proyecto ?? '').trim(),
+      // El remanente viene contestado desde la Solicitud; se puede cambiar
+      remanente_sorteo: sol.remanente_sorteo ?? null,
+      remanente_anios: sol.remanente_anios ?? [],
       ...(c ? {
         colegio: c.nombre, razon_social: c.razon, sociedad: c.sociedad, centro_gestor: c.centro_gestor,
         territorio: c.territorio, director: c.director, admin_colegio: c.admin, contador: c.contador,
@@ -572,6 +580,10 @@ function TicketMASPrincipal({ esAutorizadorFMA }: { esAutorizadorFMA: boolean })
       toast.error('Selecciona el colegio del que sale el pago');
       return;
     }
+    if (!remanenteValido(form.remanente_sorteo, form.remanente_anios)) {
+      toast.error(form.remanente_sorteo === true ? 'Marca de qué sorteo(s) sale el remanente' : 'Indica si se paga con el Remanente del Sorteo Mano Amiga');
+      return;
+    }
     if (form.orden_interna === 'SI' && (!form.numero_orden_interna || form.numero_orden_interna === 'N/A')) {
       toast.error('Debes ingresar el Número de Orden Interna');
       return;
@@ -643,6 +655,8 @@ function TicketMASPrincipal({ esAutorizadorFMA }: { esAutorizadorFMA: boolean })
         cot3_proveedor:       form.cot3_proveedor,
         motivo_seleccion:     form.motivo_seleccion,
         forma_financiamiento: form.forma_financiamiento,
+        remanente_sorteo:     form.remanente_sorteo,
+        remanente_anios:      form.remanente_sorteo ? form.remanente_anios : [],
         elaborar_suplemento:  form.elaborar_suplemento,
         elaborar_traspaso:    form.elaborar_traspaso,
         pago_otro_colegio:    form.pago_otro === 'SI' && !!form.pago_colegio,
@@ -880,6 +894,8 @@ function TicketMASPrincipal({ esAutorizadorFMA }: { esAutorizadorFMA: boolean })
           fecha_fin:          adminForm.fecha_fin_estimada,
           descripcion:        viewing.descripcion,
           clasificacion:      viewing.clasificacion,
+          remanente_sorteo:   viewing.remanente_sorteo === true,
+          remanente_texto:    textoRemanente(viewing.remanente_sorteo, viewing.remanente_anios),
         },
       });
 
@@ -1479,6 +1495,8 @@ function TicketMASPrincipal({ esAutorizadorFMA }: { esAutorizadorFMA: boolean })
               </div>
             ))}
 
+            <RemanentePregunta si={form.remanente_sorteo} anios={form.remanente_anios}
+              onChange={(si, anios) => setForm(p => ({ ...p, remanente_sorteo: si, remanente_anios: anios }))} />
             <div>
               <label className={labelClass}>Motivo de Selección del Proveedor</label>
               <textarea className={inputClass + ' min-h-[60px] resize-none'} value={form.motivo_seleccion} onChange={e => set('motivo_seleccion', e.target.value)} />
@@ -1640,7 +1658,7 @@ function TicketMASPrincipal({ esAutorizadorFMA }: { esAutorizadorFMA: boolean })
                   return (
                   <tr key={t.id} className={`${i % 2 === 0 ? 'bg-white' : 'bg-slate-50'} ${vencido ? 'border-l-4 border-l-red-400' : ''}`}>
                     <td className="px-4 py-3 font-mono text-xs font-bold text-slate-700">{t.folio}</td>
-                    <td className="px-4 py-3 text-slate-800 text-xs font-medium"><div className="truncate" title={t.nombre_proyecto ?? ''}>{t.nombre_proyecto ?? <span className="text-slate-300 italic">Sin nombre</span>}</div></td>
+                    <td className="px-4 py-3 text-slate-800 text-xs font-medium"><div className="truncate" title={t.nombre_proyecto ?? ''}>{t.nombre_proyecto ?? <span className="text-slate-300 italic">Sin nombre</span>}</div>{t.remanente_sorteo && <RemanenteBadge si anios={t.remanente_anios} className="mt-1" />}</td>
                     <td className="px-4 py-3 text-slate-800 text-xs">{t.colegio}</td>
                     <td className="px-4 py-3 text-slate-600 text-xs">{t.nombre_solicitante}</td>
                     <td className="px-4 py-3 text-slate-600 text-xs leading-tight">{t.clasificacion}</td>
@@ -1834,6 +1852,7 @@ function TicketMASPrincipal({ esAutorizadorFMA }: { esAutorizadorFMA: boolean })
           <h1 className="text-lg font-black text-slate-800">Ticket {viewing.folio}</h1>
           <EstatusBadge estatus={viewing.estatus} />
           <MarcaCorregida modulo="tickets_mas" id={viewing.id} />
+          <RemanenteBadge si={viewing.remanente_sorteo} anios={viewing.remanente_anios} />
           <div className="ml-auto flex gap-2">
             <BotonCorregir modulo="tickets_mas" estatus={viewing.estatus} onClick={() => setCorrigiendo(true)} />
             <button onClick={() => handlePrint(viewing)}
@@ -1915,6 +1934,11 @@ function TicketMASPrincipal({ esAutorizadorFMA }: { esAutorizadorFMA: boolean })
                 <p className="text-[10px] font-bold text-slate-400 uppercase">Forma de financiamiento</p>
                 <p className="text-slate-800 text-xs mt-0.5">{viewing.forma_financiamiento || '—'}</p>
               </div>
+            </div>
+            <div className="mt-3">
+              <RemanenteDetalle key={viewing.id} tabla="tickets_mas" id={viewing.id} referencia={viewing.folio}
+                si={viewing.remanente_sorteo} anios={viewing.remanente_anios} editable={isAdmin}
+                onGuardado={(si, anios) => { setViewing(v => v ? { ...v, remanente_sorteo: si, remanente_anios: anios } : v); qc.invalidateQueries({ queryKey: ['tickets_mas'] }); }} />
             </div>
           </div>
           <div className="px-4 pb-4 empty:hidden"><HistorialCorrecciones modulo="tickets_mas" id={viewing.id} /></div>

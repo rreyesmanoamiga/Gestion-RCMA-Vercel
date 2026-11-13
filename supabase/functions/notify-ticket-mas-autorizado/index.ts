@@ -71,7 +71,10 @@ serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
   try {
     const { folio, colegio, solicitante, correo_solicitante, territorio, correo_car,
-            fecha_recepcion, fecha_inicio, fecha_fin, descripcion, clasificacion } = await req.json();
+            fecha_recepcion, fecha_inicio, fecha_fin, descripcion, clasificacion,
+            remanente_sorteo, remanente_texto } = await req.json();
+    const esRemanente = remanente_sorteo === true;
+    let ccRemanente: string[] = [];
     const smtpUser = Deno.env.get('SMTP_USER') ?? '';
 
     // Gerente/Director Nacional en vivo desde Directorio.
@@ -84,6 +87,12 @@ serve(async (req) => {
       const { data: general } = await supabase.from('directorio').select('gerente_correo, director_nacional_correo').eq('codigo', 'GENERAL').maybeSingle();
       if (general?.gerente_correo) gerenteEmail = general.gerente_correo;
       if (general?.director_nacional_correo) directorNacionalEmail = general.director_nacional_correo;
+      // Remanente del Sorteo: copia a quien tenga el permiso "ver_remanente" en Accesos
+      // (Coordinación de Proyectos Especiales).
+      if (esRemanente) {
+        const { data: seg } = await supabase.from('user_permissions').select('user_email').eq('ver_remanente', true);
+        ccRemanente = (seg ?? []).map((r: { user_email: string | null }) => (r.user_email ?? '').trim()).filter(Boolean);
+      }
     }
 
     // CC fijos + CAR de zona
@@ -92,7 +101,8 @@ serve(async (req) => {
       gerenteEmail,
       directorNacionalEmail,
       correo_car ?? '',
-    ].filter(Boolean);
+      ...ccRemanente,
+    ].filter(Boolean).filter((v, i, a) => a.findIndex(x => x.toLowerCase() === v.toLowerCase()) === i);
 
     const html = `
     <!DOCTYPE html>
@@ -126,7 +136,8 @@ serve(async (req) => {
                   <tr style="background:#f8fafc;"><td style="padding:12px 16px;font-size:12px;font-weight:700;color:#64748b;text-transform:uppercase;border-bottom:1px solid #e2e8f0;">Descripción</td><td style="padding:12px 16px;font-size:13px;color:#475569;border-bottom:1px solid #e2e8f0;">${descripcion ?? '&#8212;'}</td></tr>
                   <tr><td style="padding:12px 16px;font-size:12px;font-weight:700;color:#64748b;text-transform:uppercase;border-bottom:1px solid #e2e8f0;">Fecha de Recepción</td><td style="padding:12px 16px;font-size:14px;color:#0f172a;border-bottom:1px solid #e2e8f0;">${fecha_recepcion ?? '&#8212;'}</td></tr>
                   <tr style="background:#f8fafc;"><td style="padding:12px 16px;font-size:12px;font-weight:700;color:#64748b;text-transform:uppercase;border-bottom:1px solid #e2e8f0;">Inicio Estimado</td><td style="padding:12px 16px;font-size:14px;color:#0f172a;border-bottom:1px solid #e2e8f0;">${fecha_inicio ?? '&#8212;'}</td></tr>
-                  <tr><td style="padding:12px 16px;font-size:12px;font-weight:700;color:#64748b;text-transform:uppercase;">Conclusión Estimada</td><td style="padding:12px 16px;font-size:14px;color:#0f172a;">${fecha_fin ?? '&#8212;'}</td></tr>
+                  <tr><td style="padding:12px 16px;font-size:12px;font-weight:700;color:#64748b;text-transform:uppercase;${esRemanente ? 'border-bottom:1px solid #e2e8f0;' : ''}">Conclusión Estimada</td><td style="padding:12px 16px;font-size:14px;color:#0f172a;${esRemanente ? 'border-bottom:1px solid #e2e8f0;' : ''}">${fecha_fin ?? '&#8212;'}</td></tr>
+                  ${esRemanente ? `<tr style="background:#faf5ff;"><td style="padding:12px 16px;font-size:12px;font-weight:700;color:#7e22ce;text-transform:uppercase;">Financiamiento</td><td style="padding:12px 16px;font-size:14px;font-weight:700;color:#7e22ce;">${remanente_texto ?? 'Remanente del Sorteo Mano Amiga'}</td></tr>` : ''}
                 </table>
                 <p style="color:#475569;font-size:14px;line-height:1.6;margin:0;">El Coordinador de Obras le hará llegar los documentos de inscripción del proyecto (Solicitud de Proyecto y Ticket MAS) para que los anexe a su expediente.</p>
               </td>
@@ -145,7 +156,7 @@ serve(async (req) => {
     await sendEmail(
       correo_solicitante,
       ccList,
-      `Ticket MAS Autorizado - ${folio ?? ''} - ${colegio ?? ''}`,
+      `Ticket MAS Autorizado - ${folio ?? ''} - ${colegio ?? ''}${esRemanente ? ' · Remanente Sorteo' : ''}`,
       html
     );
 

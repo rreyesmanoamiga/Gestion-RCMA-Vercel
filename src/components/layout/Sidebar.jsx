@@ -14,6 +14,7 @@ import {
   CalendarDays,
   TicketCheck,
   Factory,
+  Gift,
   ClipboardEdit,
   Inbox,
   BookOpen,
@@ -182,6 +183,7 @@ export default function Sidebar({ isOpen, onToggle }) {
   const gOperacion = [
     { to: '/tickets',       icon: TicketCheck,   label: 'Tickets Registrados',   visible: can('ver_tickets') },
     { to: '/proyectos',     icon: FolderKanban,  label: 'Proyectos',             visible: can('ver_proyectos') },
+    { to: '/remanente',     icon: Gift,          label: 'Proyectos del Remanente', visible: isAdmin || can('ver_remanente') },
     { to: '/proveedores',   icon: Factory,       label: 'Padrón de Proveedores', visible: isAdmin || can('ver_proveedores') },
     { to: '/levantamiento', icon: Layers,        label: 'Levantamiento Nal.',    visible: isAdmin || can('ver_levantamiento') },
     { to: '/checklists',    icon: ClipboardCheck,label: 'Checklists',            visible: can('ver_checklists') },
