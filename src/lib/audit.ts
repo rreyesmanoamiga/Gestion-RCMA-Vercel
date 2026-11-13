@@ -34,7 +34,8 @@ export type AuditModulo =
   | 'solicitudes_cn'
   | 'tramites_cn'
   | 'tickets_mas_cn'
-  | 'sol';
+  | 'sol'
+  | 'proveedores';
 
 interface LogAuditParams {
   accion:       AuditAccion;

@@ -68,6 +68,7 @@ import ReportarProblema from '@/pages/ReportarProblema';
 import Minutas from '@/pages/Minutas';
 import CalendarioMantenimiento from '@/pages/CalendarioMantenimiento';
 import Presupuestos from '@/pages/Presupuestos';
+import ProveedoresObras from '@/pages/ProveedoresObras';
 
 // --- NUEVO IMPORT ---
 import Directorio from '@/pages/Directorio';
@@ -469,6 +470,7 @@ function AuthenticatedApp() {
           <Route path="/"                   element={<ProtectedDashboard />} />
           <Route path="/tickets"            element={<ConPermiso permiso="ver_tickets"><Tickets /></ConPermiso>} />
           <Route path="/proyectos"          element={<ConPermiso permiso="ver_proyectos"><Projects /></ConPermiso>} />
+          <Route path="/proveedores"        element={<ConPermiso permiso="ver_proveedores"><ProveedoresObras /></ConPermiso>} />
           <Route path="/proyectos/:id"      element={<ConPermiso permiso="ver_proyectos"><ProjectDetail /></ConPermiso>} />
           <Route path="/anteproyectos"      element={<ConPermiso permiso="ver_anteproyectos"><Anteproyectos /></ConPermiso>} />
           <Route path="/checklists"         element={<ConPermiso permiso="ver_checklists"><Checklists /></ConPermiso>} />

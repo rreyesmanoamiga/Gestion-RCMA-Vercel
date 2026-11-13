@@ -13,6 +13,7 @@ import {
   Lock,
   CalendarDays,
   TicketCheck,
+  Factory,
   ClipboardEdit,
   Inbox,
   BookOpen,
@@ -181,6 +182,7 @@ export default function Sidebar({ isOpen, onToggle }) {
   const gOperacion = [
     { to: '/tickets',       icon: TicketCheck,   label: 'Tickets Registrados',   visible: can('ver_tickets') },
     { to: '/proyectos',     icon: FolderKanban,  label: 'Proyectos',             visible: can('ver_proyectos') },
+    { to: '/proveedores',   icon: Factory,       label: 'Padrón de Proveedores', visible: isAdmin || can('ver_proveedores') },
     { to: '/levantamiento', icon: Layers,        label: 'Levantamiento Nal.',    visible: isAdmin || can('ver_levantamiento') },
     { to: '/checklists',    icon: ClipboardCheck,label: 'Checklists',            visible: can('ver_checklists') },
     { to: '/minutas',       icon: FileSignature, label: 'Minutas',               visible: isAdmin || can('ver_minutas') },

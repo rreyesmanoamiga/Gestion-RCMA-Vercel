@@ -43,6 +43,7 @@ const PERMISSION_DEFS: PermissionDef[] = [
   { key: 'enviar_solicitud_proyecto', label: 'Enviar Solicitud',          group: 'Solicitud de Proyecto', default: true  },
   { key: 'ver_reportes',              label: 'Ver Reportes',              group: 'Reportes',              default: true  },
   { key: 'ver_presupuestos',          label: 'Ver Presupuesto vs Real',   group: 'Reportes',              default: false },
+  { key: 'ver_proveedores',           label: 'Ver Padrón de Proveedores (con montos)', group: 'Proveedores', default: false },
   { key: 'crear_reportes',            label: 'Crear Reportes',            group: 'Reportes',              default: false },
   { key: 'editar_reportes',           label: 'Editar Reportes',           group: 'Reportes',              default: false },
   { key: 'eliminar_reportes',         label: 'Eliminar Reportes',         group: 'Reportes',              default: false },

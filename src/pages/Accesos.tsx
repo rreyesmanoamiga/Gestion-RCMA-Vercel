@@ -155,7 +155,7 @@ const PERMISOS_OBRAS = [
   'ver_checklists', 'crear_checklists', 'editar_checklists', 'eliminar_checklists',
   'ver_calendario', 'crear_calendario', 'editar_calendario', 'eliminar_calendario',
   'ver_solicitud_proyecto', 'enviar_solicitud_proyecto', 'ver_solicitudes_recibidas',
-  'ver_reportes', 'crear_reportes', 'editar_reportes', 'eliminar_reportes', 'ver_presupuestos',
+  'ver_reportes', 'crear_reportes', 'editar_reportes', 'eliminar_reportes', 'ver_presupuestos', 'ver_proveedores',
   'ver_insumos', 'crear_insumos', 'vobo_insumos', 'eliminar_insumos',
   'ver_nexus',
   'ver_levantamiento', 'descargar_levantamiento', 'crear_levantamiento', 'eliminar_levantamiento',
