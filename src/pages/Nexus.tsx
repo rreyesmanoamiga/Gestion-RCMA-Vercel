@@ -1037,8 +1037,8 @@ export default function Nexus() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-black text-slate-900 uppercase tracking-tight flex items-center gap-2"><BookOpen className="w-6 h-6 text-teal-600"/>NEXUS</h1>
-          <p className="text-sm text-slate-500 mt-0.5">Notas, pendientes y colaboración</p>
+          <h1 className="text-2xl font-display font-semibold text-slate-900 tracking-tight uppercase">NEXUS</h1>
+          <p className="text-sm text-slate-500 font-medium mt-1 italic">Notas, pendientes y colaboración</p>
         </div>
         <div className="flex gap-2">
           {isAdmin&&tab==='notas' && <button type="button" onClick={()=>openNota()} className={btnPrimary+" flex items-center gap-2"}><Plus className="w-4 h-4"/>Nueva Nota</button>}

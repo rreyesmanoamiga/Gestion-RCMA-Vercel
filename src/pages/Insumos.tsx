@@ -662,10 +662,8 @@ export default function Insumos() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-black text-slate-900 uppercase tracking-tight flex items-center gap-2">
-            <Package className="w-6 h-6" /> Insumos
-          </h1>
-          <p className="text-sm text-slate-500 mt-0.5">Gestión de suministros · FMA Oficina Monterrey</p>
+          <h1 className="text-2xl font-display font-semibold text-slate-900 tracking-tight uppercase">Insumos</h1>
+          <p className="text-sm text-slate-500 font-medium mt-1 italic">Gestión de suministros · FMA Oficina Monterrey</p>
         </div>
         {isAdmin && tab === 'requisiciones' && (
           <button onClick={() => { setReqItems([]); setSelProveedores([]); setReqNotas(''); setShowReqForm(true); }}

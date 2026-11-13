@@ -4,7 +4,8 @@ import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import {FolderKanban, ClipboardCheck, Wrench, AlertTriangle,
   Building2, MapPin, TicketCheck, FolderOpen, CalendarDays, ClockAlert,
-  ChevronRight, Activity, type LucideIcon, BookOpen, Bell, BarChart3, ShieldAlert } from 'lucide-react';
+  ChevronRight, Activity, type LucideIcon, BookOpen, Bell, BarChart3, ShieldAlert,
+  FileSignature, Inbox, Factory, CheckCircle2, CloudUpload } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { supabase } from '@/lib/supabaseClient';
@@ -12,7 +13,7 @@ import { useAuth } from '@/lib/AuthContext';
 import { useScope } from '@/hooks/useScope';
 import { usePermissions } from '@/hooks/usePermissions';
 import StatusBadge from '@/components/shared/StatusBadge';
-import { COLEGIOS, variantesColegio, type Colegio } from '@/lib/colegios';
+import { COLEGIOS, variantesColegio, normalizarColegio, type Colegio } from '@/lib/colegios';
 import {
   PieChart, Pie, Cell, Tooltip, ResponsiveContainer, Legend,
   BarChart, Bar, XAxis, YAxis, CartesianGrid, LineChart, Line
@@ -33,7 +34,7 @@ interface Pendiente {
 }
 interface TicketRecord {
   id: string; folio?: string; estatus?: string; titulo?: string;
-  colegio?: string; territorio?: string; created_at?: string;
+  colegio?: string; territorio?: string; created_at?: string; fecha?: string; presupuesto?: number;
 }
 interface ActivityItem {
   id: string; label: string; sub: string; type: string; date: string; to?: string;
@@ -116,7 +117,17 @@ const KPI_COLS: Record<number, string> = {
 export default function Dashboard() {
   const { user } = useAuth();
   const { territorio: miTerritorio, colegioEspecifico: miColegio, esGeneral, filtrarPorAlcance } = useScope();
-  const nombreUsuario = user?.user_metadata?.nombre || user?.email || 'Usuario';
+  // Nombre para el saludo: el del perfil (Accesos); si no tiene, el de su cuenta o el correo
+  const { data: perfilNombre } = useQuery({
+    queryKey: ['perfil_nombre_dashboard', user?.email],
+    queryFn: async () => {
+      const { data } = await supabase.from('user_permissions').select('nombre').eq('user_email', user!.email!).maybeSingle();
+      return (data?.nombre as string | null) ?? null;
+    },
+    enabled: !!user?.email,
+    staleTime: 10 * 60 * 1000,
+  });
+  const nombreUsuario = perfilNombre?.trim() || user?.user_metadata?.nombre || user?.email || 'Usuario';
 
   // Qué secciones del tablero le tocan a este usuario (perfiles de consulta:
   // administradores/auxiliares de colegio y CAR no ven NEXUS, etc.)
@@ -126,6 +137,9 @@ export default function Dashboard() {
   const verChecklists  = isAdmin || can('ver_checklists');
   const verCumpl       = isAdmin || can('ver_cumplimiento');
   const verPresupuesto = isAdmin || can('ver_presupuestos');
+  const verTicketMas   = isAdmin || can('ver_ticket_mas');
+  const verSolicitudes = isAdmin || can('ver_solicitudes_recibidas');
+  const verProveedores = isAdmin || can('ver_proveedores');
 
   // Aplica el alcance del usuario directo en la consulta a Supabase — usado en
   // los conteos/listas que traen pocos registros (limit) para no perder resultados
@@ -243,13 +257,63 @@ export default function Dashboard() {
       const { data } = await aplicarAlcanceQuery(
         supabase.from('tickets_mas')
           .select('id, folio, colegio, territorio, nombre_proyecto, created_at')
-          .eq('estatus', 'pendiente')
+          .in('estatus', ['pendiente', 'en_revision'])
           .lt('created_at', hace12h)
           .order('created_at', { ascending: true })
       ).limit(10);
       return data ?? [];
     },
     refetchInterval: 60000,
+  });
+
+  // ─── Flujo de proyectos del año (Solicitudes → Ticket MAS → Tickets) ───────
+  const anioActual = new Date().getFullYear();
+  const { data: tmasFlujo = [] } = useQuery({
+    queryKey: ['tmas_flujo_dashboard', miTerritorio, miColegio, esGeneral],
+    queryFn: async () => {
+      const { data } = await aplicarAlcanceQuery(supabase.from('tickets_mas').select('id, estatus, created_at, colegio, territorio'));
+      return (data ?? []) as { id: string; estatus: string | null; created_at: string | null; colegio: string | null; territorio: string | null }[];
+    },
+    enabled: verTicketMas,
+    refetchInterval: 60000,
+  });
+  const { data: solicitudesRaw = [] } = useQuery({
+    queryKey: ['solicitudes_flujo_dashboard'],
+    queryFn: async () => {
+      const { data } = await supabase.from('solicitudes').select('id, estatus, created_at, nombre_centro');
+      return (data ?? []) as { id: string; estatus: string | null; created_at: string | null; nombre_centro: string | null }[];
+    },
+    enabled: verSolicitudes,
+    refetchInterval: 60000,
+  });
+  const solicitudesFlujo = useMemo(() => filtrarPorAlcance(solicitudesRaw,
+    s => { const c = normalizarColegio(s.nombre_centro); return COLEGIOS.find(x => x.colegio === c)?.territorio ?? (s.nombre_centro === 'FMA' ? 'FMA' : undefined); },
+    s => s.nombre_centro), [solicitudesRaw, filtrarPorAlcance]);
+
+  // ─── Control del sistema (padrón de proveedores y respaldo mensual) ───────
+  const { data: provResumen = null } = useQuery({
+    queryKey: ['proveedores_resumen_dashboard'],
+    queryFn: async () => {
+      const { data } = await supabase.from('obras_proveedores').select('ambitos, telefono, correo');
+      const rows = (data ?? []) as { ambitos: string[] | null; telefono: string | null; correo: string | null }[];
+      return {
+        total: rows.length,
+        sinAmbito: rows.filter(r => !r.ambitos || r.ambitos.length === 0).length,
+        sinContacto: rows.filter(r => !r.telefono && !r.correo).length,
+      };
+    },
+    enabled: verProveedores,
+    refetchInterval: 300000,
+  });
+  const { data: ultimaMatriz = null } = useQuery({
+    queryKey: ['matriz_mensual_ultima_dashboard'],
+    queryFn: async () => {
+      const { data } = await supabase.from('matriz_mensual_log').select('periodo, ok, mensaje, created_at')
+        .order('created_at', { ascending: false }).limit(1).maybeSingle();
+      return data as { periodo: string | null; ok: boolean; mensaje: string | null; created_at: string } | null;
+    },
+    enabled: isAdmin,
+    refetchInterval: 300000,
   });
 
   // ─── Alertas: Pagos de Levantamiento pendientes ────────────────────────────
@@ -281,7 +345,32 @@ export default function Dashboard() {
     criticalChecklists: checklists.filter(c => c.overall_status === 'critico' || c.overall_status === 'malo').length,
     urgentItems:        projects.filter(p => p.priority === 'urgente' && p.status !== 'completado' && p.status !== 'cancelado').length,
     openTickets:        tickets.filter(t => t.estatus !== 'cerrado' && t.estatus !== 'resuelto').length,
-  }), [projects, checklists, tickets]);
+    ticketsAprobAnio:   tickets.filter(t => t.estatus === 'aprobado' && (t as any).fecha && new Date(String((t as any).fecha) + 'T12:00:00').getFullYear() === anioActual).length,
+    ticketsCancelados:  tickets.filter(t => t.estatus === 'cancelado').length,
+  }), [projects, checklists, tickets, anioActual]);
+
+  const flujo = useMemo(() => {
+    const ahora = new Date();
+    const delMes = (d?: string | null) => { if (!d) return false; const f = new Date(d); return f.getFullYear() === ahora.getFullYear() && f.getMonth() === ahora.getMonth(); };
+    const delAnio = (d?: string | null) => !!d && new Date(d.length === 10 ? d + 'T12:00:00' : d).getFullYear() === anioActual;
+    const porAtender = tmasFlujo.filter(t => t.estatus === 'pendiente' || t.estatus === 'en_revision');
+    const aprobAnio = tickets.filter(t => t.estatus === 'aprobado' && delAnio((t as any).fecha));
+    return {
+      solMes: solicitudesFlujo.filter(s => delMes(s.created_at)).length,
+      solTotal: solicitudesFlujo.length,
+      solPorRecibir: solicitudesFlujo.filter(s => s.estatus === 'pendiente').length,
+      tmasPorAtender: porAtender.length,
+      tmasMas12h: porAtender.filter(t => t.created_at && Date.now() - new Date(t.created_at).getTime() > 12 * 3600 * 1000).length,
+      tmasAutAnio: tmasFlujo.filter(t => t.estatus === 'autorizado' && delAnio(t.created_at)).length,
+      ticketsAprobAnio: aprobAnio.length,
+      montoAnio: aprobAnio.reduce((s, t) => s + Number((t as any).presupuesto ?? 0), 0),
+    };
+  }, [tmasFlujo, solicitudesFlujo, tickets, anioActual]);
+
+  const presupuestoResumen = useMemo(() => ({
+    sobrecosto: projects.filter(p => p.budget != null && p.costo_real != null && Number(p.costo_real) > Number(p.budget)).length,
+    ahorro:     projects.filter(p => p.budget != null && p.costo_real != null && Number(p.costo_real) < Number(p.budget)).length,
+  }), [projects]);
 
   // ─── Datos para gráficas ───────────────────────────────────────────────────
   const projectsByStatus = useMemo(() => {
@@ -479,7 +568,9 @@ export default function Dashboard() {
         {[
           { label: 'Obras Activas',           value: stats.activeProjects,                                  to: '/proyectos' },
           { label: 'Mantenimientos Pendientes', value: colegiosSinMtto.length,                              to: '/calendario' },
-          { label: 'Tickets Abiertos',         value: stats.openTickets,                                     to: '/tickets' },
+          verTicketMas
+            ? { label: 'Ticket MAS por atender', value: flujo.tmasPorAtender,                           to: '/ticket-mas' }
+            : { label: `Tickets aprobados ${anioActual}`, value: stats.ticketsAprobAnio,                   to: '/tickets' },
           ...(verCumpl ? [{ label: 'Alertas de PC', value: cumplimientoStats.vencidos + cumplimientoStats.porExpirar, to: '/cumplimiento' }] : []),
         ].map(({ label, value, to }) => (
           <Link key={label} to={to} className="bg-white rounded-xl border border-slate-200 p-5 hover:shadow-md hover:border-slate-300 transition-all duration-200">
@@ -488,6 +579,78 @@ export default function Dashboard() {
           </Link>
         ))}
       </div>
+
+      {/* ─── Flujo de proyectos del año ───────────────────────────────────────── */}
+      {(verSolicitudes || verTicketMas) && (
+        <div>
+          <h2 className="text-sm font-bold text-slate-800 uppercase tracking-tight mb-3">Flujo de proyectos {anioActual}</h2>
+          <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
+            {[
+              ...(verSolicitudes ? [
+                { label: 'Solicitudes del mes', value: String(flujo.solMes), sub: `${flujo.solTotal} en total`, color: 'text-slate-900', to: '/solicitudes' },
+                { label: 'Por recibir', value: String(flujo.solPorRecibir), sub: 'Solicitudes pendientes', color: flujo.solPorRecibir > 0 ? 'text-amber-600' : 'text-slate-900', to: '/solicitudes' },
+              ] : []),
+              ...(verTicketMas ? [
+                { label: 'Ticket MAS por atender', value: String(flujo.tmasPorAtender), sub: `${flujo.tmasMas12h} con más de 12 h`, color: flujo.tmasMas12h > 0 ? 'text-red-600' : flujo.tmasPorAtender > 0 ? 'text-amber-600' : 'text-slate-900', to: '/ticket-mas' },
+                { label: 'Autorizados', value: String(flujo.tmasAutAnio), sub: `Ticket MAS en ${anioActual}`, color: 'text-emerald-600', to: '/ticket-mas' },
+              ] : []),
+              { label: 'Contratado', value: flujo.montoAnio.toLocaleString('es-MX', { style: 'currency', currency: 'MXN', maximumFractionDigits: 0 }), sub: `${flujo.ticketsAprobAnio} tickets aprobados en ${anioActual}`, color: 'text-blue-600', to: '/tickets' },
+            ].map(k => (
+              <Link key={k.label} to={k.to} className="bg-white rounded-xl border border-slate-200 p-4 shadow-sm hover:shadow-md hover:border-slate-300 transition-all duration-200">
+                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">{k.label}</p>
+                <p className={`text-2xl font-black ${k.color}`}>{k.value}</p>
+                <p className="text-[11px] text-slate-500">{k.sub}</p>
+              </Link>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* ─── Control del sistema ──────────────────────────────────────────────── */}
+      {(verPresupuesto || (verProveedores && provResumen) || isAdmin) && (
+        <div>
+          <h2 className="text-sm font-bold text-slate-800 uppercase tracking-tight mb-3">Control del sistema</h2>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+            {verPresupuesto && (
+              <Link to="/presupuestos" className="bg-white rounded-xl border border-slate-200 p-4 shadow-sm hover:shadow-md hover:border-slate-300 transition-all duration-200">
+                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Presupuesto vs Real</p>
+                <div className="flex gap-6">
+                  <div><p className={`text-2xl font-black ${presupuestoResumen.sobrecosto > 0 ? 'text-red-500' : 'text-slate-900'}`}>{presupuestoResumen.sobrecosto}</p><p className="text-[11px] text-slate-500">con sobrecosto</p></div>
+                  <div><p className="text-2xl font-black text-emerald-600">{presupuestoResumen.ahorro}</p><p className="text-[11px] text-slate-500">con ahorro</p></div>
+                </div>
+              </Link>
+            )}
+            {verProveedores && provResumen && (
+              <Link to="/proveedores" className="bg-white rounded-xl border border-slate-200 p-4 shadow-sm hover:shadow-md hover:border-slate-300 transition-all duration-200">
+                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Padrón de Proveedores</p>
+                <div className="flex gap-6">
+                  <div><p className="text-2xl font-black text-slate-900">{provResumen.total}</p><p className="text-[11px] text-slate-500">proveedores</p></div>
+                  <div><p className={`text-2xl font-black ${provResumen.sinAmbito > 0 ? 'text-amber-600' : 'text-emerald-600'}`}>{provResumen.sinAmbito}</p><p className="text-[11px] text-slate-500">sin ámbito</p></div>
+                  <div><p className={`text-2xl font-black ${provResumen.sinContacto > 0 ? 'text-amber-600' : 'text-emerald-600'}`}>{provResumen.sinContacto}</p><p className="text-[11px] text-slate-500">sin contacto</p></div>
+                </div>
+              </Link>
+            )}
+            {isAdmin && (() => {
+              const MESES = ['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
+              const sig = new Date(new Date().getFullYear(), new Date().getMonth() + 1, 1);
+              const etiqueta = (p?: string | null) => p && /^\d{4}-\d{2}$/.test(p) ? `${MESES[Number(p.slice(5, 7)) - 1]} ${p.slice(0, 4)}` : (p ?? '');
+              return (
+                <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-sm">
+                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Respaldo mensual (Matriz)</p>
+                  {!ultimaMatriz ? (
+                    <p className="text-sm font-bold text-slate-500">Aún no se ha guardado ninguna</p>
+                  ) : ultimaMatriz.ok ? (
+                    <p className="text-sm font-bold text-emerald-700 flex items-center gap-1.5"><CheckCircle2 className="w-4 h-4" /> <span className="capitalize">{etiqueta(ultimaMatriz.periodo)}</span> guardada en OneDrive</p>
+                  ) : (
+                    <p className="text-sm font-bold text-red-600 flex items-center gap-1.5"><AlertTriangle className="w-4 h-4" /> Falló la de {etiqueta(ultimaMatriz.periodo)}</p>
+                  )}
+                  <p className="text-[11px] text-slate-500 mt-1 flex items-center gap-1"><CloudUpload className="w-3 h-3" /> Próxima: 1 de {MESES[sig.getMonth()]}, 7:00 am</p>
+                </div>
+              );
+            })()}
+          </div>
+        </div>
+      )}
 
       {/* ─── Proyectos Actuales (tabla) + Timeline ───────────────────────────── */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
@@ -658,10 +821,10 @@ export default function Dashboard() {
           subtitle={`${stats.completedProjects} completados`}
           icon={FolderKanban} color="blue" to="/proyectos"
           trend={stats.activeProjects > 0 ? 'up' : 'neutral'} trendLabel={`${projects.length} total`} />
-        <KPICard title="Tickets Abiertos" value={stats.openTickets}
-          subtitle={`${tickets.length} tickets totales`}
+        <KPICard title={`Tickets ${anioActual}`} value={stats.ticketsAprobAnio}
+          subtitle={`${stats.ticketsCancelados} cancelados en total`}
           icon={TicketCheck} color="red" to="/tickets"
-          trend={stats.openTickets > 5 ? 'down' : 'neutral'} trendLabel={`${tickets.length} total`} />
+          trend="neutral" trendLabel={`${tickets.length} total`} />
         {verNexus && <KPICard title="Pendientes Activos" value={nexusPendientesActivos}
           subtitle="Ver todos en NEXUS"
           icon={ClockAlert} color={nexusPendientesActivos > 0 ? 'orange' : 'green'} to="/nexus"
@@ -931,21 +1094,27 @@ export default function Dashboard() {
       {/* ─── Accesos Rápidos ──────────────────────────────────────────────────── */}
       <div>
         <h2 className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-3">Accesos Rápidos</h2>
-        <div className="grid grid-cols-3 sm:grid-cols-6 gap-3">
+        <div className="grid grid-cols-3 sm:grid-cols-5 lg:grid-cols-9 gap-3">
           {([
-            { label: 'Tickets',       path: '/tickets',       icon: TicketCheck,    color: 'bg-red-50 text-red-600 border-red-100',             count: stats.openTickets },
+            { label: 'Tickets',       path: '/tickets',       icon: TicketCheck,    color: 'bg-red-50 text-red-600 border-red-100',             count: null },
             { label: 'Proyectos',     path: '/proyectos',     icon: FolderKanban,   color: 'bg-blue-50 text-blue-600 border-blue-100',           count: stats.activeProjects },
             { label: 'Anteproyectos', path: '/anteproyectos', icon: FolderOpen,     color: 'bg-indigo-50 text-indigo-600 border-indigo-100',     count: null },
             { label: 'Checklists',    path: '/checklists',    icon: ClipboardCheck, color: 'bg-emerald-50 text-emerald-600 border-emerald-100',  count: checklists.length },
             { label: 'NEXUS',         path: '/nexus',          icon: ClockAlert,     color: 'bg-teal-50 text-teal-600 border-teal-100',           count: 0 },
             { label: 'Calendario',    path: '/calendario',    icon: CalendarDays,   color: 'bg-purple-50 text-purple-600 border-purple-100',     count: null },
+            { label: 'Ticket MAS',    path: '/ticket-mas',    icon: FileSignature,  color: 'bg-orange-50 text-orange-600 border-orange-100',     count: flujo.tmasPorAtender },
+            { label: 'Solicitudes',   path: '/solicitudes',   icon: Inbox,          color: 'bg-amber-50 text-amber-700 border-amber-100',        count: flujo.solPorRecibir },
+            { label: 'Proveedores',   path: '/proveedores',   icon: Factory,        color: 'bg-slate-100 text-slate-700 border-slate-200',       count: null },
           ] as { label: string; path: string; icon: LucideIcon; color: string; count: number | null }[])
             .filter(({ path }) => path !== '/nexus' ? (
               path === '/checklists' ? verChecklists :
               path === '/tickets' ? can('ver_tickets') :
               path === '/proyectos' ? can('ver_proyectos') :
               path === '/anteproyectos' ? can('ver_anteproyectos') :
-              path === '/calendario' ? can('ver_calendario') : true
+              path === '/calendario' ? can('ver_calendario') :
+              path === '/ticket-mas' ? verTicketMas :
+              path === '/solicitudes' ? verSolicitudes :
+              path === '/proveedores' ? verProveedores : true
             ) : verNexus)
             .map(
             ({ label, path, icon: Icon, color, count }) => (

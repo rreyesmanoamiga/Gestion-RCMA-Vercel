@@ -172,7 +172,7 @@ export default function ProtocoloProyectos() {
                 <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-1">
                   Coordinación de Obras y Mantenimiento RCMA
                 </p>
-                <h1 className="text-2xl font-black text-white leading-tight">
+                <h1 className="text-2xl font-display font-semibold text-white tracking-tight leading-tight">
                   Protocolo de Recepción de Proyectos
                 </h1>
                 <p className="text-slate-300 text-sm mt-1.5 leading-relaxed">

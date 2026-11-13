@@ -888,10 +888,8 @@ export default function CalendarioMantenimiento() {
     <div className="max-w-5xl mx-auto p-4 sm:p-6 space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-black text-slate-900 uppercase tracking-tight flex items-center gap-2">
-            <Calendar className="w-6 h-6" /> Calendario de Mantenimiento
-          </h1>
-          <p className="text-sm text-slate-500 mt-0.5">Cronograma basado en guias tecnicas de mantenimiento</p>
+          <h1 className="text-2xl font-display font-semibold text-slate-900 tracking-tight uppercase">Calendario de Mantenimiento</h1>
+          <p className="text-sm text-slate-500 font-medium mt-1 italic">Cronograma basado en guías técnicas de mantenimiento</p>
         </div>
       </div>
 
