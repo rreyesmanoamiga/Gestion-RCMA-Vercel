@@ -93,12 +93,27 @@ export function RemanenteDetalle({ tabla, id, referencia, si, anios, editable, o
 
   const guardar = async () => {
     setGuardando(true);
-    const { error } = await supabase.from(tabla).update({ remanente_sorteo: vSi, remanente_anios: vSi ? vAnios : [] }).eq('id', id);
+    const cambio = { remanente_sorteo: vSi, remanente_anios: vSi ? vAnios : [] };
+    const { error } = await supabase.from(tabla).update(cambio).eq('id', id);
+    if (error) { setGuardando(false); toast.error('No se pudo guardar: ' + error.message); return; }
+    // Solicitud y Ticket MAS vinculados siempre dicen lo mismo: se corrige el otro también
+    let vinculado = false;
+    if (tabla === 'solicitudes') {
+      const { data } = await supabase.from('tickets_mas').update(cambio).eq('solicitud_id', id).select('id');
+      vinculado = (data ?? []).length > 0;
+    } else {
+      const { data: t } = await supabase.from('tickets_mas').select('solicitud_id').eq('id', id).maybeSingle();
+      if (t?.solicitud_id) {
+        const { error: e2 } = await supabase.from('solicitudes').update(cambio).eq('id', t.solicitud_id);
+        vinculado = !e2;
+      }
+    }
     setGuardando(false);
-    if (error) { toast.error('No se pudo guardar: ' + error.message); return; }
     logAudit({ accion: 'editar', modulo: tabla === 'tickets_mas' ? 'tickets_mas' : 'solicitudes', registro_id: id, registro_ref: referencia ?? null,
-      detalle: { cambio: 'Remanente del sorteo', valor: textoRemanente(vSi, vAnios) } });
-    toast.success('Remanente actualizado');
+      detalle: { cambio: 'Remanente del sorteo', valor: textoRemanente(vSi, vAnios), vinculado_actualizado: vinculado } });
+    toast.success(vinculado
+      ? `Remanente actualizado también en ${tabla === 'solicitudes' ? 'su Ticket MAS' : 'su Solicitud de Proyecto'}`
+      : 'Remanente actualizado');
     setEditando(false);
     onGuardado?.(vSi, vSi ? vAnios : []);
   };
