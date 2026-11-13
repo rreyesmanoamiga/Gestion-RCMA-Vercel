@@ -621,7 +621,7 @@ export default function SolicitudesRecibidas() {
                   </div>
                 </div>
 
-                <div className="flex gap-2 shrink-0">
+                <div className="flex flex-wrap gap-2 md:justify-end md:max-w-[60%]">
                   <button onClick={() => setViewing(s)}
                     className="flex items-center gap-1.5 px-3 py-2 border border-slate-300 rounded-md text-sm font-medium text-slate-700 hover:bg-slate-50 transition-colors">
                     <Eye className="w-4 h-4" /> Ver detalle

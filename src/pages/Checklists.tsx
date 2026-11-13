@@ -1345,7 +1345,7 @@ export default function Checklists() {
       />
 
       {/* Tabs */}
-      <div className="flex gap-1 mt-5 mb-6 bg-slate-100 rounded-lg p-1 w-fit">
+      <div className="flex gap-1 mt-5 mb-6 bg-slate-100 rounded-lg p-1 w-fit max-w-full overflow-x-auto [&>button]:shrink-0 [&>button]:whitespace-nowrap">
         <button
           onClick={() => setActiveTab('inspecciones')}
           className={`flex items-center gap-2 px-4 py-2 rounded-md text-sm font-semibold transition-all ${activeTab === 'inspecciones' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>

@@ -688,7 +688,7 @@ export default function Insumos() {
       </div>
 
       {/* Tabs */}
-      <div className="flex gap-1 bg-slate-100 rounded-lg p-1 w-fit">
+      <div className="flex gap-1 bg-slate-100 rounded-lg p-1 w-fit max-w-full overflow-x-auto [&>button]:shrink-0 [&>button]:whitespace-nowrap">
         {[
           { id: 'requisiciones', label: 'Requisiciones', icon: <ClipboardList className="w-4 h-4" /> },
           { id: 'productos',     label: 'Catálogo',      icon: <Package className="w-4 h-4" /> },
