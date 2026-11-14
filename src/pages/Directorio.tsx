@@ -9,6 +9,8 @@ import {
 } from 'lucide-react';
 import PageHeader from '@/components/shared/PageHeader';
 import { generarExcelDirectorio } from '@/lib/reportesDirectorio';
+import { usePermissions } from '@/hooks/usePermissions';
+import ContactosDirectorio, { ROL_LABEL, type AbrirContacto, type RolClave } from '@/components/directorio/ContactosDirectorio';
 
 interface Colegio {
   id: string;
@@ -64,6 +66,11 @@ const TERR_STYLE: Record<string, { bg: string; border: string; text: string; dot
 };
 
 const labelCls = 'text-[10px] font-bold text-slate-400 uppercase tracking-wider';
+
+// Las personas de la ficha vienen de Contactos (la base las rellena sola).
+// Aquí ya no se editan para que cada persona se cambie en un solo lugar.
+const PERSONA_PREFIJOS: RolClave[] = ['dir', 'adm', 'car', 'geo', 'leo', 'gjo', 'ljo', 'contador', 'gerente', 'director_nacional'];
+const esCampoPersona = (k: string) => PERSONA_PREFIJOS.some(p => k.startsWith(p + '_'));
 const inputCls = 'w-full px-2 py-1.5 border border-slate-300 text-sm rounded-md focus:ring-1 focus:ring-slate-700 focus:outline-none bg-white';
 
 // ─── Small contact row ───────────────────────────────────────────────────────
@@ -135,7 +142,11 @@ function EditSection({ title, fields, editForm, onSet }: EditSectionProps) {
 export default function Directorio() {
   const { user } = useAuth();
   const isAdmin = esAdminUsuario(user);
+  const { can } = usePermissions();
+  const verContactos = isAdmin || can('ver_contactos');
   const qc = useQueryClient();
+  const [tab, setTab]               = useState<'fichas' | 'contactos'>('fichas');
+  const [abrirContacto, setAbrirContacto] = useState<AbrirContacto | null>(null);
 
   const [search, setSearch]         = useState('');
   const [territorio, setTerritorio] = useState('todos');
@@ -219,14 +230,16 @@ export default function Directorio() {
     if (!editModal) return;
     setSaving(true);
     try {
-      const updateData = { ...editForm, niveles: editNiveles, updated_at: new Date().toISOString() };
+      // Solo datos de la sede: las personas se cambian en Contactos
+      const soloSede = Object.fromEntries(Object.entries(editForm).filter(([k]) => !esCampoPersona(k)));
+      const updateData = { ...soloSede, niveles: editNiveles, updated_at: new Date().toISOString() };
       const { error } = await supabase
         .from('directorio')
         .update(updateData)
         .eq('id', editModal.id);
       if (error) throw error;
       qc.setQueryData<Colegio[]>(['directorio'], prev =>
-        (prev ?? []).map(c => c.id === editModal.id ? { ...c, ...editForm, niveles: editNiveles } : c)
+        (prev ?? []).map(c => c.id === editModal.id ? { ...c, ...soloSede, niveles: editNiveles } : c)
       );
       await qc.invalidateQueries({ queryKey: ['directorio'] });
       setEditModal(null);
@@ -255,16 +268,44 @@ export default function Directorio() {
     <div className="max-w-7xl mx-auto p-4 space-y-5">
       <div className="flex items-start justify-between gap-4 flex-wrap">
         <PageHeader
-          title="Directorio de Colegios"
-          subtitle="Contactos institucionales de la Red Mano Amiga"
+          title="Directorio"
+          subtitle={verContactos ? 'Contactos institucionales de la Red Mano Amiga y de ORS-SER' : 'Contactos institucionales de la Red Mano Amiga'}
           icon={<BookUser className="w-5 h-5" />}
         />
-        <button onClick={handleExportExcel} disabled={exportando}
+        {tab === 'fichas' && <button onClick={handleExportExcel} disabled={exportando}
           className="inline-flex items-center gap-2 px-3 py-2 text-xs font-bold rounded-lg border border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 disabled:opacity-50 mt-1">
           {exportando ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <FileSpreadsheet className="w-3.5 h-3.5" />}
           {exportando ? 'Generando...' : 'Descargar matriz (Excel)'}
-        </button>
+        </button>}
       </div>
+
+      {/* ── Pestañas ───────────────────────────────────────────────────── */}
+      {verContactos && (
+        <div className="flex gap-1 border-b border-slate-200 overflow-x-auto">
+          {([
+            { k: 'fichas',    label: 'Fichas por sede', icon: Building2, n: colegios.length },
+            { k: 'contactos', label: 'Contactos',       icon: Users,     n: null },
+          ] as const).map(t => (
+            <button key={t.k} onClick={() => setTab(t.k)}
+              className={`px-4 py-2 text-sm whitespace-nowrap border-b-2 -mb-px inline-flex items-center gap-1.5 transition ${tab === t.k
+                ? 'font-bold text-slate-900 border-[#ED7102]' : 'font-semibold text-slate-500 border-transparent hover:text-slate-800'}`}>
+              <t.icon className="w-4 h-4" /> {t.label}
+              {t.n !== null && <span className="text-xs text-slate-400 font-medium">({t.n})</span>}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {tab === 'contactos' && verContactos && (
+        <ContactosDirectorio
+          sedes={colegios.map(c => ({ codigo: c.codigo, nombre: c.nombre, territorio: c.territorio }))}
+          isAdmin={isAdmin}
+          abrir={abrirContacto}
+          onAbierto={() => setAbrirContacto(null)}
+        />
+      )}
+
+      {tab === 'fichas' && (<>
 
       {/* ── Buscador + filtros ─────────────────────────────────────────── */}
       <div className="flex flex-wrap gap-3 items-center">
@@ -458,6 +499,8 @@ export default function Directorio() {
           })}
         </div>
       )}
+
+      </>)}
 
       {/* ══ View Modal (todos los contactos) ══════════════════════════════ */}
       {viewModal && (
@@ -673,63 +716,6 @@ export default function Directorio() {
               <EditSection title="💰 Datos Fiscales / Administrativos" editForm={editForm} onSet={set} fields={[
                 { k: 'sociedad',        label: 'Sociedad' },
                 { k: 'centro_gestor',   label: 'Centro Gestor' },
-                { k: 'contador_nombre', label: 'Contador' },
-                { k: 'contador_correo', label: 'Correo del Contador' },
-              ]} />
-
-              {editModal.codigo === 'GENERAL' && (
-                <EditSection title="🏛️ Roles Federación Mano Amiga" editForm={editForm} onSet={set} fields={[
-                  { k: 'gerente_nombre',                label: 'Gerente — Nombre', full: true },
-                  { k: 'gerente_correo',                label: 'Gerente — Correo', full: true },
-                  { k: 'gerente_tel_movil',              label: 'Gerente — Tel. Móvil' },
-                  { k: 'director_nacional_nombre',       label: 'Director Nacional — Nombre', full: true },
-                  { k: 'director_nacional_correo',       label: 'Director Nacional — Correo', full: true },
-                  { k: 'director_nacional_tel_movil',    label: 'Director Nacional — Tel. Móvil' },
-                ]} />
-              )}
-
-              <EditSection title="👤 Director" editForm={editForm} onSet={set} fields={[
-                { k: 'dir_nombre',    label: 'Nombre',     full: true },
-                { k: 'dir_correo',    label: 'Correo',     full: true },
-                { k: 'dir_tel_movil', label: 'Tel. Móvil' },
-                { k: 'dir_tel_red',   label: 'Tel. Red'   },
-              ]} />
-
-              <EditSection title="👥 Administrador" editForm={editForm} onSet={set} fields={[
-                { k: 'adm_nombre',    label: 'Nombre',     full: true },
-                { k: 'adm_correo',    label: 'Correo',     full: true },
-                { k: 'adm_tel_movil', label: 'Tel. Móvil' },
-                { k: 'adm_tel_red',   label: 'Tel. Red'   },
-              ]} />
-
-              <EditSection title="🗂️ CAR" editForm={editForm} onSet={set} fields={[
-                { k: 'car_nombre',    label: 'Nombre', full: true },
-                { k: 'car_correo',    label: 'Correo', full: true },
-                { k: 'car_tel_movil', label: 'Tel. Móvil' },
-              ]} />
-
-              <EditSection title="🏗️ Gerente de Op. ECO" editForm={editForm} onSet={set} fields={[
-                { k: 'geo_nombre',    label: 'Nombre', full: true },
-                { k: 'geo_correo',    label: 'Correo', full: true },
-                { k: 'geo_tel_movil', label: 'Tel. Móvil' },
-              ]} />
-
-              <EditSection title="🏗️ Líder de Proyecto ECO" editForm={editForm} onSet={set} fields={[
-                { k: 'leo_nombre',    label: 'Nombre', full: true },
-                { k: 'leo_correo',    label: 'Correo', full: true },
-                { k: 'leo_tel_movil', label: 'Tel. Móvil' },
-              ]} />
-
-              <EditSection title="⚖️ Gerente Jurídico OR-SER" editForm={editForm} onSet={set} fields={[
-                { k: 'gjo_nombre',    label: 'Nombre', full: true },
-                { k: 'gjo_correo',    label: 'Correo', full: true },
-                { k: 'gjo_tel_movil', label: 'Tel. Móvil' },
-              ]} />
-
-              <EditSection title="⚖️ Líder Jurídico OR-SER" editForm={editForm} onSet={set} fields={[
-                { k: 'ljo_nombre',    label: 'Nombre', full: true },
-                { k: 'ljo_correo',    label: 'Correo', full: true },
-                { k: 'ljo_tel_movil', label: 'Tel. Móvil' },
               ]} />
 
               {/* Niveles educativos — solo colegios */}
@@ -758,6 +744,33 @@ export default function Directorio() {
                   </div>
                 </div>
               )}
+
+              {/* Personas de la sede — vienen de Contactos */}
+              <div className="rounded-xl bg-slate-50 border border-slate-200 p-4">
+                <p className="text-xs font-bold text-slate-500 uppercase">👥 Personas de esta sede
+                  <span className="normal-case font-medium text-slate-400"> — vienen de Contactos</span></p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-3">
+                  {(editModal.codigo === 'GENERAL'
+                    ? (['director_nacional', 'gerente', 'adm', 'ljo', 'contador'] as RolClave[])
+                    : (['dir', 'adm', 'car', 'geo', 'leo', 'gjo', 'ljo', 'contador'] as RolClave[])
+                  ).map(rol => {
+                    const nombre = (editModal as any)[`${rol}_nombre`] as string | null;
+                    return (
+                      <div key={rol} className="bg-white rounded-lg border border-slate-200 px-3 py-2">
+                        <p className={labelCls}>{ROL_LABEL[rol]}</p>
+                        <p className={`text-sm leading-tight mt-0.5 ${nombre ? 'font-semibold text-slate-800' : 'italic text-slate-400'}`}>{nombre || 'Sin asignar'}</p>
+                        {verContactos && (
+                          <button type="button"
+                            onClick={() => { setEditModal(null); setTab('contactos'); setAbrirContacto({ codigo: editModal.codigo, rol }); }}
+                            className="text-[11px] font-bold text-blue-600 hover:underline mt-0.5">
+                            ↗ {nombre ? 'Editar en Contactos' : 'Asignar en Contactos'}
+                          </button>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
             </div>
 
             {/* Modal footer */}
