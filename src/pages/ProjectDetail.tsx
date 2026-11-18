@@ -53,6 +53,9 @@ export default function ProjectDetail() {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [showEdit, setShowEdit] = useState(false);
   const [showCostoReal, setShowCostoReal] = useState(false);
+  // Avance: barra deslizable para ajustarlo sin abrir el formulario completo
+  const [ajustandoAvance, setAjustandoAvance] = useState(false);
+  const [avanceTemp, setAvanceTemp] = useState(0);
   const [costoRealInput, setCostoRealInput] = useState('');
   const [motivoSobrecostoInput, setMotivoSobrecostoInput] = useState('');
 
@@ -667,17 +670,78 @@ export default function ProjectDetail() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2 space-y-6">
           <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
-            <h3 className="text-sm font-bold text-slate-900 uppercase tracking-tight mb-4 flex items-center gap-2">
-              <Clock className="w-4 h-4 text-blue-600" /> Estado del Avance
-            </h3>
-            <div className="flex items-end justify-between mb-2">
-              <span className="text-3xl font-black text-slate-900">{project.progress || 0}%</span>
-              <span className="text-xs font-bold text-slate-400 mb-1">PROGRESO TOTAL</span>
+            <div className="flex items-center justify-between mb-4 gap-2">
+              <h3 className="text-sm font-bold text-slate-900 uppercase tracking-tight flex items-center gap-2">
+                <Clock className="w-4 h-4 text-blue-600" /> Estado del Avance
+              </h3>
+              {puedeEditar && !ajustandoAvance && (
+                <button type="button"
+                  onClick={() => { setAvanceTemp(project.progress || 0); setAjustandoAvance(true); }}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 border border-slate-300 rounded-lg text-xs font-bold text-slate-700 hover:bg-slate-50">
+                  <Pencil className="w-3.5 h-3.5" /> Ajustar avance
+                </button>
+              )}
             </div>
-            <div className="w-full bg-slate-100 rounded-full h-3 overflow-hidden border border-slate-200">
-              <div className="bg-slate-900 h-full transition-all duration-1000 ease-out"
-                style={{ width: `${project.progress || 0}%` }} />
-            </div>
+
+            {!ajustandoAvance ? (
+              <>
+                <div className="flex items-end justify-between mb-2">
+                  <span className="text-3xl font-black text-slate-900">{project.progress || 0}%</span>
+                  <span className="text-xs font-bold text-slate-400 mb-1">PROGRESO TOTAL</span>
+                </div>
+                <div className="w-full bg-slate-100 rounded-full h-3 overflow-hidden border border-slate-200">
+                  <div className="bg-slate-900 h-full transition-all duration-1000 ease-out"
+                    style={{ width: `${project.progress || 0}%` }} />
+                </div>
+              </>
+            ) : (() => {
+              // Color según el avance: rojo → ámbar → azul → verde al 100 %
+              const c = avanceTemp >= 100 ? { fill: 'bg-emerald-500', ring: 'border-emerald-500', txt: 'text-emerald-600' }
+                : avanceTemp >= 70 ? { fill: 'bg-blue-500',    ring: 'border-blue-500',    txt: 'text-blue-600' }
+                : avanceTemp >= 30 ? { fill: 'bg-amber-500',   ring: 'border-amber-500',   txt: 'text-amber-600' }
+                :                    { fill: 'bg-red-500',     ring: 'border-red-500',     txt: 'text-red-600' };
+              const cambio = avanceTemp !== (project.progress || 0);
+              return (
+                <div>
+                  <div className="flex items-end justify-between mb-3">
+                    <span className={`text-3xl font-black ${c.txt}`}>{avanceTemp}%</span>
+                    <span className="text-xs font-bold text-slate-400 mb-1">
+                      ANTES: {project.progress || 0}%
+                    </span>
+                  </div>
+                  {/* Barra deslizable: la barra se pinta y el círculo se arrastra */}
+                  <div className="relative h-8 select-none">
+                    <div className="absolute left-0 right-0 top-1/2 -translate-y-1/2 h-3 bg-slate-100 rounded-full border border-slate-200 overflow-hidden">
+                      <div className={`h-full ${c.fill} transition-colors`} style={{ width: `${avanceTemp}%` }} />
+                    </div>
+                    <div className={`absolute top-1/2 -translate-y-1/2 -translate-x-1/2 w-7 h-7 rounded-full bg-white border-4 ${c.ring} shadow-md pointer-events-none`}
+                      style={{ left: `${avanceTemp}%` }} />
+                    <input type="range" min={0} max={100} step={5} value={avanceTemp}
+                      onChange={e => setAvanceTemp(Number(e.target.value))}
+                      aria-label="Avance de obra"
+                      className="absolute inset-0 w-full h-full opacity-0 cursor-grab active:cursor-grabbing" />
+                  </div>
+                  <div className="flex justify-between text-[10px] font-bold text-slate-400 mt-1 px-0.5">
+                    {[0, 25, 50, 75, 100].map(v => (
+                      <button key={v} type="button" onClick={() => setAvanceTemp(v)}
+                        className={`hover:text-slate-800 ${avanceTemp === v ? 'text-slate-900' : ''}`}>{v}%</button>
+                    ))}
+                  </div>
+                  {avanceTemp === 100 && project.status !== 'completado' && (
+                    <p className="text-[11px] text-emerald-700 mt-3">Al 100 % recuerda marcar el proyecto como <b>Completado</b> en Editar.</p>
+                  )}
+                  <div className="flex justify-end gap-2 mt-4">
+                    <button type="button" onClick={() => setAjustandoAvance(false)}
+                      className="px-4 py-2 border border-slate-300 rounded-lg text-xs font-semibold text-slate-700 hover:bg-slate-50">Cancelar</button>
+                    <button type="button" disabled={!cambio || updateMutation.isPending}
+                      onClick={() => updateMutation.mutate({ progress: avanceTemp }, { onSuccess: () => setAjustandoAvance(false) })}
+                      className="px-4 py-2 bg-slate-900 text-white rounded-lg text-xs font-bold hover:bg-slate-800 disabled:opacity-40 inline-flex items-center gap-1.5">
+                      <Save className="w-3.5 h-3.5" /> {updateMutation.isPending ? 'Guardando…' : 'Guardar avance'}
+                    </button>
+                  </div>
+                </div>
+              );
+            })()}
           </div>
         </div>
 
