@@ -3,8 +3,8 @@ import { leerFiltros, guardarFiltros } from '@/lib/filtrosPersistentes';
 import { db } from '@/lib/db';
 import { supabase } from '@/lib/supabaseClient';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Link } from 'react-router-dom';
-import { FolderKanban, MapPin, Calendar, User, ChevronDown, TicketCheck } from 'lucide-react';
+import { Link, useNavigate } from 'react-router-dom';
+import { FolderKanban, MapPin, Calendar, User, ChevronDown, ChevronRight, TicketCheck } from 'lucide-react';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { toast } from 'sonner';
@@ -80,6 +80,11 @@ export default function Projects() {
     };
   }, []);
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
+  // Concluidos (completados y cancelados) van en listado debajo de las tarjetas
+  const [verConcluidos, setVerConcluidos]       = useState(true);
+  const [filtroConcluidos, setFiltroConcluidos] = useState<'todos' | 'completado' | 'cancelado'>('todos');
+  const [visiblesConcluidos, setVisiblesConcluidos] = useState(PAGE_SIZE);
 
   const { data: rawProjects = [], isLoading } = useQuery({
     queryKey: ['projects'],
@@ -166,9 +171,21 @@ export default function Projects() {
     [projects, filterStatuses, filterTipoProyecto, filterTerritorio, filterColegio]
   );
 
-  const visible   = useMemo(() => filtered.slice(0, visibleCount), [filtered, visibleCount]);
-  const hasMore   = visibleCount < filtered.length;
-  const remaining = filtered.length - visibleCount;
+  const esConcluido = (p: Project) => p.status === 'completado' || p.status === 'cancelado';
+  const activos     = useMemo(() => filtered.filter(p => !esConcluido(p)), [filtered]);
+  const concluidos  = useMemo(() => filtered.filter(esConcluido), [filtered]);
+  const concluidosVista = useMemo(
+    () => filtroConcluidos === 'todos' ? concluidos : concluidos.filter(p => p.status === filtroConcluidos),
+    [concluidos, filtroConcluidos]
+  );
+  const nCompletados = concluidos.filter(p => p.status === 'completado').length;
+  const nCancelados  = concluidos.length - nCompletados;
+
+  const visible   = useMemo(() => activos.slice(0, visibleCount), [activos, visibleCount]);
+  const hasMore   = visibleCount < activos.length;
+  const remaining = activos.length - visibleCount;
+  const concluidosVisibles = concluidosVista.slice(0, visiblesConcluidos);
+  const restanConcluidos   = concluidosVista.length - concluidosVisibles.length;
 
   const kpis = useMemo(() => ({
     total:        projects.length,
@@ -303,6 +320,13 @@ export default function Projects() {
         />
       ) : (
         <>
+          {activos.length > 0 && (
+            <div className="flex items-center gap-2 mb-3">
+              <span className="w-2 h-2 rounded-full bg-blue-500" />
+              <h2 className="text-sm font-black text-slate-800 uppercase tracking-wide">Activos</h2>
+              <span className="text-xs text-slate-400">· {activos.length} en espera, en proceso o pausados</span>
+            </div>
+          )}
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
             {visible.map(project => (
               <Link
@@ -394,8 +418,107 @@ export default function Projects() {
                 Cargar más ({remaining} restante{remaining !== 1 ? 's' : ''})
               </button>
               <p className="text-xs text-slate-400">
-                Mostrando {visible.length} de {filtered.length} proyectos
+                Mostrando {visible.length} de {activos.length} proyectos activos
               </p>
+            </div>
+          )}
+
+          {/* ── Concluidos: completados y cancelados en listado ─────────────── */}
+          {concluidos.length > 0 && (
+            <div className={`${activos.length > 0 ? 'mt-8' : ''} bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden`}>
+              <div className="flex flex-wrap items-center justify-between gap-2 px-4 py-3 border-b border-slate-200 bg-slate-50">
+                <button type="button" onClick={() => setVerConcluidos(v => !v)} className="flex items-center gap-2">
+                  {verConcluidos ? <ChevronDown className="w-4 h-4 text-slate-400" /> : <ChevronRight className="w-4 h-4 text-slate-400" />}
+                  <h2 className="text-sm font-black text-slate-800 uppercase tracking-wide">Concluidos</h2>
+                  <span className="text-xs text-slate-400">· {concluidos.length}</span>
+                </button>
+                {verConcluidos && (
+                  <div className="flex flex-wrap gap-1.5">
+                    {([
+                      { k: 'todos',      label: `Todos (${concluidos.length})`, on: 'bg-slate-900 text-white border-slate-900',         off: 'bg-white text-slate-500 border-slate-200', dot: '' },
+                      { k: 'completado', label: `Completados (${nCompletados})`, on: 'bg-emerald-600 text-white border-emerald-600', off: 'bg-emerald-50 text-emerald-700 border-emerald-200', dot: 'bg-emerald-500' },
+                      { k: 'cancelado',  label: `Cancelados (${nCancelados})`,   on: 'bg-red-600 text-white border-red-600',         off: 'bg-red-50 text-red-700 border-red-200', dot: 'bg-red-500' },
+                    ] as const).map(b => (
+                      <button key={b.k} type="button"
+                        onClick={() => { setFiltroConcluidos(b.k); setVisiblesConcluidos(PAGE_SIZE); }}
+                        className={`px-3 py-1 rounded-full text-xs font-bold border inline-flex items-center gap-1.5 transition-colors ${filtroConcluidos === b.k ? b.on : b.off}`}>
+                        {b.dot && filtroConcluidos !== b.k && <span className={`w-1.5 h-1.5 rounded-full ${b.dot}`} />}
+                        {b.label}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {verConcluidos && (
+                <>
+                  <div className="overflow-x-auto">
+                    <table className="w-full min-w-[860px]">
+                      <thead>
+                        <tr className="text-left border-b border-slate-200">
+                          {['Estatus', 'Folio', 'Proyecto', 'Colegio', 'Proveedor', 'Inicio', 'Avance'].map(h => (
+                            <th key={h} className="px-3 py-2 text-[10px] font-black text-slate-400 uppercase tracking-widest">{h}</th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {concluidosVisibles.map(project => {
+                          const comp  = project.status === 'completado';
+                          const folio = project.folio || ticketByProject[project.id]?.folio;
+                          return (
+                            <tr key={project.id}
+                              onClick={() => navigate(`/proyectos/${project.id}`)}
+                              className={`border-b border-slate-100 border-l-4 cursor-pointer transition-colors ${comp
+                                ? 'border-l-emerald-500 bg-emerald-50/40 hover:bg-emerald-50' : 'border-l-red-500 bg-red-50/40 hover:bg-red-50'}`}>
+                              <td className="px-3 py-2.5">
+                                <span className={`text-[10px] font-black px-2 py-0.5 rounded-full uppercase whitespace-nowrap ${comp ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700'}`}>
+                                  {comp ? 'Completado' : 'Cancelado'}
+                                </span>
+                              </td>
+                              <td className="px-3 py-2.5 whitespace-nowrap">
+                                {folio
+                                  ? <span className="text-xs font-black text-red-500">{folio}</span>
+                                  : <span className="text-[10px] font-bold text-slate-300">Sin Ticket</span>}
+                              </td>
+                              <td className="px-3 py-2.5">
+                                <Link to={`/proyectos/${project.id}`} onClick={e => e.stopPropagation()}
+                                  className={`text-[13px] font-semibold hover:text-blue-600 ${comp ? 'text-slate-800' : 'text-slate-500 line-through decoration-red-300'}`}>
+                                  {project.name}
+                                </Link>
+                                {project.tipo_proyecto && <div className="text-[10px] text-slate-400 uppercase font-semibold">{project.tipo_proyecto}</div>}
+                              </td>
+                              <td className="px-3 py-2.5 text-xs whitespace-nowrap">
+                                <b className="text-slate-800">{project.colegio ?? '—'}</b>
+                                {project.territorio && <span className="text-[10px] text-slate-400 ml-1">{project.territorio}</span>}
+                              </td>
+                              <td className="px-3 py-2.5 text-[11px] text-slate-500 uppercase">{project.responsible ?? '—'}</td>
+                              <td className="px-3 py-2.5 text-[11px] text-slate-500 whitespace-nowrap">
+                                {project.start_date ? format(new Date(project.start_date), 'dd MMM yyyy', { locale: es }) : '—'}
+                              </td>
+                              <td className="px-3 py-2.5 w-28">
+                                {comp ? (
+                                  <div className="flex items-center gap-1.5">
+                                    <div className="flex-1 bg-emerald-100 rounded-full h-1.5 overflow-hidden">
+                                      <div className="bg-emerald-500 h-full rounded-full" style={{ width: `${project.progress ?? 100}%` }} />
+                                    </div>
+                                    <span className="text-[10px] font-bold text-emerald-700">{project.progress ?? 100}%</span>
+                                  </div>
+                                ) : <span className="text-[10px] text-red-400 font-bold">—</span>}
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                  {restanConcluidos > 0 && (
+                    <button type="button" onClick={() => setVisiblesConcluidos(v => v + PAGE_SIZE)}
+                      className="w-full flex items-center justify-center gap-1.5 py-2.5 text-xs font-semibold text-slate-500 hover:text-slate-800 hover:bg-slate-50 border-t border-slate-100">
+                      <ChevronDown className="w-3.5 h-3.5" /> Cargar más ({restanConcluidos} restante{restanConcluidos !== 1 ? 's' : ''})
+                    </button>
+                  )}
+                </>
+              )}
             </div>
           )}
         </>
