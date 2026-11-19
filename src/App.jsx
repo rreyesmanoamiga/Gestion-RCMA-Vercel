@@ -73,6 +73,8 @@ import ProyectosRemanente from '@/pages/ProyectosRemanente';
 
 // --- NUEVO IMPORT ---
 import Directorio from '@/pages/Directorio';
+import Capacitacion from '@/pages/Capacitacion';
+import CapacitacionVideo from '@/pages/CapacitacionVideo';
 import Insumos from '@/pages/Insumos';
 import Nexus from '@/pages/Nexus';
 import LevantamientoNacional from '@/pages/LevantamientoNacional';
@@ -508,6 +510,8 @@ function AuthenticatedApp() {
           
           {/* --- RUTA DE DIRECTORIO AGREGADA --- */}
           <Route path="/directorio"         element={<Directorio />} />
+          <Route path="/capacitacion"       element={<ConPermiso permiso="ver_capacitacion"><Capacitacion /></ConPermiso>} />
+          <Route path="/capacitacion/:id"   element={<ConPermiso permiso="ver_capacitacion"><CapacitacionVideo /></ConPermiso>} />
           <Route path="/insumos"             element={<ConPermiso permiso="ver_insumos"><Insumos /></ConPermiso>} />
           <Route path="/nexus"               element={<ConPermiso permiso="ver_nexus"><Nexus /></ConPermiso>} />
           <Route path="/levantamiento"       element={<ConPermiso permiso="ver_levantamiento"><LevantamientoNacional /></ConPermiso>} />

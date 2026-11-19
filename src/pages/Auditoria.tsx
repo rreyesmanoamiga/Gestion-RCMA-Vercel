@@ -170,6 +170,7 @@ const MODULO_LABEL: Record<string, string> = {
   insumos:       'Insumos',
   proveedores:   'Padrón de Proveedores',
   directorio:    'Directorio',
+  capacitacion:  'Capacitación',
   checklists:    'Checklists',
   mantenimiento: 'Mantenimiento',
   nexus:         'NEXUS',

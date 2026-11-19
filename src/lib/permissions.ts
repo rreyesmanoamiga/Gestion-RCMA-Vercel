@@ -79,6 +79,8 @@ const PERMISSION_DEFS: PermissionDef[] = [
   { key: 'cancelar_ticket_mas_cn',    label: 'Cancelar Ticket MAS CN',            group: 'Trámites CN',           default: false },
   { key: 'subir_cumplimiento',        label: 'Subir documentos de su colegio (solo ve su colegio)', group: 'Expediente de Cumplimiento (colegio)', default: false },
   { key: 'ver_sol',                   label: 'Ver Tablero SOL (ranking nacional)', group: 'Programa SOL',     default: false },
+  { key: 'ver_capacitacion',          label: 'Ver videos de Capacitación (comentar y dar me gusta)', group: 'Capacitación', default: true },
+  { key: 'gestionar_capacitacion',    label: 'Subir, publicar y responder como Coordinación', group: 'Capacitación', default: false },
 ];
 
 export const PERMISSIONS: Record<string, string> = Object.fromEntries(

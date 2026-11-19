@@ -23,7 +23,7 @@ import {
   BookUser, Package, Layers, ShieldAlert, ShieldCheck, ListTodo,
   Network, Clock3,
   Gauge, Flag, Users, Star, Award, ListChecks, ClipboardList, Settings2,
-  HeartHandshake, ChevronDown, Check,
+  HeartHandshake, ChevronDown, Check, MonitorPlay,
 } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import SidebarAccordionGroup from './SidebarAccordionGroup';
@@ -198,6 +198,7 @@ export default function Sidebar({ isOpen, onToggle }) {
   const gPlataformaResto = [
     { to: '/calendario', icon: CalendarDays, label: 'Calendario', visible: can('ver_calendario') },
     { to: '/directorio', icon: BookUser,     label: 'Directorio', visible: true },
+    { to: '/capacitacion', icon: MonitorPlay, label: 'Capacitación', visible: isAdmin || can('ver_capacitacion') },
     { to: '/accesos',    icon: Lock,         label: 'Accesos',    visible: isAdmin },
   ].filter(i => i.visible);
   const gPlataformaVisible = nexusVisible || gPlataformaResto.length > 0;
