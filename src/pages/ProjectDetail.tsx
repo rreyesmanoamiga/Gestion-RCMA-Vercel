@@ -5,7 +5,7 @@ import { db } from '@/lib/db';
 import {
   ArrowLeft, Calendar, MapPin, User, FileText, Trash2, Pencil,
   CheckCircle2, Clock, AlertTriangle, DollarSign, TrendingUp,
-  TrendingDown, Minus, Save, X, ClipboardList, Camera, Upload, ImagePlus,
+  TrendingDown, Minus, Save, X, ClipboardList, Camera, Upload, ImagePlus, FolderPlus, FolderOpen,
 } from 'lucide-react';
 import ProjectForm from '@/components/projects/ProjectForm';
 import GaleriaEvidencia, { queryKeyFotosProyecto } from '@/components/projects/GaleriaEvidencia';
@@ -39,6 +39,8 @@ interface Project {
   territorio?: string; colegio?: string; eco?: string;
   notes?: string; budget?: number; end_date?: string;
   ticket_number?: number; costo_real?: number | null; motivo_sobrecosto?: string | null;
+  created_at?: string;
+  expediente_ruta?: string | null; // carpeta creada desde la ficha (proyectos sin Ticket MAS)
 }
 
 export default function ProjectDetail() {
@@ -280,6 +282,69 @@ export default function ProjectDetail() {
     updateMutation.mutate(datos, { onSuccess: () => { setShowCierre(false); setAjustandoAvance(false); } });
   };
 
+  // ── Expediente de proyectos sin Ticket MAS ────────────────────────────────
+  // Misma estructura que el Expediente que crea Ticket MAS, en el año y mes de
+  // la fecha de inicio (no en el año de captura): 
+  //   Expedientes/<año>/<colegio>/SIN TICKET <año>-<mes> - <nombre>
+  const [showCrearExp, setShowCrearExp] = useState(false);
+  const [creandoExp, setCreandoExp] = useState('');
+  const rutaExpediente = (): string | null => {
+    if (!project?.start_date) return null;
+    const [anio, mes] = project.start_date.slice(0, 7).split('-');
+    const colegio = limpiarNombre(findColegio(directorioRows, project.colegio ?? '')?.nombre ?? project.colegio ?? 'SIN_COLEGIO');
+    const nombre = limpiarNombre((project.name ?? 'Sin nombre').slice(0, 60));
+    return `Expedientes/${anio}/${colegio}/SIN TICKET ${anio}-${mes} - ${nombre}`;
+  };
+
+  const crearExpedienteProyecto = async () => {
+    const raiz = rutaExpediente();
+    if (!raiz) { toast.error('Primero pon la fecha de inicio del proyecto (Editar).'); return; }
+    try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token    = sessionData?.session?.access_token ?? '';
+      const SUPA_URL = import.meta.env.VITE_SUPABASE_URL as string;
+      const ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY as string;
+      const placeholder = new File([''], '.keep', { type: 'text/plain' });
+      const subcarpetas = [
+        'Coordinación RCMA/01 - Solicitud de Proyecto',
+        'Coordinación RCMA/02 - Cotizaciones',
+        'Coordinación RCMA/03 - Ticket MAS',
+        'Coordinación RCMA/04 - Autorización',
+        'ECO/01 - Proyecto Ejecutivo',
+        'ECO/02 - Acta de Inicio',
+        'ECO/03 - Reportes de Obra',
+        'ECO/04 - Acta de Entrega',
+        'ECO/05 - Cierre de Obra',
+        'ECO/06 - Fotografías/Antes',
+        'ECO/06 - Fotografías/Durante',
+        'ECO/06 - Fotografías/Después',
+      ];
+      let n = 0;
+      for (const sub of subcarpetas) {
+        n++;
+        setCreandoExp(`Creando carpetas ${n} de ${subcarpetas.length}...`);
+        const fd = new FormData();
+        fd.append('file', placeholder); fd.append('carpeta', `${raiz}/${sub}`); fd.append('fileName', '.keep');
+        const res = await fetch(`${SUPA_URL}/functions/v1/sharepoint-upload`, {
+          method: 'POST', headers: { 'Authorization': `Bearer ${token}`, 'apikey': ANON_KEY }, body: fd,
+        });
+        const r = await res.json().catch(() => ({}));
+        if (!res.ok || r?.error) throw new Error(`No se pudo crear "${sub}": ${r?.error ?? res.status}`);
+      }
+      await db.Project.update(id!, { expediente_ruta: raiz });
+      logAudit({ accion: 'editar', modulo: 'proyectos', registro_id: id ?? null, registro_ref: project?.name ?? null,
+        detalle: { expediente_creado: raiz } });
+      queryClient.invalidateQueries({ queryKey: ['projects', id] });
+      queryClient.invalidateQueries({ queryKey: queryKeyFotosProyecto(id!) });
+      toast.success('Carpeta de Expediente creada en OneDrive');
+      setShowCrearExp(false);
+    } catch (e: any) {
+      toast.error(e?.message ?? 'No se pudo crear la carpeta');
+    } finally {
+      setCreandoExp('');
+    }
+  };
+
   // ── Evidencia Fotográfica (Antes / Durante / Después) ─────────────────────
   const [showEvidencia, setShowEvidencia] = useState(false);
   const [subiendoEvidencia, setSubiendoEvidencia] = useState(false);
@@ -304,6 +369,10 @@ export default function ProjectDetail() {
       // Reconstruir la misma ruta que usó Ticket MAS al crear el Expediente
       // (mismo folio/colegio/nombre/año), para subir dentro de las carpetas
       // Antes/Durante/Después que ya existen ahí.
+      // Proyecto sin ticket: usa la carpeta que se creó desde la ficha
+      if (!folioDisplay && !project!.expediente_ruta) {
+        throw new Error('Este proyecto no tiene Ticket MAS: primero crea su carpeta de Expediente.');
+      }
       const folio = folioDisplay;
       let anio = new Date().getFullYear();
       let colegioCarpeta = limpiarNombre(project!.colegio ?? 'SIN_COLEGIO');
@@ -321,7 +390,9 @@ export default function ProjectDetail() {
         }
       }
       const folioCarpeta = folio ?? 'SIN_FOLIO';
-      const raiz = `Expedientes/${anio}/${colegioCarpeta}/${folioCarpeta} - ${nombreCarpeta}/ECO/06 - Fotografías`;
+      const raiz = !folio && project!.expediente_ruta
+        ? `${project!.expediente_ruta}/ECO/06 - Fotografías`
+        : `Expedientes/${anio}/${colegioCarpeta}/${folioCarpeta} - ${nombreCarpeta}/ECO/06 - Fotografías`;
 
       const { data: sessionData } = await supabase.auth.getSession();
       const token    = sessionData?.session?.access_token ?? '';
@@ -633,6 +704,65 @@ export default function ProjectDetail() {
                 </div>
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* ─── Expediente de un proyecto sin Ticket MAS ─────────────────────── */}
+      {!folioDisplay && (puedeEditar || project.expediente_ruta) && (
+        <div className="bg-white rounded-xl border border-slate-200 shadow-sm px-6 py-4 flex flex-wrap items-center justify-between gap-3">
+          <div className="min-w-0">
+            <h3 className="text-sm font-bold text-slate-900 uppercase tracking-tight flex items-center gap-2">
+              <FolderOpen className="w-4 h-4 text-[#ED7102]" /> Expediente en OneDrive
+            </h3>
+            {project.expediente_ruta ? (
+              <p className="text-xs text-slate-500 mt-1 break-all font-mono">{project.expediente_ruta}</p>
+            ) : (
+              <p className="text-xs text-slate-500 mt-1">Este proyecto no tiene Ticket MAS, así que todavía no tiene carpeta de Expediente.</p>
+            )}
+          </div>
+          {puedeEditar && !project.expediente_ruta && (
+            <button onClick={() => setShowCrearExp(true)}
+              className="px-4 py-2 bg-slate-900 text-white rounded-md text-xs font-bold hover:bg-slate-800 flex items-center gap-2 shrink-0">
+              <FolderPlus className="w-4 h-4" /> Crear carpeta de Expediente
+            </button>
+          )}
+        </div>
+      )}
+
+      {showCrearExp && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-start justify-center p-4 overflow-y-auto"
+          onClick={e => { if (e.target === e.currentTarget && !creandoExp) setShowCrearExp(false); }}>
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg my-10">
+            <div className="px-5 py-4 border-b flex justify-between items-start gap-3">
+              <div>
+                <h2 className="text-base font-black text-slate-800">Crear carpeta de Expediente</h2>
+                <p className="text-xs text-slate-500">{project.name}</p>
+              </div>
+              <button type="button" onClick={() => setShowCrearExp(false)} disabled={!!creandoExp} className="p-1 rounded hover:bg-slate-100">
+                <X className="w-5 h-5 text-slate-400" />
+              </button>
+            </div>
+            <div className="p-5 space-y-3 text-sm">
+              {rutaExpediente() ? (
+                <>
+                  <p className="text-slate-600">Se creará en OneDrive, con el año y mes de inicio del proyecto
+                    ({project.start_date}):</p>
+                  <p className="font-mono text-xs bg-slate-50 border border-slate-200 rounded-lg p-3 break-all">📁 {rutaExpediente()}</p>
+                  <p className="text-xs text-slate-500">Con las mismas subcarpetas que un Expediente de Ticket MAS: Coordinación RCMA (01 a 04) y ECO (01 a 06, con Fotografías Antes / Durante / Después).</p>
+                </>
+              ) : (
+                <p className="text-red-600 text-sm">El proyecto no tiene fecha de inicio. Ponla en Editar para saber en qué año va la carpeta.</p>
+              )}
+            </div>
+            <div className="px-5 py-4 border-t bg-slate-50 rounded-b-xl flex justify-end gap-2">
+              <button type="button" onClick={() => setShowCrearExp(false)} disabled={!!creandoExp}
+                className="px-4 py-2 border border-slate-300 rounded-lg text-xs font-semibold text-slate-700 hover:bg-slate-100 disabled:opacity-50">Cancelar</button>
+              <button type="button" onClick={crearExpedienteProyecto} disabled={!rutaExpediente() || !!creandoExp}
+                className="px-4 py-2 bg-slate-900 text-white rounded-lg text-xs font-bold hover:bg-slate-800 disabled:opacity-50 inline-flex items-center gap-1.5">
+                <FolderPlus className="w-4 h-4" /> {creandoExp || 'Crear carpeta'}
+              </button>
+            </div>
           </div>
         </div>
       )}

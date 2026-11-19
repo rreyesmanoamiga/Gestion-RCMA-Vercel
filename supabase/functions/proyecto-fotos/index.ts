@@ -123,7 +123,7 @@ serve(async (req) => {
     if (!id) throw new Falla('Falta el proyecto');
 
     const { data: proy, error: ep } = await db.from('projects')
-      .select('id, name, folio, colegio, territorio, created_at').eq('id', id).maybeSingle();
+      .select('id, name, folio, colegio, territorio, created_at, expediente_ruta').eq('id', id).maybeSingle();
     if (ep || !proy) throw new Falla('Proyecto no encontrado', 404);
 
     // ── Permiso y alcance (mismas reglas que la pantalla) ───────────────────
@@ -145,37 +145,46 @@ serve(async (req) => {
       }
     }
 
-    // ── Folio y datos del ticket de origen (año y colegio de la carpeta) ────
-    let folio: string | null = proy.folio ?? null;
-    if (!folio) {
-      const { data: t } = await db.from('tickets').select('folio').eq('proyecto_id', id).limit(1).maybeSingle();
-      folio = t?.folio ?? null;
-    }
+    // ── Carpeta del Expediente ──────────────────────────────────────────────
     const vacio = { encontrado: false, antes: [], durante: [], despues: [] };
-    if (!folio) return json(vacio);
-
-    const { data: tmas } = await db.from('tickets_mas').select('created_at, colegio').eq('folio', folio).maybeSingle();
-    const origen = tmas ?? (await db.from('tickets').select('created_at, colegio').eq('folio', folio).maybeSingle()).data;
-
-    const colegios = [...new Set([origen?.colegio, proy.colegio].filter(Boolean).map(c => limpiarNombre(String(c))))];
-    const anios = [...new Set([
-      origen?.created_at ? new Date(origen.created_at).getFullYear() : null,
-      proy.created_at ? new Date(proy.created_at).getFullYear() : null,
-      new Date().getFullYear(),
-    ].filter(Boolean) as number[])];
-
-    const token = await graphToken();
-
-    // ── Carpeta del Expediente: la que empieza con "<folio> - " ─────────────
     let expediente: Item | null = null;
-    const prefijo = clave(`${limpiarNombre(folio)} -`);
-    buscar: for (const anio of anios) {
-      for (const col of colegios) {
-        const carpetaColegio = await porRuta(token, `Expedientes/${anio}/${col}`);
-        if (!carpetaColegio?.id) continue;
-        expediente = await subcarpeta(token, carpetaColegio.id,
-          n => clave(n).startsWith(prefijo) || clave(n) === clave(limpiarNombre(folio!)));
-        if (expediente) break buscar;
+    let token = '';
+    // Proyecto sin Ticket MAS cuya carpeta se creó desde su ficha: la ruta está guardada
+    if (proy.expediente_ruta) {
+      token = await graphToken();
+      expediente = await porRuta(token, String(proy.expediente_ruta));
+    }
+    if (!expediente) {
+      // ── Folio y datos del ticket de origen (año y colegio de la carpeta) ────
+      let folio: string | null = proy.folio ?? null;
+      if (!folio) {
+        const { data: t } = await db.from('tickets').select('folio').eq('proyecto_id', id).limit(1).maybeSingle();
+        folio = t?.folio ?? null;
+      }
+      if (!folio) return json(vacio);
+
+      const { data: tmas } = await db.from('tickets_mas').select('created_at, colegio').eq('folio', folio).maybeSingle();
+      const origen = tmas ?? (await db.from('tickets').select('created_at, colegio').eq('folio', folio).maybeSingle()).data;
+
+      const colegios = [...new Set([origen?.colegio, proy.colegio].filter(Boolean).map(c => limpiarNombre(String(c))))];
+      const anios = [...new Set([
+        origen?.created_at ? new Date(origen.created_at).getFullYear() : null,
+        proy.created_at ? new Date(proy.created_at).getFullYear() : null,
+        new Date().getFullYear(),
+      ].filter(Boolean) as number[])];
+
+      if (!token) token = await graphToken();
+
+      // ── Carpeta del Expediente: la que empieza con "<folio> - " ─────────────
+      const prefijo = clave(`${limpiarNombre(folio)} -`);
+      buscar: for (const anio of anios) {
+        for (const col of colegios) {
+          const carpetaColegio = await porRuta(token, `Expedientes/${anio}/${col}`);
+          if (!carpetaColegio?.id) continue;
+          expediente = await subcarpeta(token, carpetaColegio.id,
+            n => clave(n).startsWith(prefijo) || clave(n) === clave(limpiarNombre(folio!)));
+          if (expediente) break buscar;
+        }
       }
     }
     if (!expediente) return json(vacio);
