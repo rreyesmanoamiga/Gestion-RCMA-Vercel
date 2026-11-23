@@ -266,6 +266,7 @@ function LoginPage() {
   // ── Recuperar contraseña ───────────────────────────────────────────────────
   const [showForgot, setShowForgot]         = useState(false);
   const [forgotEmail, setForgotEmail]       = useState('');
+  const [forgotEmail2, setForgotEmail2]     = useState('');
   const [forgotLoading, setForgotLoading]   = useState(false);
   const [forgotSuccess, setForgotSuccess]   = useState(false);
   const [forgotError, setForgotError]       = useState('');
@@ -290,17 +291,48 @@ function LoginPage() {
 
   const handleForgotPassword = async (e) => {
     e.preventDefault();
-    setForgotLoading(true);
     setForgotError('');
-    const { error } = await supabase.auth.resetPasswordForEmail(forgotEmail, {
+    const correo  = forgotEmail.trim().toLowerCase();
+    const correo2 = forgotEmail2.trim().toLowerCase();
+    if (correo !== correo2) {
+      setForgotError('Los correos no coinciden. Escríbelos de nuevo.');
+      return;
+    }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(correo)) {
+      setForgotError('Escribe un correo válido.');
+      return;
+    }
+    setForgotLoading(true);
+    // Verifica que el correo exista en los usuarios del sistema antes de enviar el enlace
+    const { data: existe, error: errCheck } = await supabase.rpc('email_registrado_rcma', { p_email: correo });
+    if (errCheck) {
+      setForgotError('No se pudo verificar el correo. Intenta de nuevo en un momento.');
+      setForgotLoading(false);
+      return;
+    }
+    if (!existe) {
+      setForgotError('Este correo no está registrado en el Sistema RCMA. Revisa que esté bien escrito o contacta a la Coordinación de Obras.');
+      setForgotLoading(false);
+      return;
+    }
+    const { error } = await supabase.auth.resetPasswordForEmail(correo, {
       redirectTo: `${window.location.origin}/reset-password`,
     });
     if (error) {
-      setForgotError(error.message);
+      setForgotError(error.status === 429
+        ? 'Ya se envió un enlace hace unos segundos. Espera un momento e intenta de nuevo.'
+        : error.message);
     } else {
+      setForgotEmail(correo);
       setForgotSuccess(true);
     }
     setForgotLoading(false);
+  };
+
+  // Campos de correo que se deben escribir a mano: sin autocompletar, pegar ni arrastrar
+  const sinAutollenado = {
+    type: 'text', inputMode: 'email', autoComplete: 'off', autoCorrect: 'off', autoCapitalize: 'none', spellCheck: false,
+    onPaste: e => e.preventDefault(), onDrop: e => e.preventDefault(),
   };
 
   return (
@@ -343,7 +375,7 @@ function LoginPage() {
                 <p className="text-sm font-semibold text-slate-800">¡Correo enviado!</p>
                 <p className="text-xs text-slate-500">Revisa tu bandeja de entrada en <span className="font-medium text-slate-700">{forgotEmail}</span> y sigue el enlace para restablecer tu contraseña.</p>
                 <button
-                  onClick={() => { setShowForgot(false); setForgotSuccess(false); setForgotEmail(''); }}
+                  onClick={() => { setShowForgot(false); setForgotSuccess(false); setForgotEmail(''); setForgotEmail2(''); }}
                   className="w-full py-2 bg-slate-900 text-white rounded-md text-sm font-medium hover:bg-slate-800 transition-colors">
                   Volver al inicio de sesión
                 </button>
@@ -351,17 +383,23 @@ function LoginPage() {
             ) : (
               <form onSubmit={handleForgotPassword} className="space-y-4">
                 <div>
-                  <p className="text-sm text-slate-600 mb-4">Ingresa tu correo y te enviaremos un enlace para restablecer tu contraseña.</p>
+                  <p className="text-sm text-slate-600 mb-4">Escribe tu correo dos veces y te enviaremos un enlace para restablecer tu contraseña.</p>
                   <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Correo electrónico</label>
-                  <input type="email" required autoComplete="email" className={inputClass}
-                    value={forgotEmail} onChange={e => setForgotEmail(e.target.value)} placeholder="tu@correo.com" />
+                  <input {...sinAutollenado} required name="rcma-reset-correo" className={inputClass}
+                    value={forgotEmail} onChange={e => setForgotEmail(e.target.value)} placeholder="tu@manoamiga.edu.mx" />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Confirma tu correo</label>
+                  <input {...sinAutollenado} required name="rcma-reset-confirma" className={inputClass}
+                    value={forgotEmail2} onChange={e => setForgotEmail2(e.target.value)} placeholder="Escríbelo de nuevo" />
+                  <p className="text-[11px] text-slate-400 mt-1">Escríbelo a mano: no se permite pegar ni autocompletar.</p>
                 </div>
                 {forgotError && <p className="text-xs text-red-600 bg-red-50 border border-red-200 rounded-md px-3 py-2">{forgotError}</p>}
                 <button type="submit" disabled={forgotLoading}
                   className="w-full py-2 bg-slate-900 text-white rounded-md text-sm font-medium hover:bg-slate-800 disabled:opacity-50 transition-colors">
                   {forgotLoading ? 'Enviando...' : 'Enviar enlace'}
                 </button>
-                <button type="button" onClick={() => { setShowForgot(false); setForgotError(''); }}
+                <button type="button" onClick={() => { setShowForgot(false); setForgotError(''); setForgotEmail(''); setForgotEmail2(''); }}
                   className="w-full py-2 text-slate-500 text-sm hover:text-slate-700 transition-colors">
                   Cancelar
                 </button>
@@ -387,7 +425,7 @@ function LoginPage() {
               {loading ? 'Iniciando sesión...' : 'Iniciar sesión'}
             </button>
             <div className="text-center">
-              <button type="button" onClick={() => { setShowForgot(true); setForgotEmail(email); }}
+              <button type="button" onClick={() => { setShowForgot(true); setForgotEmail(''); setForgotEmail2(''); setForgotError(''); }}
                 className="text-xs text-slate-500 hover:text-slate-800 underline underline-offset-2 transition-colors">
                 ¿Olvidaste tu contraseña?
               </button>
