@@ -267,6 +267,7 @@ function LoginPage() {
   const [showForgot, setShowForgot]         = useState(false);
   const [forgotEmail, setForgotEmail]       = useState('');
   const [forgotEmail2, setForgotEmail2]     = useState('');
+  const [forgotEdit, setForgotEdit]         = useState({ c1: false, c2: false });
   const [forgotLoading, setForgotLoading]   = useState(false);
   const [forgotSuccess, setForgotSuccess]   = useState(false);
   const [forgotError, setForgotError]       = useState('');
@@ -334,6 +335,20 @@ function LoginPage() {
     type: 'text', inputMode: 'email', autoComplete: 'off', autoCorrect: 'off', autoCapitalize: 'none', spellCheck: false,
     onPaste: e => e.preventDefault(), onDrop: e => e.preventDefault(),
   };
+  // Solo acepta lo que se teclea; rechaza autollenado del navegador, sugerencias, pegar y arrastrar
+  const soloTecleado = (setter) => (e) => {
+    const t = e.nativeEvent?.inputType;
+    if (!t || t === 'insertReplacementText' || t.startsWith('insertFrom')) {
+      setForgotError('Escribe tu correo a mano; no se permite autollenar ni pegar.');
+      return;
+    }
+    if (forgotError) setForgotError('');
+    setter(e.target.value);
+  };
+  const cerrarForgot = () => {
+    setShowForgot(false); setForgotSuccess(false); setForgotError('');
+    setForgotEmail(''); setForgotEmail2(''); setForgotEdit({ c1: false, c2: false });
+  };
 
   return (
     <div
@@ -375,7 +390,7 @@ function LoginPage() {
                 <p className="text-sm font-semibold text-slate-800">¡Correo enviado!</p>
                 <p className="text-xs text-slate-500">Revisa tu bandeja de entrada en <span className="font-medium text-slate-700">{forgotEmail}</span> y sigue el enlace para restablecer tu contraseña.</p>
                 <button
-                  onClick={() => { setShowForgot(false); setForgotSuccess(false); setForgotEmail(''); setForgotEmail2(''); }}
+                  onClick={cerrarForgot}
                   className="w-full py-2 bg-slate-900 text-white rounded-md text-sm font-medium hover:bg-slate-800 transition-colors">
                   Volver al inicio de sesión
                 </button>
@@ -386,12 +401,14 @@ function LoginPage() {
                   <p className="text-sm text-slate-600 mb-4">Escribe tu correo dos veces y te enviaremos un enlace para restablecer tu contraseña.</p>
                   <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Correo electrónico</label>
                   <input {...sinAutollenado} required name="rcma-reset-correo" className={inputClass}
-                    value={forgotEmail} onChange={e => setForgotEmail(e.target.value)} placeholder="tu@manoamiga.edu.mx" />
+                    readOnly={!forgotEdit.c1} onFocus={() => setForgotEdit(v => ({ ...v, c1: true }))}
+                    value={forgotEmail} onChange={soloTecleado(setForgotEmail)} placeholder="tu@manoamiga.edu.mx" />
                 </div>
                 <div>
                   <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Confirma tu correo</label>
                   <input {...sinAutollenado} required name="rcma-reset-confirma" className={inputClass}
-                    value={forgotEmail2} onChange={e => setForgotEmail2(e.target.value)} placeholder="Escríbelo de nuevo" />
+                    readOnly={!forgotEdit.c2} onFocus={() => setForgotEdit(v => ({ ...v, c2: true }))}
+                    value={forgotEmail2} onChange={soloTecleado(setForgotEmail2)} placeholder="Escríbelo de nuevo" />
                   <p className="text-[11px] text-slate-400 mt-1">Escríbelo a mano: no se permite pegar ni autocompletar.</p>
                 </div>
                 {forgotError && <p className="text-xs text-red-600 bg-red-50 border border-red-200 rounded-md px-3 py-2">{forgotError}</p>}
@@ -399,7 +416,7 @@ function LoginPage() {
                   className="w-full py-2 bg-slate-900 text-white rounded-md text-sm font-medium hover:bg-slate-800 disabled:opacity-50 transition-colors">
                   {forgotLoading ? 'Enviando...' : 'Enviar enlace'}
                 </button>
-                <button type="button" onClick={() => { setShowForgot(false); setForgotError(''); setForgotEmail(''); setForgotEmail2(''); }}
+                <button type="button" onClick={cerrarForgot}
                   className="w-full py-2 text-slate-500 text-sm hover:text-slate-700 transition-colors">
                   Cancelar
                 </button>
@@ -425,7 +442,7 @@ function LoginPage() {
               {loading ? 'Iniciando sesión...' : 'Iniciar sesión'}
             </button>
             <div className="text-center">
-              <button type="button" onClick={() => { setShowForgot(true); setForgotEmail(''); setForgotEmail2(''); setForgotError(''); }}
+              <button type="button" onClick={() => { cerrarForgot(); setShowForgot(true); }}
                 className="text-xs text-slate-500 hover:text-slate-800 underline underline-offset-2 transition-colors">
                 ¿Olvidaste tu contraseña?
               </button>
