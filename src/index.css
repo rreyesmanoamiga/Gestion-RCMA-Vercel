@@ -1,10 +1,12 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 @layer base {
   :root {
-    --font-sans:    'Inter', sans-serif;
+    --font-sans:    'Inter', 'Segoe UI', system-ui, sans-serif;
     --font-display: var(--font-sans); /* títulos con la misma letra del sistema */
 
     --background:            213 25% 97%;
