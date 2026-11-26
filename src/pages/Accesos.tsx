@@ -36,6 +36,7 @@ const AREA_GRUPOS_RELEVANTES: Record<string, string[]> = {
   fma_becas:          ['Dashboard', 'Reportes'],
   fma_aux_contable:   ['Insumos', 'Proyectos', 'Reportes'],
   fma_procuracion:    ['Dashboard', 'Anteproyectos', 'Proyectos', 'Reportes'],
+  fma_corfis:         ['Programa SOL'],
   orser_inmobiliaria: ['Cumplimiento', 'Anteproyectos', 'Proyectos', 'Reportes'],
   car:                ['Dashboard', 'Solicitud de Proyecto', 'Anteproyectos', 'Ticket MAS', 'Tickets', 'Proyectos', 'Minutas', 'Calendario', 'Levantamiento Nacional', 'Reportes'],
   coordinacion_rcma:  ['Dashboard', 'Proyectos', 'Tickets', 'Ticket MAS', 'Trámites CN', 'Reportes', 'Calendario', 'Cumplimiento', 'Programa SOL'],

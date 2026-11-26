@@ -12,6 +12,7 @@ export const AREAS: { value: string; label: string; color: string }[] = [
   { value: 'fma_aux_contable',  label: 'Aux. Cont. (FMA)',               color: 'bg-lime-50 text-lime-700 border-lime-200' },
   { value: 'fma_procuracion',   label: 'Procuración de Fondos (FMA)',    color: 'bg-violet-50 text-violet-700 border-violet-200' },
   { value: 'fma_comunicacion',  label: 'Comunicación Institucional (FMA)', color: 'bg-fuchsia-50 text-fuchsia-700 border-fuchsia-200' },
+  { value: 'fma_corfis',        label: 'CORFIS (FMA)',                   color: 'bg-green-50 text-green-700 border-green-200' },
   { value: 'orser_inmobiliaria', label: 'Inmobiliaria (ORS-SER)',        color: 'bg-stone-50 text-stone-700 border-stone-200' },
   { value: 'director_colegio',  label: 'Director de Colegio',            color: 'bg-indigo-50 text-indigo-700 border-indigo-200' },
   { value: 'coordinacion_rcma', label: 'Informática (FMA)',              color: 'bg-orange-50 text-orange-700 border-orange-200' },
