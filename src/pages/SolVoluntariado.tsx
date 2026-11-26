@@ -8,6 +8,8 @@ import {
 import { supabase } from '@/lib/supabaseClient';
 import { useDirectorio, getDirectorNacional, type DirectorioColegio } from '@/lib/directorio';
 import { logAudit } from '@/lib/audit';
+import { useAuth } from '@/lib/AuthContext';
+import { notificarSOL } from '@/lib/solCampo';
 import { useSharePointUpload } from '@/hooks/useSharePointUpload';
 import PageHeader from '@/components/shared/PageHeader';
 import AccesoRestringido from '@/components/shared/AccesoRestringido';
@@ -92,7 +94,8 @@ function TabApoyos({ ciclo, campus, directorio, data, refrescar }: { ciclo: stri
   const [editando, setEditando] = useState<SolApoyo | 'nuevo' | null>(null);
   const aliadoDe = (id: string) => data.aliados.find(a => a.id === id);
 
-  const delCiclo = data.apoyos.filter(a => a.ciclo === ciclo && (!fCampus || a.colegio === fCampus));
+  // Las jornadas avisadas desde el celular cuentan hasta que se cierran
+  const delCiclo = data.apoyos.filter(a => a.ciclo === ciclo && (!fCampus || a.colegio === fCampus) && estatusDe(a) === 'cerrada');
   const filtrados = delCiclo.filter(a => {
     if (fAliado && a.aliado_id !== fAliado) return false;
     const n = q.trim().toLowerCase();
@@ -114,7 +117,7 @@ function TabApoyos({ ciclo, campus, directorio, data, refrescar }: { ciclo: stri
     imprimirHTML(htmlDiplomas({
       tipo: 'aliado', campusNombre: nombre, ciclo: a.ciclo, ciudad: ciudadDe(nombre), fecha: a.fecha, beneficiarios: [],
       aliadoNombre: al?.nombre ?? '', actividad: a.actividad, fechaApoyo: a.fecha, directorCampus: c?.dir_nombre ?? '',
-    }));
+    }, { firmaCoordinador: true }));
     if (!a.constancia_fecha) {
       const { error } = await supabase.from('sol_apoyos').update({ constancia_fecha: hoyISO() }).eq('id', a.id);
       if (!error) refrescar();
@@ -132,6 +135,7 @@ function TabApoyos({ ciclo, campus, directorio, data, refrescar }: { ciclo: stri
 
   return (
     <div>
+      <AvisosPorAutorizar data={data} directorio={directorio} refrescar={refrescar} />
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-5">
         <KpiSOL titulo="Jornadas" valor={kpi.apoyos} icon={HeartHandshake} tono="verde" detalle={`${kpi.aliados} aliado(s) participaron`} />
         <KpiSOL titulo="Voluntarios" valor={kpi.voluntarios.toLocaleString('es-MX')} icon={Users} tono="slate" detalle="Suma de todas las jornadas" />
@@ -198,6 +202,64 @@ function TabApoyos({ ciclo, campus, directorio, data, refrescar }: { ciclo: stri
           onClose={() => setEditando(null)} onSaved={() => { setEditando(null); refrescar(); }} />
       )}
     </div>
+  );
+}
+
+// ── Avisos de jornada que llegan del celular ─────────────────────────────────
+type EstatusJornada = 'aviso' | 'autorizada' | 'regresada' | 'cerrada' | 'cancelada';
+const estatusDe = (a: SolApoyo) => ((a as SolApoyo & { estatus?: EstatusJornada }).estatus ?? 'cerrada');
+
+function AvisosPorAutorizar({ data, directorio, refrescar }: { data: Data; directorio: DirectorioColegio[]; refrescar: () => void }) {
+  const { user } = useAuth();
+  const [regresar, setRegresar] = useState<string | null>(null);
+  const [motivo, setMotivo] = useState('');
+  const [trabajando, setTrabajando] = useState<string | null>(null);
+  type Ext = SolApoyo & { estatus: EstatusJornada; hora_inicio: string | null; hora_fin: string | null; voluntarios_esperados: number | null; actividades: string[]; creado_nombre: string | null };
+  const lista = (data.apoyos as Ext[]).filter(a => a.estatus === 'aviso' || a.estatus === 'autorizada');
+  if (!lista.length) return null;
+
+  const responder = async (a: Ext, estatus: 'autorizada' | 'regresada') => {
+    setTrabajando(a.id);
+    const upd = estatus === 'autorizada'
+      ? { estatus, autorizado_por: (user?.email ?? '').toLowerCase(), autorizado_at: new Date().toISOString(), obs_coordinacion: null }
+      : { estatus, obs_coordinacion: motivo.trim() };
+    const { error } = await supabase.from('sol_apoyos').update(upd).eq('id', a.id);
+    setTrabajando(null);
+    if (error) { toast.error(error.message); return; }
+    logAudit({ accion: estatus === 'autorizada' ? 'autorizar' : 'editar', modulo: 'sol', registro_id: a.id, registro_ref: `Voluntariado ${a.folio}` });
+    await notificarSOL('jornada_respuesta', a.id);
+    toast.success(estatus === 'autorizada' ? 'Jornada autorizada · se avisó por correo' : 'Aviso regresado con tus observaciones');
+    setRegresar(null); setMotivo('');
+    refrescar();
+  };
+
+  return (
+    <section className="bg-white rounded-xl border border-amber-200 shadow-sm mb-5 overflow-hidden">
+      <div className="px-4 py-2.5 bg-amber-50 text-amber-800 text-sm font-bold flex items-center gap-2"><Clock className="w-4 h-4" />Jornadas avisadas desde el celular</div>
+      <div className="divide-y divide-slate-100">
+        {lista.map(a => (
+          <div key={a.id} className="px-4 py-3 flex flex-col md:flex-row md:items-center gap-3">
+            <div className="flex-1 min-w-0 text-sm">
+              <p className="font-bold text-slate-900">{a.folio} · {data.aliados.find(x => x.id === a.aliado_id)?.nombre ?? '—'} <span className={`ml-1 px-2 py-0.5 rounded-full border text-[10px] font-bold ${a.estatus === 'aviso' ? 'bg-amber-50 text-amber-700 border-amber-200' : 'bg-emerald-50 text-emerald-700 border-emerald-200'}`}>{a.estatus === 'aviso' ? 'Por autorizar' : 'Autorizada · en curso'}</span></p>
+              <p className="text-[12px] text-slate-600">{ciudadDe(nombreCampus(directorio, a.colegio))} · {fechaCorta(a.fecha)} · {a.hora_inicio ?? ''}–{a.hora_fin ?? ''} · {(a.actividades ?? []).join(', ')} · {a.voluntarios_esperados ?? '—'} voluntarios</p>
+              <p className="text-[11px] text-slate-500">Avisó: {a.creado_nombre ?? '—'}{a.hallazgos_ids.length ? ` · ${a.hallazgos_ids.length} hallazgo(s) por atender` : ''}{a.notas ? ` · ${a.notas}` : ''}</p>
+              {regresar === a.id && (
+                <div className="mt-2 flex gap-2">
+                  <input className={inputCls} autoFocus placeholder="¿Qué hay que corregir?" value={motivo} onChange={e => setMotivo(e.target.value)} />
+                  <button className={btnSecondary} disabled={!motivo.trim() || trabajando === a.id} onClick={() => responder(a, 'regresada')}>Regresar</button>
+                </div>
+              )}
+            </div>
+            {a.estatus === 'aviso' && regresar !== a.id && (
+              <div className="flex gap-2 shrink-0">
+                <button className={btnSecondary} onClick={() => { setRegresar(a.id); setMotivo(''); }}>Regresar</button>
+                <button className={btnPrimary} disabled={trabajando === a.id} onClick={() => responder(a, 'autorizada')}>{trabajando === a.id ? <Loader2 className="w-4 h-4 animate-spin" /> : null}Autorizar</button>
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+    </section>
   );
 }
 
@@ -551,7 +613,7 @@ function TabRanking({ ciclo, directorio, data, refrescar }: { ciclo: string; dir
     imprimirHTML(htmlDiplomas({
       tipo: 'aliado_anual', campusNombre: '', ciclo, ciudad, fecha, beneficiarios: [], directorNacional: dirNacional,
       aliadoNombre: f.aliado?.nombre ?? '', apoyos: f.apoyos, horas: f.horas, campusLista,
-    }));
+    }, { firmaCoordinador: true }));
     const { error } = await supabase.from('sol_aliados_reconocimientos').upsert(
       { aliado_id: f.id, ciclo, apoyos: f.apoyos, horas: f.horas, colegios: f.colegios, fecha_emision: fecha },
       { onConflict: 'aliado_id,ciclo' },

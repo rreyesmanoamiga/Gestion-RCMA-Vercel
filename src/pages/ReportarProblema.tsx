@@ -15,7 +15,7 @@ import { logAudit } from '@/lib/audit';
 const MODULOS = [
   'Dashboard', 'Protocolo de Proyectos', 'Solicitud de Proyecto', 'Solicitudes Recibidas',
   'Ticket MAS', 'Tickets Registrados', 'Proyectos', 'Presupuesto vs Real', 'Anteproyectos',
-  'Levantamiento Nacional', 'Minutas y Notas Técnicas', 'NEXUS', 'Checklists',
+  'Levantamiento Nacional', 'Minutas y Notas Técnicas', 'NEXUS', 'Programa SOL',
   'Calendario de Mantenimiento', 'Insumos', 'Reportes', 'Directorio', 'Accesos', 'Auditoría',
   'Otro / No estoy seguro',
 ];

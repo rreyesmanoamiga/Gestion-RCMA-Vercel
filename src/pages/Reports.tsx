@@ -624,7 +624,6 @@ async function exportResumenPDF({ stats, projects, checklists, solicitudes, tick
     { label: 'Avance Prom.',   value: avgA + '%',                  color: [99, 102, 241] },
     { label: 'Tickets TCMM',   value: String(tickets.length),      color: [239, 68,  68] },
     { label: 'Pendientes NEXUS', value: String((nexusPendientes.length ? nexusPendientes.filter(p => p.estatus !== 'completado' && p.estatus !== 'cancelado') : pendientes).length), color: [245, 158, 11] },
-    { label: 'Inspecciones',   value: String(checklists.length),   color: [20,  184, 166] },
   ]);
   y += 4;
 
@@ -1202,8 +1201,7 @@ interface HojaMatriz {
 interface ResumenMatriz { label: string; count: number }
 const ORDEN_MATRIZ = [
   '📊 Resumen Ejecutivo', '📁 Proyectos', '💰 Presupuesto vs Real', '🎫 Tickets TCMM', '🎫 Ticket MAS',
-  '📐 Anteproyectos', '✅ Inspecciones', '📩 Solicitudes',
-  'Minimos Indispensables', 'Minimos Detalle',
+  '📐 Anteproyectos', '📩 Solicitudes',
   '🔧 Cumplimiento Mtto.', '📦 Requisiciones', '🏫 Levant. Planteles', '💵 Levant. Pagos', '📄 Levant. Reportes',
   '📝 Nexus Notas', '✅ Nexus Pendientes',
   '📋 Cumpl. Documentos', '✅ Cumpl. Pendientes', '📝 Cumpl. Notas', '📌 Cumpl. Seguim.',
@@ -1433,8 +1431,7 @@ async function renderMatrizClasico(hojas: HojaMatriz[], resRows: ResumenMatriz[]
 
   wb.SheetNames = [
     '📊 Resumen Ejecutivo', '📁 Proyectos', '💰 Presupuesto vs Real', '🎫 Tickets TCMM', '🎫 Ticket MAS',
-    '📐 Anteproyectos', '✅ Inspecciones', '📩 Solicitudes',
-    'Minimos Indispensables', 'Minimos Detalle',
+    '📐 Anteproyectos', '📩 Solicitudes',
     '🔧 Cumplimiento Mtto.', '📦 Requisiciones', '🏫 Levant. Planteles', '💵 Levant. Pagos', '📄 Levant. Reportes',
     '📝 Nexus Notas', '✅ Nexus Pendientes',
     '📋 Cumpl. Documentos', '✅ Cumpl. Pendientes', '📝 Cumpl. Notas', '📌 Cumpl. Seguim.',
@@ -1488,10 +1485,6 @@ async function exportMatrizExcel(data: {
     }),
     [12, 36, 14, 16, 14, 20, 18, 18, 20], [5, 6, 7]);
 
-  buildSheet('✅ Inspecciones', 'Checklists de Inspección — Sistema RCMA', ['Título', 'Colegio', 'Territorio', 'Inspector', 'Material', 'Estado General', 'Núm. Ítems', 'Fecha'],
-    (data.checklists as Record<string, unknown>[]).map(c => [c.titulo ?? '—', c.colegio ?? '—', c.territorio ?? '—', c.inspector ?? 'Sin asignar', c.material ?? '—', c.overall_status ?? '—', Array.isArray(c.items) ? (c.items as unknown[]).length : 0, fmt((c.fecha ?? c.created_at) as string)]),
-    [38, 14, 12, 24, 32, 16, 12, 14]);
-
   buildSheet('📩 Solicitudes', 'Solicitudes de Proyecto — Sistema RCMA', ['Centro', 'Proyecto', 'Solicitante', 'Puesto', 'Tipo Iniciativa', 'Costo Aprox.', 'Estatus', 'Fecha Solicitud', 'Fecha Inicio Prop.'],
     (data.solicitudes as Record<string, unknown>[]).map(s => [s.nombre_centro ?? '—', s.nombre_proyecto ?? '—', s.nombre_solicitante ?? '—', s.puesto_solicitante ?? '—', s.tipo_iniciativa ?? '—', num(s.costo_aproximado as number), s.estatus ?? '—', fmt(s.created_at as string), fmt(s.fecha_inicio_propuesta as string)]),
     [22, 34, 24, 20, 22, 16, 14, 18, 20], 5);
@@ -1505,64 +1498,6 @@ async function exportMatrizExcel(data: {
     rampa_acceso:'P2',sia:'P2',sanitario_adapt:'P2',escalones:'P2',poliza_rc:'P2',
     simulacros:'P2',brigadas:'P2',cronograma:'P2',bitacora:'P2',fumigacion:'P2',
   };
-  const resLabelMin: Record<string, string> = { completo: 'Si Cumple', en_proceso: 'En Proceso', incompleto: 'No Cumple' };
-  const secNomMin: Record<string, string> = { construccion:'01 Construccion', instalaciones:'02 Instalaciones', accesibilidad:'03 Accesibilidad', seguridad:'04 Seguridad y PC', mantenimiento:'05 Mantenimiento' };
-  const estadoLblMin: Record<string, string> = { cumple:'Cumple', no_cumple:'No Cumple', en_proceso:'En Proceso', na:'N/A' };
-
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const minimosList = data.minimos as any[];
-
-  const minimosRows: (string | number | null | undefined)[][] = minimosList.map(m => {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const its: any[] = Array.isArray(m.items) ? m.items : [];
-    const activos  = its.filter((i: any) => i.estado !== 'na');
-    const cumpleN  = its.filter((i: any) => i.estado === 'cumple').length;
-    const noCumple = its.filter((i: any) => i.estado === 'no_cumple').length;
-    const enProc   = its.filter((i: any) => i.estado === 'en_proceso').length;
-    const pct      = activos.length > 0 ? Math.round(cumpleN / activos.length * 100) : 0;
-    const p1All    = its.filter((i: any) => (ITEM_PRIO[i.id as string] ?? 'P3') === 'P1' && i.estado !== 'na');
-    const p2All    = its.filter((i: any) => (ITEM_PRIO[i.id as string] ?? 'P3') === 'P2' && i.estado !== 'na');
-    const pctP1    = p1All.length > 0 ? Math.round(p1All.filter((i: any) => i.estado === 'cumple').length / p1All.length * 100) : 100;
-    const pctP2    = p2All.length > 0 ? Math.round(p2All.filter((i: any) => i.estado === 'cumple').length / p2All.length * 100) : 100;
-    const pendP1   = its.filter((i: any) => (ITEM_PRIO[i.id as string] ?? 'P3') === 'P1' && i.estado === 'no_cumple').length;
-    const pendP2   = its.filter((i: any) => (ITEM_PRIO[i.id as string] ?? 'P3') === 'P2' && i.estado === 'no_cumple').length;
-    const verif    = its.filter((i: any) => i.verificado_por).length;
-    return [
-      String(m.colegio ?? '—'), String(m.territorio ?? '—'), String(m.inspector ?? 'Sin asignar'),
-      fmt(m.fecha as string), resLabelMin[m.resultado as string] ?? String(m.resultado ?? '—'),
-      pct, pctP1, pctP2, cumpleN, noCumple, enProc, pendP1, pendP2, verif,
-      fmt(m.created_at as string),
-    ];
-  });
-
-  buildSheet('Minimos Indispensables', 'Minimos Indispensables — Sistema RCMA',
-    ['Colegio','Territorio','Inspector','Fecha Evaluacion','Resultado','% Cumplimiento',
-     '% Criticos P1','% Urgentes P2','Items Cumple','Items No Cumple',
-     'Items En Proceso','Pendientes Criticos','Pendientes Urgentes','Verificaciones','Fecha Registro'],
-    minimosRows,
-    [22, 14, 22, 18, 16, 14, 14, 14, 12, 14, 14, 16, 16, 14, 18]);
-
-  const minimosDetalle: (string | number | null | undefined)[][] = minimosList.flatMap(m => {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const its: any[] = Array.isArray(m.items) ? m.items : [];
-    return its.map((it: any) => [
-      String(m.colegio ?? '—'), String(m.territorio ?? '—'), fmt(m.fecha as string),
-      secNomMin[it.seccion as string] ?? String(it.seccion ?? '—'),
-      String(it.nombre ?? it.id ?? '—'),
-      ITEM_PRIO[it.id as string] ?? 'P3',
-      estadoLblMin[it.estado as string] ?? String(it.estado ?? '—'),
-      it.observacion ? String(it.observacion) : '—',
-      it.verificado_por ? String(it.verificado_por) : '—',
-      it.fecha_verificacion ? fmt(String(it.fecha_verificacion)) : '—',
-    ]);
-  });
-
-  buildSheet('Minimos Detalle', 'Detalle de Items por Evaluacion — Sistema RCMA',
-    ['Colegio','Territorio','Fecha Evaluacion','Seccion','Item','Prioridad',
-     'Estado','Observacion','Verificado Por','Fecha Verificacion'],
-    minimosDetalle,
-    [22, 14, 18, 22, 48, 12, 14, 32, 22, 18]);
-
   // ── Ticket MAS ────────────────────────────────────────────────────────────
   const tmasLbl: Record<string,string> = { autorizado:'Autorizado', pendiente:'Pendiente', en_revision:'En Revisión', cancelado:'Cancelado' };
   buildSheet('🎫 Ticket MAS', 'Ticket MAS — Sistema RCMA',
@@ -1692,8 +1627,7 @@ async function exportMatrizExcel(data: {
     { label: 'Tickets Registrados (TCMM + TMAS)', count: data.tickets.length + data.ticketsMas.length },
     { label: 'Presupuesto vs Real', count: (data.projects as Record<string, unknown>[]).filter(p => p.budget != null).length },
     { label: 'Anteproyectos', count: data.anteproyectos.length },
-    { label: 'Inspecciones', count: data.checklists.length }, { label: 'Solicitudes', count: data.solicitudes.length },
-    { label: 'Mínimos Indispensables', count: data.minimos.length },
+    { label: 'Solicitudes', count: data.solicitudes.length },
     { label: 'Mantenimiento — Colegios al Día', count: (data.cumplimiento as unknown as ColegioCumplimiento[]).filter(c => c.pct >= 80).length },
     { label: 'Requisiciones (Insumos)', count: data.requisiciones.length },
     { label: 'Planteles Levantamiento Nacional', count: data.planteles.length },
@@ -1717,22 +1651,14 @@ async function exportMatrizExcel(data: {
 }
 
 // ─── Componente ───────────────────────────────────────────────────────────────
+const SIN_DATOS: unknown[] = [];
+
 export default function Reports() {
   const { isAdmin, can } = usePermissions();
   const { data: rawProjects_    = [] } = useQuery({ queryKey: ['projects'],    queryFn: () => db.Project.list('-created_at', 500) });
-  const { data: rawChecklists_  = [] } = useQuery({ queryKey: ['checklists'],  queryFn: () => db.Checklist.list('-created_at', 500) });
-  const { data: rawMinimos_ = [] } = useQuery({
-    queryKey: ['minimos_indispensables_report'],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from('minimos_indispensables')
-        .select('*')
-        .order('created_at', { ascending: false })
-        .limit(500);
-      if (error) throw error;
-      return data ?? [];
-    },
-  });
+  // El Checklist de Obras y los Mínimos Indispensables se retiraron (ahora es el Recorrido SOL)
+  const rawChecklists_ = SIN_DATOS;
+  const rawMinimos_ = SIN_DATOS;
   const { data: rawSolicitudes_ = [] } = useQuery({
     queryKey: ['solicitudes'],
     queryFn: async () => { const { data, error } = await supabase.from('solicitudes').select('id,nombre_centro,nombre_proyecto,estatus,created_at').order('created_at', { ascending: false }).limit(500); if (error) throw error; return data ?? []; },

@@ -134,7 +134,8 @@ export default function Dashboard() {
   const { can, isAdmin } = usePermissions();
   const verNexus       = isAdmin || can('ver_nexus');
   const verLev         = isAdmin || can('ver_levantamiento');
-  const verChecklists  = isAdmin || can('ver_checklists');
+  // El Checklist de Obras se retiró: las inspecciones ahora son el Recorrido SOL
+  const verChecklists  = false;
   const verCumpl       = isAdmin || can('ver_cumplimiento');
   const verPresupuesto = isAdmin || can('ver_presupuestos');
   const verTicketMas   = isAdmin || can('ver_ticket_mas');
@@ -152,7 +153,7 @@ export default function Dashboard() {
   };
 
   const projectsQuery    = useQuery({ queryKey: ['projects'],    queryFn: () => db.Project.list('-created_at', 500), refetchInterval: 60000 });
-  const checklistsQuery  = useQuery({ queryKey: ['checklists'],  queryFn: () => db.Checklist.list('-created_at', 500), refetchInterval: 60000 });
+  const checklistsQuery  = { data: [] as unknown[], isLoading: false };
   const ticketsQuery     = useQuery({
     queryKey: ['tickets'],
     queryFn: async () => {

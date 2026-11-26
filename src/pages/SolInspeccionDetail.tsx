@@ -3,7 +3,7 @@ import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import {
-  ArrowLeft, Save, Printer, FileSpreadsheet, FileText, FolderOpen, Upload, Loader2, ListChecks, Flag, AlertTriangle,
+  ArrowLeft, Save, Printer, FileSpreadsheet, FileText, FolderOpen, Upload, Loader2, ListChecks, Flag, AlertTriangle, Camera,
 } from 'lucide-react';
 import { supabase } from '@/lib/supabaseClient';
 import { useDirectorio } from '@/lib/directorio';
@@ -163,6 +163,13 @@ export default function SolInspeccionDetail() {
             })}
           </div>
         </div>
+        {(r as SolRespuesta & { fotos?: string[] }).fotos?.length ? (
+          <div className="pl-8 mt-1.5 flex flex-wrap gap-2">
+            {((r as SolRespuesta & { fotos?: string[] }).fotos ?? []).map((u, k) => (
+              <a key={u} href={u} target="_blank" rel="noreferrer" className="text-[11px] text-blue-700 hover:underline inline-flex items-center gap-1"><Camera className="w-3 h-3" />Foto {k + 1}</a>
+            ))}
+          </div>
+        ) : null}
         {(bajo || r.observacion) && (
           <div className="pl-8 mt-2 flex gap-2 items-center">
             <input className={inputCls + ' text-xs'} placeholder="Observación / hallazgo" value={r.observacion ?? ''}
@@ -185,10 +192,10 @@ export default function SolInspeccionDetail() {
           <div className="flex-1">
             <p className="text-[11px] font-bold tracking-widest text-[#ED7102] uppercase">Inspección SOL · {tipoLabel(insp.tipo)}</p>
             <h1 className="text-2xl font-display font-semibold text-slate-900">{campusNombre}</h1>
-            <p className="text-sm text-slate-500">{fechaLarga(insp.fecha)} · Ciclo {cicloLabel(insp.ciclo)}{insp.trimestre ? ` · T${insp.trimestre}` : ''} · {insp.origen === 'excel' ? `Importada de Excel${insp.version_formato ? ` (v${insp.version_formato})` : ''}` : 'Captura manual'}</p>
+            <p className="text-sm text-slate-500">{fechaLarga(insp.fecha)} · Ciclo {cicloLabel(insp.ciclo)}{insp.trimestre ? ` · T${insp.trimestre}` : ''} · {insp.origen === 'excel' ? `Importada de Excel${insp.version_formato ? ` (v${insp.version_formato})` : ''}` : insp.origen === 'recorrido' ? `Recorrido ${insp.folio ?? ''}` : 'Captura manual'}</p>
             <div className="flex flex-wrap gap-2 mt-3">
               {insp.archivo_url && <a className={btnSecondary} href={insp.archivo_url} target="_blank" rel="noreferrer"><FileSpreadsheet className="w-4 h-4 text-emerald-600" />Excel original</a>}
-              {cab.pdf_url && <a className={btnSecondary} href={cab.pdf_url} target="_blank" rel="noreferrer"><FileText className="w-4 h-4 text-red-600" />PDF firmado</a>}
+              {cab.pdf_url && <a className={btnSecondary} href={cab.pdf_url} target="_blank" rel="noreferrer"><FileText className="w-4 h-4 text-red-600" />{insp.origen === 'recorrido' ? 'Informe del recorrido' : 'PDF firmado'}</a>}
               {cab.evidencia_url && <a className={btnSecondary} href={cab.evidencia_url} target="_blank" rel="noreferrer"><FolderOpen className="w-4 h-4 text-blue-600" />Fotos</a>}
               <button className={btnSecondary} onClick={imprimir}><Printer className="w-4 h-4" />Resultado para firma</button>
               <button className={btnSecondary} disabled={uploading} onClick={() => pdfRef.current?.click()}>
@@ -220,6 +227,8 @@ export default function SolInspeccionDetail() {
           <div className="md:col-span-2"><label className={labelCls}>Observaciones generales</label><textarea className={inputCls} rows={2} value={cab.observaciones} onChange={e => { setCab({ ...cab, observaciones: e.target.value }); setSucio(true); }} /></div>
         </div>
       </div>
+
+      {insp.origen === 'recorrido' && <PanelRecorrido insp={insp} />}
 
       <div className="space-y-4">
         {porArea.map(g => (
@@ -282,5 +291,53 @@ export default function SolInspeccionDetail() {
         </button>
       </div>
     </div>
+  );
+}
+
+// ── Datos del Recorrido SOL hecho desde el celular ──────────────────────────
+interface EvalRec { numero?: number; area?: string; texto: string; resultado: string | null; observacion?: string; fotos?: string[] }
+const RES_LABEL: Record<string, { t: string; c: string }> = {
+  cumple: { t: 'Cumple', c: 'text-emerald-700' }, parcial: { t: 'Parcial', c: 'text-amber-700' },
+  no_cumple: { t: 'No cumple', c: 'text-red-700' }, na: { t: 'No aplica', c: 'text-slate-500' },
+};
+function PanelRecorrido({ insp }: { insp: SolInspeccion }) {
+  const r = (insp.recorrido ?? {}) as {
+    elaboro_nombre?: string; elaboro_puesto?: string; acompanante?: string; administrador?: string; hora_inicio?: string; hora_fin?: string;
+    infraestructura?: EvalRec[]; extras?: EvalRec[]; guardianes?: { nivel: string; grupo: string; promedio: string; fotos?: string[] }[];
+    areas_omitidas?: string[]; firmas?: { elaboro?: string; acompanante?: string };
+  };
+  const fila = (x: EvalRec, i: number) => (
+    <div key={i} className="px-4 py-2 text-sm flex flex-col sm:flex-row sm:items-start gap-1 sm:gap-3">
+      <p className="flex-1 text-slate-800">{x.area ? <b className="text-slate-500 mr-1">{x.area}:</b> : null}{x.texto}{x.observacion ? <span className="text-slate-500"> — {x.observacion}</span> : null}</p>
+      <span className={`text-xs font-bold ${RES_LABEL[x.resultado ?? '']?.c ?? 'text-slate-400'}`}>{RES_LABEL[x.resultado ?? '']?.t ?? 'Sin calificar'}</span>
+      {(x.fotos ?? []).map((u, k) => <a key={u} href={u} target="_blank" rel="noreferrer" className="text-[11px] text-blue-700 hover:underline">Foto {k + 1}</a>)}
+    </div>
+  );
+  return (
+    <section className="bg-white rounded-xl border border-slate-200 shadow-sm mb-5 overflow-hidden">
+      <div className="px-4 py-3 bg-[#00295A] text-white font-bold text-sm uppercase">Recorrido desde el celular · {insp.folio}</div>
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-3 p-4 text-sm">
+        <div><p className={labelCls}>Elaboró</p><p>{r.elaboro_nombre ?? '—'}</p><p className="text-[11px] text-slate-500">{r.elaboro_puesto}</p></div>
+        <div><p className={labelCls}>Acompañó</p><p>{r.acompanante || '—'}</p></div>
+        <div><p className={labelCls}>Administrador(a)</p><p>{r.administrador || '—'}</p></div>
+        <div><p className={labelCls}>Horario</p><p>{r.hora_inicio ?? '—'}–{r.hora_fin ?? '—'}</p>{r.areas_omitidas?.length ? <p className="text-[11px] text-amber-700">Sin recorrer: {r.areas_omitidas.join(', ')}</p> : null}</div>
+      </div>
+      {!!r.infraestructura?.length && (<><p className="px-4 pt-1 text-[11px] font-bold uppercase text-slate-500">Infraestructura (no cuenta en el Índice)</p><div className="divide-y divide-slate-100">{r.infraestructura.map(fila)}</div></>)}
+      {!!r.extras?.length && (<><p className="px-4 pt-3 text-[11px] font-bold uppercase text-slate-500">Conceptos extra (no cuentan en el Índice)</p><div className="divide-y divide-slate-100">{r.extras.map(fila)}</div></>)}
+      {!!r.guardianes?.length && (
+        <><p className="px-4 pt-3 text-[11px] font-bold uppercase text-slate-500">Guardianes SOL · concentrado SOL-F08</p>
+          <div className="divide-y divide-slate-100">{r.guardianes.map((g, i) => (
+            <div key={i} className="px-4 py-2 text-sm flex gap-3"><span className="flex-1">{g.nivel} {g.grupo} · promedio {g.promedio || '—'}</span>
+              {(g.fotos ?? []).map((u, k) => <a key={u} href={u} target="_blank" rel="noreferrer" className="text-[11px] text-blue-700 hover:underline">F08 {k + 1}</a>)}</div>
+          ))}</div></>
+      )}
+      {(r.firmas?.elaboro || r.firmas?.acompanante) && (
+        <div className="grid grid-cols-2 gap-4 p-4">
+          {[['Elaboró', r.firmas?.elaboro, r.elaboro_nombre], ['Acompañó', r.firmas?.acompanante, r.acompanante]].map(([t, img, n]) => (
+            <div key={t} className="text-center"><p className={labelCls}>{t}</p>{img ? <img src={img} alt={`Firma ${t}`} className="h-14 mx-auto" /> : <p className="h-14 text-xs text-slate-400">Sin firma</p>}<p className="text-xs border-t border-slate-300 pt-1">{n}</p></div>
+          ))}
+        </div>
+      )}
+    </section>
   );
 }

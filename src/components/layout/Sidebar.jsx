@@ -23,7 +23,7 @@ import {
   BookUser, Package, Layers, ShieldAlert, ShieldCheck, ListTodo,
   Network, Clock3,
   Gauge, Flag, Users, Star, Award, ListChecks, ClipboardList, Settings2,
-  HeartHandshake, ChevronDown, Check, MonitorPlay,
+  HeartHandshake, ChevronDown, Check, MonitorPlay, PenLine,
 } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import SidebarAccordionGroup from './SidebarAccordionGroup';
@@ -62,6 +62,29 @@ function NexusLink({ navLinkClass, handleNavClick, userEmail, isAdmin }) {
   );
 }
 
+/** Firmas por autorizar (Programa SOL), con cuántas están pendientes. */
+function FirmasLink({ navLinkClass, handleNavClick }) {
+  const { data: badge = 0 } = useQuery({
+    queryKey: ['sol_firmas_pendientes'],
+    queryFn: async () => {
+      const { count } = await supabase.from('sol_firmas').select('id', { count: 'exact', head: true }).eq('estatus', 'pendiente');
+      return count ?? 0;
+    },
+    refetchInterval: 60000,
+  });
+  return (
+    <Link to="/sol/firmas" onClick={handleNavClick} className={navLinkClass('/sol/firmas') + ' relative'}>
+      <PenLine className="w-[18px] h-[18px]" />
+      Firmas por autorizar
+      {badge > 0 && (
+        <span className="absolute right-2 top-1/2 -translate-y-1/2 bg-[#ED7102] text-white text-[10px] font-bold min-w-[16px] h-[16px] rounded-full flex items-center justify-center px-1">
+          {badge > 9 ? '9+' : badge}
+        </span>
+      )}
+    </Link>
+  );
+}
+
 /** Item pendiente de implementación: se muestra deshabilitado, sin enlazar a una ruta 404. */
 function PendingItem({ icon: Icon, label }) {
   return (
@@ -92,7 +115,9 @@ export default function Sidebar({ isOpen, onToggle }) {
   const modoCompliance = puedeVerCumplimiento && location.pathname.startsWith('/cumplimiento');
   // Programa SOL: el administrador ve todo; quien tenga "ver_sol" (administradores
   // de campus) solo ve el Tablero SOL con el ranking nacional.
-  const puedeVerSOL = isAdmin || can('ver_sol');
+  const puedeVerSOL = isAdmin || can('ver_sol') || can('sol_recorridos');
+  const puedeTableroSOL = isAdmin || can('ver_sol');
+  const puedeCampoSOL = isAdmin || can('sol_recorridos');
   // Ojo: '/solicitud' y '/solicitudes' también empiezan con '/sol' — se compara exacto.
   const modoSOL = puedeVerSOL && (location.pathname === '/sol' || location.pathname.startsWith('/sol/'));
   const esAdminSOL = isAdmin && (user?.email ?? '').toLowerCase() === 'rreyes@manoamiga.edu.mx';
@@ -105,7 +130,7 @@ export default function Sidebar({ isOpen, onToggle }) {
   const MODULOS = [
     { key: 'obras',        label: 'Obras y Mantenimiento', corto: 'Obras',        icon: Wrench,      to: '/',             visible: true },
     { key: 'cumplimiento', label: 'Cumplimiento Normativo', corto: 'Cumplimiento', icon: ShieldCheck, to: '/cumplimiento', visible: puedeVerCumplimiento },
-    { key: 'sol',          label: 'Programa SOL',           corto: 'SOL',          icon: Star,        to: '/sol',          visible: puedeVerSOL },
+    { key: 'sol',          label: 'Programa SOL',           corto: 'SOL',          icon: Star,        to: puedeTableroSOL ? '/sol' : '/sol/recorrido', visible: puedeVerSOL },
   ].filter(m => m.visible);
   const moduloActual = MODULOS.find(m => m.key === (modoCompliance ? 'cumplimiento' : modoSOL ? 'sol' : 'obras')) ?? MODULOS[0];
   const [selectorAbierto, setSelectorAbierto] = useState(false);
@@ -186,7 +211,6 @@ export default function Sidebar({ isOpen, onToggle }) {
     { to: '/remanente',     icon: Gift,          label: 'Proyectos del Remanente', visible: isAdmin || can('ver_remanente') },
     { to: '/proveedores',   icon: Factory,       label: 'Padrón de Proveedores', visible: isAdmin || can('ver_proveedores') },
     { to: '/levantamiento', icon: Layers,        label: 'Levantamiento Nal.',    visible: isAdmin || can('ver_levantamiento') },
-    { to: '/checklists',    icon: ClipboardCheck,label: 'Checklists',            visible: can('ver_checklists') },
     { to: '/minutas',       icon: FileSignature, label: 'Minutas',               visible: isAdmin || can('ver_minutas') },
   ].filter(i => i.visible);
 
@@ -250,7 +274,7 @@ export default function Sidebar({ isOpen, onToggle }) {
   // MÓDULO: PROGRAMA SOL (Seguridad · Orden · Limpieza)
   // ---------------------------------------------------------------------
   const solInspeccion = [
-    { to: '/sol/inspecciones',   icon: ClipboardList, label: 'Inspecciones (SOL-F01)' },
+    { to: '/sol/inspecciones',   icon: ClipboardList, label: 'Inspecciones' },
   ];
   const solSeguimiento = [
     { to: '/sol/hallazgos',      icon: ListChecks,    label: 'Hallazgos' },
@@ -363,10 +387,25 @@ export default function Sidebar({ isOpen, onToggle }) {
               (todos plegados) en lugar de heredar el estado abierto anterior. */}
           {modoSOL ? (
             <React.Fragment key={`sol-${enDashboard}`}>
-              <Link to="/sol" onClick={handleNavClick} className={navLinkClassExacta('/sol')}>
-                <Gauge className="w-[18px] h-[18px]" />
-                Tablero SOL
-              </Link>
+              {puedeTableroSOL && (
+                <Link to="/sol" onClick={handleNavClick} className={navLinkClassExacta('/sol')}>
+                  <Gauge className="w-[18px] h-[18px]" />
+                  Tablero SOL
+                </Link>
+              )}
+              {puedeCampoSOL && (
+                <>
+                  <Link to="/sol/recorrido" onClick={handleNavClick} className={navLinkClass('/sol/recorrido')}>
+                    <ClipboardCheck className="w-[18px] h-[18px]" />
+                    Recorrido SOL
+                  </Link>
+                  <Link to="/sol/jornadas" onClick={handleNavClick} className={navLinkClass('/sol/jornadas')}>
+                    <HeartHandshake className="w-[18px] h-[18px]" />
+                    Voluntariado SOL
+                  </Link>
+                </>
+              )}
+              {esAdminSOL && <FirmasLink navLinkClass={navLinkClass} handleNavClick={handleNavClick} />}
 
               {esAdminSOL && (
                 <>

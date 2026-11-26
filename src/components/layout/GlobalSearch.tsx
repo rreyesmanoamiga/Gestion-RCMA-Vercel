@@ -44,8 +44,8 @@ async function buscarGlobal(q: string): Promise<SearchResult[]> {
       .or(`nombre_proyecto.ilike.${like},nombre_centro.ilike.${like},nombre_solicitante.ilike.${like}`).limit(5),
     supabase.from('anteproyectos').select('id,nombre_proyecto,colegio')
       .or(`nombre_proyecto.ilike.${like},colegio.ilike.${like}`).limit(5),
-    supabase.from('checklists').select('id,titulo,colegio')
-      .or(`titulo.ilike.${like},colegio.ilike.${like}`).limit(5),
+    // El Checklist de Obras se retiró (las inspecciones ahora son el Recorrido SOL)
+    Promise.resolve({ data: [] as { id: string; titulo: string | null; colegio: string | null }[] }),
     supabase.from('insumos_requisiciones').select('id,folio')
       .ilike('folio', like).limit(5),
     supabase.from('nexus_pendientes').select('id,titulo,colegio')

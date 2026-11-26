@@ -133,7 +133,7 @@ function TabCampus({ ciclo, campus, data, dirNacional, registrar, quitar }: { ci
   };
   const diploma = (f: typeof filas[number]) => imprimirHTML(htmlDiplomas({
     tipo: 'campus', campusNombre: f.c.nombre, ciclo, ciudad, fecha, beneficiarios: [], directorNacional: dirNacional,
-  }));
+  }, { firmaCoordinador: true }));
 
   return (
     <div>
@@ -258,7 +258,7 @@ function TabGrupo({ ciclo, campus, data, dirNacional, registrar }: { ciclo: stri
     imprimirHTML(htmlDiplomas({
       tipo: 'grupo', campusNombre: nombre, ciclo, ciudad: ciudad || ciudadDe(nombre), fecha, beneficiarios: lista,
       grupo: g.grupo, nivel: g.nivel, directorCampus: f.director, coordinadorComite: f.coordinador, directorNacional: dirNacional,
-    }));
+    }, { firmaCoordinador: true }));
     await registrar({ tipo: 'grupo', colegio, ciclo, nivel: g.nivel, grupo: g.grupo, beneficiarios: lista.join('\n'), detalle: { promedio: g.prom }, fecha_emision: fecha });
   };
 

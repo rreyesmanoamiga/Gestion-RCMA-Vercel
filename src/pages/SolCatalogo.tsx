@@ -2,7 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import {
-  Plus, Save, Loader2, Info, ListChecks, Users, FileStack, Download, UploadCloud, ExternalLink, AlertTriangle, CheckCircle2, X, History,
+  Plus, Save, Loader2, Info, ListChecks, Users, FileStack, Download, UploadCloud, ExternalLink, AlertTriangle, CheckCircle2, X, History, Building2,
 } from 'lucide-react';
 import { supabase } from '@/lib/supabaseClient';
 import { useAuth } from '@/lib/AuthContext';
@@ -23,9 +23,10 @@ import {
 } from '@/lib/solFormatos';
 import { inputCls, labelCls, btnPrimary, btnSecondary, useSolAdmin } from '@/components/sol/SolShared';
 
-type Tab = 'criterios' | 'guardianes' | 'formatos';
+type Tab = 'criterios' | 'infra' | 'guardianes' | 'formatos';
 const TABS: { key: Tab; label: string; icon: React.ComponentType<{ className?: string }> }[] = [
-  { key: 'criterios',  label: 'Criterios de inspección', icon: ListChecks },
+  { key: 'criterios',  label: 'Criterios del recorrido', icon: ListChecks },
+  { key: 'infra',      label: 'Infraestructura',         icon: Building2 },
   { key: 'guardianes', label: 'Renglones Guardianes',    icon: Users },
   { key: 'formatos',   label: 'Formatos vigentes',       icon: FileStack },
 ];
@@ -80,7 +81,9 @@ export default function SolCatalogo() {
   const areasC = new Set(activosC.map(c => c.area)).size;
   const activosR = renglones.filter(r => r.activo).length;
   const subtitulo = tab === 'criterios'
-    ? `${activosC.length} criterios activos del formato SOL-F01 en ${areasC} áreas · se usan en la captura manual y en el Excel que se envía a los campus`
+    ? `${activosC.length} criterios activos en ${areasC} áreas · son los que se califican en el Recorrido SOL desde el celular`
+    : tab === 'infra'
+      ? 'Puntos del área Infraestructura del recorrido · salen en el informe y generan hallazgos, pero no cuentan en el Índice ni en el ranking'
     : tab === 'guardianes'
       ? `${activosR} renglones de la Bitácora del Guardián (SOL-F07) · ${activosR * 5} palomitas por semana`
       : 'Versión vigente de cada formato, historial y descarga';
@@ -93,18 +96,13 @@ export default function SolCatalogo() {
           <button key={t.key} onClick={() => setTab(t.key)}
             className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-semibold transition ${tab === t.key ? 'bg-white shadow-sm text-slate-900' : 'text-slate-500 hover:text-slate-800'}`}>
             <t.icon className="w-4 h-4" />{t.label}
-            {t.key === 'criterios' && pendientes['SOL-F01'] && <span className="w-2 h-2 rounded-full bg-[#ED7102]" />}
             {t.key === 'guardianes' && pendientes['GUARDIANES'] && <span className="w-2 h-2 rounded-full bg-[#ED7102]" />}
           </button>
         ))}
       </div>
 
-      {tab === 'criterios' && (
-        <>
-          <AvisoPublicar formato="SOL-F01" pendiente={pendientes['SOL-F01']} vigente={vigentes['SOL-F01']} onPublicar={() => setPublicando('SOL-F01')} />
-          <TabCriterios criterios={criterios} cargando={cargandoC} />
-        </>
-      )}
+      {tab === 'criterios' && <TabCriterios criterios={criterios} cargando={cargandoC} />}
+      {tab === 'infra' && <TabInfra />}
       {tab === 'guardianes' && (
         <>
           <AvisoPublicar formato="GUARDIANES" pendiente={pendientes['GUARDIANES']} vigente={vigentes['GUARDIANES']} onPublicar={() => setPublicando('GUARDIANES')} />
@@ -165,7 +163,7 @@ function TabCriterios({ criterios, cargando }: { criterios: SolCriterio[]; carga
       setCambios({});
       qc.invalidateQueries({ queryKey: ['sol_criterios_todos'] });
       qc.invalidateQueries({ queryKey: ['sol_criterios_activos_n'] });
-      toast.success('Catálogo actualizado. Publica la nueva versión del SOL-F01 cuando termines.');
+      toast.success('Catálogo actualizado. Aplica a los siguientes recorridos.');
     } catch (e: unknown) { toast.error(errMsg(e)); }
     finally { setGuardando(false); }
   };
@@ -183,7 +181,7 @@ function TabCriterios({ criterios, cargando }: { criterios: SolCriterio[]; carga
     <>
       <div className="rounded-lg border border-blue-200 bg-blue-50 p-3 text-sm text-blue-800 flex gap-2 mb-5">
         <Info className="w-4 h-4 shrink-0 mt-0.5" />
-        <p>Cada inspección guarda una copia del texto de sus criterios, así que editar aquí no altera el historial. SOL califica hábitos (despejado, ordenado, limpio); el estado del inmueble se atiende con Ticket MAS. Cuando termines de editar, publica la nueva versión del SOL-F01 para que el Excel y la captura manual coincidan.</p>
+        <p>Estos criterios son los que se califican en el Recorrido SOL desde el celular; los cambios aplican al siguiente recorrido que se inicie. Cada inspección guarda una copia del texto de sus criterios, así que editar aquí no altera el historial. SOL califica hábitos (despejado, ordenado, limpio); el estado del inmueble va en Infraestructura o se atiende con Ticket MAS.</p>
       </div>
       <div className="flex gap-2 mb-4"><button className={btnSecondary} onClick={agregar}><Plus className="w-4 h-4" />Agregar criterio</button></div>
       {cargando && <p className="text-slate-500">Cargando…</p>}
@@ -244,6 +242,68 @@ function BarraGuardar({ n, etiqueta, guardando, onDescartar, onGuardar }: { n: n
         <button className={btnPrimary} disabled={guardando} onClick={onGuardar}>{guardando ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}Guardar</button>
       </div>
     </div>
+  );
+}
+
+// ── Infraestructura (no cuenta en el Índice) ─────────────────────────────────
+interface CriterioInfra { id: string; numero: number; texto: string; activo: boolean }
+function TabInfra() {
+  const qc = useQueryClient();
+  const { data: items = [], isLoading } = useQuery({
+    queryKey: ['sol_criterios_infra'],
+    queryFn: async () => {
+      const { data, error } = await supabase.from('sol_criterios_infra').select('*').order('numero');
+      if (error) throw error;
+      return (data ?? []) as CriterioInfra[];
+    },
+  });
+  const [cambios, setCambios] = useState<Record<string, Partial<CriterioInfra>>>({});
+  const [guardando, setGuardando] = useState(false);
+  const val = <K extends keyof CriterioInfra>(c: CriterioInfra, k: K): CriterioInfra[K] => (cambios[c.id]?.[k] as CriterioInfra[K]) ?? c[k];
+  const set = (c: CriterioInfra, k: keyof CriterioInfra, v: unknown) => setCambios(p => ({ ...p, [c.id]: { ...p[c.id], [k]: v } }));
+  const guardar = async () => {
+    setGuardando(true);
+    try {
+      for (const [id, patch] of Object.entries(cambios)) {
+        const { error } = await supabase.from('sol_criterios_infra').update(patch).eq('id', id);
+        if (error) throw error;
+      }
+      logAudit({ accion: 'editar', modulo: 'sol', registro_ref: `Infraestructura SOL (${Object.keys(cambios).length} punto(s))` });
+      setCambios({});
+      qc.invalidateQueries({ queryKey: ['sol_criterios_infra'] });
+      toast.success('Infraestructura actualizada. Aplica a los siguientes recorridos.');
+    } catch (e: unknown) { toast.error(errMsg(e)); }
+    finally { setGuardando(false); }
+  };
+  const agregar = async () => {
+    const numero = items.reduce((m, c) => Math.max(m, c.numero), 100) + 1;
+    const { error } = await supabase.from('sol_criterios_infra').insert({ numero, texto: 'Nuevo punto de infraestructura', activo: false });
+    if (error) { toast.error(error.message); return; }
+    qc.invalidateQueries({ queryKey: ['sol_criterios_infra'] });
+    toast.success('Punto agregado (inactivo). Edítalo y actívalo.');
+  };
+  return (
+    <>
+      <div className="rounded-lg border border-blue-200 bg-blue-50 p-3 text-sm text-blue-800 flex gap-2 mb-5">
+        <Info className="w-4 h-4 shrink-0 mt-0.5" />
+        <p>Es la novena área del recorrido, para lo que el equipo MAS revisa además de SOL. Lo que no cumple se vuelve hallazgo (un <b>No cumple</b> es riesgo grave y se atiende el mismo día), pero no cuenta en el Índice SOL, el ranking ni el distintivo Campus SOL.</p>
+      </div>
+      <div className="flex gap-2 mb-4"><button className={btnSecondary} onClick={agregar}><Plus className="w-4 h-4" />Agregar punto</button></div>
+      {isLoading && <p className="text-slate-500">Cargando…</p>}
+      <section className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+        <div className="px-4 py-2.5 bg-slate-600 text-white font-bold text-sm uppercase flex justify-between"><span>Infraestructura</span><span className="font-semibold normal-case text-white/70">{items.filter(c => val(c, 'activo')).length} activos</span></div>
+        <div className="divide-y divide-slate-100">
+          {items.map(c => (
+            <div key={c.id} className={`grid grid-cols-12 gap-2 items-center px-4 py-2 ${val(c, 'activo') ? '' : 'opacity-50'}`}>
+              <span className="col-span-1 text-sm font-bold text-slate-400 tabular-nums">{c.numero}</span>
+              <input className={inputCls + ' col-span-9 !py-1'} value={val(c, 'texto')} onChange={e => set(c, 'texto', e.target.value)} />
+              <label className="col-span-2 flex items-center gap-1 text-xs text-slate-600"><input type="checkbox" checked={val(c, 'activo')} onChange={e => set(c, 'activo', e.target.checked)} />Activo</label>
+            </div>
+          ))}
+        </div>
+      </section>
+      <BarraGuardar n={Object.keys(cambios).length} etiqueta="punto(s)" guardando={guardando} onDescartar={() => setCambios({})} onGuardar={guardar} />
+    </>
   );
 }
 
@@ -357,8 +417,9 @@ function TabFormatos({ versiones, pendientes, onPublicar }: { versiones: SolForm
 
   return (
     <>
-      <div className="grid md:grid-cols-3 gap-4 mb-6">
-        {SOL_FORMATOS.map(f => {
+      <div className="grid md:grid-cols-2 gap-4 mb-6">
+        <div className="rounded-xl border border-blue-200 bg-blue-50 p-4 text-sm text-blue-800 flex gap-2 md:order-2"><Info className="w-4 h-4 shrink-0 mt-0.5" /><p>La inspección (antes SOL-F01) y el aviso de voluntariado (antes SOL-V03) ya no son formatos de papel: se hacen desde el celular en Recorrido SOL y Voluntariado SOL. Solo los formatos de Guardianes siguen impresos para el Comité.</p></div>
+        {SOL_FORMATOS.filter(f => f.key === 'GUARDIANES').map(f => {
           const v = vigentes[f.key];
           return (
             <div key={f.key} className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden flex flex-col">

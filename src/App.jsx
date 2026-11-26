@@ -12,12 +12,12 @@ const PERM_ROUTES = [
   { perm: 'ver_tickets',            route: '/tickets'       },
   { perm: 'ver_proyectos',          route: '/proyectos'     },
   { perm: 'ver_anteproyectos',      route: '/anteproyectos' },
-  { perm: 'ver_checklists',         route: '/checklists'    },
   { perm: 'ver_calendario',         route: '/calendario'    },
   { perm: 'ver_solicitud_proyecto', route: '/solicitud'     },
   { perm: 'ver_solicitud_proyecto', route: '/protocolo'     },
   { perm: 'ver_reportes',           route: '/reportes'      },
   { perm: 'ver_sol',                route: '/sol'           },
+  { perm: 'sol_recorridos',         route: '/sol/recorrido' },
   { perm: 'autorizar_ticket_mas_fma', route: '/ticket-mas'  },
 ];
 
@@ -36,8 +36,6 @@ import AppLayout from '@/components/layout/AppLayout';
 import Dashboard from '@/pages/Dashboard';
 import Projects from '@/pages/Projects';
 import ProjectDetail from '@/pages/ProjectDetail';
-import Checklists from '@/pages/Checklists';
-import ChecklistDetail from '@/pages/ChecklistDetail';
 import Anteproyectos from '@/pages/Anteproyectos';
 import Tickets from '@/pages/Tickets';
 import SolicitudProyecto from '@/pages/SolicitudProyecto';
@@ -88,6 +86,9 @@ import SolGuardianes from '@/pages/SolGuardianes';
 import SolReconocimientos from '@/pages/SolReconocimientos';
 import SolCatalogo from '@/pages/SolCatalogo';
 import SolVoluntariado from '@/pages/SolVoluntariado';
+import SolRecorrido from '@/pages/SolRecorrido';
+import SolJornadas from '@/pages/SolJornadas';
+import SolFirmas from '@/pages/SolFirmas';
 import PWAUpdatePrompt from '@/components/PWAUpdatePrompt';
 import AccesoRestringido from '@/components/shared/AccesoRestringido';
 
@@ -532,8 +533,6 @@ function AuthenticatedApp() {
           <Route path="/remanente"          element={<ConPermiso permiso="ver_remanente"><ProyectosRemanente /></ConPermiso>} />
           <Route path="/proyectos/:id"      element={<ConPermiso permiso="ver_proyectos"><ProjectDetail /></ConPermiso>} />
           <Route path="/anteproyectos"      element={<ConPermiso permiso="ver_anteproyectos"><Anteproyectos /></ConPermiso>} />
-          <Route path="/checklists"         element={<ConPermiso permiso="ver_checklists"><Checklists /></ConPermiso>} />
-          <Route path="/checklists/:id"     element={<ConPermiso permiso="ver_checklists"><ChecklistDetail /></ConPermiso>} />
           <Route path="/solicitud"           element={<ConPermiso permiso="ver_solicitud_proyecto"><SolicitudProyecto /></ConPermiso>} />
           <Route path="/protocolo"           element={<ProtocoloProyectos />} />
           <Route path="/ticket-mas"          element={<TicketMAS />} />
@@ -580,6 +579,9 @@ function AuthenticatedApp() {
           <Route path="/sol/reconocimientos"      element={<SolReconocimientos />} />
           <Route path="/sol/catalogo"             element={<SolCatalogo />} />
           <Route path="/sol/voluntariado"         element={<SolVoluntariado />} />
+          <Route path="/sol/recorrido"            element={<SolRecorrido />} />
+          <Route path="/sol/jornadas"             element={<SolJornadas />} />
+          <Route path="/sol/firmas"               element={<SolFirmas />} />
 
           <Route path="/login"               element={<Navigate to="/" replace />} />
           <Route path="*"                   element={<PageNotFound />} />

@@ -28,8 +28,8 @@ const inputClass = 'w-full px-3 py-2 border border-slate-300 rounded-md text-sm 
 // para RESALTARLOS primero en el formulario; el resto sigue disponible abajo
 // por si hace falta una excepción puntual. No oculta ni bloquea nada.
 const AREA_GRUPOS_RELEVANTES: Record<string, string[]> = {
-  colegio:            ['Dashboard', 'Solicitud de Proyecto', 'Trámites CN', 'Calendario', 'Checklists', 'Minutas', 'NEXUS', 'Programa SOL', 'Expediente de Cumplimiento (colegio)'],
-  director_colegio:   ['Dashboard', 'Solicitud de Proyecto', 'Trámites CN', 'Calendario', 'Checklists', 'Minutas', 'Reportes', 'NEXUS', 'Programa SOL', 'Expediente de Cumplimiento (colegio)'],
+  colegio:            ['Dashboard', 'Solicitud de Proyecto', 'Trámites CN', 'Calendario', 'Minutas', 'NEXUS', 'Programa SOL', 'Expediente de Cumplimiento (colegio)'],
+  director_colegio:   ['Dashboard', 'Solicitud de Proyecto', 'Trámites CN', 'Calendario', 'Minutas', 'Reportes', 'NEXUS', 'Programa SOL', 'Expediente de Cumplimiento (colegio)'],
   fma_direccion_nacional: ['Dashboard', 'Proyectos', 'Tickets', 'Ticket MAS', 'Anteproyectos', 'Minutas', 'Reportes', 'Cumplimiento'],
   fma_gerencia:       ['Dashboard', 'Proyectos', 'Tickets', 'Ticket MAS', 'Anteproyectos', 'Minutas', 'Reportes', 'Cumplimiento'],
   fma_admisiones:     ['Dashboard', 'Reportes'],
@@ -38,12 +38,12 @@ const AREA_GRUPOS_RELEVANTES: Record<string, string[]> = {
   fma_procuracion:    ['Dashboard', 'Anteproyectos', 'Proyectos', 'Reportes'],
   orser_inmobiliaria: ['Cumplimiento', 'Anteproyectos', 'Proyectos', 'Reportes'],
   car:                ['Dashboard', 'Solicitud de Proyecto', 'Anteproyectos', 'Ticket MAS', 'Tickets', 'Proyectos', 'Minutas', 'Calendario', 'Levantamiento Nacional', 'Reportes'],
-  coordinacion_rcma:  ['Dashboard', 'Proyectos', 'Tickets', 'Ticket MAS', 'Trámites CN', 'Reportes', 'Calendario', 'Checklists', 'Cumplimiento'],
+  coordinacion_rcma:  ['Dashboard', 'Proyectos', 'Tickets', 'Ticket MAS', 'Trámites CN', 'Reportes', 'Calendario', 'Cumplimiento', 'Programa SOL'],
   orser_finanzas:     ['Reportes', 'Insumos', 'Proyectos', 'Dashboard'],
   orser_juridico:     ['Reportes', 'Ticket MAS', 'Anteproyectos', 'Minutas', 'Cumplimiento'],
   orser_fiscal:       ['Reportes', 'Insumos', 'Proyectos'],
-  orser_eco:          ['Proyectos', 'Anteproyectos', 'Checklists', 'Reportes'],
-  orser_pc:           ['Cumplimiento', 'Trámites CN', 'Checklists', 'Calendario', 'Reportes'],
+  orser_eco:          ['Proyectos', 'Anteproyectos', 'Reportes'],
+  orser_pc:           ['Cumplimiento', 'Trámites CN', 'Calendario', 'Reportes'],
 };
 
 // Áreas que se ubican en un colegio específico (Territorio → Colegio, como hoy).
@@ -152,7 +152,6 @@ const PERMISOS_OBRAS = [
   'ver_tickets', 'crear_tickets', 'editar_tickets', 'eliminar_tickets',
   'ver_ticket_mas', 'enviar_ticket_mas', 'autorizar_ticket_mas', 'cancelar_ticket_mas', 'autorizar_ticket_mas_fma',
   'ver_anteproyectos', 'descargar_anteproyectos', 'crear_anteproyectos', 'editar_anteproyectos', 'eliminar_anteproyectos',
-  'ver_checklists', 'crear_checklists', 'editar_checklists', 'eliminar_checklists',
   'ver_calendario', 'crear_calendario', 'editar_calendario', 'eliminar_calendario',
   'ver_solicitud_proyecto', 'enviar_solicitud_proyecto', 'ver_solicitudes_recibidas',
   'ver_reportes', 'crear_reportes', 'editar_reportes', 'eliminar_reportes', 'ver_presupuestos', 'ver_proveedores', 'ver_remanente',

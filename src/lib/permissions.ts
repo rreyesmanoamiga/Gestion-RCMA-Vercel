@@ -30,10 +30,6 @@ const PERMISSION_DEFS: PermissionDef[] = [
   { key: 'crear_anteproyectos',       label: 'Crear Anteproyectos',       group: 'Anteproyectos',         default: false },
   { key: 'editar_anteproyectos',      label: 'Editar Anteproyectos',      group: 'Anteproyectos',         default: false },
   { key: 'eliminar_anteproyectos',    label: 'Eliminar Anteproyectos',    group: 'Anteproyectos',         default: false },
-  { key: 'ver_checklists',            label: 'Ver Checklists',            group: 'Checklists',            default: true  },
-  { key: 'crear_checklists',          label: 'Crear Checklists',          group: 'Checklists',            default: false },
-  { key: 'editar_checklists',         label: 'Editar Checklists',         group: 'Checklists',            default: false },
-  { key: 'eliminar_checklists',       label: 'Eliminar Checklists',       group: 'Checklists',            default: false },
   { key: 'ver_calendario',            label: 'Ver Calendario',            group: 'Calendario',            default: true  },
   { key: 'crear_calendario',          label: 'Crear Eventos',             group: 'Calendario',            default: false },
   { key: 'editar_calendario',         label: 'Editar Eventos',            group: 'Calendario',            default: false },
@@ -79,6 +75,7 @@ const PERMISSION_DEFS: PermissionDef[] = [
   { key: 'cancelar_ticket_mas_cn',    label: 'Cancelar Ticket MAS CN',            group: 'Trámites CN',           default: false },
   { key: 'subir_cumplimiento',        label: 'Subir documentos de su colegio (solo ve su colegio)', group: 'Expediente de Cumplimiento (colegio)', default: false },
   { key: 'ver_sol',                   label: 'Ver Tablero SOL (ranking nacional)', group: 'Programa SOL',     default: false },
+  { key: 'sol_recorridos',            label: 'Hacer Recorridos SOL y jornadas de Voluntariado (celular)', group: 'Programa SOL', default: false },
   { key: 'ver_capacitacion',          label: 'Ver videos de Capacitación (comentar y dar me gusta)', group: 'Capacitación', default: true },
   { key: 'gestionar_capacitacion',    label: 'Subir, publicar y responder como Coordinación', group: 'Capacitación', default: false },
 ];

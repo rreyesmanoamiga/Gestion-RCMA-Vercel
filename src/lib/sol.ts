@@ -14,6 +14,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 import type { WorkSheet, WorkBook, CellObject } from 'xlsx';
 import type { DirectorioColegio } from '@/lib/directorio';
+import { FIRMA_RCMA_SRC } from '@/lib/firmaRcma';
 
 // ── Constantes ───────────────────────────────────────────────────────────────
 export const SOL_AREAS = [
@@ -35,13 +36,14 @@ export const SOL_COMPONENTES: { key: SolComponente; label: string; color: string
   { key: 'L', label: 'Limpieza',  color: '#2F6DB5' },
 ];
 
-export type SolTipoInspeccion = 'linea_base' | 'semanal' | 'mensual' | 'trimestral' | 'anual';
+export type SolTipoInspeccion = 'linea_base' | 'semanal' | 'mensual' | 'trimestral' | 'anual' | 'visita_mas';
 export const SOL_TIPOS: { key: SolTipoInspeccion; label: string; corto: string; excel: string }[] = [
   { key: 'linea_base', label: 'Línea base',                        corto: 'Línea base', excel: 'Línea base' },
   { key: 'semanal',    label: 'Semanal · Comité SOL',              corto: 'Semanal',    excel: 'Semanal · Comité SOL' },
   { key: 'mensual',    label: 'Mensual · Director de campus',      corto: 'Mensual',    excel: 'Mensual · Director de campus' },
   { key: 'trimestral', label: 'Trimestral · Auditoría cruzada',    corto: 'Trimestral', excel: 'Trimestral · Auditoría cruzada' },
   { key: 'anual',      label: 'Anual · Verificación NOM-001-STPS', corto: 'Anual',      excel: 'Anual · Verificación NOM-001-STPS' },
+  { key: 'visita_mas', label: 'Visita MAS · Recorrido SOL',        corto: 'Visita MAS', excel: 'Visita MAS · Recorrido SOL' },
 ];
 export const tipoLabel = (k?: string | null) => SOL_TIPOS.find(t => t.key === k)?.label ?? (k ?? '—');
 export const tipoCorto = (k?: string | null) => SOL_TIPOS.find(t => t.key === k)?.corto ?? (k ?? '—');
@@ -192,7 +194,9 @@ export interface SolInspeccion {
   por_area: Record<string, number | null>;
   criterios_calificados: number;
   criterios_na: number;
-  origen: 'excel' | 'manual';
+  origen: 'excel' | 'manual' | 'recorrido';
+  folio?: string | null;
+  recorrido?: Record<string, unknown> | null;
   version_formato: string | null;
   archivo_url: string | null;
   pdf_url: string | null;
@@ -747,7 +751,7 @@ export function htmlReporteTrimestral(ciclo: string, trimestre: number, filas: F
   <table><tr><th class="num">#</th><th>Campus</th><th class="num">Insp.</th><th class="num">Índice</th><th class="num">S</th><th class="num">O</th><th class="num">L</th><th class="num">Hallazgos abiertos</th><th class="num">Cerrados &lt;30 días</th><th class="num">Tarjetas pendientes</th></tr>${rows}</table>
   ${sinInsp.length ? `<h3>Campus sin inspección registrada en el trimestre</h3><p>${sinInsp.map(f => esc(f.nombre)).join(' · ')}</p>` : ''}
   ${notas.trim() ? `<h3>Observaciones de la Coordinación</h3><p style="white-space:pre-wrap">${esc(notas)}</p>` : ''}
-  <div class="firmas" style="max-width:520px"><div>Ing. Ricardo Reyes Medina<br/>Coordinador de Obras y Mantenimiento (RCMA)</div></div>
+  <div class="firmas" style="max-width:520px"><div style="position:relative;border-top-color:transparent"><img src="${FIRMA_RCMA_SRC}" alt="Firma" style="display:block;height:52px;margin:0 auto -10px"/><div style="border-top:1px solid ${INK};padding-top:4px">Ing. Ricardo Reyes Medina<br/>Coordinador de Obras y Mantenimiento (RCMA)</div></div></div>
   <div class="foot">Índice SOL = puntos obtenidos ÷ puntos posibles × 100 (formato SOL-F01). Verde 85–100 · Ámbar 70–84 · Rojo 0–69. Manual del Programa SOL (SOL-M01).</div>
   </body></html>`;
 }
@@ -788,12 +792,18 @@ const DIPLOMA = {
 
 const listaNatural = (xs: string[]) => xs.length <= 1 ? (xs[0] ?? '') : `${xs.slice(0, -1).join(', ')} y ${xs[xs.length - 1]}`;
 
-export function htmlDiplomas(d: DatosDiploma): string {
+/** Firma del Coordinador sobre su línea: solo cuando él la autorizó (o él mismo imprime). */
+export interface OpcionesDiploma { firmaCoordinador?: boolean }
+
+export function htmlDiplomas(d: DatosDiploma, opc: OpcionesDiploma = {}): string {
   const cfg = DIPLOMA[d.tipo];
   const fondo = `${window.location.origin}/sol/${cfg.fondo}`;
   const lugar = `${esc(d.ciudad || '[Ciudad]')}, a ${fechaLarga(d.fecha)}`;
-  const firma = (n: string | undefined, p: string) =>
-    `<div class="f"><div class="ln"></div><b>${esc(n || '')}</b><span>${p}</span></div>`;
+  const firma = (n: string | undefined, p: string) => {
+    const esCoordinador = (n ?? '').includes('Ricardo Reyes');
+    const img = esCoordinador && opc.firmaCoordinador ? `<img class="fi" src="${FIRMA_RCMA_SRC}" alt="Firma"/>` : '';
+    return `<div class="f"><div class="fz">${img}</div><div class="ln"></div><b>${esc(n || '')}</b><span>${p}</span></div>`;
+  };
   const firmas = d.tipo === 'campus' || d.tipo === 'aliado_anual'
     ? firma(d.directorNacional, 'Director Nacional') + firma('Ing. Ricardo Reyes Medina', 'Coordinador de Obras y Mantenimiento (RCMA)')
     : d.tipo === 'aliado'
@@ -844,10 +854,12 @@ export function htmlDiplomas(d: DatosDiploma): string {
    .nom { font-size:26pt; font-weight:700; color:#1F4E79; margin-bottom:6pt; }
    .nom.vacio { display:inline-block; min-width:4.5in; border-bottom:1px solid #8C8C8C; }
    .txt { font-size:13pt; color:#262626; margin-bottom:3pt; }
-   .lugar { font-size:11pt; font-style:italic; color:#595959; margin-bottom:0.49in; }
+   .lugar { font-size:11pt; font-style:italic; color:#595959; margin-bottom:0.04in; }
    .firmas { display:flex; justify-content:center; gap:0.28in; }
    .firmas .f { width:2.25in; display:flex; flex-direction:column; align-items:center; }
    .firmas.cuatro { gap:0.2in; } .firmas.cuatro .f { width:2.1in; }
+   .firmas .fz { width:100%; height:0.72in; display:flex; align-items:flex-end; justify-content:center; margin-bottom:-0.1in; position:relative; z-index:1; }
+   .firmas .fi { height:0.72in; width:auto; max-width:2.1in; object-fit:contain; }
    .firmas .ln { width:100%; border-top:1px solid #404040; margin-bottom:4pt; }
    .firmas b { font-size:11pt; color:#1F4E79; }
    .firmas span { font-size:10pt; color:#595959; line-height:1.15; }
