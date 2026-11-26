@@ -18,6 +18,7 @@ import {
   PieChart, Pie, Cell, Tooltip, ResponsiveContainer, Legend,
   BarChart, Bar, XAxis, YAxis, CartesianGrid, LineChart, Line
 } from 'recharts';
+import { ValorAnimado, NumeroAnimado, Sparkline, CambioMes, BarraAvance, ActualizadoHace } from '@/components/shared/Animados';
 
 // ─── Interfaces ───────────────────────────────────────────────────────────────
 interface Project {
@@ -74,7 +75,7 @@ function KPICard({ title, value, subtitle, icon: Icon, color, trend, trendLabel,
   const c = colorMap[color];
 
   const inner = (
-    <div className="bg-white rounded-xl border border-slate-200 p-5 pl-6 hover:shadow-md hover:border-slate-300 transition-all duration-200 h-full relative overflow-hidden">
+    <div className="bg-white rounded-xl border border-slate-200 p-5 pl-6 hover:shadow-md hover:-translate-y-0.5 hover:border-slate-300 transition-all duration-200 h-full relative overflow-hidden">
       <div className="absolute top-0 left-0 w-1 h-full" style={{ backgroundColor: c.accent }} />
       <div className="flex items-start justify-between mb-3">
         <Icon className="w-4 h-4 text-slate-300" aria-hidden="true" />
@@ -87,12 +88,12 @@ function KPICard({ title, value, subtitle, icon: Icon, color, trend, trendLabel,
           </span>
         )}
       </div>
-      <p className={`font-display text-4xl font-semibold ${c.text} mb-1 leading-none`}>{value}</p>
+      <p className={`text-4xl font-bold tracking-tight ${c.text} mb-1 leading-none`}><ValorAnimado valor={value} /></p>
       <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-2">{title}</p>
       {subtitle && <p className="text-xs text-slate-400 mt-0.5">{subtitle}</p>}
     </div>
   );
-  return to ? <Link to={to} className="block h-full">{inner}</Link> : inner;
+  return to ? <Link to={to} className="block h-full rcma-aparece">{inner}</Link> : <div className="h-full rcma-aparece">{inner}</div>;
 }
 
 // ─── Tooltip personalizado ────────────────────────────────────────────────────
@@ -352,6 +353,12 @@ export default function Dashboard() {
 
   const flujo = useMemo(() => {
     const ahora = new Date();
+    const meses6 = Array.from({ length: 6 }, (_, i) => new Date(ahora.getFullYear(), ahora.getMonth() - (5 - i), 1));
+    const enMes = (d: string | null | undefined, m: Date) => {
+      if (!d) return false;
+      const f = new Date(d.length === 10 ? d + 'T12:00:00' : d);
+      return f.getFullYear() === m.getFullYear() && f.getMonth() === m.getMonth();
+    };
     const delMes = (d?: string | null) => { if (!d) return false; const f = new Date(d); return f.getFullYear() === ahora.getFullYear() && f.getMonth() === ahora.getMonth(); };
     const delAnio = (d?: string | null) => !!d && new Date(d.length === 10 ? d + 'T12:00:00' : d).getFullYear() === anioActual;
     const porAtender = tmasFlujo.filter(t => t.estatus === 'pendiente' || t.estatus === 'en_revision');
@@ -365,6 +372,11 @@ export default function Dashboard() {
       tmasAutAnio: tmasFlujo.filter(t => t.estatus === 'autorizado' && delAnio(t.created_at)).length,
       ticketsAprobAnio: aprobAnio.length,
       montoAnio: aprobAnio.reduce((s, t) => s + Number((t as any).presupuesto ?? 0), 0),
+      // Últimos 6 meses (el último es el mes actual) para tendencia y comparación
+      serieSol:   meses6.map(m => solicitudesFlujo.filter(s => enMes(s.created_at, m)).length),
+      serieAut:   meses6.map(m => tmasFlujo.filter(t => t.estatus === 'autorizado' && enMes(t.created_at, m)).length),
+      serieMonto: meses6.map(m => tickets.filter(t => t.estatus === 'aprobado' && enMes((t as any).fecha, m))
+                                        .reduce((s, t) => s + Number((t as any).presupuesto ?? 0), 0)),
     };
   }, [tmasFlujo, solicitudesFlujo, tickets, anioActual]);
 
@@ -475,53 +487,25 @@ export default function Dashboard() {
     return filtrados.slice(0, 8);
   }, [projects, tableStatusFilter]);
 
-  // ─── Timeline (estilo Gantt) — a partir de las fechas reales de `recentProjects` ──
-  const ganttData = useMemo(() => {
-    const hoy = new Date();
-    const conFechas = recentProjects
-      .filter(p => p.created_at)
-      .map(p => ({
-        id: p.id,
-        name: (p.name ?? 'Sin nombre').length > 22 ? `${(p.name ?? '').slice(0, 22)}…` : (p.name ?? 'Sin nombre'),
-        nombreCompleto: p.name ?? 'Sin nombre',
-        start: new Date(p.created_at as string),
-        end: p.completado_at ? new Date(p.completado_at) : hoy,
-        enCurso: !p.completado_at,
-        status: p.status ?? '',
-        color: STATUS_COLORS[p.status ?? ''] ?? '#8F9DAE',
-      }));
-    if (conFechas.length === 0) return [];
-    const minStart = new Date(Math.min(...conFechas.map(p => p.start.getTime())));
-    const fmt = (d: Date) => d.toLocaleDateString('es-MX', { day: 'numeric', month: 'short', year: 'numeric' });
-    return conFechas.map(p => ({
-      name: p.name,
-      nombreCompleto: p.nombreCompleto,
-      inicio: fmt(p.start),
-      fin: p.enCurso ? 'En curso' : fmt(p.end),
-      statusLabel: STATUS_LABELS[p.status] ?? p.status ?? 'Sin estado',
-      offset: Math.max(0, Math.round((p.start.getTime() - minStart.getTime()) / 86400000)),
-      duration: Math.max(1, Math.round((p.end.getTime() - p.start.getTime()) / 86400000)),
-      color: p.color,
-    }));
+  // ─── Cronograma — barras con el avance real, color por estatus y línea de "hoy" ──
+  const cronograma = useMemo(() => {
+    const hoy = Date.now();
+    const items = recentProjects.filter(p => p.created_at).map(p => {
+      const ini = new Date(p.created_at as string).getTime();
+      const fin = p.completado_at ? new Date(p.completado_at).getTime() : hoy;
+      return {
+        id: p.id, nombre: p.name ?? 'Sin nombre', colegio: p.colegio ?? p.location ?? '',
+        ini, fin: Math.max(fin, ini + 86400000), enCurso: !p.completado_at,
+        pct: typeof p.progress === 'number' ? p.progress : (p.status === 'completado' ? 100 : 0),
+        status: p.status ?? '', color: STATUS_COLORS[p.status ?? ''] ?? '#8F9DAE',
+      };
+    });
+    if (!items.length) return { items: [], desde: 0, hasta: 0, hoy };
+    const desde = Math.min(...items.map(x => x.ini));
+    const hasta = Math.max(hoy, ...items.map(x => x.fin));
+    const margen = (hasta - desde) * 0.04 || 86400000;
+    return { items, desde: desde - margen, hasta: hasta + margen, hoy };
   }, [recentProjects]);
-
-  const GanttTooltip = ({ active, payload }: { active?: boolean; payload?: any[] }) => {
-    if (!active || !payload?.length) return null;
-    const d = payload.find(p => p.dataKey === 'duration')?.payload;
-    if (!d) return null;
-    return (
-      <div className="bg-white border border-slate-200 rounded-lg shadow-lg px-3 py-2 max-w-[220px]">
-        <p className="text-xs font-bold text-slate-800 mb-1">{d.nombreCompleto}</p>
-        <div className="flex items-center gap-1.5 mb-1">
-          <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: d.color }} />
-          <span className="text-[11px] font-semibold text-slate-600">{d.statusLabel}</span>
-        </div>
-        <p className="text-[11px] text-slate-500">Inicio: {d.inicio}</p>
-        <p className="text-[11px] text-slate-500">Fin: {d.fin}</p>
-        <p className="text-[11px] font-bold text-slate-700 mt-1">{d.duration} día{d.duration !== 1 ? 's' : ''} de duración</p>
-      </div>
-    );
-  };
 
   if (isLoading) {
     return (
@@ -558,6 +542,7 @@ export default function Dashboard() {
           <p className="text-sm text-slate-500 ml-11">
             Panel de Gestión · {projects.length} proyectos · {tickets.length} tickets
           </p>
+          <div className="ml-11 mt-1"><ActualizadoHace ts={Math.max(projectsQuery.dataUpdatedAt ?? 0, ticketsQuery.dataUpdatedAt ?? 0)} /></div>
         </div>
         <div className="hidden sm:flex items-center justify-center bg-white rounded-xl p-3 shadow-sm border border-slate-100">
           <img src="/logo.png" alt="Mano Amiga" className="h-16 w-auto object-contain" />
@@ -573,9 +558,10 @@ export default function Dashboard() {
             ? { label: 'Ticket MAS por atender', value: flujo.tmasPorAtender,                           to: '/ticket-mas' }
             : { label: `Tickets aprobados ${anioActual}`, value: stats.ticketsAprobAnio,                   to: '/tickets' },
           ...(verCumpl ? [{ label: 'Alertas de PC', value: cumplimientoStats.vencidos + cumplimientoStats.porExpirar, to: '/cumplimiento' }] : []),
-        ].map(({ label, value, to }) => (
-          <Link key={label} to={to} className="bg-white rounded-xl border border-slate-200 p-5 hover:shadow-md hover:border-slate-300 transition-all duration-200">
-            <p className="text-3xl font-display font-semibold text-slate-900 leading-none mb-2">{value}</p>
+        ].map(({ label, value, to }, i) => (
+          <Link key={label} to={to} style={{ animationDelay: `${i * 60}ms` }}
+            className="rcma-aparece bg-white rounded-xl border border-slate-200 p-5 shadow-sm hover:shadow-md hover:-translate-y-0.5 hover:border-slate-300 transition-all duration-200">
+            <p className="text-3xl font-bold tracking-tight text-slate-900 leading-none mb-2"><NumeroAnimado valor={value} /></p>
             <p className="text-xs font-semibold text-slate-500">{label}</p>
           </Link>
         ))}
@@ -586,23 +572,35 @@ export default function Dashboard() {
         <div>
           <h2 className="text-sm font-bold text-slate-800 uppercase tracking-tight mb-3">Flujo de proyectos {anioActual}</h2>
           <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
-            {[
-              ...(verSolicitudes ? [
-                { label: 'Solicitudes del mes', value: String(flujo.solMes), sub: `${flujo.solTotal} en total`, color: 'text-slate-900', to: '/solicitudes' },
-                { label: 'Por recibir', value: String(flujo.solPorRecibir), sub: 'Solicitudes pendientes', color: flujo.solPorRecibir > 0 ? 'text-amber-600' : 'text-slate-900', to: '/solicitudes' },
-              ] : []),
-              ...(verTicketMas ? [
-                { label: 'Ticket MAS por atender', value: String(flujo.tmasPorAtender), sub: `${flujo.tmasMas12h} con más de 12 h`, color: flujo.tmasMas12h > 0 ? 'text-red-600' : flujo.tmasPorAtender > 0 ? 'text-amber-600' : 'text-slate-900', to: '/ticket-mas' },
-                { label: 'Autorizados', value: String(flujo.tmasAutAnio), sub: `Ticket MAS en ${anioActual}`, color: 'text-emerald-600', to: '/ticket-mas' },
-              ] : []),
-              { label: 'Contratado', value: flujo.montoAnio.toLocaleString('es-MX', { style: 'currency', currency: 'MXN', maximumFractionDigits: 0 }), sub: `${flujo.ticketsAprobAnio} tickets aprobados en ${anioActual}`, color: 'text-blue-600', to: '/tickets' },
-            ].map(k => (
-              <Link key={k.label} to={k.to} className="bg-white rounded-xl border border-slate-200 p-4 shadow-sm hover:shadow-md hover:border-slate-300 transition-all duration-200">
-                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">{k.label}</p>
-                <p className={`text-2xl font-black ${k.color}`}>{k.value}</p>
-                <p className="text-[11px] text-slate-500">{k.sub}</p>
-              </Link>
-            ))}
+            {(() => {
+              const pesos = (n: number) => n.toLocaleString('es-MX', { style: 'currency', currency: 'MXN', maximumFractionDigits: 0 });
+              const compacto = (n: number) => '$' + new Intl.NumberFormat('es-MX', { notation: 'compact', maximumFractionDigits: 1 }).format(n);
+              const actual = (a: number[]) => a.at(-1) ?? 0, anterior = (a: number[]) => a.at(-2) ?? 0;
+              type K = { label: string; value: number; fmt?: (n: number) => string; sub: string; color: string; to: string; serie?: number[]; trazo?: string };
+              const ks: K[] = [
+                ...(verSolicitudes ? [
+                  { label: 'Solicitudes del mes', value: flujo.solMes, sub: `${flujo.solTotal} en total`, color: 'text-slate-900', to: '/solicitudes', serie: flujo.serieSol, trazo: '#00295A' },
+                  { label: 'Por recibir', value: flujo.solPorRecibir, sub: 'Solicitudes pendientes', color: flujo.solPorRecibir > 0 ? 'text-amber-600' : 'text-slate-900', to: '/solicitudes' },
+                ] : []),
+                ...(verTicketMas ? [
+                  { label: 'Ticket MAS por atender', value: flujo.tmasPorAtender, sub: `${flujo.tmasMas12h} con más de 12 h`, color: flujo.tmasMas12h > 0 ? 'text-red-600' : flujo.tmasPorAtender > 0 ? 'text-amber-600' : 'text-slate-900', to: '/ticket-mas' },
+                  { label: 'Autorizados', value: flujo.tmasAutAnio, sub: `Ticket MAS en ${anioActual}`, color: 'text-emerald-600', to: '/ticket-mas', serie: flujo.serieAut, trazo: '#059669' },
+                ] : []),
+                { label: 'Contratado', value: flujo.montoAnio, fmt: pesos, sub: `${flujo.ticketsAprobAnio} tickets aprobados en ${anioActual}`, color: 'text-blue-600', to: '/tickets', serie: flujo.serieMonto, trazo: '#2563eb' },
+              ];
+              return ks.map((k, i) => (
+                <Link key={k.label} to={k.to} style={{ animationDelay: `${i * 60}ms` }}
+                  className="rcma-aparece bg-white rounded-xl border border-slate-200 p-4 shadow-sm hover:shadow-md hover:-translate-y-0.5 hover:border-slate-300 transition-all duration-200 flex flex-col">
+                  <div className="flex items-start justify-between gap-2 mb-1">
+                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{k.label}</p>
+                    {k.serie && <CambioMes actual={actual(k.serie)} anterior={anterior(k.serie)} formato={k.fmt ? compacto : undefined} />}
+                  </div>
+                  <p className={`text-2xl font-black ${k.color}`}><NumeroAnimado valor={k.value} formato={k.fmt} /></p>
+                  <p className="text-[11px] text-slate-500">{k.sub}</p>
+                  {k.serie && <div className="mt-auto pt-2" title="Últimos 6 meses"><Sparkline datos={k.serie} color={k.trazo} alto={26} /></div>}
+                </Link>
+              ));
+            })()}
           </div>
         </div>
       )}
@@ -692,7 +690,14 @@ export default function Dashboard() {
                         <p className="text-xs text-slate-400">{project.colegio ?? project.location ?? 'Sin ubicación'}</p>
                       </td>
                       <td className="px-3 py-3"><StatusBadge status={project.status} /></td>
-                      <td className="px-3 py-3 text-slate-600">{typeof project.progress === 'number' ? `${project.progress}%` : '—'}</td>
+                      <td className="px-3 py-3 text-slate-600 whitespace-nowrap">
+                        {typeof project.progress === 'number' ? (
+                          <span className="inline-flex items-center gap-2">
+                            <BarraAvance pct={project.progress} color={STATUS_COLORS[project.status ?? ''] ?? '#00295A'} />
+                            <span className="tabular-nums text-xs font-semibold">{project.progress}%</span>
+                          </span>
+                        ) : '—'}
+                      </td>
                       <td className="px-5 py-3 text-slate-500 text-xs">
                         {project.completado_at
                           ? new Date(project.completado_at).toLocaleDateString('es-MX')
@@ -725,23 +730,45 @@ export default function Dashboard() {
             </Link>
           )}
 
-          {ganttData.length === 0 ? (
+          {cronograma.items.length === 0 ? (
             <div className="flex-1 flex items-center justify-center min-h-[180px] text-sm text-slate-400">Sin proyectos recientes con fecha</div>
-          ) : (
-            <div className="flex-1 min-h-[220px]">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={ganttData} layout="vertical" margin={{ top: 5, right: 10, left: 0, bottom: 5 }}>
-                  <XAxis type="number" tick={{ fontSize: 10 }} tickFormatter={(v) => `${v}d`} />
-                  <YAxis type="category" dataKey="name" tick={{ fontSize: 11 }} width={140} />
-                  <Tooltip content={<GanttTooltip />} cursor={{ fill: 'rgba(148, 163, 184, 0.08)' }} />
-                  <Bar dataKey="offset" stackId="a" fill="transparent" />
-                  <Bar dataKey="duration" stackId="a" radius={[0, 4, 4, 0]} barSize={28}>
-                    {ganttData.map((entry, i) => <Cell key={i} fill={entry.color} />)}
-                  </Bar>
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-          )}
+          ) : (() => {
+            const { items, desde, hasta, hoy } = cronograma;
+            const pos = (t: number) => ((t - desde) / (hasta - desde)) * 100;
+            const fmt = (t: number) => new Date(t).toLocaleDateString('es-MX', { day: 'numeric', month: 'short' });
+            return (
+              <div className="flex-1 flex flex-col justify-center gap-4 py-1">
+                {items.map((x, i) => {
+                  const dias = Math.max(1, Math.round((x.fin - x.ini) / 86400000));
+                  return (
+                    <Link key={x.id} to={`/proyectos/${x.id}`} style={{ animationDelay: `${i * 70}ms` }}
+                      className="rcma-aparece grid grid-cols-[minmax(0,150px)_1fr_40px] items-center gap-3 group"
+                      title={`${x.nombre}\n${STATUS_LABELS[x.status] ?? x.status} · ${x.pct}% de avance\nInicio: ${fmt(x.ini)} · ${x.enCurso ? 'En curso' : 'Fin: ' + fmt(x.fin)} · ${dias} día${dias !== 1 ? 's' : ''}`}>
+                      <div className="min-w-0">
+                        <p className="text-xs font-semibold text-slate-800 truncate group-hover:text-blue-600 transition-colors">{x.nombre}</p>
+                        <p className="text-[10.5px] text-slate-400 truncate">{x.colegio}{x.colegio ? ' · ' : ''}{STATUS_LABELS[x.status] ?? x.status}</p>
+                      </div>
+                      <div className="relative h-2.5 rounded-full bg-slate-100">
+                        <div className="absolute top-0 h-2.5 rounded-full overflow-hidden" style={{ left: `${pos(x.ini)}%`, width: `${Math.max(1.5, pos(x.fin) - pos(x.ini))}%`, backgroundColor: `${x.color}33` }}>
+                          <div className="h-full rounded-full rcma-llenar" style={{ width: `${Math.max(x.pct, x.pct > 0 ? 4 : 0)}%`, backgroundColor: x.color, animationDelay: `${i * 70 + 150}ms` }} />
+                        </div>
+                        <div className="absolute -top-1.5 -bottom-1.5 border-l-[1.5px] border-dashed border-[#ED7102]" style={{ left: `${pos(hoy)}%` }} />
+                      </div>
+                      <p className="text-[11px] text-slate-500 text-right tabular-nums">{x.pct}%</p>
+                    </Link>
+                  );
+                })}
+                <div className="grid grid-cols-[minmax(0,150px)_1fr_40px] gap-3 text-[10px] text-slate-400">
+                  <span />
+                  <div className="relative flex justify-between">
+                    <span>{fmt(desde)}</span>
+                    <span className="absolute -translate-x-1/2 -top-1 px-1 bg-white text-[#ED7102] font-semibold" style={{ left: `${pos(hoy)}%` }}>Hoy</span>
+                  </div>
+                  <span />
+                </div>
+              </div>
+            );
+          })()}
         </div>
       </div>
 

@@ -305,7 +305,11 @@ export default function Sidebar({ isOpen, onToggle }) {
         aria-label={isOpen ? 'Cerrar menú' : 'Abrir menú'}
         aria-expanded={isOpen}
         aria-controls="app-sidebar"
-        className="fixed top-4 left-4 z-50 lg:hidden bg-white shadow-md p-2 rounded-md hover:bg-slate-100 transition-colors border border-slate-200"
+        className={cn(
+          'fixed z-50 lg:hidden bg-white shadow-md p-2 rounded-md hover:bg-slate-100 transition-all duration-300 border border-slate-200',
+          // Abierto: la X se va al borde derecho del menú para no taparle el logo
+          isOpen ? 'top-[25px] left-[236px]' : 'top-4 left-4'
+        )}
       >
         {isOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
       </button>
@@ -326,7 +330,7 @@ export default function Sidebar({ isOpen, onToggle }) {
               <Building2 className="w-5 h-5 text-sidebar-primary-foreground" />
             </div>
             <div className="flex-1 min-w-0">
-              <h1 className="text-base font-display font-semibold text-sidebar-foreground leading-tight tracking-tight">
+              <h1 className="text-[17px] font-sans font-bold text-sidebar-foreground leading-tight tracking-tight">
                 Sistema RCMA
               </h1>
               {hayOtrosModulos ? (

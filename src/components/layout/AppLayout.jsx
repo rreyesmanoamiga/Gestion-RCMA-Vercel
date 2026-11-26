@@ -18,14 +18,7 @@ export default function AppLayout() {
   );
 
   return (
-    <div
-      className="min-h-screen bg-background relative"
-      style={{
-        backgroundImage:
-          'linear-gradient(hsl(213 20% 90% / 0.6) 1px, transparent 1px), linear-gradient(90deg, hsl(213 20% 90% / 0.6) 1px, transparent 1px)',
-        backgroundSize: '28px 28px',
-      }}
-    >
+    <div className="min-h-screen bg-background relative">
       <Sidebar isOpen={sidebarOpen} onToggle={handleToggle} />
       <main className="lg:ml-64 min-h-screen">
         <VerComoBanner />

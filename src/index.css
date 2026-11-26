@@ -108,3 +108,14 @@
 .scrollbar-sidebar::-webkit-scrollbar-thumb:hover {
   background: hsl(28 98% 47%);
 }
+
+/* ─── Animaciones sutiles (tarjetas, barras de avance, gráficas) ───────────── */
+@keyframes rcma-aparece { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+@keyframes rcma-llenar  { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+@keyframes rcma-desvanece { from { opacity: 0; } to { opacity: 1; } }
+.rcma-aparece { animation: rcma-aparece .45s ease-out both; }
+.rcma-llenar  { transform-origin: left center; animation: rcma-llenar 1s cubic-bezier(.2,.7,.2,1) both; }
+.rcma-trazo   { animation: rcma-desvanece .8s ease-out both; }
+@media (prefers-reduced-motion: reduce) {
+  .rcma-aparece, .rcma-llenar, .rcma-trazo { animation: none; }
+}
