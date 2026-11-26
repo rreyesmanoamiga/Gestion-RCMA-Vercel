@@ -2,7 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabaseClient';
 import { PERMISSIONS, PERMISSION_GROUPS, DEFAULT_PERMISSIONS } from '@/lib/permissions';
-import { Lock, UserPlus, Mail, Pencil, X, Trash2, ShieldCheck, Users, Search, User, Building2, MapPin, Briefcase, Camera, Eye, AlertTriangle } from 'lucide-react';
+import { Lock, UserPlus, Mail, Pencil, X, Trash2, ShieldCheck, Users, Search, User, Building2, MapPin, Briefcase, Camera, Eye, AlertTriangle, Send, Loader2 } from 'lucide-react';
 import { useAuth } from '@/lib/AuthContext';
 import { toast } from 'sonner';
 import PageHeader from '@/components/shared/PageHeader';
@@ -203,6 +203,40 @@ function UltimoIngreso({ fecha }: { fecha?: string }) {
   );
 }
 
+// ─── Estado del acceso (invitación / ingreso) ───────────────────────────────
+// La invitación y el enlace de reenvío duran 24 horas (configuración de Supabase).
+const VIGENCIA_ENLACE_HORAS = 24;
+interface EstadoAuth { enlace_enviado: string | null; ultimo_ingreso: string | null; confirmado: boolean }
+type Estado = 'activo' | 'vigente' | 'vencida' | 'sin_invitacion';
+
+function estadoDe(auth: EstadoAuth | undefined, ingresoAuditoria?: string): { estado: Estado; ingreso?: string; horasRestantes?: number } {
+  const ingreso = [auth?.ultimo_ingreso, ingresoAuditoria].filter(Boolean).sort().at(-1) as string | undefined;
+  if (ingreso) return { estado: 'activo', ingreso };
+  if (!auth || !auth.enlace_enviado) return { estado: 'sin_invitacion' };
+  const horas = (Date.now() - new Date(auth.enlace_enviado).getTime()) / 3_600_000;
+  if (horas < VIGENCIA_ENLACE_HORAS) return { estado: 'vigente', horasRestantes: Math.ceil(VIGENCIA_ENLACE_HORAS - horas) };
+  return { estado: 'vencida' };
+}
+
+function EstadoAcceso({ auth, ingresoAuditoria }: { auth?: EstadoAuth; ingresoAuditoria?: string }) {
+  const { estado, ingreso, horasRestantes } = estadoDe(auth, ingresoAuditoria);
+  if (estado === 'activo') return <UltimoIngreso fecha={ingreso} />;
+  const enviado = auth?.enlace_enviado
+    ? new Date(auth.enlace_enviado).toLocaleString('es-MX', { dateStyle: 'medium', timeStyle: 'short' })
+    : undefined;
+  const cfg = {
+    vigente:        { cls: 'bg-sky-50 text-sky-700 border-sky-200',       txt: `Invitación vigente · vence en ${horasRestantes} h` },
+    vencida:        { cls: 'bg-red-50 text-red-700 border-red-200',       txt: 'Invitación vencida' },
+    sin_invitacion: { cls: 'bg-slate-100 text-slate-600 border-slate-200', txt: 'Sin invitación' },
+  }[estado];
+  return (
+    <span title={enviado ? `Último enlace enviado: ${enviado}` : undefined}
+      className={`inline-block mt-0.5 text-[10px] font-bold px-1.5 py-0.5 rounded-full border ${cfg.cls}`}>
+      {cfg.txt}
+    </span>
+  );
+}
+
 /** Línea "Ve: …" del listado, con aviso si algo no cuadra. */
 function LineaAlcance({ u }: { u: Record<string, unknown> }) {
   const { texto, avisos } = resumenAlcance(
@@ -309,6 +343,8 @@ export default function Accesos() {
   const [editingUser, setEditingUser] = useState<EditingUser | null>(null);
   const [revokeEmail, setRevokeEmail] = useState<string | null>(null);
   const [search, setSearch]           = useState('');
+  const [soloPendientes, setSoloPendientes] = useState(false);
+  const [reenviando, setReenviando]   = useState<string | null>(null);
   const [inviting, setInviting]       = useState(false);
 
   // Campos del formulario de invitación
@@ -353,20 +389,59 @@ export default function Accesos() {
     staleTime: 60_000,
   });
 
+  // Estado real de cada cuenta en Supabase: último enlace enviado y último ingreso
+  const { data: estadoAuth = {} } = useQuery({
+    queryKey: ['estadoAccesos'],
+    enabled: isAdmin,
+    queryFn: async () => {
+      const { data, error } = await supabase.rpc('rcma_estado_accesos');
+      if (error) throw error;
+      const m: Record<string, EstadoAuth> = {};
+      (data ?? []).forEach((r: EstadoAuth & { email: string }) => { m[r.email] = r; });
+      return m;
+    },
+    staleTime: 60_000,
+  });
+  const estadoUsuario = (u: PermRecord) => {
+    const k = String(u.user_email).toLowerCase();
+    return estadoDe(estadoAuth[k], ultimosIngresos[k]).estado;
+  };
+
+  const reenviarInvitacion = async (u: PermRecord) => {
+    const email = String(u.user_email);
+    setReenviando(email);
+    try {
+      const { data, error } = await supabase.functions.invoke('invite-user', { body: { email, reenviar: true } });
+      if (error || data?.error) throw new Error(data?.error ?? error?.message ?? 'No se pudo reenviar');
+      toast.success(`Se envió un nuevo enlace a ${email}. Vence en ${VIGENCIA_ENLACE_HORAS} horas.`);
+      qc.invalidateQueries({ queryKey: ['estadoAccesos'] });
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'No se pudo reenviar la invitación');
+    } finally {
+      setReenviando(null);
+    }
+  };
+
   const allPerms     = rawPerms as unknown as PermRecord[];
   const nonAdminUsers = useMemo(() => allPerms.filter(p => String(p.role) !== 'admin'), [allPerms]);
 
+  const pendientes = useMemo(
+    () => nonAdminUsers.filter(u => estadoUsuario(u) !== 'activo'),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [nonAdminUsers, estadoAuth, ultimosIngresos]);
+
   const filteredUsers = useMemo(() => {
-    if (!search.trim()) return nonAdminUsers;
+    const base = soloPendientes ? pendientes : nonAdminUsers;
+    if (!search.trim()) return base;
     const q = search.toLowerCase();
-    return nonAdminUsers.filter(u =>
+    return base.filter(u =>
       String(u.user_email).toLowerCase().includes(q) ||
       String(u.nombre ?? '').toLowerCase().includes(q) ||
       String(u.puesto ?? '').toLowerCase().includes(q) ||
       String(u.colegio ?? '').toLowerCase().includes(q) ||
       (getAreaInfo(String(u.area ?? ''))?.label.toLowerCase().includes(q) ?? false)
     );
-  }, [nonAdminUsers, search]);
+  }, [nonAdminUsers, pendientes, soloPendientes, search]);
 
   // ── Update permisos + datos del usuario ───────────────────────────────────
   const updatePermsMutation = useMutation({
@@ -427,12 +502,17 @@ export default function Accesos() {
 
       if (error) throw new Error(error.message);
 
-      supabase.functions.invoke('invite-user', {
+      const { data: inv, error: invError } = await supabase.functions.invoke('invite-user', {
         body: { email: inviteEmail, permissions: invitePerms },
-      }).catch(() => {});
+      });
 
       await qc.invalidateQueries({ queryKey: ['userPermissions'] });
-      toast.success(`Invitación enviada a ${inviteEmail}`);
+      qc.invalidateQueries({ queryKey: ['estadoAccesos'] });
+      if (invError || inv?.error) {
+        toast.warning(`Se guardaron sus permisos, pero no se pudo mandar el correo (${inv?.error ?? invError?.message}). Usa "Reenviar invitación" en la lista.`);
+      } else {
+        toast.success(`Invitación enviada a ${inviteEmail}`);
+      }
       resetInviteForm();
       setShowInvite(false);
     } catch (err: unknown) {
@@ -514,6 +594,13 @@ export default function Accesos() {
             <Users className="w-4 h-4 text-slate-400" />
             Usuarios con Acceso ({nonAdminUsers.length})
           </h2>
+          {pendientes.length > 0 && (
+            <button onClick={() => setSoloPendientes(v => !v)}
+              title="Usuarios que todavía no han entrado al sistema"
+              className={`text-[11px] font-bold px-2.5 py-1 rounded-full border transition-colors ${soloPendientes ? 'bg-red-600 text-white border-red-600' : 'bg-red-50 text-red-700 border-red-200 hover:bg-red-100'}`}>
+              {soloPendientes ? 'Ver todos' : `${pendientes.length} sin entrar`}
+            </button>
+          )}
           {/* Buscador */}
           {nonAdminUsers.length > 0 && (
             <div className="relative sm:ml-auto w-full sm:w-72">
@@ -573,6 +660,13 @@ export default function Accesos() {
                             </div>
                           </div>
                           <div className="flex gap-1.5 shrink-0">
+                            {estadoUsuario(u) !== 'activo' && (
+                              <button onClick={() => reenviarInvitacion(u)} disabled={reenviando === String(u.user_email)}
+                                title="Reenviar invitación (nuevo enlace de 24 horas)"
+                                className="p-1.5 rounded-md border border-sky-200 text-sky-700 hover:bg-sky-50 transition-colors disabled:opacity-50">
+                                {reenviando === String(u.user_email) ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />}
+                              </button>
+                            )}
                             <button onClick={() => verComo(u)} title="Ver el sistema como este usuario (solo lectura)" className="p-1.5 rounded-md border border-slate-200 text-slate-600 hover:bg-slate-100 transition-colors">
                               <Eye className="w-3.5 h-3.5" />
                             </button>
@@ -595,7 +689,7 @@ export default function Accesos() {
                           {u.colegio && <span className="flex items-center gap-1"><Building2 className="w-3 h-3" />{String(u.colegio)}</span>}
                         </div>
                         <LineaAlcance u={u} />
-                        <UltimoIngreso fecha={ultimosIngresos[String(u.user_email).toLowerCase()]} />
+                        <EstadoAcceso auth={estadoAuth[String(u.user_email).toLowerCase()]} ingresoAuditoria={ultimosIngresos[String(u.user_email).toLowerCase()]} />
                         <p className="text-[10px] font-bold text-blue-600 uppercase tracking-tighter">
                           {activePerms.length} permiso{activePerms.length !== 1 ? 's' : ''} activo{activePerms.length !== 1 ? 's' : ''}
                         </p>
@@ -619,7 +713,7 @@ export default function Accesos() {
                         {/* Puesto */}
                         <div className="col-span-2">
                           <p className="text-sm text-slate-700 truncate">{String(u.puesto || '—')}</p>
-                          <UltimoIngreso fecha={ultimosIngresos[String(u.user_email).toLowerCase()]} />
+                          <EstadoAcceso auth={estadoAuth[String(u.user_email).toLowerCase()]} ingresoAuditoria={ultimosIngresos[String(u.user_email).toLowerCase()]} />
                         </div>
                         {/* Territorio / Colegio */}
                         <div className="col-span-2">
@@ -654,6 +748,13 @@ export default function Accesos() {
                         </div>
                         {/* Acciones */}
                         <div className="col-span-2 flex gap-2 justify-end">
+                          {estadoUsuario(u) !== 'activo' && (
+                            <button onClick={() => reenviarInvitacion(u)} disabled={reenviando === String(u.user_email)}
+                              title="Reenviar invitación (nuevo enlace de 24 horas)"
+                              className="p-1.5 rounded-md border border-sky-200 text-sky-700 hover:bg-sky-50 transition-colors disabled:opacity-50">
+                              {reenviando === String(u.user_email) ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />}
+                            </button>
+                          )}
                           <button onClick={() => verComo(u)} title="Ver el sistema como este usuario (solo lectura)"
                             className="p-1.5 rounded-md border border-slate-200 text-slate-600 hover:bg-slate-100 transition-colors">
                             <Eye className="w-3.5 h-3.5" />

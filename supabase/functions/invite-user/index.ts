@@ -81,6 +81,9 @@ async function sendEmail(to: string, subject: string, html: string) {
   tlsConn.close();
 }
 
+const json = (body: unknown, status = 200) =>
+  new Response(JSON.stringify(body), { status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders });
@@ -89,12 +92,7 @@ serve(async (req) => {
   try {
     // ── Verificar que el llamante es admin ────────────────────────────────────
     const authHeader = req.headers.get('Authorization');
-    if (!authHeader) {
-      return new Response(
-        JSON.stringify({ error: 'No autorizado' }),
-        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
+    if (!authHeader) return json({ error: 'No autorizado' }, 401);
 
     const supabaseVerify = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
@@ -102,28 +100,15 @@ serve(async (req) => {
       { global: { headers: { Authorization: authHeader } } }
     );
     const { data: { user: caller }, error: authError } = await supabaseVerify.auth.getUser();
-    if (authError || !caller) {
-      return new Response(
-        JSON.stringify({ error: 'No autorizado' }),
-        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
+    if (authError || !caller) return json({ error: 'No autorizado' }, 401);
     if (caller.user_metadata?.role !== 'admin') {
-      return new Response(
-        JSON.stringify({ error: 'Acceso denegado: se requiere rol de administrador' }),
-        { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
+      return json({ error: 'Acceso denegado: se requiere rol de administrador' }, 403);
     }
     // ─────────────────────────────────────────────────────────────────────────
 
-    const { email } = await req.json();
-
-    if (!email) {
-      return new Response(
-        JSON.stringify({ error: 'El campo email es requerido' }),
-        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
+    const body = await req.json();
+    const email = String(body?.email ?? '').trim().toLowerCase();
+    if (!email) return json({ error: 'El campo email es requerido' }, 400);
 
     const supabaseAdmin = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
@@ -133,18 +118,25 @@ serve(async (req) => {
 
     const siteUrl  = Deno.env.get('SITE_URL')  ?? '';
     const smtpUser = Deno.env.get('SMTP_USER') ?? '';
+    const redirectTo = `${siteUrl}/reset-password`;
 
-    // Usar generateLink en vez de inviteUserByEmail
-    // Así Supabase NO manda su propio email — solo generamos el link
-    const { data, error } = await supabaseAdmin.auth.admin.generateLink({
-      type: 'invite',
-      email,
-      options: {
-        redirectTo: `${siteUrl}/reset-password`,
-      },
+    // Usar generateLink en vez de inviteUserByEmail: Supabase NO manda su propio
+    // correo, solo generamos el enlace y lo enviamos con nuestro formato.
+    // 1) Invitación normal (usuario nuevo o invitado que nunca activó su cuenta).
+    // 2) Si Supabase responde que el correo ya está registrado, se manda un enlace
+    //    de recuperación: lleva a la misma pantalla para crear su contraseña.
+    let reenvio = false;
+    let { data, error } = await supabaseAdmin.auth.admin.generateLink({
+      type: 'invite', email, options: { redirectTo },
     });
-
+    if (error && /already|registered|exists/i.test(error.message ?? '')) {
+      reenvio = true;
+      ({ data, error } = await supabaseAdmin.auth.admin.generateLink({
+        type: 'recovery', email, options: { redirectTo },
+      }));
+    }
     if (error) throw error;
+    if (body?.reenviar) reenvio = true;
 
     // Link real de activación con token correcto
     const actionLink = (data as any)?.properties?.action_link ?? siteUrl;
@@ -154,8 +146,17 @@ serve(async (req) => {
     const nuevoUserId = (data as any)?.user?.id ?? null;
     if (nuevoUserId) {
       await supabaseAdmin.from('user_permissions')
-        .upsert({ user_email: email, user_id: nuevoUserId }, { onConflict: 'user_email' });
+        .update({ user_id: nuevoUserId })
+        .ilike('user_email', email);
     }
+
+    const titulo  = reenvio ? 'Tu nuevo enlace de acceso' : 'Has sido invitado 🎉';
+    const parrafo = reenvio
+      ? 'Te enviamos un nuevo enlace para que actives tu cuenta en <strong>Sistema RCMA</strong> — la plataforma de gestión de obras de Colegios Mano Amiga. El enlace anterior ya no es válido.'
+      : 'El administrador del sistema te ha invitado a acceder a <strong>Sistema RCMA</strong> — la plataforma de gestión de obras de Colegios Mano Amiga.';
+    const asunto  = reenvio
+      ? '🔐 Nuevo enlace de acceso al Sistema RCMA — Colegios Mano Amiga'
+      : '🔐 Invitación al Sistema RCMA — Colegios Mano Amiga';
 
     const html = `
     <!DOCTYPE html>
@@ -173,10 +174,9 @@ serve(async (req) => {
             </tr>
             <tr>
               <td style="padding:40px;">
-                <h2 style="margin:0 0 16px;color:#0f172a;font-size:20px;">Has sido invitado 🎉</h2>
+                <h2 style="margin:0 0 16px;color:#0f172a;font-size:20px;">${titulo}</h2>
                 <p style="color:#475569;font-size:15px;line-height:1.6;margin:0 0 24px;">
-                  El administrador del sistema te ha invitado a acceder a <strong>Sistema RCMA</strong> —
-                  la plataforma de gestión de obras de Colegios Mano Amiga.
+                  ${parrafo}
                 </p>
                 <p style="color:#475569;font-size:15px;line-height:1.6;margin:0 0 32px;">
                   Haz clic en el botón para activar tu cuenta y crear tu contraseña:
@@ -191,7 +191,7 @@ serve(async (req) => {
                   </tr>
                 </table>
                 <p style="color:#94a3b8;font-size:13px;margin:0;">
-                  Si no esperabas esta invitación puedes ignorar este correo.
+                  Si no esperabas este correo puedes ignorarlo.
                   Este enlace expira en 24 horas.
                 </p>
               </td>
@@ -209,11 +209,7 @@ serve(async (req) => {
     </body>
     </html>`;
 
-    await sendEmail(
-      email,
-      '🔐 Invitación al Sistema RCMA — Colegios Mano Amiga',
-      html
-    );
+    await sendEmail(email, asunto, html);
 
     // Registrar en auditoría: quién invitó a quién
     try {
@@ -221,23 +217,16 @@ serve(async (req) => {
         usuario_id:     caller.id,
         usuario_nombre: caller.user_metadata?.full_name ?? caller.email,
         usuario_email:  caller.email,
-        accion:         'invitacion_enviada',
+        accion:         reenvio ? 'invitacion_reenviada' : 'invitacion_enviada',
         modulo:         'usuarios',
-        registro_id:    (data as any)?.user?.id ?? null,
+        registro_id:    nuevoUserId,
         registro_ref:   email,
       });
     } catch { /* no bloqueante */ }
 
-    return new Response(
-      JSON.stringify({ success: true }),
-      { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-    );
-
+    return json({ success: true, reenvio });
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Error desconocido';
-    return new Response(
-      JSON.stringify({ error: message }),
-      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-    );
+    return json({ error: message }, 500);
   }
 });
