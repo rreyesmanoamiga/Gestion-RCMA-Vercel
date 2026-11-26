@@ -18,7 +18,7 @@ export default function AppLayout() {
   );
 
   return (
-    <div className="min-h-screen bg-background relative">
+    <div className="rcma-descanso min-h-screen bg-background relative">
       <Sidebar isOpen={sidebarOpen} onToggle={handleToggle} />
       <main className="lg:ml-64 min-h-screen">
         <VerComoBanner />

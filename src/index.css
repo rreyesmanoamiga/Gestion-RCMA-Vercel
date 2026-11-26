@@ -9,9 +9,9 @@
     --font-sans:    'Inter', 'Segoe UI', system-ui, sans-serif;
     --font-display: var(--font-sans); /* títulos con la misma letra del sistema */
 
-    --background:            213 25% 97%;
+    --background:            213 20% 90%;   /* #DFE4EA · tono "descanso" */
     --foreground:            213 30% 12%;
-    --card:                  0 0% 100%;
+    --card:                  210 40% 98%;   /* #F8FAFC */
     --card-foreground:       213 30% 12%;
     --popover:               0 0% 100%;
     --popover-foreground:    213 30% 12%;
@@ -119,3 +119,11 @@
 @media (prefers-reduced-motion: reduce) {
   .rcma-aparece, .rcma-llenar, .rcma-trazo { animation: none; }
 }
+
+/* ─── Tono "descanso": tarjetas en blanco hueso dentro del sistema ──────────
+   :where() deja la especificidad baja, así los estados hover siguen ganando. */
+:where(.rcma-descanso) .bg-white        { background-color: #f8fafc; }
+:where(.rcma-descanso) .border-slate-200 { border-color: #d5dbe3; }
+:where(.rcma-descanso) .border-slate-100 { border-color: #e2e8f0; }
+:where(.rcma-descanso) .bg-slate-50     { background-color: #f1f5f9; }
+:where(.rcma-descanso) .hover\:bg-slate-50:hover { background-color: #eef2f6; }
