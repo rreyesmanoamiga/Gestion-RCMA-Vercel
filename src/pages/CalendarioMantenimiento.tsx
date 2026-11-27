@@ -2,7 +2,9 @@ import React, { useState, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { ChevronLeft, ChevronRight, Calendar, CheckCircle2, Clock, AlertTriangle, Wrench, X, Plus, Trash2, Bell, Mail, UserPlus, Pencil, Lock, Search, ChevronDown, ChevronUp, BellOff, Filter, FileSpreadsheet, Loader2, FileText } from 'lucide-react';
 import { supabase } from '@/lib/supabaseClient';
-import { COLEGIOS } from '@/lib/colegios';
+import { COLEGIOS as TODOS_COLEGIOS } from '@/lib/colegios';
+// El Calendario de Mantenimiento solo lleva colegios (sin clínicas, oficinas ni General)
+const COLEGIOS = TODOS_COLEGIOS.filter(c => c.colegio.startsWith('MA '));
 import { useAuth } from '@/lib/AuthContext';
 import { usePermissions } from '@/hooks/usePermissions';
 import { useScope, esColegioDeOficina } from '@/hooks/useScope';
@@ -230,7 +232,7 @@ export default function CalendarioMantenimiento() {
   const miColegio      = String((permsRecord as any)?.colegio ?? '');
   const { territorio: territorioAlcance, esGeneral, area } = useScope();
   // Solo un colegio real marca "realizado" (no ECO, ni oficinas FMA, ni el CAR).
-  const esAdminColegio = !isAdmin && !!miColegio && miColegio !== 'ECO'
+  const esAdminColegio = !isAdmin && !!miColegio && miColegio.startsWith('MA ')
     && !esColegioDeOficina(miColegio) && area !== 'car';
   // CAR / usuarios con territorio: consultan el avance de los colegios de su
   // territorio (pestaña Cumplimiento), sin marcar ni editar nada.
@@ -1403,7 +1405,7 @@ export default function CalendarioMantenimiento() {
                     <select value={rmColegio} onChange={e => setRmColegio(e.target.value)}
                       className="px-3 py-2 border border-slate-200 rounded-md text-sm bg-white focus:ring-2 focus:ring-orange-500 focus:outline-none">
                       <option value="">Colegio…</option>
-                      {COLEGIOS.filter(c => c.colegio.startsWith('MA ')).map(c => <option key={c.colegio} value={c.colegio}>{c.colegio}</option>)}
+                      {COLEGIOS.map(c => <option key={c.colegio} value={c.colegio}>{c.colegio}</option>)}
                     </select>
                     <input type="month" value={rmMes} onChange={e => setRmMes(e.target.value)}
                       className="px-3 py-2 border border-slate-200 rounded-md text-sm focus:ring-2 focus:ring-orange-500 focus:outline-none" />

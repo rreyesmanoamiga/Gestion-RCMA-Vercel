@@ -178,7 +178,7 @@ function construirHojas(data: DatosMatriz, año: number, mes: number) {
   // ── Cumplimiento de Mantenimiento (del mes que cerró) ──
   let totalInstancias = 0;
   todasLasActividades(data.customMaintenance).forEach(a => { totalInstancias += fechasEnMes(a, año, mes); });
-  const cumplimiento = COLEGIOS.map(c => {
+  const cumplimiento = COLEGIOS.filter(c => c.colegio.startsWith('MA ')).map(c => { // solo colegios
     const completados = data.completions.filter(r => r.colegio === c.colegio).length;
     const pct = totalInstancias > 0 ? Math.round((completados / totalInstancias) * 100) : 0;
     return { ...c, completados, total: totalInstancias, pct };
