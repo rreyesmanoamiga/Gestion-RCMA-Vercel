@@ -20,6 +20,12 @@
 //   { "colegio": "MA PIE" }         → solo ese colegio
 //   { "muestra": true }             → regresa el PDF (requiere colegio); no envía ni sube
 //   { "prueba": true }              → manda el correo solo al administrador del sistema
+//   { "avisos_pc": true }           → NO manda reportes: revisa qué meses cerrados ya
+//                                     están al 100 % por colegio (Reporte Mensual con Firma
+//                                     de Protección Civil) y avisa SOLO al administrador.
+//                                     La llama pg_cron de lunes a viernes 8:20 am.
+//                                     Con "prueba": true manda el aviso aunque no haya
+//                                     nada nuevo y no marca nada como avisado.
 // ============================================================================
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { PDFDocument, StandardFonts, rgb, type PDFFont, type PDFPage, type PDFImage } from 'npm:pdf-lib@1.17.1';
@@ -406,7 +412,7 @@ ${pieAutomatico}
 }
 
 /** SMTP (Office 365) con varios destinatarios y un PDF adjunto */
-async function enviarCorreo(para: string[], cc: string[], asunto: string, html: string, adjunto: { nombre: string; bytes: Uint8Array }) {
+async function enviarCorreo(para: string[], cc: string[], asunto: string, html: string, adjunto?: { nombre: string; bytes: Uint8Array }) {
   const host = Deno.env.get('SMTP_HOST') ?? 'smtp.office365.com';
   const port = parseInt(Deno.env.get('SMTP_PORT') ?? '587');
   const user = Deno.env.get('SMTP_USER') ?? '';
@@ -426,15 +432,15 @@ async function enviarCorreo(para: string[], cc: string[], asunto: string, html: 
   await cmd('DATA');
   const asuntoB64 = `=?UTF-8?B?${btoa(String.fromCharCode(...enc.encode(asunto)))}?=`;
   const htmlB64 = btoa(String.fromCharCode(...enc.encode(html))).replace(/.{76}/g, '$&\r\n');
-  let bin = ''; for (let i = 0; i < adjunto.bytes.length; i += 0x8000) bin += String.fromCharCode(...adjunto.bytes.subarray(i, i + 0x8000));
+  let bin = ''; if (adjunto) for (let i = 0; i < adjunto.bytes.length; i += 0x8000) bin += String.fromCharCode(...adjunto.bytes.subarray(i, i + 0x8000));
   const pdfB64 = btoa(bin).replace(/.{76}/g, '$&\r\n');
   const lim = 'mix_' + Date.now();
   const msg = [
     `From: Sistema RCMA <${user}>`, `To: ${para.join(', ')}`, ...(cc.length ? [`Cc: ${cc.join(', ')}`] : []),
     `Subject: ${asuntoB64}`, 'MIME-Version: 1.0', `Content-Type: multipart/mixed; boundary="${lim}"`, '',
     `--${lim}`, 'Content-Type: text/html; charset=UTF-8', 'Content-Transfer-Encoding: base64', '', htmlB64, '',
-    `--${lim}`, `Content-Type: application/pdf; name="${adjunto.nombre}"`, 'Content-Transfer-Encoding: base64',
-    `Content-Disposition: attachment; filename="${adjunto.nombre}"`, '', pdfB64, '', `--${lim}--`, '.',
+    ...(adjunto ? [`--${lim}`, `Content-Type: application/pdf; name="${adjunto.nombre}"`, 'Content-Transfer-Encoding: base64',
+      `Content-Disposition: attachment; filename="${adjunto.nombre}"`, '', pdfB64, ''] : []), `--${lim}--`, '.',
   ].join('\r\n');
   const fin = await cmd(msg);
   await cmd('QUIT'); try { tls.close(); } catch { /* ya cerrado */ }
@@ -457,6 +463,147 @@ async function subirOneDrive(ruta: string, bytes: Uint8Array): Promise<string> {
   return (await r.json()).webUrl ?? '';
 }
 
+// ─── Avisos: Reporte Mensual con Firma (Protección Civil) listo ──────────────
+// Revisa cada colegio y cada mes ya cerrado desde agosto 2026. Si el mes quedó
+// al 100 % (con la misma regla del calendario), avisa al administrador una sola
+// vez para que genere el PDF, lo firme y lo mande a Protección Civil.
+// Atrasados: pasado el día DIA_LIMITE_PC del mes siguiente y aún incompletos;
+// se listan en el aviso cuando hay algo nuevo y cada lunes como recordatorio.
+const DIA_LIMITE_PC = 10;
+
+async function avisosPC(db: any, prueba: boolean) {
+  const hoyMx = new Date(Date.now() - 6 * 3600e3).toISOString().slice(0, 10);
+  const hoy = new Date(hoyMx + 'T00:00:00Z');
+  const esLunes = hoy.getUTCDay() === 1;
+  // Meses cerrados: de 2026-08 al mes anterior al actual
+  const meses: { año: number; mes: number; periodo: string; ini: string; fin: string; limite: string }[] = [];
+  for (let d = Date.UTC(2026, 7, 1); d < Date.UTC(hoy.getUTCFullYear(), hoy.getUTCMonth(), 1);) {
+    const f = new Date(d), año = f.getUTCFullYear(), mes = f.getUTCMonth();
+    meses.push({ año, mes, periodo: `${año}-${String(mes + 1).padStart(2, '0')}`, ini: iso(d), fin: iso(Date.UTC(año, mes + 1, 0)),
+      limite: iso(Date.UTC(año, mes + 1, DIA_LIMITE_PC)) });
+    d = Date.UTC(año, mes + 1, 1);
+  }
+  if (!meses.length) return { ok: true, revisados: 0, nuevos: 0, atrasados: 0, correo: false };
+  const finTotal = meses[meses.length - 1].fin;
+
+  const [{ data: custom }, { data: dir }, { data: control }] = await Promise.all([
+    db.from('custom_maintenance').select('*'),
+    db.from('directorio').select('codigo, nombre'),
+    db.from('pc_reportes_control').select('*'),
+  ]);
+  const acts = actividades(custom ?? []);
+  const nombreDe = (c: string) => (dir ?? []).find((d: any) => d.codigo === c)?.nombre || c;
+  const previo = new Map<string, any>((control ?? []).map((r: any) => [`${r.colegio}|${r.periodo}`, r]));
+
+  let comp: { colegio: string; actividad_ref: string; fecha_programada: string }[] = [];
+  for (let i = 0; ; i += 1000) {
+    const { data, error } = await db.from('maintenance_completions').select('colegio, actividad_ref, fecha_programada')
+      .in('colegio', COLEGIOS).gte('fecha_programada', INICIO_REGISTRO).lte('fecha_programada', finTotal)
+      .order('id').range(i, i + 999);
+    if (error) throw error;
+    comp = comp.concat(data ?? []); if (!data || data.length < 1000) break;
+  }
+  const hechasSet = new Set(comp.map(c => `${c.colegio}|${c.actividad_ref}|${c.fecha_programada}`));
+  // Programa de cada mes (igual para todos los colegios)
+  const programa = meses.map(m => acts.flatMap(a => fechas(a, m.ini, m.fin).map(f => `${a.ref}|${f}`)));
+
+  const ahora = new Date().toISOString();
+  const filas: any[] = [], nuevos: any[] = [], atrasados: any[] = [];
+  for (const colegio of COLEGIOS) {
+    meses.forEach((m, k) => {
+      const prog = programa[k].length;
+      const hechas = programa[k].filter(x => hechasSet.has(`${colegio}|${x}`)).length;
+      const p = pct(hechas, prog);
+      const ant = previo.get(`${colegio}|${m.periodo}`);
+      const completo = prog > 0 && hechas >= prog;
+      const fila = {
+        colegio, periodo: m.periodo, programadas: prog, hechas, avance: p,
+        completo_en: completo ? (ant?.completo_en ?? ahora) : null,
+        avisado_en: ant?.avisado_en ?? null, enviado_en: ant?.enviado_en ?? null, enviado_por: ant?.enviado_por ?? null,
+        actualizado_en: ahora,
+      };
+      const info = { colegio, nombre: nombreDe(colegio), periodo: m.periodo, mesTxt: `${MESES[m.mes]} ${m.año}`, avance: p, hechas, prog, completo_en: fila.completo_en };
+      if (completo && !fila.avisado_en && !fila.enviado_en) { nuevos.push(info); if (!prueba) fila.avisado_en = ahora; }
+      if (!completo && !fila.enviado_en && hoyMx > m.limite) atrasados.push(info);
+      filas.push(fila);
+    });
+  }
+  for (let i = 0; i < filas.length; i += 500) {
+    const { error } = await db.from('pc_reportes_control').upsert(filas.slice(i, i + 500), { onConflict: 'colegio,periodo' });
+    if (error) throw error;
+  }
+
+  const mandar = prueba || nuevos.length > 0 || (esLunes && atrasados.length > 0);
+  if (mandar) {
+    const asunto = `${prueba ? '[PRUEBA] ' : ''}Reportes de Protección Civil · ${nuevos.length ? `${nuevos.length} listo${nuevos.length === 1 ? '' : 's'} para firmar` : `${atrasados.length} mes${atrasados.length === 1 ? '' : 'es'} sin completar`}`;
+    try {
+      await enviarCorreo([ADMIN_EMAIL], [], asunto, htmlAvisoPC(nuevos, atrasados, hoyMx));
+    } catch (e) {
+      // si el correo falla, que mañana se vuelva a intentar
+      if (!prueba && nuevos.length) {
+        for (const n of nuevos) await db.from('pc_reportes_control').update({ avisado_en: null }).eq('colegio', n.colegio).eq('periodo', n.periodo);
+      }
+      throw e;
+    }
+  }
+  return { ok: true, revisados: filas.length, nuevos: nuevos.length, atrasados: atrasados.length, correo: mandar };
+}
+
+function htmlAvisoPC(nuevos: any[], atrasados: any[], hoyMx: string): string {
+  const fc = (s: string | null) => { if (!s) return ''; const d = new Date(new Date(s).getTime() - 6 * 3600e3); return `${String(d.getUTCDate()).padStart(2, '0')}-${MESES[d.getUTCMonth()].slice(0, 3)}`; };
+  const ordenar = (a: any, b: any) => a.nombre.localeCompare(b.nombre) || a.periodo.localeCompare(b.periodo);
+  const filasTabla = (lista: any[], listo: boolean) => lista.sort(ordenar).map(r => `<tr>
+      <td style="padding:8px 10px;border-bottom:1px solid #e2e8f0;font-size:13px;color:#0f172a;"><b>${r.nombre}</b></td>
+      <td style="padding:8px 10px;border-bottom:1px solid #e2e8f0;font-size:13px;color:#334155;text-transform:capitalize;">${r.mesTxt}</td>
+      <td style="padding:8px 10px;border-bottom:1px solid #e2e8f0;font-size:13px;text-align:right;color:${listo ? '#16a34a' : '#dc2626'};font-weight:bold;">${listo ? `100 % · ${fc(r.completo_en)}` : `${r.avance} % (${r.hechas}/${r.prog})`}</td></tr>`).join('');
+  // Atrasados: un renglón por colegio con sus meses (ago 0 % · sep 35 % …)
+  const porColegio = new Map<string, any[]>();
+  atrasados.forEach(r => porColegio.set(r.colegio, [...(porColegio.get(r.colegio) ?? []), r]));
+  const filasAtrasados = [...porColegio.values()].sort((a, b) => a[0].nombre.localeCompare(b[0].nombre)).map(ms => `<tr>
+      <td style="padding:8px 10px;border-bottom:1px solid #e2e8f0;font-size:13px;color:#0f172a;"><b>${ms[0].nombre}</b></td>
+      <td style="padding:8px 10px;border-bottom:1px solid #e2e8f0;font-size:12px;color:#334155;">${ms.sort((a: any, b: any) => a.periodo.localeCompare(b.periodo)).map((r: any) => `${MESES[Number(r.periodo.slice(5)) - 1].slice(0, 3)} ${r.periodo.slice(2, 4)}: <b style="color:#dc2626;">${r.avance} %</b>`).join(' &nbsp;·&nbsp; ')}</td></tr>`).join('');
+  const tablaAtrasados = atrasados.length ? `
+<tr><td style="padding:6px 36px 14px;">
+  <p style="margin:0 0 6px;font-size:12px;font-weight:bold;color:#dc2626;text-transform:uppercase;">Atrasados (${atrasados.length} mes${atrasados.length === 1 ? '' : 'es'} en ${porColegio.size} colegio${porColegio.size === 1 ? '' : 's'})</p>
+  <table width="100%" cellpadding="0" cellspacing="0" style="border:1px solid #e2e8f0;border-radius:8px;border-collapse:separate;">
+    <tr style="background:#f8fafc;"><td style="padding:7px 10px;font-size:11px;color:#64748b;font-weight:bold;">COLEGIO</td><td style="padding:7px 10px;font-size:11px;color:#64748b;font-weight:bold;">MESES SIN COMPLETAR · AVANCE</td></tr>
+    ${filasAtrasados}
+  </table>
+  <p style="margin:6px 0 0;font-size:12px;color:#64748b;">Meses cerrados sin completar después del día ${DIA_LIMITE_PC} del mes siguiente.</p>
+</td></tr>` : '';
+  const tabla = (titulo: string, color: string, lista: any[], listo: boolean, nota: string) => lista.length ? `
+<tr><td style="padding:6px 36px 14px;">
+  <p style="margin:0 0 6px;font-size:12px;font-weight:bold;color:${color};text-transform:uppercase;">${titulo} (${lista.length})</p>
+  <table width="100%" cellpadding="0" cellspacing="0" style="border:1px solid #e2e8f0;border-radius:8px;border-collapse:separate;">
+    <tr style="background:#f8fafc;"><td style="padding:7px 10px;font-size:11px;color:#64748b;font-weight:bold;">COLEGIO</td><td style="padding:7px 10px;font-size:11px;color:#64748b;font-weight:bold;">MES</td><td style="padding:7px 10px;font-size:11px;color:#64748b;font-weight:bold;text-align:right;">${listo ? 'COMPLETADO' : 'AVANCE'}</td></tr>
+    ${filasTabla(lista, listo)}
+  </table>
+  <p style="margin:6px 0 0;font-size:12px;color:#64748b;">${nota}</p>
+</td></tr>` : '';
+  return `<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8"></head>
+<body style="margin:0;padding:0;background:#f1f5f9;font-family:Arial,sans-serif;">
+<table width="100%" cellpadding="0" cellspacing="0" style="background:#f1f5f9;padding:32px 0;"><tr><td align="center">
+<table width="600" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:12px;overflow:hidden;">
+<tr><td style="background:#00295A;padding:26px 36px;border-bottom:3px solid #ED7102;">
+  <h1 style="margin:0;color:#fff;font-size:20px;">Reportes de Protección Civil</h1>
+  <p style="margin:4px 0 0;color:#94a3b8;font-size:13px;">Reporte Mensual con Firma · revisión del ${fc(hoyMx + 'T12:00:00Z')}</p>
+</td></tr>
+<tr><td style="padding:24px 36px 10px;color:#334155;font-size:14px;line-height:1.6;">
+  <p style="margin:0;">${nuevos.length
+    ? 'El Sistema RCMA detectó colegios que ya completaron al 100 % su cronograma de mantenimiento de los meses indicados. Ya puede generar su Reporte Mensual con Firma y enviarlo a Protección Civil.'
+    : 'Recordatorio semanal: estos meses siguen sin completarse y ya pasó la fecha límite (día ' + DIA_LIMITE_PC + ' del mes siguiente). Puede esperar a que los completen o enviarlos como estén.'}</p>
+</td></tr>
+${tabla('Listos para firmar', '#16a34a', nuevos, true, 'Cada mes se avisa una sola vez. Al enviarlo, márquelo como "Enviado a PC" en el sistema.')}
+${tablaAtrasados}
+<tr><td style="padding:4px 36px 26px;" align="center">
+  <a href="${(Deno.env.get('SITE_URL') ?? 'https://gestion-rcma-vercel.vercel.app')}/calendario" style="display:inline-block;background:#ED7102;color:#fff;text-decoration:none;font-weight:bold;font-size:14px;padding:11px 22px;border-radius:8px;">Abrir Calendario › Reportes de Protección Civil</a>
+</td></tr>
+<tr><td style="background:#f8fafc;padding:16px 36px;border-top:1px solid #e2e8f0;">
+  <p style="margin:0;color:#94a3b8;font-size:11px;text-align:center;">Aviso automático del Sistema RCMA para la Coordinación de Obras y Mantenimiento.</p>
+</td></tr>
+</table></td></tr></table></body></html>`;
+}
+
 // ─── Servidor ────────────────────────────────────────────────────────────────
 const json = (b: unknown, status = 200) => new Response(JSON.stringify(b), { status, headers: { ...cors, 'Content-Type': 'application/json' } });
 const correoOk = (c?: string | null) => !!c && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(c.trim());
@@ -476,6 +623,8 @@ Deno.serve(async (req) => {
       permitido = (u?.user?.email ?? '').toLowerCase() === ADMIN_EMAIL;
     }
     if (!permitido) return json({ error: 'Sin permiso' }, 403);
+
+    if (body?.avisos_pc === true) return json(await avisosPC(db, body?.prueba === true));
 
     // Mes a reportar: el pedido, o el que acaba de cerrar (hora de Monterrey)
     let año: number, mes: number;

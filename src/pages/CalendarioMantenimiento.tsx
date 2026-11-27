@@ -347,6 +347,8 @@ export default function CalendarioMantenimiento() {
   const [pcAño, setPcAño] = useState(new Date().getFullYear());
   const [pcMes, setPcMes] = useState(new Date().getMonth());
   const [pcGenerando, setPcGenerando] = useState<'individual' | 'general' | 'firma' | null>(null);
+  const [pcGenerandoClave, setPcGenerandoClave] = useState<string | null>(null);
+  const pcColegioSel = pcColegio, pcAñoSel = pcAño, pcMesSel = pcMes;
   const { data: directorioRowsPC = [] } = useDirectorio();
   const [editingItem, setEditingItem] = useState<Actividad | null>(null);
   const [showConsulta, setShowConsulta] = useState(false);
@@ -776,6 +778,33 @@ export default function CalendarioMantenimiento() {
     }
   };
 
+  // Avisos del Reporte Mensual con Firma: meses al 100 % listos para firmar y atrasados
+  // (los calcula la Edge Function reporte-mantenimiento-mensual cada día hábil).
+  const DIA_LIMITE_PC = 10;
+  const { data: controlPC = [], refetch: refetchControlPC } = useQuery({
+    queryKey: ['pc_reportes_control'],
+    enabled: showReportePC && isAdmin,
+    queryFn: async () => {
+      const { data, error } = await supabase.from('pc_reportes_control').select('*').is('enviado_en', null).order('periodo');
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+  const hoyISO_PC = new Date().toLocaleDateString('en-CA');
+  const limitePC = (periodo: string) => { const [a, m] = periodo.split('-').map(Number); return new Date(Date.UTC(a, m, DIA_LIMITE_PC)).toISOString().slice(0, 10); };
+  const listosPC = (controlPC as any[]).filter(r => r.completo_en);
+  const atrasadosPC = (controlPC as any[]).filter(r => !r.completo_en && hoyISO_PC > limitePC(r.periodo));
+  const mesTxtPC = (periodo: string) => { const [a, m] = periodo.split('-').map(Number); return `${MESES_PC[m - 1]} ${a}`; };
+  const marcarEnviadoPC = async (r: any) => {
+    const { error } = await supabase.from('pc_reportes_control')
+      .update({ enviado_en: new Date().toISOString(), enviado_por: user?.email ?? null })
+      .eq('colegio', r.colegio).eq('periodo', r.periodo);
+    if (error) { toast.error('No se pudo marcar: ' + error.message); return; }
+    logAudit({ accion: 'editar', modulo: 'calendario', registro_ref: `Reporte PC Mensual enviado — ${r.colegio} ${mesTxtPC(r.periodo)}` });
+    toast.success(`${nombreColegioPC(r.colegio)} · ${mesTxtPC(r.periodo)} marcado como enviado a PC`);
+    refetchControlPC();
+  };
+
   const handleGenerarReporteIndividual = async () => {
     if (!pcColegio) { toast.error('Selecciona un colegio'); return; }
     setPcGenerando('individual');
@@ -814,9 +843,10 @@ export default function CalendarioMantenimiento() {
     }
   };
 
-  const handleGenerarReporteFirma = async () => {
+  const handleGenerarReporteFirma = async (dest?: { colegio: string; año: number; mes: number }) => {
+    const pcColegio = dest?.colegio ?? pcColegioSel, pcAño = dest?.año ?? pcAñoSel, pcMes = dest?.mes ?? pcMesSel;
     if (!pcColegio) { toast.error('Selecciona un colegio'); return; }
-    setPcGenerando('firma');
+    setPcGenerando('firma'); setPcGenerandoClave(dest ? `${dest.colegio}|${dest.año}-${dest.mes}` : null);
     try {
       const colegioInfo = COLEGIOS.find(c => c.colegio === pcColegio);
       const inicioISO = `${pcAño}-${String(pcMes + 1).padStart(2, '0')}-01`;
@@ -855,7 +885,7 @@ export default function CalendarioMantenimiento() {
     } catch (e: any) {
       toast.error('Error al generar el PDF: ' + (e.message ?? 'desconocido'));
     } finally {
-      setPcGenerando(null);
+      setPcGenerando(null); setPcGenerandoClave(null);
     }
   };
 
@@ -1258,6 +1288,56 @@ export default function CalendarioMantenimiento() {
                 Genera el programa de mantenimiento con la evidencia de cumplimiento real registrada en el sistema. Cada reporte se guarda en tu OneDrive, en <b>Sistema RCMA Doc › Protección Civil</b>.
               </p>
 
+              {isAdmin && (listosPC.length > 0 || atrasadosPC.length > 0) && (
+                <div className="border border-emerald-200 bg-emerald-50/40 rounded-lg p-4">
+                  <p className="text-sm font-bold text-slate-900 mb-1">Reportes Mensuales con Firma por enviar</p>
+                  <p className="text-xs text-slate-500 mb-3">
+                    Meses que el colegio ya completó al 100 %. Genera el PDF, fírmalo, envíalo a Protección Civil y márcalo como enviado. Atrasados: pasado el día {DIA_LIMITE_PC} del mes siguiente siguen incompletos.
+                  </p>
+                  {(() => {
+                    const renglon = (r: any, listo: boolean) => {
+                      const [a, m] = r.periodo.split('-').map(Number);
+                      const clave = `${r.colegio}|${a}-${m - 1}`;
+                      return (
+                        <div key={`${r.colegio}|${r.periodo}`} className="flex items-center gap-2 bg-white border border-slate-200 rounded-md px-3 py-2">
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-semibold text-slate-900 truncate">{nombreColegioPC(r.colegio)}</p>
+                            <p className="text-xs text-slate-500 capitalize">
+                              {mesTxtPC(r.periodo)} · {listo
+                                ? <span className="text-emerald-700 font-bold normal-case">100 % listo</span>
+                                : <span className="text-red-600 font-bold normal-case">{r.avance} % · atrasado</span>}
+                            </p>
+                          </div>
+                          <button onClick={() => handleGenerarReporteFirma({ colegio: r.colegio, año: a, mes: m - 1 })} disabled={pcGenerando !== null}
+                            title="Generar PDF con firma" className="px-2.5 py-1.5 bg-blue-600 text-white rounded-md text-xs font-bold hover:bg-blue-700 disabled:opacity-50 flex items-center gap-1">
+                            {pcGenerandoClave === clave ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <FileText className="w-3.5 h-3.5" />}PDF
+                          </button>
+                          <button onClick={() => marcarEnviadoPC(r)} title="Marcar como enviado a Protección Civil"
+                            className="px-2.5 py-1.5 border border-emerald-300 bg-white text-emerald-700 rounded-md text-xs font-bold hover:bg-emerald-50 flex items-center gap-1">
+                            <CheckCircle2 className="w-3.5 h-3.5" />Enviado
+                          </button>
+                        </div>
+                      );
+                    };
+                    return (
+                      <div className="space-y-2">
+                        {listosPC.length > 0
+                          ? listosPC.map(r => renglon(r, true))
+                          : <p className="text-xs text-slate-500 italic">Ningún mes listo por ahora.</p>}
+                        {atrasadosPC.length > 0 && (
+                          <details className="group">
+                            <summary className="cursor-pointer text-xs font-bold text-red-600 py-1 select-none">
+                              Atrasados ({atrasadosPC.length}) — ver lista
+                            </summary>
+                            <div className="space-y-2 mt-2">{atrasadosPC.map(r => renglon(r, false))}</div>
+                          </details>
+                        )}
+                      </div>
+                    );
+                  })()}
+                </div>
+              )}
+
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Año</label>
@@ -1296,7 +1376,7 @@ export default function CalendarioMantenimiento() {
                     ))}
                   </select>
                 </div>
-                <button onClick={handleGenerarReporteFirma} disabled={pcGenerando !== null}
+                <button onClick={() => handleGenerarReporteFirma()} disabled={pcGenerando !== null}
                   className="w-full px-4 py-2 bg-blue-600 text-white rounded-md text-sm font-bold hover:bg-blue-700 disabled:opacity-50 flex items-center justify-center gap-2">
                   {pcGenerando === 'firma' ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileText className="w-4 h-4" />}
                   {pcGenerando === 'firma' ? 'Generando y guardando...' : (pcColegio ? `Generar PDF ${folioMensualPC(pcColegio, pcAño, pcMes)}` : 'Generar PDF con Firma')}
