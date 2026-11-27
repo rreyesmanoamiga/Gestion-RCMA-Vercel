@@ -70,6 +70,20 @@ function tabla(items: Item[], color: string) {
     <td style="padding:8px 12px;font-size:10px;color:#94a3b8;font-weight:bold;">FECHA LÍMITE</td></tr>${filas}</table>`;
 }
 
+
+/** Bloque de contacto: el correo lo manda el sistema (cuenta solo de salida); dudas → Coordinación */
+const CONTACTO = { nombre: 'Ing. Ricardo Joanathan Reyes Medina', puesto: 'Coordinador de Obras y Mantenimiento RCMA' };
+const bloqueContacto = () => `<tr><td style="padding:4px 36px 22px;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#f1f5f9;border-left:4px solid #ED7102;border-radius:8px;">
+    <tr><td style="padding:14px 18px;font-size:13px;color:#334155;line-height:1.6;">
+      <b style="color:#00295A;">¿Tienen dudas o necesitan apoyo?</b><br>
+      Comuníquense con la Coordinación de Obras y Mantenimiento RCMA:<br>
+      <b>${CONTACTO.nombre}</b> · ${CONTACTO.puesto}
+    </td></tr></table></td></tr>`;
+const pieAutomatico = `<tr><td style="background:#f8fafc;padding:16px 36px;border-top:1px solid #e2e8f0;">
+  <p style="margin:0;color:#94a3b8;font-size:11px;text-align:center;">Este es un mensaje automático del Sistema RCMA; por favor no respondan a este correo.<br>Colegios Mano Amiga — Juntos Transformando Vidas.</p>
+</td></tr>`;
+
 function html(nombre: string, saludo: string, porVencer: Item[], vencidos: Item[]) {
   return `<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8"></head>
 <body style="margin:0;padding:0;background:#f1f5f9;font-family:Arial,sans-serif;">
@@ -79,15 +93,15 @@ function html(nombre: string, saludo: string, porVencer: Item[], vencidos: Item[
   <h1 style="margin:0;color:#fff;font-size:20px;">Programa SOL · Recordatorio</h1>
   <p style="margin:4px 0 0;color:#94a3b8;font-size:13px;">${esc(nombre)}</p></td></tr>
 <tr><td style="padding:24px 36px 4px;color:#334155;font-size:14px;line-height:1.6;">
-  <p>VTR ¡</p><p>${esc(saludo)}</p>
-  <p>Les recordamos ${vencidos.length && porVencer.length ? 'los hallazgos y tarjetas rojas vencidos y los que están por vencer' : vencidos.length ? 'los hallazgos y tarjetas rojas que vencieron' : `los hallazgos y tarjetas rojas que vencen en los próximos ${DIAS_ANTES} días`} en su colegio. Al atenderlos, por favor regístrenlo en el Sistema RCMA con su foto de cierre.</p></td></tr>
+  <p>${esc(saludo)}</p>
+  <p>El Sistema RCMA les recuerda ${vencidos.length && porVencer.length ? 'los hallazgos y tarjetas rojas vencidos y los que están por vencer' : vencidos.length ? 'los hallazgos y tarjetas rojas que vencieron' : `los hallazgos y tarjetas rojas que vencen en los próximos ${DIAS_ANTES} días`} en su colegio. Al atenderlos, por favor regístrenlo en el Sistema RCMA con su foto de cierre.</p></td></tr>
 ${vencidos.length ? `<tr><td style="padding:8px 36px;"><p style="margin:0 0 8px;font-size:13px;font-weight:bold;color:#dc2626;">Vencidos (${vencidos.length})</p>${tabla(vencidos, '#dc2626')}</td></tr>` : ''}
 ${porVencer.length ? `<tr><td style="padding:8px 36px;"><p style="margin:0 0 8px;font-size:13px;font-weight:bold;color:#d97706;">Por vencer (${porVencer.length})</p>${tabla(porVencer, '#d97706')}</td></tr>` : ''}
 <tr><td style="padding:18px 36px 26px;">
   <a href="${SITE_URL}/sol/hallazgos" style="display:inline-block;background:#ED7102;color:#fff;padding:11px 22px;border-radius:8px;font-size:14px;font-weight:bold;text-decoration:none;">Ver en el sistema →</a>
-  <p style="margin:16px 0 0;color:#334155;font-size:14px;">Saludos.<br><b>Coordinación de Obras y Mantenimiento RCMA</b></p></td></tr>
-<tr><td style="background:#f8fafc;padding:16px 36px;border-top:1px solid #e2e8f0;">
-  <p style="margin:0;color:#94a3b8;font-size:11px;text-align:center;">Sistema RCMA · Colegios Mano Amiga — Juntos Transformando Vidas.</p></td></tr>
+</td></tr>
+${bloqueContacto()}
+${pieAutomatico}
 </table></td></tr></table></body></html>`;
 }
 

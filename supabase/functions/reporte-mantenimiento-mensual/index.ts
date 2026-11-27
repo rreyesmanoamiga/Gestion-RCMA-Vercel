@@ -346,15 +346,33 @@ async function construirPdf(r: Resultado, folio: string, emision: string, ficha:
 }
 
 // ─── Correo ──────────────────────────────────────────────────────────────────
+
+/** Bloque de contacto: el correo lo manda el sistema (cuenta solo de salida); dudas → Coordinación */
+const CONTACTO = { nombre: 'Ing. Ricardo Joanathan Reyes Medina', puesto: 'Coordinador de Obras y Mantenimiento RCMA' };
+const bloqueContacto = () => `<tr><td style="padding:4px 36px 22px;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#f1f5f9;border-left:4px solid #ED7102;border-radius:8px;">
+    <tr><td style="padding:14px 18px;font-size:13px;color:#334155;line-height:1.6;">
+      <b style="color:#00295A;">¿Tienen dudas o necesitan apoyo?</b><br>
+      Comuníquense con la Coordinación de Obras y Mantenimiento RCMA:<br>
+      <b>${CONTACTO.nombre}</b> · ${CONTACTO.puesto}
+    </td></tr></table></td></tr>`;
+const pieAutomatico = `<tr><td style="background:#f8fafc;padding:16px 36px;border-top:1px solid #e2e8f0;">
+  <p style="margin:0;color:#94a3b8;font-size:11px;text-align:center;">Este es un mensaje automático del Sistema RCMA; por favor no respondan a este correo.<br>Colegios Mano Amiga — Juntos Transformando Vidas.</p>
+</td></tr>`;
+
 function htmlCorreo(r: Resultado, saludo: string, folio: string): string {
   const nivel = nivelDe(r.anual.pct);
   const color = nivel === 'excelente' ? '#16a34a' : nivel === 'bien' ? '#d97706' : '#dc2626';
   const mesTxt = `${MESES[r.mes]} de ${r.año}`;
+  const datoAvance = `<b style="color:${color}">${r.anual.pct} %</b> (${r.anual.hechas} de ${r.anual.prog} actividades programadas registradas)`;
   const cuerpo = nivel === 'excelente'
-    ? `<p>¡Excelente trabajo! <b>${r.nombre}</b> cerró ${mesTxt} con el <b>100 %</b> de su Cronograma de Mantenimientos al día (${r.anual.hechas} de ${r.anual.prog} actividades programadas registradas en el Sistema RCMA).</p><p>Muchas felicidades a todo el equipo por su compromiso. ¡Sigan así!</p>`
+    ? `<p>El Sistema RCMA les envía el reporte de avance del Cronograma de Mantenimientos de <b>${r.nombre}</b> correspondiente a <b>${mesTxt}</b>.</p>
+       <p>¡Excelente trabajo! El colegio tiene al día el <b style="color:${color}">100 %</b> de su cronograma de ${r.año} (${r.anual.hechas} de ${r.anual.prog} actividades programadas registradas). Felicidades a todo el equipo por su compromiso; ¡sigan así!</p>`
     : nivel === 'bien'
-      ? `<p>Les comparto el reporte de avance del Cronograma de Mantenimientos de <b>${r.nombre}</b> correspondiente a <b>${mesTxt}</b>. Su avance acumulado de ${r.año} es de <b style="color:${color}">${r.anual.pct} %</b> (${r.anual.hechas} de ${r.anual.prog} actividades programadas registradas en el Sistema RCMA).</p><p>Van por buen camino; solo no olviden los mantenimientos pendientes que vienen detallados en el reporte adjunto.</p>`
-      : `<p>Les comparto el reporte de avance del Cronograma de Mantenimientos de <b>${r.nombre}</b> correspondiente a <b>${mesTxt}</b>. Su avance acumulado de ${r.año} es de <b style="color:${color}">${r.anual.pct} %</b> (${r.anual.hechas} de ${r.anual.prog} actividades programadas registradas en el Sistema RCMA), por debajo de lo esperado.</p><p>Les pido de favor atender los mantenimientos pendientes que vienen detallados en el reporte adjunto y registrar cada actividad en el sistema conforme se realice, para que el cronograma refleje el trabajo real del colegio. Si requieren apoyo con la captura, con gusto los apoyamos.</p>`;
+      ? `<p>El Sistema RCMA les envía el reporte de avance del Cronograma de Mantenimientos de <b>${r.nombre}</b> correspondiente a <b>${mesTxt}</b>.</p>
+         <p>Su avance acumulado de ${r.año} es de ${datoAvance}. Van por buen camino; solo no olviden los mantenimientos pendientes que vienen detallados en el reporte adjunto.</p>`
+      : `<p>El Sistema RCMA les envía el reporte de avance del Cronograma de Mantenimientos de <b>${r.nombre}</b> correspondiente a <b>${mesTxt}</b>.</p>
+         <p>Su avance acumulado de ${r.año} es de ${datoAvance}, por debajo de lo esperado. Les pedimos atender los mantenimientos pendientes que vienen detallados en el reporte adjunto y registrar cada actividad en el sistema el día en que se realice.</p>`;
   return `<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8"></head>
 <body style="margin:0;padding:0;background:#f1f5f9;font-family:Arial,sans-serif;">
 <table width="100%" cellpadding="0" cellspacing="0" style="background:#f1f5f9;padding:32px 0;"><tr><td align="center">
@@ -364,7 +382,7 @@ function htmlCorreo(r: Resultado, saludo: string, folio: string): string {
   <p style="margin:4px 0 0;color:#94a3b8;font-size:13px;">${r.nombre} · ${mesTxt} · <span style="color:#fca5a5;font-weight:bold;">${folio}</span></p>
 </td></tr>
 <tr><td style="padding:26px 36px 8px;color:#334155;font-size:14px;line-height:1.6;">
-  <p>VTR ¡</p><p>${saludo}</p><p>Buenos días, espero que se encuentren bien.</p>
+  <p>${saludo}</p>
   ${cuerpo}
 </td></tr>
 <tr><td style="padding:0 36px 8px;">
@@ -379,14 +397,11 @@ function htmlCorreo(r: Resultado, saludo: string, folio: string): string {
       <p style="margin:2px 0 0;font-size:11px;color:#64748b;">${r.mensual.hechas} de ${r.mensual.prog} actividades del mes</p></td></tr>
   </table>
 </td></tr>
-<tr><td style="padding:14px 36px 26px;color:#334155;font-size:14px;line-height:1.6;">
-  <p>${nivel === 'excelente' ? 'Adjunto encontrarán el reporte en PDF con el desglose por categoría y su reconocimiento.' : 'Adjunto encontrarán el reporte en PDF con el desglose por categoría y la lista de mantenimientos pendientes.'}</p>
-  <p>Sin más por el momento, quedo al pendiente.</p><p>Saludos.</p>
-  <p style="margin-top:14px;"><b>Ing. Ricardo Joanathan Reyes Medina</b><br><span style="color:#64748b;">Coordinador de Obras y Mantenimiento RCMA</span></p>
+<tr><td style="padding:14px 36px 8px;color:#334155;font-size:14px;line-height:1.6;">
+  <p>${nivel === 'excelente' ? 'Se adjunta el reporte en PDF con el desglose por categoría y el reconocimiento del colegio.' : 'Se adjunta el reporte en PDF con el desglose por categoría y la lista de mantenimientos pendientes.'}</p>
 </td></tr>
-<tr><td style="background:#f8fafc;padding:16px 36px;border-top:1px solid #e2e8f0;">
-  <p style="margin:0;color:#94a3b8;font-size:11px;text-align:center;">Sistema RCMA · Colegios Mano Amiga — Juntos Transformando Vidas.</p>
-</td></tr>
+${bloqueContacto()}
+${pieAutomatico}
 </table></td></tr></table></body></html>`;
 }
 
