@@ -53,3 +53,6 @@ coverage/
 
 # Archivos locales del CLI de Supabase
 supabase/.temp/
+
+# Archivos de apoyo que genera Claude (propuestas, muestras)
+Claude outputs/
