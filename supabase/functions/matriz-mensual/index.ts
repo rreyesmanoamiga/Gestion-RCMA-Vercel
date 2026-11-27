@@ -101,8 +101,8 @@ async function leerDatos(db: any, año: number, mes: number): Promise<DatosMatri
   const [projects, checklists, tickets, anteproyectos, solicitudes, minimos, ticketsMas, customMaintenance, completions,
     requisiciones, planteles, pagosLev, reportesLev, nexusNotas, nexusPendientes,
     complianceDocs, compliancePendientes, complianceNotas, complianceSeguimientos] = await Promise.all([
-    todo('projects', '*', desc), todo('checklists', '*', desc), todo('tickets', '*', desc),
-    todo('anteproyectos', '*', desc), todo('solicitudes', '*', desc), todo('minimos_indispensables', '*', desc),
+    todo('projects', '*', desc), Promise.resolve([] as any[]) /* checklists: módulo retirado (nov 2026) */, todo('tickets', '*', desc),
+    todo('anteproyectos', '*', desc), todo('solicitudes', '*', desc), Promise.resolve([] as any[]) /* minimos_indispensables: retirado */,
     todo('tickets_mas', '*', desc), todo('custom_maintenance'),
     todo('maintenance_completions', 'colegio', undefined, q => q.gte('fecha_programada', ini).lte('fecha_programada', fin)),
     todo('insumos_requisiciones', '*', desc), todo('levantamiento_planteles', '*', ['colegio_nombre', true]),
@@ -122,8 +122,7 @@ type Celda = string | number | null | undefined;
 interface Hoja { name: string; title: string; headers: string[]; rows: Celda[][]; widths: number[]; moneyCol?: number | number[] }
 const ORDEN_MATRIZ = [
   '📊 Resumen Ejecutivo', '📁 Proyectos', '💰 Presupuesto vs Real', '🎫 Tickets TCMM', '🎫 Ticket MAS',
-  '📐 Anteproyectos', '✅ Inspecciones', '📩 Solicitudes',
-  'Minimos Indispensables', 'Minimos Detalle',
+  '📐 Anteproyectos', '📩 Solicitudes',
   '🔧 Cumplimiento Mtto.', '📦 Requisiciones', '🏫 Levant. Planteles', '💵 Levant. Pagos', '📄 Levant. Reportes',
   '📝 Nexus Notas', '✅ Nexus Pendientes',
   '📋 Cumpl. Documentos', '✅ Cumpl. Pendientes', '📝 Cumpl. Notas', '📌 Cumpl. Seguim.',
@@ -165,59 +164,9 @@ function construirHojas(data: DatosMatriz, año: number, mes: number) {
     }),
     [12, 36, 14, 16, 14, 20, 18, 18, 20], [5, 6, 7]);
 
-  buildSheet('✅ Inspecciones', 'Checklists de Inspección — Sistema RCMA', ['Título', 'Colegio', 'Territorio', 'Inspector', 'Material', 'Estado General', 'Núm. Ítems', 'Fecha'],
-    data.checklists.map(c => [c.titulo ?? '—', c.colegio ?? '—', c.territorio ?? '—', c.inspector ?? 'Sin asignar', c.material ?? '—', c.overall_status ?? '—', Array.isArray(c.items) ? c.items.length : 0, fmt(c.fecha ?? c.created_at)]),
-    [38, 14, 12, 24, 32, 16, 12, 14]);
-
   buildSheet('📩 Solicitudes', 'Solicitudes de Proyecto — Sistema RCMA', ['Centro', 'Proyecto', 'Solicitante', 'Puesto', 'Tipo Iniciativa', 'Costo Aprox.', 'Estatus', 'Fecha Solicitud', 'Fecha Inicio Prop.'],
     data.solicitudes.map(s => [s.nombre_centro ?? '—', s.nombre_proyecto ?? '—', s.nombre_solicitante ?? '—', s.puesto_solicitante ?? '—', s.tipo_iniciativa ?? '—', num(s.costo_aproximado), s.estatus ?? '—', fmt(s.created_at), fmt(s.fecha_inicio_propuesta)]),
     [22, 34, 24, 20, 22, 16, 14, 18, 20], 5);
-
-  // ── Mínimos Indispensables ──
-  const ITEM_PRIO: Record<string, string> = {
-    puertas_ancho:'P1',pasillos:'P1',tablero:'P1',circuitos:'P1',polo_tierra:'P1',
-    agua_red:'P1',gas:'P1',pasillos_libres:'P1',const_pc:'P1',pipc:'P1',
-    seg_estr:'P1',extintores:'P1',senal_emerg:'P1',cisterna_limp:'P1',cert_extinct:'P1',
-    aulas_m2:'P2',sanitarios:'P2',bebederos:'P2',iluminacion:'P2',drenaje:'P2',
-    rampa_acceso:'P2',sia:'P2',sanitario_adapt:'P2',escalones:'P2',poliza_rc:'P2',
-    simulacros:'P2',brigadas:'P2',cronograma:'P2',bitacora:'P2',fumigacion:'P2',
-  };
-  const resLabelMin: Record<string, string> = { completo: 'Si Cumple', en_proceso: 'En Proceso', incompleto: 'No Cumple' };
-  const secNomMin: Record<string, string> = { construccion:'01 Construccion', instalaciones:'02 Instalaciones', accesibilidad:'03 Accesibilidad', seguridad:'04 Seguridad y PC', mantenimiento:'05 Mantenimiento' };
-  const estadoLblMin: Record<string, string> = { cumple:'Cumple', no_cumple:'No Cumple', en_proceso:'En Proceso', na:'N/A' };
-  const prio = (i: any) => ITEM_PRIO[i.id as string] ?? 'P3';
-
-  buildSheet('Minimos Indispensables', 'Minimos Indispensables — Sistema RCMA',
-    ['Colegio','Territorio','Inspector','Fecha Evaluacion','Resultado','% Cumplimiento','% Criticos P1','% Urgentes P2','Items Cumple','Items No Cumple','Items En Proceso','Pendientes Criticos','Pendientes Urgentes','Verificaciones','Fecha Registro'],
-    data.minimos.map(m => {
-      const its: any[] = Array.isArray(m.items) ? m.items : [];
-      const activos = its.filter(i => i.estado !== 'na');
-      const cumpleN = its.filter(i => i.estado === 'cumple').length;
-      const p1 = its.filter(i => prio(i) === 'P1' && i.estado !== 'na');
-      const p2 = its.filter(i => prio(i) === 'P2' && i.estado !== 'na');
-      return [
-        String(m.colegio ?? '—'), String(m.territorio ?? '—'), String(m.inspector ?? 'Sin asignar'),
-        fmt(m.fecha), resLabelMin[m.resultado] ?? String(m.resultado ?? '—'),
-        activos.length > 0 ? Math.round(cumpleN / activos.length * 100) : 0,
-        p1.length > 0 ? Math.round(p1.filter(i => i.estado === 'cumple').length / p1.length * 100) : 100,
-        p2.length > 0 ? Math.round(p2.filter(i => i.estado === 'cumple').length / p2.length * 100) : 100,
-        cumpleN, its.filter(i => i.estado === 'no_cumple').length, its.filter(i => i.estado === 'en_proceso').length,
-        its.filter(i => prio(i) === 'P1' && i.estado === 'no_cumple').length,
-        its.filter(i => prio(i) === 'P2' && i.estado === 'no_cumple').length,
-        its.filter(i => i.verificado_por).length, fmt(m.created_at),
-      ];
-    }),
-    [22, 14, 22, 18, 16, 14, 14, 14, 12, 14, 14, 16, 16, 14, 18]);
-
-  buildSheet('Minimos Detalle', 'Detalle de Items por Evaluacion — Sistema RCMA',
-    ['Colegio','Territorio','Fecha Evaluacion','Seccion','Item','Prioridad','Estado','Observacion','Verificado Por','Fecha Verificacion'],
-    data.minimos.flatMap(m => (Array.isArray(m.items) ? m.items : []).map((it: any) => [
-      String(m.colegio ?? '—'), String(m.territorio ?? '—'), fmt(m.fecha),
-      secNomMin[it.seccion] ?? String(it.seccion ?? '—'), String(it.nombre ?? it.id ?? '—'), prio(it),
-      estadoLblMin[it.estado] ?? String(it.estado ?? '—'), it.observacion ? String(it.observacion) : '—',
-      it.verificado_por ? String(it.verificado_por) : '—', it.fecha_verificacion ? fmt(String(it.fecha_verificacion)) : '—',
-    ])),
-    [22, 14, 18, 22, 48, 12, 14, 32, 22, 18]);
 
   // ── Ticket MAS ──
   const tmasLbl: Record<string, string> = { autorizado:'Autorizado', pendiente:'Pendiente', en_revision:'En Revisión', cancelado:'Cancelado' };
@@ -301,8 +250,7 @@ function construirHojas(data: DatosMatriz, año: number, mes: number) {
     { label: 'Tickets Registrados (TCMM + TMAS)', count: data.tickets.length + data.ticketsMas.length },
     { label: 'Presupuesto vs Real', count: data.projects.filter(p => p.budget != null).length },
     { label: 'Anteproyectos', count: data.anteproyectos.length },
-    { label: 'Inspecciones', count: data.checklists.length }, { label: 'Solicitudes', count: data.solicitudes.length },
-    { label: 'Mínimos Indispensables', count: data.minimos.length },
+    { label: 'Solicitudes', count: data.solicitudes.length },
     { label: 'Mantenimiento — Colegios al Día', count: cumplimiento.filter(c => c.pct >= 80).length },
     { label: 'Requisiciones (Insumos)', count: data.requisiciones.length },
     { label: 'Planteles Levantamiento Nacional', count: data.planteles.length },

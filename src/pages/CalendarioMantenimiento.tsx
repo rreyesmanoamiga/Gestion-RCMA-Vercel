@@ -312,6 +312,37 @@ export default function CalendarioMantenimiento() {
   const [showGestion, setShowGestion] = useState(false);
   const [showNotificaciones, setShowNotificaciones] = useState(false);
   const [showReportePC, setShowReportePC] = useState(false);
+  // Reporte mensual automático a colegios (Edge Function reporte-mantenimiento-mensual)
+  const mesAnterior = (() => { const d = new Date(); d.setDate(1); d.setMonth(d.getMonth() - 1); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`; })();
+  const [rmColegio, setRmColegio] = useState('');
+  const [rmMes, setRmMes] = useState(mesAnterior);
+  const [rmTrabajando, setRmTrabajando] = useState<'ver' | 'prueba' | null>(null);
+  const reporteMensual = async (accion: 'ver' | 'prueba') => {
+    if (!rmColegio) { toast.error('Elige un colegio'); return; }
+    setRmTrabajando(accion);
+    const ventana = accion === 'ver' ? window.open('', '_blank') : null; // se abre antes para que el navegador no la bloquee
+    try {
+      const { data: ses } = await supabase.auth.getSession();
+      const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/reporte-mantenimiento-mensual`;
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${ses.session?.access_token ?? ''}`, apikey: import.meta.env.VITE_SUPABASE_ANON_KEY },
+        body: JSON.stringify({ colegio: rmColegio, mes: rmMes, ...(accion === 'ver' ? { muestra: true } : { prueba: true }) }),
+      });
+      if (accion === 'ver') {
+        if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error ?? `Error ${res.status}`);
+        const blob = await res.blob();
+        const u = URL.createObjectURL(blob);
+        if (ventana) ventana.location.href = u; else window.open(u, '_blank');
+      } else {
+        const r = await res.json();
+        const fila = r?.resultados?.[0];
+        if (!res.ok || !fila?.ok) throw new Error(fila?.error ?? r?.error ?? `Error ${res.status}`);
+        toast.success(`Te llegó la prueba de ${rmColegio} (${fila.avance} %) a tu correo`);
+      }
+    } catch (e) { ventana?.close(); toast.error(e instanceof Error ? e.message : 'No se pudo generar el reporte'); }
+    finally { setRmTrabajando(null); }
+  };
   const [pcColegio, setPcColegio] = useState('');
   const [pcAño, setPcAño] = useState(new Date().getFullYear());
   const [pcMes, setPcMes] = useState(new Date().getMonth());
@@ -1214,7 +1245,7 @@ export default function CalendarioMantenimiento() {
       {/* Modal Reportes de Protección Civil */}
       {showReportePC && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl shadow-xl w-full max-w-lg">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-lg max-h-[92vh] overflow-y-auto">
             <div className="flex items-center justify-between p-5 border-b border-slate-100">
               <div className="flex items-center gap-2">
                 <FileSpreadsheet className="w-5 h-5 text-orange-600" />
@@ -1281,6 +1312,34 @@ export default function CalendarioMantenimiento() {
                   {pcGenerando === 'general' ? 'Generando y guardando...' : 'Generar PDF General'}
                 </button>
               </div>
+
+              {isAdmin && (
+                <div className="border border-orange-200 bg-orange-50/40 rounded-lg p-4">
+                  <p className="text-sm font-bold text-slate-900 mb-1">Reporte mensual a colegios (automático)</p>
+                  <p className="text-xs text-slate-500 mb-3">
+                    Sale solo el <b>día 1 de cada mes a las 8:00 am</b>: un correo por colegio al administrador (CC director, CAR, Gerencia, Dirección Nacional, David Pichardo y Dr. Mariano) con su PDF. Aquí puedes revisarlo antes.
+                  </p>
+                  <div className="grid grid-cols-2 gap-3 mb-3">
+                    <select value={rmColegio} onChange={e => setRmColegio(e.target.value)}
+                      className="px-3 py-2 border border-slate-200 rounded-md text-sm bg-white focus:ring-2 focus:ring-orange-500 focus:outline-none">
+                      <option value="">Colegio…</option>
+                      {COLEGIOS.filter(c => c.colegio.startsWith('MA ')).map(c => <option key={c.colegio} value={c.colegio}>{c.colegio}</option>)}
+                    </select>
+                    <input type="month" value={rmMes} onChange={e => setRmMes(e.target.value)}
+                      className="px-3 py-2 border border-slate-200 rounded-md text-sm focus:ring-2 focus:ring-orange-500 focus:outline-none" />
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <button onClick={() => reporteMensual('ver')} disabled={rmTrabajando !== null}
+                      className="px-3 py-2 border border-slate-300 bg-white text-slate-700 rounded-md text-sm font-bold hover:bg-slate-50 disabled:opacity-50 flex items-center justify-center gap-2">
+                      {rmTrabajando === 'ver' ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileText className="w-4 h-4" />}Ver PDF
+                    </button>
+                    <button onClick={() => reporteMensual('prueba')} disabled={rmTrabajando !== null}
+                      className="px-3 py-2 bg-orange-600 text-white rounded-md text-sm font-bold hover:bg-orange-700 disabled:opacity-50 flex items-center justify-center gap-2">
+                      {rmTrabajando === 'prueba' ? <Loader2 className="w-4 h-4 animate-spin" /> : <Mail className="w-4 h-4" />}Enviarme prueba
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         </div>

@@ -15,6 +15,7 @@ import { useScope, esColegioDeOficina } from '@/hooks/useScope';
 import { useAuth } from '@/lib/AuthContext';
 import { logAudit } from '@/lib/audit';
 import { fmtHora } from '@/lib/utils';
+import { leerAcuerdosDePdf } from '@/lib/leerAcuerdosPdf';
 import { useSharePointUpload } from '@/hooks/useSharePointUpload';
 import { TERRITORIOS, getColegiosByTerritorio } from '@/lib/colegios';
 import { useDirectorio, getGerenteFMA, getDirectorNacional } from '@/lib/directorio';
@@ -222,6 +223,8 @@ export default function Minutas({ modulo = 'obras' }: { modulo?: ModuloMinutas }
   const [form, setForm]               = useState({ ...FORM_INIT });
   const [file, setFile]               = useState<File | null>(null);
   const [dragActive, setDragActive]   = useState(false);
+  // Lectura automática de acuerdos del PDF (se revisan antes de guardar)
+  const [lecturaPdf, setLecturaPdf]   = useState<{ estado: 'leyendo' | 'ok' | 'nada'; n?: number } | null>(null);
   // Cada destinatario del correo va en "Para", en "CC" o no va (null)
   const [notifEnrique, setNotifEnrique] = useState<Posicion>(null);
   const [notifCAR, setNotifCAR]       = useState<Posicion>(null);
@@ -368,6 +371,7 @@ export default function Minutas({ modulo = 'obras' }: { modulo?: ModuloMinutas }
     setNotifGerenciaCN('para');
     setVisibleAdminColegio(false);
     setAcuerdosForm([]);
+    setLecturaPdf(null);
   };
 
   // Al llegar la lista de contactos externos, se marcan los que van por defecto
@@ -421,6 +425,28 @@ export default function Minutas({ modulo = 'obras' }: { modulo?: ModuloMinutas }
     return { para, cc, adminEmails, faltaPara };
   }, [externosActivos, notifExternos, notifGerenciaCN, notifEnrique, notifCAR, notifAdminColegio,
       colegioAdmins, form.colegio, gerenteFMA, directorNacional, carPorColegioMap]);
+
+  // Al elegir el PDF se leen sus acuerdos/acciones y se precargan para revisarlos.
+  // Solo llena si todavía no hay acuerdos capturados (no pisa lo que ya escribiste).
+  const elegirPdf = async (f: File | null) => {
+    setFile(f);
+    setLecturaPdf(null);
+    if (!f) return;
+    const yaHay = acuerdosForm.some(a => a.descripcion.trim());
+    if (yaHay) return;
+    setLecturaPdf({ estado: 'leyendo' });
+    try {
+      const leidos = await leerAcuerdosDePdf(f);
+      if (leidos.length) {
+        setAcuerdosForm(leidos);
+        setLecturaPdf({ estado: 'ok', n: leidos.length });
+        toast.success(`Se detectaron ${leidos.length} acuerdo${leidos.length !== 1 ? 's' : ''} en el PDF`, { description: 'Revísalos arriba antes de guardar.' });
+      } else setLecturaPdf({ estado: 'nada' });
+    } catch (e) {
+      console.error('Lectura de acuerdos del PDF:', e);
+      setLecturaPdf({ estado: 'nada' });
+    }
+  };
 
   const agregarFilaAcuerdo = () => setAcuerdosForm(prev => [...prev, { descripcion: '', responsable: '', fecha_compromiso: '', hora_compromiso: '' }]);
   const quitarFilaAcuerdo  = (idx: number) => setAcuerdosForm(prev => prev.filter((_, i) => i !== idx));
@@ -882,6 +908,16 @@ export default function Minutas({ modulo = 'obras' }: { modulo?: ModuloMinutas }
                       <Plus className="w-3 h-3" /> {form.tipo === 'nota_tecnica' ? 'Agregar acción' : 'Agregar acuerdo'}
                     </button>
                   </div>
+                  {lecturaPdf && (
+                    <p className={`text-[11px] rounded-md px-2.5 py-1.5 mb-2 border ${
+                      lecturaPdf.estado === 'ok' ? 'bg-emerald-50 border-emerald-200 text-emerald-800'
+                      : lecturaPdf.estado === 'leyendo' ? 'bg-slate-50 border-slate-200 text-slate-600'
+                      : 'bg-amber-50 border-amber-200 text-amber-800'}`}>
+                      {lecturaPdf.estado === 'leyendo' && 'Leyendo los acuerdos del PDF…'}
+                      {lecturaPdf.estado === 'ok' && <>Se detectaron <b>{lecturaPdf.n}</b> {form.tipo === 'nota_tecnica' ? 'acciones' : 'acuerdos'} en el PDF. Revisa responsable y fecha antes de guardar.</>}
+                      {lecturaPdf.estado === 'nada' && 'No se encontró la tabla de acuerdos en el PDF; captúralos a mano.'}
+                    </p>
+                  )}
                   {acuerdosForm.length === 0 ? (
                     <p className="text-xs text-slate-400 border border-dashed border-slate-200 rounded-lg px-3 py-3 text-center">
                       {form.tipo === 'nota_tecnica'
@@ -1009,7 +1045,7 @@ export default function Minutas({ modulo = 'obras' }: { modulo?: ModuloMinutas }
                   onDrop={e => {
                     e.preventDefault(); setDragActive(false);
                     const dropped = e.dataTransfer.files?.[0];
-                    if (dropped && dropped.name.toLowerCase().endsWith('.pdf')) setFile(dropped);
+                    if (dropped && dropped.name.toLowerCase().endsWith('.pdf')) elegirPdf(dropped);
                     else toast.error('Solo se aceptan archivos PDF (.pdf)');
                   }}
                   className={`flex items-center gap-3 cursor-pointer border-2 border-dashed rounded-lg px-4 py-3 transition
@@ -1019,7 +1055,7 @@ export default function Minutas({ modulo = 'obras' }: { modulo?: ModuloMinutas }
                     {file ? file.name : 'Arrastra el archivo PDF aquí o haz clic para seleccionarlo'}
                   </span>
                   <input type="file" accept=".pdf" className="hidden"
-                    onChange={e => setFile(e.target.files?.[0] ?? null)} />
+                    onChange={e => elegirPdf(e.target.files?.[0] ?? null)} />
                 </label>
               </div>
             </div>
