@@ -790,7 +790,7 @@ export default function Minutas({ modulo = 'obras' }: { modulo?: ModuloMinutas }
       {/* ── Modal: Nueva / Editar Minuta ─────────────────────────────────── */}
       {showForm && (
         <div className="fixed inset-0 z-[100] flex items-start sm:items-center justify-center bg-black/50 p-4 overflow-y-auto">
-          <div className="bg-white rounded-xl shadow-xl max-w-lg w-full my-8">
+          <div className="bg-white rounded-xl shadow-xl max-w-2xl w-full my-8">
             <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100">
               <h2 className="font-bold text-slate-900">{editItem ? `Editar ${TIPO_CFG[form.tipo]?.label ?? 'Documento'}` : 'Nuevo Documento'}</h2>
               <button onClick={() => { setShowForm(false); resetForm(); }} className="text-slate-400 hover:text-slate-700">
@@ -798,7 +798,7 @@ export default function Minutas({ modulo = 'obras' }: { modulo?: ModuloMinutas }
               </button>
             </div>
 
-            <div className="p-5 space-y-3 max-h-[75vh] overflow-y-auto">
+            <div className="p-5 space-y-3 max-h-[75vh] overflow-y-auto overflow-x-hidden">
               <div>
                 <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Tipo de Documento *</label>
                 <div className="grid grid-cols-2 gap-2">
@@ -929,19 +929,22 @@ export default function Minutas({ modulo = 'obras' }: { modulo?: ModuloMinutas }
                       {acuerdosForm.map((row, idx) => (
                         <div key={idx} className="flex items-start gap-1.5 bg-slate-50 border border-slate-200 rounded-lg p-2">
                           <span className="text-[11px] font-bold text-slate-400 mt-2 w-4 shrink-0">{idx + 1}.</span>
-                          <div className="flex-1 space-y-1.5">
-                            <input value={row.descripcion} onChange={e => actualizarFilaAcuerdo(idx, 'descripcion', e.target.value)}
+                          <div className="flex-1 min-w-0 space-y-1.5">
+                            {/* El texto completo se ve en varios renglones (crece con el contenido) */}
+                            <textarea value={row.descripcion} onChange={e => actualizarFilaAcuerdo(idx, 'descripcion', e.target.value)}
                               placeholder={form.tipo === 'nota_tecnica' ? '¿Qué acción se recomienda?' : '¿Qué se acordó?'}
-                              className="w-full px-2 py-1.5 border border-slate-200 rounded-md text-xs focus:ring-2 focus:ring-blue-500 focus:outline-none" />
-                            <div className="grid grid-cols-1 sm:grid-cols-[1fr_auto_auto] gap-1.5">
+                              rows={Math.max(1, Math.ceil(row.descripcion.length / 80))}
+                              className="w-full px-2 py-1.5 border border-slate-200 rounded-md text-xs leading-snug resize-none [field-sizing:content] focus:ring-2 focus:ring-blue-500 focus:outline-none" />
+                            <div className="grid grid-cols-1 sm:grid-cols-[minmax(0,1fr)_136px_104px] gap-1.5">
                               <input value={row.responsable} onChange={e => actualizarFilaAcuerdo(idx, 'responsable', e.target.value)}
-                                placeholder="Responsable"
-                                className="px-2 py-1.5 border border-slate-200 rounded-md text-xs focus:ring-2 focus:ring-blue-500 focus:outline-none" />
+                                placeholder="Responsable" title={row.responsable}
+                                className="min-w-0 w-full px-2 py-1.5 border border-slate-200 rounded-md text-xs focus:ring-2 focus:ring-blue-500 focus:outline-none" />
                               <input type="date" value={row.fecha_compromiso} onChange={e => actualizarFilaAcuerdo(idx, 'fecha_compromiso', e.target.value)}
-                                className="px-2 py-1.5 border border-slate-200 rounded-md text-xs focus:ring-2 focus:ring-blue-500 focus:outline-none" />
+                                title="Fecha compromiso (opcional)"
+                                className="min-w-0 w-full px-2 py-1.5 border border-slate-200 rounded-md text-xs focus:ring-2 focus:ring-blue-500 focus:outline-none" />
                               <input type="time" value={row.hora_compromiso} disabled={!row.fecha_compromiso} onChange={e => actualizarFilaAcuerdo(idx, 'hora_compromiso', e.target.value)}
                                 title={row.fecha_compromiso ? 'Hora (opcional): hora del evento en Outlook; vacía = 9:00' : 'Primero elige la fecha'}
-                                className="px-2 py-1.5 border border-slate-200 rounded-md text-xs focus:ring-2 focus:ring-blue-500 focus:outline-none disabled:bg-slate-100 disabled:text-slate-300" />
+                                className="min-w-0 w-full px-2 py-1.5 border border-slate-200 rounded-md text-xs focus:ring-2 focus:ring-blue-500 focus:outline-none disabled:bg-slate-100 disabled:text-slate-300" />
                             </div>
                           </div>
                           <button type="button" onClick={() => quitarFilaAcuerdo(idx)}
