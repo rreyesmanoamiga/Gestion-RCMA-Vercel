@@ -1,5 +1,6 @@
 import React, { useState, useCallback } from 'react';
-import { Outlet } from 'react-router-dom';
+import { Outlet, useLocation } from 'react-router-dom';
+import ErrorBoundary from '@/components/shared/ErrorBoundary';
 import Sidebar from './Sidebar';
 import NotificationBell from './NotificationBell';
 import GlobalSearch from './GlobalSearch';
@@ -11,6 +12,7 @@ import { useLimpiarFiltrosAlSalir } from '@/lib/filtrosPersistentes';
 export default function AppLayout() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   useLimpiarFiltrosAlSalir();
+  const location = useLocation();
 
   const handleToggle = useCallback(
     () => setSidebarOpen(prev => !prev),
@@ -30,7 +32,7 @@ export default function AppLayout() {
           </div>
         </div>
         <div className="p-4 md:p-6 lg:p-8 pt-2 lg:pt-4">
-          <Outlet />
+          <ErrorBoundary resetKey={location.pathname}><Outlet /></ErrorBoundary>
         </div>
       </main>
       <OfflineBanner />

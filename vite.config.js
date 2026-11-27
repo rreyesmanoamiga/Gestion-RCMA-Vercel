@@ -7,7 +7,11 @@ export default defineConfig({
   plugins: [
     react(),
     VitePWA({
-      registerType: 'autoUpdate',
+      // 'prompt': la versión nueva queda en espera y el usuario decide cuándo
+      // actualizar (aviso en PWAUpdatePrompt). Antes era 'autoUpdate' con
+      // skipWaiting/clientsClaim: al publicar, la página se recargaba sola y quien
+      // estaba capturando perdía lo que llevaba.
+      registerType: 'prompt',
       injectRegister: 'auto',
       includeAssets: ['favicon.ico', 'logo.png'],
       manifest: {
@@ -33,8 +37,6 @@ export default defineConfig({
         ],
       },
       workbox: {
-        skipWaiting: true,
-        clientsClaim: true,
         // Límite de tamaño por archivo para precaché offline — el default de Workbox
         // es 2 MB, y el sistema ya lo superó. Se sube a 5 MB para dar margen de
         // crecimiento sin tener que tocar esto de nuevo pronto.
